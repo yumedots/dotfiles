@@ -20,6 +20,7 @@ hl.monitor({
 local terminal = "footclient" -- use footclient; the foot server is started at login
 local fileManager = "dolphin"
 local menu = "fuzzel"
+local wallpaper = "/home/gabriel/Documents/Wallpaper/Yosemite 2.jpg"
 
 
 -------------------
@@ -30,14 +31,11 @@ local menu = "fuzzel"
 
 -- Autostart necessary processes (like notifications daemons, status bars, etc.)
 -- Or execute your favorite apps at launch like this:
-hl.on("hyprland.start", function () 
-  -- Set a fixed wallpaper from ~/Documents/Wallpaper with swaybg
-  hl.exec_cmd("swaybg --image /home/gabriel/Documents/Wallpaper/wallhaven-gp62o7.png &")
-
-  hl.exec_cmd("foot --server &")
-
-  hl.exec_cmd("waybar &")
+hl.on("hyprland.start", function ()
+  hl.exec_cmd("hyprpaper -c /dev/null & foot --server & waybar &")
 end)
+hl.exec_cmd("foot --server &")
+hl.exec_cmd("hyprctl --batch \"hyprpaper preload '" .. wallpaper .. "' ; hyprpaper wallpaper , '" .. wallpaper .. "'\"")
 
 
 -------------------------------
