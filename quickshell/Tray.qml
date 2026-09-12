@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell.Services.SystemTray
 import Quickshell.Widgets
+import "theme.js" as Theme
 
 Row {
 	id: root
@@ -12,13 +13,13 @@ Row {
 		delegate: Item {
 			required property var modelData
 
-			implicitWidth: 14
-			implicitHeight: 14
+			implicitWidth: Theme.trayIconSize
+			implicitHeight: Theme.trayIconSize
 
 			IconImage {
 				anchors.fill: parent
 				source: modelData.icon
-				implicitSize: 14
+				implicitSize: Theme.trayIconSize
 			}
 
 			MouseArea {
