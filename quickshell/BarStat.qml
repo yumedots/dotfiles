@@ -21,7 +21,7 @@ Item {
 
 	implicitWidth: Theme.lineLength + root.gap
 	readonly property real contentHeight: Math.round(root.inkAbove + root.inkBelow)
-	implicitHeight: root.contentHeight + Math.ceil(Theme.barThickness) + Theme.barPadding * 2
+	implicitHeight: root.contentHeight + Math.ceil(Theme.barThickness)
 
 	TextMetrics {
 		id: iconsMetrics
@@ -57,7 +57,7 @@ Item {
 			id: labelIcon
 
 			x: 0
-			y: Theme.barPadding + root.inkAbove - root.iconAscent
+			y: root.inkAbove - root.iconAscent
 
 			font.family: Theme.fontFamily
 			font.pixelSize: Theme.iconSize
@@ -69,7 +69,7 @@ Item {
 			id: labelValue
 
 			x: labelIcon.width
-			y: Theme.barPadding + root.inkAbove - root.valueAscent
+			y: root.inkAbove - root.valueAscent
 
 			width: Math.max(labelValue.implicitWidth, content.width - labelIcon.width)
 			horizontalAlignment: Text.AlignHCenter

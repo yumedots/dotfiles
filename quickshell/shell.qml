@@ -17,7 +17,7 @@ Variants {
 			right: true
 		}
 
-		implicitHeight: Math.ceil(right.implicitHeight) + Theme.barPadding * 2
+		implicitHeight: Math.ceil(right.implicitHeight) + Theme.barTopPadding
 		exclusiveZone: implicitHeight
 		color: Theme.background
 
