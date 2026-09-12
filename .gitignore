@@ -14,3 +14,5 @@
 /go
 /net.imput.helium
 /mimeapps.list
+/zsh/.zcompdump-*
+/zsh/.zsh_history
