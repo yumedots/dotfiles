@@ -12,13 +12,13 @@ Item {
 
 	readonly property int filled: Theme.filledCells(root.pct)
 
-	implicitWidth: Math.max(label.implicitWidth, bar.implicitWidth)
+	implicitWidth: Math.max(label.implicitWidth, line.implicitWidth)
 	implicitHeight: Theme.barHeight
 
 	Text {
 		id: label
 
-		anchors.horizontalCenter: parent.horizontalCenter
+		anchors.left: parent.left
 		anchors.verticalCenter: parent.verticalCenter
 
 		font.family: Theme.fontFamily
@@ -28,27 +28,27 @@ Item {
 	}
 
 	Item {
-		id: bar
+		id: line
 
-		anchors.horizontalCenter: parent.horizontalCenter
+		anchors.left: parent.left
 		anchors.bottom: parent.bottom
 
-		implicitWidth: Theme.barCells * Theme.barCellWidth
-		implicitHeight: Theme.barThickness
+		implicitWidth: Theme.lineLength
 		width: implicitWidth
-		height: implicitHeight
+		height: Theme.barThickness
 
 		Rectangle {
+			id: fill
+
 			anchors.left: parent.left
 			anchors.top: parent.top
 			anchors.bottom: parent.bottom
-			width: root.filled * Theme.barCellWidth
+			width: line.width * root.filled / Theme.barCells
 			color: root.barColor
 		}
 
 		Rectangle {
-			anchors.left: parent.left
-			anchors.leftMargin: root.filled * Theme.barCellWidth
+			anchors.left: fill.right
 			anchors.right: parent.right
 			anchors.top: parent.top
 			anchors.bottom: parent.bottom
