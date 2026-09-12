@@ -5,6 +5,7 @@ import "config.js" as Config
 Row {
 	id: root
 	spacing: Config.workspaceSpacing
+	leftPadding: Config.workspaceLeftPadding
 
 	readonly property int pool: 10
 	readonly property var persistentIds: [1, 2, 3, 4]

@@ -23,6 +23,7 @@ const spacing = 12;
 const sidePadding = 6;
 const workspacePadding = 1;
 const workspaceSpacing = 6;
+const workspaceLeftPadding = 6;
 
 const iconCpu = "\uf2db";
 const iconMemory = "\uefc5";
