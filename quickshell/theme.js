@@ -27,7 +27,7 @@ const iconVolumeMid = "\uf027";
 const iconVolumeHigh = "\uf028";
 
 const barCells = 15;
-const lineLength = 50;
+const lineLength = 45;
 const barThickness = 1.5;
 
 function mixColor(c1, c2, t) {
