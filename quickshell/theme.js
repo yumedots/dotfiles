@@ -15,7 +15,9 @@ const volumeBase = "#ffffff";
 
 const fontFamily = "Hack Nerd Font";
 const fontSize = 12;
-const barHeight = 20;
+const iconSize = 10;
+const trayIconSize = 11;
+const barPadding = 0;
 const spacing = 12;
 const sidePadding = 3;
 const workspacePadding = 1;
