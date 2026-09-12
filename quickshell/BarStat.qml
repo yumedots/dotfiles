@@ -41,7 +41,7 @@ Item {
 		id: valueMetrics
 		font.family: Theme.fontFamily
 		font.pixelSize: Theme.fontSize
-		text: root.value
+		text: Theme.valueSample
 	}
 
 	Item {
