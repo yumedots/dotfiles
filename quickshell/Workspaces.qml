@@ -4,7 +4,7 @@ import "theme.js" as Theme
 
 Row {
 	id: root
-	spacing: 0
+	spacing: Theme.workspaceSpacing
 
 	readonly property var persistentIds: [1, 2, 3, 4]
 
