@@ -20,7 +20,7 @@ const iconSize = 10;
 const trayIconSize = 11;
 const barTopPadding = 3;
 const spacing = 12;
-const sidePadding = 3;
+const sidePadding = 6;
 const workspacePadding = 1;
 const workspaceSpacing = 6;
 
