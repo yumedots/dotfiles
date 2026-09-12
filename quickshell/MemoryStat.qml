@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell.Io
-import "theme.js" as Theme
+import "config.js" as Config
+import "helpers.js" as Helpers
 
 BarStat {
 	id: root
@@ -8,8 +9,8 @@ BarStat {
 	property real usedGB: 0
 	property real totalGB: 0
 
-	barColor: Theme.mixColor(Theme.memoryBase, Theme.red, root.pct / 100)
-	icon: Theme.iconMemory
+	barColor: Helpers.mixColor(Config.memoryBase, Config.red, root.pct / 100)
+	icon: Config.iconMemory
 	value: root.usedGB.toFixed(1) + "G"
 
 	function handleMeminfo(text) {

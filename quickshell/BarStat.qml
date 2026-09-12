@@ -1,17 +1,18 @@
 import QtQuick
-import "theme.js" as Theme
+import "config.js" as Config
+import "helpers.js" as Helpers
 
 Item {
 	id: root
 
 	property real pct: 0
-	property color barColor: Theme.red
+	property color barColor: Config.red
 	property color textColor: root.barColor
 	property string icon: ""
 	property string value: ""
 	property real gap: 0
 
-	readonly property int filled: Theme.filledCells(root.pct)
+	readonly property int filled: Helpers.filledCells(root.pct, Config.barCells)
 	readonly property real valueAscent: -valueMetrics.boundingRect.y
 	readonly property real iconAscent: -iconMetrics.boundingRect.y
 	readonly property real valueBelow: valueMetrics.tightBoundingRect.y + valueMetrics.tightBoundingRect.height
@@ -19,29 +20,29 @@ Item {
 	readonly property real inkBelow: Math.max(iconsMetrics.tightBoundingRect.y + iconsMetrics.tightBoundingRect.height, root.valueBelow)
 	readonly property real textOffset: root.implicitHeight - root.inkAbove - root.valueBelow
 
-	implicitWidth: Theme.lineLength + root.gap
+	implicitWidth: Config.lineLength + root.gap
 	readonly property real contentHeight: Math.round(root.inkAbove + root.inkBelow)
-	implicitHeight: root.contentHeight + Math.ceil(Theme.barThickness)
+	implicitHeight: root.contentHeight + Math.ceil(Config.barThickness)
 
 	TextMetrics {
 		id: iconsMetrics
-		font.family: Theme.fontFamily
-		font.pixelSize: Theme.iconSize
-		text: Theme.iconCpu + Theme.iconMemory + Theme.iconVolumeLow + Theme.iconVolumeMid + Theme.iconVolumeHigh
+		font.family: Config.fontFamily
+		font.pixelSize: Config.iconSize
+		text: Config.iconCpu + Config.iconMemory + Config.iconVolumeLow + Config.iconVolumeMid + Config.iconVolumeHigh
 	}
 
 	TextMetrics {
 		id: iconMetrics
-		font.family: Theme.fontFamily
-		font.pixelSize: Theme.iconSize
+		font.family: Config.fontFamily
+		font.pixelSize: Config.iconSize
 		text: root.icon
 	}
 
 	TextMetrics {
 		id: valueMetrics
-		font.family: Theme.fontFamily
-		font.pixelSize: Theme.fontSize
-		text: Theme.valueSample
+		font.family: Config.fontFamily
+		font.pixelSize: Config.fontSize
+		text: Config.valueSample
 	}
 
 	Item {
@@ -51,7 +52,7 @@ Item {
 		anchors.top: parent.top
 		anchors.bottom: parent.bottom
 
-		width: Theme.lineLength
+		width: Config.lineLength
 
 		Text {
 			id: labelIcon
@@ -59,8 +60,8 @@ Item {
 			x: 0
 			y: root.inkAbove - root.iconAscent
 
-			font.family: Theme.fontFamily
-			font.pixelSize: Theme.iconSize
+			font.family: Config.fontFamily
+			font.pixelSize: Config.iconSize
 			color: root.textColor
 			text: root.icon
 		}
@@ -74,8 +75,8 @@ Item {
 			width: Math.max(labelValue.implicitWidth, content.width - labelIcon.width)
 			horizontalAlignment: Text.AlignHCenter
 
-			font.family: Theme.fontFamily
-			font.pixelSize: Theme.fontSize
+			font.family: Config.fontFamily
+			font.pixelSize: Config.fontSize
 			color: root.textColor
 			text: root.value
 		}
@@ -87,7 +88,7 @@ Item {
 			anchors.bottom: parent.bottom
 
 			width: parent.width
-			height: Theme.barThickness
+			height: Config.barThickness
 
 			Rectangle {
 				id: fill
@@ -95,7 +96,7 @@ Item {
 				anchors.left: parent.left
 				anchors.top: parent.top
 				anchors.bottom: parent.bottom
-				width: line.width * root.filled / Theme.barCells
+				width: line.width * root.filled / Config.barCells
 				color: root.barColor
 			}
 
@@ -104,7 +105,7 @@ Item {
 				anchors.right: parent.right
 				anchors.top: parent.top
 				anchors.bottom: parent.bottom
-				color: Theme.dim
+				color: Config.dim
 			}
 		}
 	}

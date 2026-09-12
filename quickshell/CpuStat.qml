@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell.Io
-import "theme.js" as Theme
+import "config.js" as Config
+import "helpers.js" as Helpers
 
 BarStat {
 	id: root
@@ -10,8 +11,8 @@ BarStat {
 	property bool waitingForSecondSample: false
 	property string lastRead: ""
 
-	barColor: Theme.mixColor(Theme.cpuBase, Theme.red, root.pct / 100)
-	icon: Theme.iconCpu
+	barColor: Helpers.mixColor(Config.cpuBase, Config.red, root.pct / 100)
+	icon: Config.iconCpu
 	value: Math.round(root.pct) + "%"
 
 	function sample(text) {

@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell
-import "theme.js" as Theme
+import "config.js" as Config
 
 Variants {
 	model: Quickshell.screens
@@ -17,9 +17,9 @@ Variants {
 			right: true
 		}
 
-		implicitHeight: Math.ceil(right.implicitHeight) + Theme.barTopPadding
+		implicitHeight: Math.ceil(right.implicitHeight) + Config.barTopPadding
 		exclusiveZone: implicitHeight
-		color: Theme.background
+		color: Config.background
 
 		SystemClock {
 			id: clock
@@ -44,13 +44,13 @@ Variants {
 			id: right
 
 			anchors.right: parent.right
-			anchors.rightMargin: Theme.sidePadding
+			anchors.rightMargin: Config.sidePadding
 			anchors.bottom: parent.bottom
-			spacing: Theme.spacing
+			spacing: Config.spacing
 
 			Tray {
 				anchors.bottom: parent.bottom
-				anchors.bottomMargin: Math.ceil(Theme.barThickness)
+				anchors.bottomMargin: Math.ceil(Config.barThickness)
 			}
 
 			CpuStat {

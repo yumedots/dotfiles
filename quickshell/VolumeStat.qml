@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell.Services.Pipewire
-import "theme.js" as Theme
+import "config.js" as Config
 
 BarStat {
 	id: root
@@ -10,11 +10,11 @@ BarStat {
 	readonly property bool isMuted: root.sink && root.sink.audio ? root.sink.audio.muted : false
 
 	pct: root.volume * 100
-	barColor: Theme.volumeBase
-	textColor: root.isMuted ? Theme.muted : Theme.volumeBase
-	icon: root.pct >= 67 ? Theme.iconVolumeHigh
-		: root.pct >= 34 ? Theme.iconVolumeMid
-		: Theme.iconVolumeLow
+	barColor: Config.volumeBase
+	textColor: root.isMuted ? Config.muted : Config.volumeBase
+	icon: root.pct >= 67 ? Config.iconVolumeHigh
+		: root.pct >= 34 ? Config.iconVolumeMid
+		: Config.iconVolumeLow
 	value: Math.round(root.pct) + "%"
 
 	PwObjectTracker {

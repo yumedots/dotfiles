@@ -1,10 +1,10 @@
 import QtQuick
 import Quickshell.Hyprland
-import "theme.js" as Theme
+import "config.js" as Config
 
 Row {
 	id: root
-	spacing: Theme.workspaceSpacing
+	spacing: Config.workspaceSpacing
 
 	readonly property var persistentIds: [1, 2, 3, 4]
 
@@ -29,8 +29,8 @@ Row {
 			required property var modelData
 
 			text: "" + modelData
-			padding: Theme.workspacePadding
-			color: root.focusedId === modelData ? Theme.workspaceActive : Theme.workspaceInactive
+			padding: Config.workspacePadding
+			color: root.focusedId === modelData ? Config.workspaceActive : Config.workspaceInactive
 
 			MouseArea {
 				anchors.fill: parent

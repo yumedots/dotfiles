@@ -1,12 +1,12 @@
 import QtQuick
-import "theme.js" as Theme
+import "config.js" as Config
 
 Item {
 	id: root
 
 	property string text: ""
-	property color color: Theme.foreground
-	property int pixelSize: Theme.fontSize
+	property color color: Config.foreground
+	property int pixelSize: Config.fontSize
 	property real padding: 0
 
 	readonly property var sampleInk: metrics.tightBoundingRect
@@ -16,9 +16,9 @@ Item {
 
 	TextMetrics {
 		id: metrics
-		font.family: Theme.fontFamily
+		font.family: Config.fontFamily
 		font.pixelSize: root.pixelSize
-		text: Theme.valueSample
+		text: Config.valueSample
 	}
 
 	Text {
@@ -27,7 +27,7 @@ Item {
 		x: root.padding
 		y: metrics.boundingRect.y - metrics.tightBoundingRect.y
 
-		font.family: Theme.fontFamily
+		font.family: Config.fontFamily
 		font.pixelSize: root.pixelSize
 		color: root.color
 		text: root.text
