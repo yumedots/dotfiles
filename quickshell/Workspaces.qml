@@ -22,6 +22,18 @@ Row {
 			: "workspace " + id);
 	}
 
+	function scroll(step) {
+		const count = root.ids.length;
+
+		if (!count)
+			return;
+
+		const focused = Hyprland.focusedWorkspace;
+		const index = root.ids.indexOf(focused ? focused.id : root.focusedId);
+
+		root.focusWorkspace(root.ids[(index + step + count) % count]);
+	}
+
 	function settle() {
 		const ids = root.persistentIds.concat(Hyprland.workspaces.values.filter(function (w) { return w.id > 0; }).map(function (w) { return w.id; }));
 		root.ids = Array.from(new Set(ids));
@@ -56,7 +68,11 @@ Row {
 
 			MouseArea {
 				anchors.fill: parent
+				anchors.leftMargin: -Config.workspaceSpacing / 2
+				anchors.rightMargin: -Config.workspaceSpacing / 2
+
 				onClicked: root.focusWorkspace(ws.workspaceId)
+				onWheel: (wheel) => root.scroll(wheel.angleDelta.y < 0 ? 1 : -1)
 			}
 		}
 	}
