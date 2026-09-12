@@ -17,8 +17,8 @@ Variants {
 			right: true
 		}
 
-		implicitHeight: Theme.barHeight
-		exclusiveZone: Theme.barHeight
+		implicitHeight: Math.ceil(right.implicitHeight) + Theme.barPadding * 2
+		exclusiveZone: implicitHeight
 		color: Theme.background
 
 		SystemClock {
@@ -28,16 +28,15 @@ Variants {
 
 		Workspaces {
 			anchors.left: parent.left
-			anchors.verticalCenter: parent.verticalCenter
+			anchors.bottom: parent.bottom
+			anchors.bottomMargin: cpuStat.textOffset
 		}
 
-		Text {
+		BarText {
 			anchors.horizontalCenter: parent.horizontalCenter
-			anchors.verticalCenter: parent.verticalCenter
+			anchors.bottom: parent.bottom
+			anchors.bottomMargin: cpuStat.textOffset
 
-			font.family: Theme.fontFamily
-			font.pixelSize: Theme.fontSize
-			color: Theme.foreground
 			text: Qt.formatDateTime(clock.date, "HH:mm")
 		}
 
@@ -46,14 +45,16 @@ Variants {
 
 			anchors.right: parent.right
 			anchors.rightMargin: Theme.sidePadding
-			anchors.verticalCenter: parent.verticalCenter
+			anchors.bottom: parent.bottom
 			spacing: Theme.spacing
 
 			Tray {
-				anchors.verticalCenter: parent.verticalCenter
+				anchors.bottom: parent.bottom
+				anchors.bottomMargin: Math.ceil(Theme.barThickness)
 			}
 
 			CpuStat {
+				id: cpuStat
 				anchors.bottom: parent.bottom
 			}
 
@@ -65,12 +66,10 @@ Variants {
 				anchors.bottom: parent.bottom
 			}
 
-			Text {
-				anchors.verticalCenter: parent.verticalCenter
+			BarText {
+				anchors.bottom: parent.bottom
+				anchors.bottomMargin: cpuStat.textOffset
 
-				font.family: Theme.fontFamily
-				font.pixelSize: Theme.fontSize
-				color: Theme.foreground
 				text: Qt.formatDateTime(clock.date, "yyyy-MM-dd")
 			}
 		}
