@@ -9,49 +9,75 @@ Item {
 	property color textColor: root.barColor
 	property string icon: ""
 	property string value: ""
+	property real gap: 0
 
 	readonly property int filled: Theme.filledCells(root.pct)
 
-	implicitWidth: Theme.lineLength
+	implicitWidth: Theme.lineLength + root.gap
 	implicitHeight: Theme.barHeight
 
-	Text {
-		id: label
-
-		anchors.left: parent.left
-		anchors.verticalCenter: parent.verticalCenter
-
-		font.family: Theme.fontFamily
-		font.pixelSize: Theme.fontSize
-		color: root.textColor
-		text: root.icon + "  " + root.value
-	}
-
 	Item {
-		id: line
+		id: content
 
 		anchors.left: parent.left
+		anchors.top: parent.top
 		anchors.bottom: parent.bottom
 
-		width: root.implicitWidth
-		height: Theme.barThickness
+		width: Theme.lineLength
 
-		Rectangle {
-			id: fill
+		Text {
+			id: labelIcon
 
 			anchors.left: parent.left
-			anchors.top: parent.top
-			anchors.bottom: parent.bottom
-			width: line.width * root.filled / Theme.barCells
-			color: root.barColor
+			anchors.verticalCenter: parent.verticalCenter
+
+			font.family: Theme.fontFamily
+			font.pixelSize: Theme.fontSize
+			color: root.textColor
+			text: root.icon
 		}
 
-		Rectangle {
-			anchors.left: fill.right
-			anchors.right: parent.right
-			anchors.top: parent.top
+		Text {
+			id: labelValue
+
+			anchors.left: labelIcon.right
+			anchors.verticalCenter: parent.verticalCenter
+
+			width: Math.max(labelValue.implicitWidth, content.width - labelIcon.width)
+			horizontalAlignment: Text.AlignHCenter
+
+			font.family: Theme.fontFamily
+			font.pixelSize: Theme.fontSize
+			color: root.textColor
+			text: root.value
+		}
+
+		Item {
+			id: line
+
+			anchors.left: parent.left
 			anchors.bottom: parent.bottom
-			color: Theme.dim
+
+			width: parent.width
+			height: Theme.barThickness
+
+			Rectangle {
+				id: fill
+
+				anchors.left: parent.left
+				anchors.top: parent.top
+				anchors.bottom: parent.bottom
+				width: line.width * root.filled / Theme.barCells
+				color: root.barColor
+			}
+
+			Rectangle {
+				anchors.left: fill.right
+				anchors.right: parent.right
+				anchors.top: parent.top
+				anchors.bottom: parent.bottom
+				color: Theme.dim
+			}
 		}
 	}
 }
