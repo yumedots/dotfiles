@@ -25,15 +25,12 @@ Row {
 	Repeater {
 		model: root.ids
 
-		delegate: Text {
+		delegate: BarText {
 			required property var modelData
 
 			text: "" + modelData
-			font.family: Theme.fontFamily
-			font.pixelSize: Theme.fontSize
+			padding: Theme.workspacePadding
 			color: root.focusedId === modelData ? Theme.workspaceActive : Theme.workspaceInactive
-			leftPadding: Theme.workspacePadding
-			rightPadding: Theme.workspacePadding
 
 			MouseArea {
 				anchors.fill: parent
