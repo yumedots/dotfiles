@@ -32,7 +32,7 @@ local wallpaper = "/home/gabriel/Documents/Wallpaper/Yosemite 2.jpg"
 -- Autostart necessary processes (like notifications daemons, status bars, etc.)
 -- Or execute your favorite apps at launch like this:
 hl.on("hyprland.start", function ()
-  hl.exec_cmd("hyprpaper -c /dev/null & foot --server & waybar &")
+  hl.exec_cmd("hyprpaper -c /dev/null & foot --server & quickshell &")
 end)
 hl.exec_cmd("foot --server &")
 hl.exec_cmd("hyprctl --batch \"hyprpaper preload '" .. wallpaper .. "' ; hyprpaper wallpaper , '" .. wallpaper .. "'\"")
@@ -60,7 +60,7 @@ hl.config({
         gaps_in  = 8,
         gaps_out = 15,
 
-        border_size = 2,
+        border_size = 1,
 
         col = {
             active_border   = { colors = {"rgba(33ccffee)", "rgba(00ff99ee)"}, angle = 45 },
@@ -87,7 +87,7 @@ hl.config({
         },
 
         blur = {
-            enabled   = true,            
+            enabled   = false,            
         },
     },
 
