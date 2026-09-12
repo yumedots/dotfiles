@@ -16,6 +16,12 @@ Row {
 		return workspaces.map(function (w) { return w.id; }).join(",") + "|" + (Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1);
 	}
 
+	function focusWorkspace(id) {
+		Hyprland.dispatch(Hyprland.usingLua
+			? "hl.dsp.focus({ workspace = " + id + " })"
+			: "workspace " + id);
+	}
+
 	function settle() {
 		const ids = root.persistentIds.concat(Hyprland.workspaces.values.filter(function (w) { return w.id > 0; }).map(function (w) { return w.id; }));
 		root.ids = Array.from(new Set(ids));
@@ -50,7 +56,7 @@ Row {
 
 			MouseArea {
 				anchors.fill: parent
-				onClicked: Hyprland.dispatch("workspace " + ws.workspaceId)
+				onClicked: root.focusWorkspace(ws.workspaceId)
 			}
 		}
 	}
