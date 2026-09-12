@@ -9,16 +9,16 @@ Item {
 	property int pixelSize: Theme.fontSize
 	property real padding: 0
 
-	readonly property var ink: metrics.tightBoundingRect
+	readonly property var sampleInk: metrics.tightBoundingRect
 
 	implicitWidth: label.implicitWidth + root.padding * 2
-	implicitHeight: ink.height
+	implicitHeight: root.sampleInk.height
 
 	TextMetrics {
 		id: metrics
 		font.family: Theme.fontFamily
 		font.pixelSize: root.pixelSize
-		text: root.text
+		text: Theme.valueSample
 	}
 
 	Text {
