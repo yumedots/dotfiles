@@ -2,6 +2,9 @@
 
 Do not write comments in code
 Talk in an TLDR mode and explain in an simple TLDR with the less amount of words possible
+NEVER commit or run any git write command until the user explicitly says commit or anything similar, no commits on your own ever
+When the user asks to commit, commit in small coherent blocks, never one big commit: stage whatever files each change touches
+When the user asks to commit, commit messages are one line only, no description and no footer, matching the style of the existing commits
 
 
 # Ponytail, lazy senior dev mode
