@@ -18,25 +18,14 @@ PanelWindow {
 	exclusiveZone: plate.height + Config.dockGap
 
 	readonly property int pool: 16
+	readonly property var windowEvents: ["openwindow", "closewindow", "movewindow", "changefloatingmode"]
 	property bool launcherOpen: false
 	readonly property var toplevels: Hyprland.toplevels.values
 	readonly property string activeAddress: Hyprland.activeToplevel ? Hyprland.activeToplevel.address : ""
 	readonly property int workspaceId: Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1
 	property var applications: ({})
-	readonly property var icons: ({})
-
-	readonly property var apps: {
-		const ids = Config.dockPinned.slice();
-
-		dock.toplevels.forEach(function (toplevel) {
-			const appId = dock.classOf(toplevel);
-
-			if (appId && !ids.some(function (id) { return id.toLowerCase() === appId.toLowerCase(); }))
-				ids.push(appId);
-		});
-
-		return ids;
-	}
+	property var icons: ({})
+	property var apps: []
 
 	function classOf(toplevel) {
 		return toplevel.lastIpcObject.class || "";
@@ -49,6 +38,10 @@ PanelWindow {
 		return Helpers.orderedWindows(dock.toplevels.filter(function (toplevel) {
 			return dock.classOf(toplevel).toLowerCase() === appId.toLowerCase();
 		}), dock.workspaceId);
+	}
+
+	function entryOf(appId) {
+		return Helpers.lookupApp(dock.applications, appId);
 	}
 
 	function iconOf(appId) {
@@ -71,8 +64,19 @@ PanelWindow {
 		return "";
 	}
 
-	function entryOf(appId) {
-		return Helpers.lookupApp(dock.applications, appId);
+	function computeApps() {
+		const ids = Config.dockPinned.slice();
+
+		dock.toplevels.forEach(function (toplevel) {
+			const appId = dock.classOf(toplevel);
+
+			if (appId && !ids.some(function (id) { return id.toLowerCase() === appId.toLowerCase(); }))
+				ids.push(appId);
+		});
+
+		dock.apps = ids.map(function (id) {
+			return { id: id, icon: dock.iconOf(id), windows: dock.windowsOf(id) };
+		});
 	}
 
 	function focus(toplevel) {
@@ -107,6 +111,13 @@ PanelWindow {
 		dock.launcherOpen = true;
 	}
 
+	onToplevelsChanged: settle.restart()
+
+	onApplicationsChanged: {
+		dock.icons = ({});
+		dock.computeApps();
+	}
+
 	Process {
 		id: desktopFiles
 
@@ -122,9 +133,22 @@ PanelWindow {
 		target: Hyprland
 
 		function onRawEvent(event) {
-			if (event.name === "movewindow" || event.name === "changefloatingmode")
-				Hyprland.refreshToplevels();
+			if (dock.windowEvents.indexOf(event.name) < 0)
+				return;
+
+			Hyprland.refreshToplevels();
+			settle.restart();
 		}
+	}
+
+	Timer {
+		id: settle
+
+		interval: 150
+		running: false
+		repeat: false
+
+		onTriggered: dock.computeApps()
 	}
 
 	Process {
@@ -174,8 +198,9 @@ PanelWindow {
 
 				required property int index
 
-				readonly property string appId: dock.apps[index] === undefined ? "" : dock.apps[index]
-				readonly property var windows: dock.windowsOf(item.appId)
+				readonly property var app: dock.apps[index] === undefined ? null : dock.apps[index]
+				readonly property string appId: item.app ? item.app.id : ""
+				readonly property var windows: item.app ? item.app.windows : []
 
 				visible: item.appId !== ""
 				width: Config.dockIconSize
@@ -184,7 +209,7 @@ PanelWindow {
 				IconImage {
 					anchors.fill: parent
 					implicitSize: Config.dockIconSize
-					source: dock.iconOf(item.appId)
+					source: item.app ? item.app.icon : ""
 				}
 
 				Row {
