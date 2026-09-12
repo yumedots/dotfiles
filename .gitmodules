@@ -1,0 +1,3 @@
+[submodule "zsh/custom/themes/minimal"]
+	path = zsh/custom/themes/minimal
+	url = https://github.com/subnixr/minimal
