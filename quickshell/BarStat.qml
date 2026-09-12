@@ -12,7 +12,7 @@ Item {
 
 	readonly property int filled: Theme.filledCells(root.pct)
 
-	implicitWidth: Math.max(label.implicitWidth, line.implicitWidth)
+	implicitWidth: Theme.lineLength
 	implicitHeight: Theme.barHeight
 
 	Text {
@@ -33,8 +33,7 @@ Item {
 		anchors.left: parent.left
 		anchors.bottom: parent.bottom
 
-		implicitWidth: Theme.lineLength
-		width: implicitWidth
+		width: root.implicitWidth
 		height: Theme.barThickness
 
 		Rectangle {
