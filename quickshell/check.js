@@ -348,7 +348,7 @@ assert(parseCpuInfo("processor\t: 0").cores === 1, "without a cpu cores line the
 
 const processes = parseTopProcesses("90.6 freebuff\n39.1 freebuff\n 4.6 helium\n\nnot a process\n");
 assert(processes.length === 3, "one entry per ps line, the noise is dropped");
-assert(processes[0].name === "freebuff" && processes[0].pct === 90.6, "the name and the percentage are split");
+assert(processes[0].name === "freebuff" && processes[0].value === 90.6, "the name and the value are split");
 assert(parseTopProcesses("12.5 tmux: server")[0].name === "tmux: server", "a name with spaces survives");
 assert(parseTopProcesses("%CPU COMMAND").length === 0, "a header line is not a process");
 assert(parseTopProcesses("").length === 0, "an empty listing has no processes");
@@ -356,5 +356,36 @@ assert(topProcesses(parseTopProcesses("200 ps\n40 freebuff\n10 ps <defunct>"), [
 assert(topProcesses(parseTopProcesses("5 a\n4 b\n3 c\n2 d"), [], 2).length === 2, "the list is capped");
 assert(topProcesses(parseTopProcesses("5 a"), [], 0).length === 1, "a cap of zero keeps everything");
 assert(topProcesses(null, [], 3).length === 0, "no processes, no list");
+
+const mem = parseMeminfo("MemTotal:       32763188 kB\nMemFree:        26602464 kB\nMemAvailable:   28637116 kB\nBuffers:          106552 kB\nCached:          2406664 kB\nSwapTotal:       8388604 kB\nSwapFree:        7340032 kB\n");
+assert(mem.total === 32763188 && mem.used === 32763188 - 28637116, "used is total minus available");
+assert(mem.available === 28637116 && mem.cached === 2406664 && mem.buffers === 106552, "available, cached and buffers are read back");
+assert(mem.swapUsed === 8388604 - 7340032, "swap used is total minus free");
+assert(mem.pool === 32763188 + 8388604 && mem.committed === (32763188 - 28637116) + (8388604 - 7340032), "the pool and the committed amount both count swap");
+assert(Math.round(mem.free) === Math.round(mem.pool - mem.committed - mem.cached - mem.buffers), "free is what is left of the pool after committed, cached and buffers");
+assert(mem.free === mem.ramFree + mem.swapFree, "the free total is the ram free plus the swap free");
+assert(mem.ramFree === mem.total - mem.used - mem.cached - mem.buffers, "ram free leaves out the swap");
+assert(mem.swapFree === mem.swapTotal - mem.swapUsed, "swap free is the unused part of the swap");
+assert(Math.round(mem.pct * 100) === Math.round(10000 * mem.committed / mem.pool), "the percentage is committed over the pool");
+
+const noAvailable = parseMeminfo("MemTotal: 1000 kB\nMemFree: 400 kB\nBuffers: 100 kB\nCached: 200 kB\n");
+assert(noAvailable.available === 700 && noAvailable.used === 300, "without MemAvailable the kernel's fallback sum is used");
+assert(noAvailable.pool === 1000 && noAvailable.free === 400, "without swap the pool is just the ram");
+assert(parseMeminfo("").pct === 0 && parseMeminfo("").total === 0, "an unreadable meminfo has no percentage");
+assert(parseMeminfo("MemTotal: 0 kB").pct === 0, "a zero total does not divide by zero");
+assert(mem.swapTotal === 8388604 && parseMeminfo("MemTotal: 100 kB").swapUsed === 0, "no swap means no swap used");
+assert(parseMeminfo("MemTotal: 1000 kB\nSwapTotal: 1000 kB\nMemFree: 1000 kB\n").free === 1000, "swap free is counted as free memory too");
+
+assert(dangerColor("#7bd88f", "#d8b04a", "#e05252", 60, 85, 0) === "#ff7bd88f", "no load is the safe colour");
+assert(dangerColor("#7bd88f", "#d8b04a", "#e05252", 60, 85, 60) === "#ffd8b04a", "the warning colour lands exactly at the warning mark");
+assert(dangerColor("#7bd88f", "#d8b04a", "#e05252", 60, 85, 90) === "#ffe05252", "above the danger mark it stays the danger colour");
+assert(dangerColor("#7bd88f", "#d8b04a", "#e05252", 60, 85, 30) === mixColors("#7bd88f", "#d8b04a", 0.5), "below the warning mark it ramps from safe to warn");
+assert(dangerColor("#7bd88f", "#d8b04a", "#e05252", 60, 85, 72.5) === mixColors("#d8b04a", "#e05252", 0.5), "between the marks it ramps from warn to danger");
+assert(gbText(1024 * 1024) === "1.0 GB", "kilobytes become gigabytes");
+assert(gbText(32763188) === "31.2 GB", "a real total formats to one decimal");
+
+assert(sizeText(1024 * 1024) === "1.0 GB" && sizeText(1024 * 1024 * 3.5) === "3.5 GB", "a gigabyte or more is shown in GB");
+assert(sizeText(1024 * 1024 - 1) === "1024.0 MB" && sizeText(620 * 1024) === "620.0 MB", "below a gigabyte it drops to MB");
+assert(sizeText(999) === "999 KB" && sizeText(0) === "0 KB", "below a megabyte it stays in KB");
 
 console.log("check ok");

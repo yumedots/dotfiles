@@ -881,10 +881,74 @@ function parseTopProcesses(text) {
 		const match = /^\s*([0-9]+(?:\.[0-9]+)?)\s+(.+?)\s*$/.exec(line);
 
 		if (match)
-			out.push({ name: match[2], pct: parseFloat(match[1]) });
+			out.push({ name: match[2], value: parseFloat(match[1]) });
 	});
 
 	return out;
+}
+
+function parseMeminfo(text) {
+	const vals = {};
+
+	String(text || "").split("\n").forEach(function (line) {
+		const at = line.indexOf(":");
+
+		if (at < 0)
+			return;
+
+		vals[line.substring(0, at).trim()] = parseFloat(line.substring(at + 1)) || 0;
+	});
+
+	const total = vals["MemTotal"] || 0;
+	const available = vals["MemAvailable"] || (vals["MemFree"] || 0) + (vals["Buffers"] || 0) + (vals["Cached"] || 0);
+	const used = Math.max(0, total - available);
+	const cached = vals["Cached"] || 0;
+	const buffers = vals["Buffers"] || 0;
+	const swapTotal = vals["SwapTotal"] || 0;
+	const swapUsed = Math.max(0, swapTotal - (vals["SwapFree"] || 0));
+	const pool = total + swapTotal;
+	const committed = used + swapUsed;
+
+	return {
+		total: total,
+		used: used,
+		available: available,
+		cached: cached,
+		buffers: buffers,
+		swapTotal: swapTotal,
+		swapUsed: swapUsed,
+		pool: pool,
+		committed: committed,
+		ramFree: Math.max(0, total - used - cached - buffers),
+		swapFree: Math.max(0, swapTotal - swapUsed),
+		free: Math.max(0, pool - committed - cached - buffers),
+		pct: pool > 0 ? 100 * committed / pool : 0
+	};
+}
+
+function dangerColor(base, warn, danger, warnAt, dangerAt, pct) {
+	if (pct <= warnAt)
+		return mixColors(base, warn, warnAt > 0 ? pct / warnAt : 1);
+
+	if (pct >= dangerAt)
+		return mixColors(danger, danger, 1);
+
+	return mixColors(warn, danger, dangerAt > warnAt ? (pct - warnAt) / (dangerAt - warnAt) : 1);
+}
+
+
+function gbText(kb) {
+	return (kb / 1024 / 1024).toFixed(1) + " GB";
+}
+
+function sizeText(kb) {
+	if (kb >= 1024 * 1024)
+		return (kb / 1024 / 1024).toFixed(1) + " GB";
+
+	if (kb >= 1024)
+		return (kb / 1024).toFixed(1) + " MB";
+
+	return Math.round(kb) + " KB";
 }
 
 function topProcesses(procs, ignore, max) {
