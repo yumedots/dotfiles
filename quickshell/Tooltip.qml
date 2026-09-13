@@ -9,8 +9,6 @@ PopupWindow {
 
 	property Item anchorItem
 	property var anchorWindow
-	property real padding: Config.tooltipPadding
-	property real gap: Config.tooltipGap
 	property int closeDelay: Config.tooltipCloseDelay
 	property var borderColors: null
 	property real borderWidth: -1
@@ -91,7 +89,7 @@ PopupWindow {
 		id: border
 
 		anchors.fill: parent
-		padding: root.padding
+		padding: border.gapsIn
 		borderColors: root.borderColors
 		borderWidth: root.borderWidth
 	}

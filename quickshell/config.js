@@ -32,8 +32,6 @@ const barCells = 15;
 const lineLength = 45;
 const barThickness = 1.5;
 
-const tooltipPadding = 8;
-const tooltipGap = 4;
 const tooltipCloseDelay = 150;
 const tooltipOffsetX = 0;
 const tooltipOffsetY = -8;
