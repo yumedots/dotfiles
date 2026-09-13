@@ -6,49 +6,38 @@ import "helpers.js" as Helpers
 BarStat {
 	id: root
 
-	property real prevTotal: -1
-	property real prevIdle: -1
-	property bool waitingForSecondSample: false
+	signal clicked()
+	signal exited()
+
+	readonly property alias hovered: area.containsMouse
+
+	property var prev: null
 	property string lastRead: ""
+	property var cores: []
 
 	barColor: Helpers.mixColor(Config.cpuBase, Config.red, root.pct / 100)
 	icon: Config.iconCpu
 	value: Math.round(root.pct) + "%"
-
-	function sample(text) {
-		const fields = text.split("\n")[0].split(/\s+/);
-		let total = 0;
-		let idle = 0;
-		for (let i = 1; i < fields.length; i++) {
-			const n = parseFloat(fields[i]);
-			if (isNaN(n))
-				continue;
-			total += n;
-			if (i === 4 || i === 5)
-				idle += n;
-		}
-		return [total, idle];
-	}
 
 	function handleStat(text) {
 		if (text === root.lastRead)
 			return;
 		root.lastRead = text;
 
-		const s = sample(text);
-		if (!root.waitingForSecondSample) {
-			root.prevTotal = s[0];
-			root.prevIdle = s[1];
-			root.waitingForSecondSample = true;
-			secondSample.restart();
-			return;
-		}
+		const first = root.prev === null;
+		const now = Helpers.parseCpuStat(text);
+		const load = Helpers.cpuPercents(root.prev, now);
 
-		const dt = s[0] - root.prevTotal;
-		const di = s[1] - root.prevIdle;
-		root.waitingForSecondSample = false;
-		if (dt > 0)
-			root.pct = 100 * (1 - di / dt);
+		root.prev = now;
+		root.cores = load.cores;
+		root.pct = load.all;
+
+		if (first)
+			secondSample.restart();
+	}
+
+	function refresh() {
+		statFile.reload();
 	}
 
 	FileView {
@@ -72,5 +61,15 @@ BarStat {
 		interval: 150
 		repeat: false
 		onTriggered: statFile.reload()
+	}
+
+	MouseArea {
+		id: area
+
+		anchors.fill: parent
+		hoverEnabled: true
+
+		onClicked: root.clicked()
+		onExited: root.exited()
 	}
 }

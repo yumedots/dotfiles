@@ -89,6 +89,9 @@ ShellRoot {
 				CpuStat {
 					id: cpuStat
 					anchors.bottom: parent.bottom
+
+					onClicked: cpuPopup.toggle()
+					onExited: cpuPopup.scheduleClose()
 				}
 
 				MemoryStat {
@@ -121,6 +124,18 @@ ShellRoot {
 						onClicked: calendarPopup.toggle()
 						onExited: calendarPopup.scheduleClose()
 					}
+				}
+			}
+
+			Tooltip {
+				id: cpuPopup
+
+				anchorWindow: bar
+				anchorItem: cpuStat
+				anchorHovered: cpuStat.hovered
+
+				CpuMonitor {
+					source: cpuStat
 				}
 			}
 
