@@ -18,7 +18,7 @@ PanelWindow {
 	exclusiveZone: plate.height + Config.dockGap
 
 	readonly property int pool: 16
-	readonly property var windowEvents: ["openwindow", "closewindow", "movewindow", "changefloatingmode"]
+	readonly property var windowEvents: ["openwindow", "closewindow", "movewindow", "changefloatingmode", "windowtitle"]
 	property bool launcherOpen: false
 	readonly property var toplevels: Hyprland.toplevels.values
 	readonly property string activeAddress: Hyprland.activeToplevel ? Hyprland.activeToplevel.address : ""
@@ -31,14 +31,22 @@ PanelWindow {
 		return toplevel.lastIpcObject.class || "";
 	}
 
+	function appIdOf(toplevel) {
+		const cls = dock.classOf(toplevel);
+		const word = Helpers.terminalAppId(cls, toplevel.lastIpcObject ? toplevel.lastIpcObject.title : "", Config.dockTerminalClasses);
+
+		return word && dock.iconOf(word) ? word : cls;
+	}
+
 	function windowsOf(appId) {
 		if (!appId)
 			return [];
 
 		return Helpers.orderedWindows(dock.toplevels.filter(function (toplevel) {
-			return dock.classOf(toplevel).toLowerCase() === appId.toLowerCase();
+			return dock.appIdOf(toplevel).toLowerCase() === appId.toLowerCase();
 		}), dock.workspaceId);
 	}
+
 
 	function entryOf(appId) {
 		return Helpers.lookupApp(dock.applications, appId);
@@ -68,7 +76,7 @@ PanelWindow {
 		const ids = Config.dockPinned.slice();
 
 		dock.toplevels.forEach(function (toplevel) {
-			const appId = dock.classOf(toplevel);
+			const appId = dock.appIdOf(toplevel);
 
 			if (appId && !ids.some(function (id) { return id.toLowerCase() === appId.toLowerCase(); }))
 				ids.push(appId);
@@ -205,6 +213,18 @@ PanelWindow {
 				visible: item.appId !== ""
 				width: Config.dockIconSize
 				height: Config.dockIconSize
+				transformOrigin: Item.Center
+	opacity: item.appId === "" ? 0 : 1
+	scale: item.appId === "" ? Config.dockEnterScale : 1
+
+	Behavior on opacity {
+		NumberAnimation { duration: Config.dockEnterDuration; easing.type: Easing.OutCubic }
+	}
+
+	Behavior on scale {
+		NumberAnimation { duration: Config.dockEnterDuration; easing.type: Easing.OutCubic }
+	}
+
 
 				IconImage {
 					anchors.fill: parent
@@ -229,6 +249,16 @@ PanelWindow {
 							radius: Config.dockDotSize / 2
 							color: item.windows[index] && item.windows[index].address === dock.activeAddress ? Config.foreground : Config.dim
 						}
+					}
+
+					Text {
+						height: Config.dockDotSize
+						verticalAlignment: Text.AlignVCenter
+						font.family: Config.fontFamily
+						font.pixelSize: Config.dockPlusSize
+						color: Config.dim
+						text: "+"
+						visible: item.windows.length > Config.dockMaxDots
 					}
 				}
 

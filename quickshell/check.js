@@ -35,6 +35,10 @@ assert(lookupApp(entries, "foo bar").id === "foo", "display name lookup");
 assert(lookupApp(entries, "hidden") === null, "NoDisplay entries are skipped");
 assert(lookupApp(entries, "nope") === null, "unknown ids return null");
 assert(lookupApp(entries, "") === null, "empty names return null");
+assert(daysInMonth(2024, 1) === 29 && daysInMonth(2026, 1) === 28, "february length");
+assert(mondayIndex(new Date(2024, 0, 1)) === 0, "2024-01-01 is a monday");
+assert(mondayIndex(new Date(2026, 8, 1)) === 1, "2026-09-01 is a tuesday");
+assert(clampedDay(31, 2026, 1) === 28, "day clamps to the month length");
 assert(filledCells(50, 15) === 8 && filledCells(200, 15) === 15, "filled cells clamp");
 assert(nextIndex(["a", "b", "c"], "a") === 1, "next window");
 assert(nextIndex(["a", "b", "c"], "c") === 0, "window cycling wraps around");
@@ -53,5 +57,18 @@ assert(orderedWindows([right, left, elsewhere], 3)[2] === elsewhere, "windows on
 assert(orderedWindows([right, elsewhere, left], 3)[1] === right, "same column falls through to the next window");
 assert(orderedWindows([above, left], 3)[0] === left, "same x orders by y");
 assert(orderedWindows([elsewhere], 3).length === 1, "a single window stays put");
+
+assert(commandWord("btop") === "btop", "a bare command is the running program");
+assert(commandWord("nvim notes.md") === "nvim", "arguments are dropped");
+assert(commandWord("Zathura a.pdf") === "zathura", "the command is lowercased");
+assert(commandWord("Yazi: .config") === "yazi", "a colon after the command is dropped");
+assert(commandWord("gabriel@archlinux:~") === "", "a prompt title is not a command");
+assert(commandWord("~/dotfiles") === "", "a path is not a command");
+assert(commandWord("/usr/bin/btop") === "", "an absolute path is not a command");
+assert(commandWord("") === "", "an empty title is not a command");
+assert(terminalAppId("footclient", "yazi: .config", ["foot", "footclient"]) === "yazi", "a tui title wins inside a terminal");
+assert(terminalAppId("footclient", "gabriel@archlinux:~", ["foot", "footclient"]) === "", "a plain prompt has no command");
+assert(terminalAppId("code-insiders", "notes.md - Code", ["foot", "footclient"]) === "code-insiders", "a non-terminal keeps the class");
+assert(terminalAppId("FOOTCLIENT", "btop", ["foot", "footclient"]) === "btop", "terminal classes match case-insensitively");
 
 console.log("check ok");

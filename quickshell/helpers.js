@@ -50,6 +50,34 @@ function filledCells(pct, cells) {
 	return Math.min(Math.max(Math.round((pct / 100) * cells), 0), cells);
 }
 
+function daysInMonth(year, month) {
+	return new Date(year, month + 1, 0).getDate();
+}
+
+function mondayIndex(date) {
+	return (date.getDay() + 6) % 7;
+}
+
+function clampedDay(day, year, month) {
+	return Math.min(Math.max(day, 1), daysInMonth(year, month));
+}
+
+function commandWord(title) {
+	const word = (title || "").split(" ")[0].replace(/:$/, "");
+
+	if (!word || word.indexOf("/") >= 0 || word.indexOf("~") >= 0)
+		return "";
+
+	return word.toLowerCase();
+}
+
+function terminalAppId(cls, title, terminals) {
+	if (terminals.indexOf(String(cls).toLowerCase()) < 0)
+		return cls;
+
+	return commandWord(title);
+}
+
 function parseDesktopEntries(text) {
 	const entries = {};
 
