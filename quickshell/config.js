@@ -32,7 +32,7 @@ const barCells = 15;
 const lineLength = 45;
 const barThickness = 1.5;
 
-const tooltipCloseDelay = 150;
+const tooltipCloseDelay = 50;
 const tooltipOffsetX = 0;
 const tooltipOffsetY = -8;
 const borderFallbackWidth = 1;
