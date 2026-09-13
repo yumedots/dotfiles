@@ -92,9 +92,30 @@ hl.config({
     },
 
     animations = {
-        enabled = false,
+        enabled = true,
     },
 })
+
+-- Fast, subtle motion: transitions land in 100-200ms and only appear/disappear gets a tiny pop.
+-- speed is deciseconds (1 = 100ms), see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Animations/
+hl.curve("quick", { type = "bezier", points = { {0.15, 0}, {0.1, 1} } })
+
+hl.animation({ leaf = "global",        enabled = true, speed = 1.5, bezier = "quick" })
+hl.animation({ leaf = "border",        enabled = true, speed = 1.5, bezier = "quick" })
+hl.animation({ leaf = "windows",       enabled = true, speed = 2,   bezier = "quick" })
+hl.animation({ leaf = "windowsIn",     enabled = true, speed = 1.6, bezier = "quick", style = "popin 97%" })
+hl.animation({ leaf = "windowsOut",    enabled = true, speed = 1.2, bezier = "quick", style = "popin 97%" })
+hl.animation({ leaf = "fade",          enabled = true, speed = 1.5, bezier = "quick" })
+hl.animation({ leaf = "fadeIn",        enabled = true, speed = 1.2, bezier = "quick" })
+hl.animation({ leaf = "fadeOut",       enabled = true, speed = 1,   bezier = "quick" })
+hl.animation({ leaf = "layers",        enabled = true, speed = 1.5, bezier = "quick" })
+hl.animation({ leaf = "layersIn",      enabled = true, speed = 1.5, bezier = "quick", style = "fade" })
+hl.animation({ leaf = "layersOut",     enabled = true, speed = 1.2, bezier = "quick", style = "fade" })
+hl.animation({ leaf = "fadeLayersIn",  enabled = true, speed = 1.2, bezier = "quick" })
+hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1,   bezier = "quick" })
+hl.animation({ leaf = "workspaces",    enabled = true, speed = 1.5, bezier = "quick", style = "fade" })
+hl.animation({ leaf = "workspacesIn",  enabled = true, speed = 1.2, bezier = "quick", style = "fade" })
+hl.animation({ leaf = "workspacesOut", enabled = true, speed = 1.5, bezier = "quick", style = "fade" })
 
 hl.config({
     dwindle = {
