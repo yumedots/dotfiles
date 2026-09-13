@@ -83,7 +83,12 @@ ShellRoot {
 				}
 
 				VolumeStat {
+					id: volumeStat
+
 					anchors.bottom: parent.bottom
+
+					onClicked: volumePopup.toggle()
+					onExited: volumePopup.scheduleClose()
 				}
 
 				BarText {
@@ -104,6 +109,16 @@ ShellRoot {
 						onExited: calendarPopup.scheduleClose()
 					}
 				}
+			}
+
+			Tooltip {
+				id: volumePopup
+
+				anchorWindow: bar
+				anchorItem: volumeStat
+				anchorHovered: volumeStat.hovered
+
+				VolumeMixer {}
 			}
 
 			Tooltip {
