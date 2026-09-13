@@ -22,15 +22,24 @@
         cpuBase -> red, the same load ramp as the overall % in the title (the names went purple for a
         pass and were asked back to white: the purple is the card's, the rows stay readable).
         `ps -eo pcpu=,comm= --sort=-pcpu` re-run every 2s, the sampler's own `ps` (and its zombie)
-        filtered out with Config.cpuTopIgnore: pcpu is an average over the process life, so the fresh
+        filtered out with Config.psIgnore: pcpu is an average over the process life, so the fresh
         `ps` was showing up at 100-200% and topping the list (seen in the probe). Config.cpuTopMax (30)
         caps the list and Config.cpuTopCount (5) is how many rows fit before it scrolls: the rows live
-        in a ListView (spacing Config.cpuProcsGap 6, delegate height taken from a hidden prototype Text
-        so the viewport is exactly cpuTopCount rows) with a 3px Config.muted rounded scrollbar pinned to
-        the card's right edge, taller than the track only when there is more to see. Verified on a
-        scratch instance: procs 30, listH 94 = 5*14 + 4*6, contentH 594 = 30*14 + 29*6, thumb 15 tall at
-        y 0 and y 79 (= the full 94-15 track) at the two ends, row width 231 = the 240 list minus the
-        thumb and the gap, and 21 thumb pixels in a screenshot of the real card
+        in ProcessList.qml (a shared viewport: spacing Config.procsGap 6, row height from a hidden
+        prototype Text, delegate width/height read off ListView.view.rowWidth/rowHeight, and a 3px
+        Config.muted rounded scrollbar pinned to the card's right edge, taller than the track only when
+        there is more to see). Verified on a scratch instance: procs 30, listH 94 = 5*14 + 4*6, contentH
+        594 = 30*14 + 29*6, thumb 15 tall at y 0 and y 79 (= the full 94-15 track) at the two ends, row
+        width 231 = the 240 list minus the thumb and the gap, and 21 thumb pixels in a screenshot of the
+        real card
+  - [x] BUG, the rows were invisible for a while and this is why: rowHeight/rowWidth were declared on
+        the ProcessList *root Item* and read in the delegate as ListView.view.rowWidth, but
+        ListView.view is the ListView, not the Item holding it, so both resolved to undefined and every
+        delegate was created 0x0. contentHeight still came out right (30 delegates of 0 + 29 gaps of 6 =
+        174) and the scrollbar still drew, which is why it looked like a styling problem instead of a
+        sizing one. The two properties now live on the ListView itself (rowWidth takes the width, the
+        scrollbar and the spacing off its own geometry). Verified: delegate 14x231, and the pixel runs
+        that used to read 0 white pixels in the list band now read 339 (cpu card) and 585 (memory card)
   - [x] /proc/stat has exactly one reader: the bar's CpuStat (Helpers.parseCpuStat + cpuPercents, every
         2s, a 150ms second sample on the first read so the bar does not sit at 0% for two seconds). It
         exposes `pct` and `cores`, and the tooltip's CpuMonitor takes them through `source` (shell.qml:
@@ -42,9 +51,65 @@
   - [x] verified content box 264x241 logical (it was 264x201 with three process rows, so the taller
         viewport is exactly the 2 extra rows of 20), fade and border from the shared Tooltip /
         HyprBorder, no warnings on load, node check.js covers the parsing and the clamping
-- [ ] Memory tooltip
-  - [ ] the process eating the most RAM (name + MB + %)
-  - [ ] used / total / available / cached breakdown
+- [x] Memory tooltip (MemoryMonitor.qml, opened by clicking MemoryStat like the cpu one)
+  - [x] /proc/meminfo is parsed once, in the bar's MemoryStat (Helpers.parseMeminfo), and the card takes
+        it through `source` (shell.qml: `MemoryMonitor { source: memoryStat }`), so the bar's number and
+        the widget's cannot drift - the same fix the cpu tooltip needed. MemoryStat keeps the bar label
+        it had (used GB, e.g. "4.0G") and now also exposes the whole parsed record. Verified:
+        bar=12.703 tooltip=12.703 equal=true, total 32763188 kB, used total-available, available/cached/
+        buffers read back against /proc/meminfo
+  - [x] used of total, then available and cached on their own line (Helpers.gbText, kB -> GB with one
+        decimal), then a 4px usage bar in Config.dim with the load colour filling it, then the top
+        processes by RSS
+  - [x] the process eating the most RAM: `ps -eo rss=,comm= --sort=-rss` re-run every 2s while the card
+        is on screen, capped at Config.memoryTopMax (30) and shown Config.memoryTopCount (5) rows at a
+        time with the same ProcessList viewport as the cpu card (Config.psIgnore drops the sampler's own
+        `ps`). Each row is just `name` in Config.foreground and the amount right aligned in
+        Config.memoryBase: Helpers.sizeText picks the unit from the size, GB at a gigabyte or more, then
+        MB, then KB, so `800.7 MB`, `4.2 GB` and `0 KB` all read right. The gauge bar behind the row and
+        the percentage were both dropped on request - the list is there to say how much RAM a process
+        holds, not how big a slice of the card it deserves
+  - [x] swap is counted in everything, not drawn beside it: Helpers.parseMeminfo now returns `pool`
+        (total + swapTotal), `committed`        (used + swapUsed), `free` (pool - committed - cached - buffers, so reclaimable memory counts as
+        free and so does free swap, with `ramFree` and `swapFree` kept apart for the two sides of the
+        bar) and `pct` (committed over the pool, not just ram). One parser means the bar widget's percentage, its colour and the card's whole header are
+        the same numbers. Verified: pool 36957488, committed 4368640 = used + swapUsed, free 29999256,
+        and used + cached + buffers + swapUsed + free = the pool exactly, so the bar always fills 100%
+  - [x] one stacked bar holds the picture, flat, ram cut off from swap, and each pool gets the room it
+        is worth: the bar is scaled by the pool (total + swapTotal), so the ram side takes
+        total/pool and the swap side swapTotal/pool of the width, then each side is filled with its own
+        used / free split - a bigger swap really does get a wider slot (88.7% ram against 11.3% swap on
+        this box, 213px against 27px). Slices: used (danger scale) / cached / buffers / ram free, then
+        Config.memorySeparator (2) in Config.background, then swap used / swap free. The divider is a
+        slice of its own so it reads as a cut between the two pools rather than another colour, and the
+        free slices are Config.memoryFree (#ffffff) on both sides, one rule: free memory is white. A
+        vertical gradient was tried here and taken back out. The legend repeats the same colours in the
+        same order (used / cached / buffers / swap / free, free last). Verified from the pixels along the
+        bar: used #8ed081 to x70.6, cached #44774f to x86.9, buffers #25412b for 0.7, white free to
+        x253.1, the 2px black divider, white free swap to the end; segments 28.8 + 16.2 + 0.7 + 165.3 +
+        2 + 0 + 27 = 240.00 = the card's inner width
+  - [x] a danger meter instead of a straight ramp, so red only shows up when it means something:
+        Helpers.dangerColor(base, warn, danger, warnAt, dangerAt, pct) stays on memoryBase and walks to
+        memoryWarn by Config.memoryWarnAt (60), then to memoryDanger by Config.memoryDangerAt (85), then
+        holds. Used by the bar slice, the header percentage and the bar widget's own colour
+        (MemoryStat), and by every row of the process list, where the colour is the share of the pool
+        that process holds (a 300 MB process sits on memoryBase, a 40% hog lands in the red). The old
+        straight mixColors(memoryBase, red, pct/100) is what made everything look half alarming.
+        Verified: 10% #8bd184, 60% #d8b04a, 75% #dd784f, 90% #e05252, and the live rows came out
+        #7ed78c for the 2% top process. memorySwap also moved off the warm tones to a cool #7f8fd8,
+        since the amber now belongs to the warning scale
+  - [x] rows on this box: `used 4.2 GB`, `cached 2.4 GB`, `buffers 105.4 MB`, `free 28.6 GB`,
+        `swap 0 KB of 4.0 GB` (0 KB rather than 0 B, which is the unit rule the sizes follow)
+  - [x] the card is the memory equivalent of the cpu one: the title is Config.foreground, the committed
+        of pool line, the "Top memory" heading and the row amounts are Config.memoryBase (green), the
+        row names white. Content box 264x292 logical, everything inside the card's width (the figures are
+        right aligned and the names elide), no warnings on load
+  - [x] the cpu card is back to 264x241: a load average line was added under its specs and then asked
+        out again, so Helpers.parseLoadavg and its asserts went with it (no dead code left behind)
+  - [x] the shared plumbing this needed: the stat's clicked/exited/hover moved into BarStat.qml (it was
+        copied into CpuStat and VolumeStat, and MemoryStat would have been a third copy), and the process
+        viewport became ProcessList.qml, so both cards scroll the same way (the cpu content box measured
+        the same 264x241 before and after the refactor)
 - [x] Volume tooltip, a real mixer, laid out as a mixing console (VolumeMixer.qml, opened from VolumeStat)
   - [x] one column per stream, icon only: a vertical 4px pill fader, the percent, then the icon which is
         also the mute toggle (verified: app icons resolve, e.g. image://icon/chromium)
