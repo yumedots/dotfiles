@@ -55,7 +55,7 @@ Item {
 		}
 
 		stdout: StdioCollector {
-			onStreamFinished: root.procs = Helpers.topProcesses(Helpers.parseTopProcesses(text), Config.cpuTopIgnore, Config.cpuTopMax)
+			onStreamFinished: root.procs = Helpers.topProcesses(Helpers.parseTopProcesses(text), Config.psIgnore, Config.cpuTopMax)
 		}
 	}
 
@@ -114,6 +114,7 @@ Item {
 			text: root.spec
 		}
 
+
 		Item {
 			width: column.width
 			height: root.blockRows * (root.blockSize + Config.cpuBlockGap) - Config.cpuBlockGap
@@ -148,70 +149,40 @@ Item {
 			text: "Top processes"
 		}
 
-		Text {
-			id: procRowPrototype
-
-			visible: false
-			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
-			text: "0.0%"
-		}
-
-		Item {
+		ProcessList {
 			width: column.width
-			height: procRowPrototype.implicitHeight * Config.cpuTopCount + Config.cpuProcsGap * (Config.cpuTopCount - 1)
+			visibleRows: Config.cpuTopCount
 			visible: root.procs.length > 0
+			model: root.procs
 
-			ListView {
-				id: procList
+			delegate: Item {
+				required property var modelData
 
-				anchors.fill: parent
-				clip: true
-				model: root.procs
-				spacing: Config.cpuProcsGap
-				boundsBehavior: Flickable.StopAtBounds
+				width: ListView.view.rowWidth
+				height: ListView.view.rowHeight
 
-				delegate: Item {
-					required property var modelData
+				Text {
+					id: process
 
-					width: procList.width - procScroll.width - Config.cpuProcsGap
-					height: procRowPrototype.implicitHeight
+					width: parent.width - percent.width - 8
+					elide: Text.ElideRight
 
-					Text {
-						id: process
-
-						width: parent.width - percent.width - 8
-						elide: Text.ElideRight
-
-						font.family: Config.fontFamily
-						font.pixelSize: Config.fontSize
-						color: Config.foreground
-						text: modelData.name
-					}
-
-					Text {
-						id: percent
-
-						anchors.right: parent.right
-
-						font.family: Config.fontFamily
-						font.pixelSize: Config.fontSize
-						color: root.colorFor(modelData.pct)
-						text: modelData.pct.toFixed(1) + "%"
-					}
+					font.family: Config.fontFamily
+					font.pixelSize: Config.fontSize
+					color: Config.foreground
+					text: modelData.name
 				}
-			}
 
-			Rectangle {
-				id: procScroll
+				Text {
+					id: percent
 
-				visible: procList.contentHeight > procList.height
-				width: 3
-				radius: width / 2
-				color: Config.muted
-				x: parent.width - width
-				height: Math.max(12, procList.height * procList.height / Math.max(1, procList.contentHeight))
-				y: procList.contentY / Math.max(1, procList.contentHeight - procList.height) * (procList.height - height)
+					anchors.right: parent.right
+
+					font.family: Config.fontFamily
+					font.pixelSize: Config.fontSize
+					color: root.colorFor(modelData.value)
+					text: modelData.value.toFixed(1) + "%"
+				}
 			}
 		}
 	}
