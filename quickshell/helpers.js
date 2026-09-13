@@ -131,6 +131,25 @@ function parseHyprGaps(text) {
 	return gaps;
 }
 
+function parseHyprAnimationSpeed(text, leaf) {
+	let groups;
+
+	try {
+		groups = JSON.parse(text);
+	} catch (error) {
+		return null;
+	}
+
+	const list = [].concat.apply([], groups);
+
+	for (let i = 0; i < list.length; i++) {
+		if (list[i] && list[i].name === leaf)
+			return list[i].overridden && list[i].speed > 0 ? Math.round(list[i].speed * 100) : null;
+	}
+
+	return null;
+}
+
 function daysInMonth(year, month) {
 	return new Date(year, month + 1, 0).getDate();
 }

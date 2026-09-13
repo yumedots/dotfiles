@@ -114,4 +114,14 @@ assert(pinnedFromText("yazi\nbtop\n\n")[0] === "yazi" && pinnedFromText("yazi\nb
 assert(pinnedFromText("").length === 0, "a missing pin file yields nothing");
 assert(shellQuote("a b") === "'a b'", "shell quoting wraps spaces");
 
+const animations = JSON.stringify([[
+	{ name: "windowsIn", overridden: true, speed: 1.6 },
+	{ name: "fade", overridden: false, speed: 0 }
+]]);
+
+assert(parseHyprAnimationSpeed(animations, "windowsIn") === 160, "an overridden animation speed becomes milliseconds");
+assert(parseHyprAnimationSpeed(animations, "fade") === null, "an inherited animation has no own speed");
+assert(parseHyprAnimationSpeed(animations, "nope") === null, "an unknown leaf has no speed");
+assert(parseHyprAnimationSpeed("not json", "windowsIn") === null, "garbage yields nothing");
+
 console.log("check ok");
