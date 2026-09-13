@@ -23,3 +23,51 @@ rules = [
 	# Fallback
 	{ url = "*/", fg = "blue" }
 ]
+
+[mgr]
+cwd = { fg = "gray" }
+
+[tabs]
+active   = { bg = "gray", bold = true }
+inactive = { fg = "gray", bg = "darkgray" }
+sep_inner = { open = "", close = "" }
+sep_outer = { open = "", close = "" }
+
+[mode]
+normal_main = { bg = "gray", bold = true }
+normal_alt  = { fg = "gray", bg = "darkgray" }
+
+[indicator]
+padding = { open = " ", close = " " }
+
+[status]
+sep_left  = { open = "", close = "" }
+sep_right = { open = "", close = "" }
+
+[which]
+border = { fg = "gray" }
+cand   = { fg = "gray" }
+
+[confirm]
+border = { fg = "gray" }
+title  = { fg = "gray" }
+
+[spot]
+border   = { fg = "gray" }
+title    = { fg = "gray" }
+tbl_col  = { fg = "gray" }
+
+[pick]
+border = { fg = "gray" }
+
+[input]
+border = { fg = "gray" }
+
+[cmp]
+border = { fg = "gray" }
+
+[tasks]
+border = { fg = "gray" }
+
+[help]
+border = { fg = "gray" }
