@@ -105,7 +105,7 @@ PanelWindow {
 
 		const entry = dock.entryOf(appId);
 
-		Quickshell.execDetached([entry && entry.exec ? entry.exec : appId]);
+		Quickshell.execDetached(Helpers.launchCommand(entry, appId));
 	}
 
 	function toggleLauncher() {

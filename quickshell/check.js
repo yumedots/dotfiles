@@ -22,6 +22,7 @@ const entries = parseDesktopEntries([
 	"/usr/share/applications/firefox.desktop:Icon=firefox",
 	"/usr/share/applications/foo.desktop:Name=Foo Bar",
 	"/usr/share/applications/foo.desktop:Icon=foo",
+	"/usr/share/applications/foo.desktop:Terminal=true",
 	"/usr/share/applications/hidden.desktop:Name=Hidden App",
 	"/usr/share/applications/hidden.desktop:Icon=hidden",
 	"/usr/share/applications/hidden.desktop:NoDisplay=true"
@@ -32,6 +33,7 @@ assert(lookupApp(entries, "firefox").exec === "firefox", "exec basename comes fr
 assert(lookupApp(entries, "Code - Insiders").id === "code-insiders", "wmclass lookup");
 assert(lookupApp(entries, "code-insiders").icon === "vscode-insiders", "action groups do not overwrite the main icon");
 assert(lookupApp(entries, "foo bar").id === "foo", "display name lookup");
+assert(lookupApp(entries, "foo").terminal === true, "Terminal=true is parsed");
 assert(lookupApp(entries, "hidden") === null, "NoDisplay entries are skipped");
 assert(lookupApp(entries, "nope") === null, "unknown ids return null");
 assert(lookupApp(entries, "") === null, "empty names return null");
@@ -70,5 +72,8 @@ assert(terminalAppId("footclient", "yazi: .config", ["foot", "footclient"]) === 
 assert(terminalAppId("footclient", "gabriel@archlinux:~", ["foot", "footclient"]) === "", "a plain prompt has no command");
 assert(terminalAppId("code-insiders", "notes.md - Code", ["foot", "footclient"]) === "code-insiders", "a non-terminal keeps the class");
 assert(terminalAppId("FOOTCLIENT", "btop", ["foot", "footclient"]) === "btop", "terminal classes match case-insensitively");
+assert(launchCommand({ exec: "btop", terminal: true }, "btop")[0] === "foot" && launchCommand({ exec: "btop", terminal: true }, "btop")[2] === "btop", "a Terminal=true app opens inside a terminal");
+assert(launchCommand({ exec: "code-insiders" }, "code-insiders")[0] === "code-insiders", "a regular app runs directly");
+assert(launchCommand(null, "footclient")[0] === "footclient", "an entry-less app runs as-is");
 
 console.log("check ok");

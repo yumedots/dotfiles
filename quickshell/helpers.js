@@ -78,6 +78,15 @@ function terminalAppId(cls, title, terminals) {
 	return commandWord(title);
 }
 
+function launchCommand(entry, appId) {
+	const command = entry && entry.exec ? entry.exec : appId;
+
+	if (entry && entry.terminal)
+		return ["foot", "-e", command];
+
+	return [command];
+}
+
 function parseDesktopEntries(text) {
 	const entries = {};
 
@@ -103,6 +112,8 @@ function parseDesktopEntries(text) {
 			entry.icon = value;
 		else if (key === "StartupWMClass" && !entry.wmclass)
 			entry.wmclass = value;
+		else if (key === "Terminal")
+			entry.terminal = value === "true";
 		else if (key === "Exec" && !entry.exec) {
 			const command = value.split(/\s+/)[0];
 
