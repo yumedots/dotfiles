@@ -7,33 +7,38 @@ Item {
 
 	property date today: new Date()
 	property int monthOffset: 0
-	property int shownDay: 0
 
 	readonly property date first: new Date(root.today.getFullYear(), root.today.getMonth() + root.monthOffset, 1)
-	readonly property int days: Helpers.daysInMonth(root.first.getFullYear(), root.first.getMonth())
+	readonly property int year: root.first.getFullYear()
+	readonly property int month: root.first.getMonth()
+	readonly property int length: Helpers.daysInMonth(root.year, root.month)
 	readonly property int leading: Helpers.mondayIndex(root.first)
-	readonly property int selected: Helpers.clampedDay(root.shownDay || root.today.getDate(), root.first.getFullYear(), root.first.getMonth())
-	readonly property date selectedDate: new Date(root.first.getFullYear(), root.first.getMonth(), root.selected)
+	readonly property int rows: Math.ceil((root.leading + root.length) / 7)
 	readonly property real gridWidth: Config.calendarCellWidth * 7
-	readonly property int rows: 6
 
 	implicitWidth: root.gridWidth + Config.calendarPadding * 2
-	implicitHeight: Config.calendarPadding * 2 + Config.calendarHeaderHeight + Config.calendarFooterHeight + Config.calendarCellHeight * root.rows
+	implicitHeight: Config.calendarPadding * 2
+		+ Config.calendarHeaderHeight
+		+ Config.calendarCellHeight
+		+ Config.calendarCellHeight * root.rows
 
-	function step(months) {
+	function shift(months) {
 		root.monthOffset += months;
-		root.shownDay = 0;
+	}
+
+	function reset() {
+		root.monthOffset = 0;
 	}
 
 	function isToday(day) {
 		return root.monthOffset === 0 && day === root.today.getDate();
 	}
 
-	component Nav: Item {
-		id: nav
+	component Arrow: Item {
+		id: arrow
 
 		property string glyph
-		signal activated()
+		signal fired()
 
 		implicitWidth: label.implicitWidth + 10
 		implicitHeight: Config.calendarHeaderHeight
@@ -44,17 +49,12 @@ Item {
 			anchors.centerIn: parent
 			font.family: Config.fontFamily
 			font.pixelSize: Config.fontSize
-			color: hover.hovered ? Config.foreground : Config.dim
-			text: nav.glyph
+			color: Config.foreground
+			text: arrow.glyph
 		}
 
-		HoverHandler {
-			id: hover
-		}
-
-		MouseArea {
-			anchors.fill: parent
-			onClicked: nav.activated()
+		TapHandler {
+			onTapped: arrow.fired()
 		}
 	}
 
@@ -72,14 +72,14 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			spacing: 2
 
-			Nav {
+			Arrow {
 				glyph: "«"
-				onActivated: root.step(-12)
+				onFired: root.shift(-12)
 			}
 
-			Nav {
+			Arrow {
 				glyph: "‹"
-				onActivated: root.step(-1)
+				onFired: root.shift(-1)
 			}
 		}
 
@@ -88,14 +88,14 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			spacing: 2
 
-			Nav {
+			Arrow {
 				glyph: "›"
-				onActivated: root.step(1)
+				onFired: root.shift(1)
 			}
 
-			Nav {
+			Arrow {
 				glyph: "»"
-				onActivated: root.step(12)
+				onFired: root.shift(12)
 			}
 		}
 
@@ -105,15 +105,21 @@ Item {
 			font.pixelSize: Config.fontSize
 			color: Config.foreground
 			text: Qt.formatDate(root.first, "MMMM yyyy")
-		}
 
-		MouseArea {
-			anchors.fill: parent
-			onClicked: {
-				root.monthOffset = 0;
-				root.shownDay = 0;
+			TapHandler {
+				onTapped: root.reset()
 			}
 		}
+	}
+
+	Rectangle {
+		anchors.top: header.top
+		anchors.bottom: weekdays.bottom
+		anchors.left: header.left
+		anchors.right: header.right
+		color: "transparent"
+		border.width: 1
+		border.color: Config.foreground
 	}
 
 	Row {
@@ -134,7 +140,7 @@ Item {
 				verticalAlignment: Text.AlignVCenter
 				font.family: Config.fontFamily
 				font.pixelSize: Config.fontSize
-				color: Config.dim
+				color: Config.foreground
 				text: Qt.formatDate(new Date(2024, 0, 1 + index), "ddd")
 			}
 		}
@@ -156,8 +162,8 @@ Item {
 
 				required property int index
 
-				readonly property int day: index - root.leading + 1
-				readonly property bool within: cell.day >= 1 && cell.day <= root.days
+				readonly property int day: cell.index - root.leading + 1
+				readonly property bool inside: cell.day >= 1 && cell.day <= root.length
 
 				x: (cell.index % 7) * Config.calendarCellWidth
 				y: Math.floor(cell.index / 7) * Config.calendarCellHeight
@@ -169,7 +175,7 @@ Item {
 					width: Math.min(parent.width, parent.height) - 2
 					height: width
 					color: Config.foreground
-					visible: cell.within && root.isToday(cell.day)
+					visible: cell.inside && root.isToday(cell.day)
 				}
 
 				Text {
@@ -177,44 +183,9 @@ Item {
 					font.family: Config.fontFamily
 					font.pixelSize: Config.fontSize
 					color: root.isToday(cell.day) ? Config.background : Config.foreground
-					text: cell.within ? cell.day : ""
-				}
-
-				HoverHandler {
-					onHoveredChanged: {
-						if (hovered && cell.within)
-							root.shownDay = cell.day;
-					}
+					text: cell.inside ? cell.day : ""
 				}
 			}
-		}
-	}
-
-	Item {
-		id: footer
-
-		anchors.bottom: parent.bottom
-		anchors.bottomMargin: Config.calendarPadding
-		anchors.horizontalCenter: parent.horizontalCenter
-		width: root.gridWidth
-		height: Config.calendarFooterHeight
-
-		Text {
-			anchors.left: parent.left
-			anchors.verticalCenter: parent.verticalCenter
-			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
-			color: Config.foreground
-			text: Qt.formatDate(root.selectedDate, "dddd d MMMM")
-		}
-
-		Text {
-			anchors.right: parent.right
-			anchors.verticalCenter: parent.verticalCenter
-			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
-			color: Config.dim
-			text: root.days + " days"
 		}
 	}
 }

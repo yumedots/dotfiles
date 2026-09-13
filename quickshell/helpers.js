@@ -50,16 +50,59 @@ function filledCells(pct, cells) {
 	return Math.min(Math.max(Math.round((pct / 100) * cells), 0), cells);
 }
 
+function parseGradient(text) {
+	const parts = String(text || "").trim().split(/\s+/);
+	const colors = [];
+	let angle = 0;
+
+	parts.forEach(function (part) {
+		const degrees = /^(-?[0-9.]+)deg$/i.exec(part);
+
+		if (degrees) {
+			angle = parseFloat(degrees[1]);
+			return;
+		}
+
+		if (/^[0-9a-f]{6}([0-9a-f]{2})?$/i.test(part))
+			colors.push("#" + part.toLowerCase());
+	});
+
+	return { colors: colors.length ? colors : null, angle: angle };
+}
+
+function parseHyprBorder(text) {
+	const border = { colors: null, angle: 0, width: null };
+
+	String(text || "").split("\n").forEach(function (line) {
+		if (!line.trim())
+			return;
+
+		let option;
+
+		try {
+			option = JSON.parse(line);
+		} catch (error) {
+			return;
+		}
+
+		if (option.gradient) {
+			const gradient = parseGradient(option.gradient);
+
+			border.colors = gradient.colors || border.colors;
+			border.angle = gradient.angle;
+		} else if (typeof option.int === "number" && String(option.option).indexOf("border_size") >= 0)
+			border.width = option.int;
+	});
+
+	return border;
+}
+
 function daysInMonth(year, month) {
 	return new Date(year, month + 1, 0).getDate();
 }
 
 function mondayIndex(date) {
 	return (date.getDay() + 6) % 7;
-}
-
-function clampedDay(day, year, month) {
-	return Math.min(Math.max(day, 1), daysInMonth(year, month));
 }
 
 function commandWord(title) {

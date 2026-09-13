@@ -35,11 +35,16 @@ const barCells = 15;
 const lineLength = 45;
 const barThickness = 1.5;
 
+const tooltipPadding = 8;
+const tooltipGap = 4;
+const tooltipCloseDelay = 150;
+const tooltipBorderWidth = 1;
+const tooltipBorderColor = "#ffffff";
+
 const calendarCellWidth = 26;
 const calendarCellHeight = 19;
 const calendarPadding = 10;
 const calendarHeaderHeight = 22;
-const calendarFooterHeight = 20;
 
 const dockEnabled = false;
 const dockIconSize = 34;

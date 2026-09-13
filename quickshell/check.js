@@ -40,8 +40,28 @@ assert(lookupApp(entries, "") === null, "empty names return null");
 assert(daysInMonth(2024, 1) === 29 && daysInMonth(2026, 1) === 28, "february length");
 assert(mondayIndex(new Date(2024, 0, 1)) === 0, "2024-01-01 is a monday");
 assert(mondayIndex(new Date(2026, 8, 1)) === 1, "2026-09-01 is a tuesday");
-assert(clampedDay(31, 2026, 1) === 28, "day clamps to the month length");
 assert(filledCells(50, 15) === 8 && filledCells(200, 15) === 15, "filled cells clamp");
+
+const border = parseHyprBorder([
+	'{"option": "general:col.active_border", "gradient": "ee33ccff ee00ff99 45deg", "set": true }',
+	'{"option": "general:border_size", "int": 1, "set": true }'
+].join("\n"));
+
+assert(border.colors[0] === "#ee33ccff" && border.colors[1] === "#ee00ff99", "gradient colors keep hyprland's alpha first order");
+assert(border.angle === 45, "gradient angle is read");
+assert(border.width === 1, "border size is read");
+
+const solidBorder = parseHyprBorder('{"option": "general:col.inactive_border", "gradient": "aa595959 0deg", "set": true }');
+assert(solidBorder.colors.length === 1 && solidBorder.colors[0] === "#aa595959", "a single color border is not treated as a gradient");
+
+const unsetBorder = parseHyprBorder('{"option": "general:col.active_border", "gradient": "", "set": false }\n{"option": "general:border_size", "int": 3, "set": true }');
+assert(unsetBorder.colors === null && unsetBorder.width === 3, "an unset gradient still reports the border size");
+
+const brokenBorder = parseHyprBorder("hyprctl: command not found\n\n");
+assert(brokenBorder.colors === null && brokenBorder.width === null && brokenBorder.angle === 0, "unreadable output leaves the tooltip on its fallback border");
+
+const namedColor = parseGradient("rgba(ff0000ff) 90deg");
+assert(namedColor.angle === 90 && namedColor.colors === null, "a token that is not a plain hex color is dropped");
 assert(nextIndex(["a", "b", "c"], "a") === 1, "next window");
 assert(nextIndex(["a", "b", "c"], "c") === 0, "window cycling wraps around");
 assert(nextIndex(["a", "b", "c"], "zz") === 0, "an unfocused app starts at its first window");

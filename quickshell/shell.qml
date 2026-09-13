@@ -41,12 +41,6 @@ ShellRoot {
 				anchors.bottomMargin: cpuStat.textOffset
 
 				text: Qt.formatDateTime(clock.date, "HH:mm")
-
-				HoverHandler {
-					id: clockHover
-
-					onHoveredChanged: clockHover.hovered ? calendarPopup.show() : calendarPopup.scheduleClose()
-				}
 			}
 
 			Row {
@@ -76,53 +70,35 @@ ShellRoot {
 				}
 
 				BarText {
+					id: dateText
+
 					anchors.bottom: parent.bottom
 					anchors.bottomMargin: cpuStat.textOffset
 
 					text: Qt.formatDateTime(clock.date, "yyyy-MM-dd")
+
+					MouseArea {
+						id: dateArea
+
+						anchors.fill: parent
+						hoverEnabled: true
+
+						onClicked: calendarPopup.toggle()
+						onExited: calendarPopup.scheduleClose()
+					}
 				}
 			}
 
-			PopupWindow {
+			Tooltip {
 				id: calendarPopup
 
-				anchor.window: bar
-				anchor.rect.x: Math.round((bar.width - implicitWidth) / 2)
-				anchor.rect.y: bar.height
-
-				implicitWidth: calendar.implicitWidth
-				implicitHeight: calendar.implicitHeight
-				color: Config.background
-				visible: false
-
-				function show() {
-					closeTimer.stop();
-					visible = true;
-				}
-
-				function scheduleClose() {
-					closeTimer.restart();
-				}
-
-				Timer {
-					id: closeTimer
-
-					interval: 150
-
-					onTriggered: {
-						if (!clockHover.hovered && !calendarHover.hovered)
-							calendarPopup.visible = false;
-					}
-				}
+				anchorWindow: bar
+				anchorItem: dateText
+				anchorHovered: dateArea.containsMouse
+				padding: 0
 
 				Calendar {
-					id: calendar
-
 					today: clock.date
-
-					HoverHandler {
-						id: calendarHover
-					}
 				}
 			}
 		}
