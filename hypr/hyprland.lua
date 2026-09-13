@@ -19,7 +19,8 @@ hl.monitor({
 -- Set programs that you use
 local terminal = "footclient" -- use footclient; the foot server is started at login
 local fileManager = "dolphin"
-local menu = "fuzzel"
+local menu = "qs ipc call shell launcher"
+local windowSwitcher = "qs ipc call shell windows"
 local wallpaper = "/home/gabriel/Documents/Wallpaper/12-Monterey-Dark.jpg"
 
 
@@ -35,6 +36,7 @@ hl.on("hyprland.start", function ()
   hl.exec_cmd("awww-daemon & foot --server & quickshell &")
 end)
 hl.exec_cmd("foot --server &")
+hl.exec_cmd("pgrep -f 'cliphist store' >/dev/null || wl-paste --watch cliphist store &")
 hl.exec_cmd("awww query 2>/dev/null | grep -qF 'image: " .. wallpaper .. "' || for i in $(seq 1 10); do awww img '" .. wallpaper .. "' && break; sleep 0.2; done")
 
 
@@ -212,6 +214,7 @@ hl.bind(mainMod .. " + SPACE", function()
     end
 end)
 hl.bind( "ALT + SPACE", hl.dsp.exec_cmd(menu))
+hl.bind(mainMod .. " + TAB", hl.dsp.exec_cmd(windowSwitcher))
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 
 -- Move focus with mainMod + arrow keys

@@ -1,8 +1,21 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "config.js" as Config
 
 ShellRoot {
+	IpcHandler {
+		target: "shell"
+
+		function launcher() {
+			launcherWindow.toggle();
+		}
+
+		function windows() {
+			launcherWindow.toggleWindows();
+		}
+	}
+
 	Variants {
 		model: Quickshell.screens
 
@@ -137,5 +150,10 @@ ShellRoot {
 
 	Dock {
 		visible: Config.dockEnabled
+		onLauncherRequested: launcherWindow.toggle()
+	}
+
+	Launcher {
+		id: launcherWindow
 	}
 }

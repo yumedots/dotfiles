@@ -19,7 +19,7 @@ PanelWindow {
 
 	readonly property int pool: 16
 	readonly property var windowEvents: ["openwindow", "closewindow", "movewindow", "changefloatingmode", "windowtitle"]
-	property bool launcherOpen: false
+	signal launcherRequested()
 	readonly property var toplevels: Hyprland.toplevels.values
 	readonly property string activeAddress: Hyprland.activeToplevel ? Hyprland.activeToplevel.address : ""
 	readonly property int workspaceId: Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1
@@ -92,17 +92,6 @@ PanelWindow {
 		const entry = dock.entryOf(appId);
 
 		Quickshell.execDetached(Helpers.launchCommand(entry, appId));
-	}
-
-	function toggleLauncher() {
-		if (dock.launcherOpen) {
-			Quickshell.execDetached(["pkill", "-x", Config.dockLauncherProcess]);
-			dock.launcherOpen = false;
-			return;
-		}
-
-		Quickshell.execDetached(Config.dockLauncherCommand);
-		dock.launcherOpen = true;
 	}
 
 	function isPinned(appId) {
@@ -230,25 +219,6 @@ PanelWindow {
 		onTriggered: dock.computeApps()
 	}
 
-	Process {
-		id: launcherCheck
-
-		command: ["pgrep", "-x", Config.dockLauncherProcess]
-		running: false
-
-		onExited: (code) => {
-			dock.launcherOpen = code === 0;
-		}
-	}
-
-	Timer {
-		interval: 400
-		running: true
-		repeat: true
-
-		onTriggered: launcherCheck.running = true
-	}
-
 	Rectangle {
 		id: plate
 
@@ -370,7 +340,7 @@ PanelWindow {
 
 			MouseArea {
 				anchors.fill: parent
-				onPressed: dock.toggleLauncher()
+				onPressed: dock.launcherRequested()
 			}
 		}
 	}
