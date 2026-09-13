@@ -10,6 +10,7 @@ const workspaceActive = "#ffffff";
 const workspaceInactive = "#5c5c5c";
 
 const cpuBase = "#a78bfa";
+const cpuIdle = "#2f2f2f";
 const memoryBase = "#7bd88f";
 const volumeBase = "#ffffff";
 
@@ -66,6 +67,16 @@ const iconOutput = "\u{f0379}";
 const iconInput = "\u{f036c}";
 const iconPrev = "\u{f0141}";
 const iconNext = "\u{f0142}";
+
+const cpuTooltipWidth = 240;
+const cpuTooltipPadding = 12;
+const cpuBlockGap = 4;
+const cpuBlockColumns = 16;
+const cpuTopCount = 5;
+const cpuTopMax = 30;
+const cpuProcsGap = 6;
+const cpuTopIgnore = ["ps", "ps <defunct>"];
+const cpuPollMs = 1000;
 
 const launcherWidth = 270;
 const launcherPadding = 12;
