@@ -2,7 +2,7 @@
 
 ## Tooltips
 
-- [ ] Shared tooltip popup (black, square edges, the same popup mechanism the calendar uses), opens on hover, closes with a small delay so the pointer can travel into it
+- [x] Shared tooltip popup (Tooltip.qml: black, square edges, 1px gradient border taken from the Hyprland config), opens on demand, closes with a small delay so the pointer can travel into it (Config.tooltipCloseDelay)
 - [ ] CPU tooltip
   - [ ] per core usage as a block grid, one block per core, github contribution graph style, color mixed red -> cpuBase by load
   - [ ] cpu model name, core/thread count and basic specs from /proc/cpuinfo
@@ -15,15 +15,13 @@
   - [ ] only the apps with audio flowing, via PwNodePeakMonitor on the Pipewire.nodes streams (PwNode.isStream)
   - [ ] default sink volume + mute at the top
   - [ ] mute a single app without touching the sink
-- [ ] Date / clock tooltip = the calendar below
+- [x] Date / clock tooltip = the calendar below
 
 ## Calendar
 
 - [x] month grid, weekday column names, today inverted
-- [x] footer with the day of the week, the date and how many days the month has
 - [x] two arrows each side: month (‹ ›) and year (« »), title click resets to today
-- [x] hovering a day moves the footer to that day, the day number is kept when changing month
-- [x] hover the clock opens it, leaving closes it (verified with a real pointer)
+- [x] rewritten from scratch, click the date component at the far right opens it, leaving it closes it (verified by screenshot: 203x178 logical, 1px gradient border)
 - [ ] optional: week numbers, ISO week, holidays
 
 ## Dock
@@ -85,7 +83,27 @@
 - tmp test tools (not part of the config, they live in /tmp and vanish on reboot): /tmp/vp/vpclick is
   a small zwlr_virtual_pointer_manager_v1 client that injects move/click/scroll, /tmp/bin has wtype
   so keys can be typed into a focused surface
-- check.js covers the desktop entry parsing, the app lookup and the calendar date helpers: node check.js
+- check.js covers the desktop entry parsing, the app lookup, the calendar date helpers and the
+  Hyprland border parsing: node check.js
+- the tooltip border is not configured in this repo: Tooltip.qml asks Hyprland for
+  `general:col.active_border` and `general:border_size` (hyprctl getoption -j) and asks again on the
+  `configreloaded` event, so the hyprland config stays the single source of truth. `borderWidth`
+  (-1) and `borderColors` (null) override it per tooltip, e.g. `borderWidth: 0` for no border
+- hyprctl prints colors as AARRGGBB, which is also what Qt parses an 8 digit hex string as, so
+  "#" + the token is the color as is (ee33ccff -> opacity ee, rgb 33ccff). A value hyprland cannot
+  express as plain hex is dropped and the tooltip falls back to Config.tooltipBorderColor
+- the gradient border is a rotated rectangle the size of the diagonal clipped by the tooltip frame,
+  with a hole cut by the background colored rectangle on top, because Qt's Gradient only offers
+  Horizontal/Vertical orientation. Only the first and last color stop are used
+- `anchorItem.Window.window` is a raw Qt window, not the Quickshell one, and setting it made the
+  popup never show ("not a quickshell window"), so Tooltip takes the window explicitly
+  (`anchorWindow: bar`) and positions itself from the anchor item with mapToItem
+- mapToItem is not reactive, so a binding for the position was evaluated before layout and gave
+  0,0 (popup off screen). Tooltip.refreshAnchor recomputes it every time the popup is shown
+- anchor.rect.y is measured from the bottom edge of the anchor window, not its top, so the popup
+  sits `rect.y` below the bar. Fine for this top bar, and the x is clamped to the window width so a
+  far right anchor (the date) still lands on screen. A bottom anchored tooltip (the dock) would
+  need flipping up, which is not implemented yet
 
 
 Make switching workspaces with the mouse wheel faster while holding the SUPER button
