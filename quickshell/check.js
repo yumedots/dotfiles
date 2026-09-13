@@ -298,4 +298,63 @@ assert(appEntries({ avahi: { name: "Avahi", exec: "avahi" } }, ["avahi"]).length
 assert(appEntries({ keep: { name: "Keep", exec: "keep" } }, ["avahi"]).length === 1, "only the ignored ids are skipped");
 assert(appEntries({ firefox: { name: "Firefox", exec: "firefox", execLine: "firefox --new-window" } })[0].execLine === "firefox --new-window", "the exec line reaches the launcher entry");
 
+const statBefore = [
+	"cpu  100 0 100 800 0 0 0 0 0 0",
+	"cpu0 60 0 40 900 0 0 0 0 0 0",
+	"cpu1 20 0 30 750 0 0 0 0 0 0",
+	"intr 123 456"
+].join("\n");
+const statAfter = [
+	"cpu  150 0 175 875 0 0 0 0 0 0",
+	"cpu0 70 0 105 925 0 0 0 0 0 0",
+	"cpu1 50 0 50 800 0 0 0 0 0 0"
+].join("\n");
+
+const before = parseCpuStat(statBefore);
+const after = parseCpuStat(statAfter);
+
+assert(before.total.total === 1000 && before.total.idle === 800, "the aggregate cpu line is not a core");
+assert(before.cores.length === 2, "one sample per core, the other /proc/stat lines are ignored");
+assert(before.cores[0].total === 1000 && before.cores[0].idle === 900, "the idle and iowait columns are the idle time");
+
+const load = cpuPercents(before, after);
+assert(load.all === 62.5, "the overall load comes from the aggregate line");
+assert(load.cores[0] === 75, "a core that spent a quarter of the delta idle is at 75%");
+assert(load.cores[1] === 50, "a core that spent half of the delta idle is at 50%");
+assert(cpuPercents(null, after).cores[0] === 0, "the first sample has nothing to compare against");
+assert(cpuPercents({ total: before.total, cores: [before.cores[0]] }, after).cores[1] === 0, "a core without a previous sample reads zero");
+assert(cpuPercents(before, before).all === 0, "an unchanged sample has no load");
+assert(parseCpuStat("").cores.length === 0, "an empty stat file has no cores");
+assert(parseCpuStat("ctxt 1\nbtime 2\n").total.total === 0, "no cpu line, no sample");
+assert(cpuLoad({ total: 200, idle: 0 }, { total: 100, idle: 50 }) === 100, "the load is clamped at 100%");
+
+const info = parseCpuInfo([
+	"processor\t: 0",
+	"model name\t: Intel(R) Xeon(R) CPU E5-2690 v4 @ 2.60GHz",
+	"cpu MHz\t\t: 1200.000",
+	"cache size\t: 35840 KB",
+	"cpu cores\t: 14",
+	"processor\t: 1",
+	"cpu MHz\t\t: 3196.870"
+].join("\n"));
+
+assert(info.model === "Intel(R) Xeon(R) CPU E5-2690 v4 @ 2.60GHz", "the model name is the first one");
+assert(info.threads === 2 && info.cores === 14, "threads are counted, cores come from cpu cores");
+assert(info.mhz === 3196.87, "the fastest clock in the file wins");
+assert(info.cache === 35840, "the cache size is read in KB");
+assert(cpuSpecLine(info) === "2 threads \u00b7 14 cores \u00b7 3.2 GHz \u00b7 35 MB", "the spec line reads threads, cores, clock and cache");
+assert(cpuSpecLine(parseCpuInfo("")) === "", "an unreadable cpuinfo has no spec line");
+assert(parseCpuInfo("processor\t: 0").cores === 1, "without a cpu cores line the thread count stands in");
+
+const processes = parseTopProcesses("90.6 freebuff\n39.1 freebuff\n 4.6 helium\n\nnot a process\n");
+assert(processes.length === 3, "one entry per ps line, the noise is dropped");
+assert(processes[0].name === "freebuff" && processes[0].pct === 90.6, "the name and the percentage are split");
+assert(parseTopProcesses("12.5 tmux: server")[0].name === "tmux: server", "a name with spaces survives");
+assert(parseTopProcesses("%CPU COMMAND").length === 0, "a header line is not a process");
+assert(parseTopProcesses("").length === 0, "an empty listing has no processes");
+assert(topProcesses(parseTopProcesses("200 ps\n40 freebuff\n10 ps <defunct>"), ["ps", "ps <defunct>"], 3)[0].name === "freebuff", "the sampling process and its zombie are filtered out");
+assert(topProcesses(parseTopProcesses("5 a\n4 b\n3 c\n2 d"), [], 2).length === 2, "the list is capped");
+assert(topProcesses(parseTopProcesses("5 a"), [], 0).length === 1, "a cap of zero keeps everything");
+assert(topProcesses(null, [], 3).length === 0, "no processes, no list");
+
 console.log("check ok");

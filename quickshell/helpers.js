@@ -766,6 +766,136 @@ function pathLines(text) {
 	return String(text || "").split("\n").map(function (line) { return line.trim(); }).filter(function (line) { return line !== ""; });
 }
 
+function cpuSample(fields) {
+	let total = 0;
+	let idle = 0;
+
+	for (let i = 1; i < fields.length; i++) {
+		const n = parseFloat(fields[i]);
+
+		if (isNaN(n))
+			continue;
+
+		total += n;
+		if (i === 4 || i === 5)
+			idle += n;
+	}
+
+	return { total: total, idle: idle };
+}
+
+function parseCpuStat(text) {
+	const out = { total: { total: 0, idle: 0 }, cores: [] };
+
+	String(text || "").split("\n").forEach(function (line) {
+		const fields = line.trim().split(/\s+/);
+
+		if (fields[0] !== "cpu" && !/^cpu[0-9]+$/.test(fields[0]))
+			return;
+
+		if (fields[0] === "cpu")
+			out.total = cpuSample(fields);
+		else
+			out.cores.push(cpuSample(fields));
+	});
+
+	return out;
+}
+
+function cpuLoad(now, before) {
+	if (!now || !before)
+		return 0;
+
+	const dt = now.total - before.total;
+
+	if (dt <= 0)
+		return 0;
+
+	return Math.min(Math.max(100 * (1 - (now.idle - before.idle) / dt), 0), 100);
+}
+
+function cpuPercents(prev, now) {
+	const out = { all: 0, cores: [] };
+
+	if (!now || !now.cores)
+		return out;
+
+	out.all = cpuLoad(now.total, prev ? prev.total : null);
+	out.cores = now.cores.map(function (core, i) {
+		return cpuLoad(core, prev && prev.cores && prev.cores[i] ? prev.cores[i] : null);
+	});
+
+	return out;
+}
+
+function parseCpuInfo(text) {
+	const info = { model: "", cores: 0, threads: 0, mhz: 0, cache: 0 };
+
+	String(text || "").split("\n").forEach(function (line) {
+		const at = line.indexOf(":");
+
+		if (at < 0)
+			return;
+
+		const key = line.substring(0, at).trim();
+		const value = line.substring(at + 1).trim();
+
+		if (key === "processor")
+			info.threads += 1;
+		else if (key === "model name" && !info.model)
+			info.model = value;
+		else if (key === "cpu cores" && !info.cores)
+			info.cores = parseInt(value, 10) || 0;
+		else if (key === "cpu MHz")
+			info.mhz = Math.max(info.mhz, parseFloat(value) || 0);
+		else if (key === "cache size" && !info.cache)
+			info.cache = parseFloat(value) || 0;
+	});
+
+	if (!info.cores)
+		info.cores = info.threads;
+
+	return info;
+}
+
+function cpuSpecLine(info) {
+	const parts = [];
+	const i = info || {};
+
+	if (i.threads)
+		parts.push(i.threads + " threads");
+	if (i.cores && i.cores !== i.threads)
+		parts.push(i.cores + " cores");
+	if (i.mhz)
+		parts.push((i.mhz / 1000).toFixed(1) + " GHz");
+	if (i.cache)
+		parts.push(i.cache >= 1024 ? Math.round(i.cache / 1024) + " MB" : i.cache + " KB");
+
+	return parts.join(" · ");
+}
+
+function parseTopProcesses(text) {
+	const out = [];
+
+	String(text || "").split("\n").forEach(function (line) {
+		const match = /^\s*([0-9]+(?:\.[0-9]+)?)\s+(.+?)\s*$/.exec(line);
+
+		if (match)
+			out.push({ name: match[2], pct: parseFloat(match[1]) });
+	});
+
+	return out;
+}
+
+function topProcesses(procs, ignore, max) {
+	const skip = ignore || [];
+	const kept = (procs || []).filter(function (proc) {
+		return skip.indexOf(proc.name) < 0;
+	});
+
+	return max > 0 ? kept.slice(0, max) : kept;
+}
+
 function lookupApp(entries, name) {
 	if (!name)
 		return null;
