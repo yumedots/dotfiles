@@ -10,12 +10,44 @@
 - [ ] Memory tooltip
   - [ ] the process eating the most RAM (name + MB + %)
   - [ ] used / total / available / cached breakdown
-- [ ] Volume tooltip, a real mixer
-  - [ ] one row per app currently playing sound (icon, name, volume slider, mute toggle)
-  - [ ] only the apps with audio flowing, via PwNodePeakMonitor on the Pipewire.nodes streams (PwNode.isStream)
-  - [ ] default sink volume + mute at the top
-  - [ ] mute a single app without touching the sink
+- [x] Volume tooltip, a real mixer, laid out as a mixing console (VolumeMixer.qml, opened from VolumeStat)
+  - [x] one column per stream, icon only: a vertical 4px pill fader, the percent, then the icon which is
+        also the mute toggle (verified: app icons resolve, e.g. image://icon/chromium)
+  - [x] the fader fills from the bottom, so half volume is a half pill, and a click anywhere on it jumps there
+  - [x] only the apps with audio flowing: `pw-dump` polled while the popup is open, a node counts while its
+        state is running. Config.mixerOnlyPlaying off keeps every app stream visible instead
+  - [x] mute a single app without touching the sink (verified: the sink stays unmuted)
+  - [x] outputs only: the apps that are recording are not channels, they only put a red dot on the mic line
+        as a reminder (there is no input mixer, and no separator between the two)
+  - [x] one stream, one channel, even for two windows of the same app: two Chromium streams sat side by side
+        as two columns, and setting one to 35% left the other and the sink untouched (verified)
+  - [x] the app faders on top, then the output and input devices below as DeviceLines that run the whole
+        width of the widget: the device icon, a 4px horizontal pill and the percent flush at the right
+        edge (verified: line 228 wide, the bar runs 34 -> 190.1 and the percent ends exactly at 228.0)
+  - [x] how wide the widget is with nothing playing is Config.mixerIdleChannels columns (2), which is what
+        the output / input bars stretch to: 78 long at rest, and they grow with the app columns past the
+        cap. Config.mixerChannelWidth (72) sets the X size, Config.mixerFaderThickness (4) the fatness,
+        Config.mixerDeviceIconSize (26) the icon on the output / input rows (verified: popup 174x82 idle
+        with the bars 78.1 long, rows h26, 26px icons, app badges still 22). Raising mixerIdleChannels
+        widens the resting widget and lengthens both bars by the same amount
+  - [x] the percent is the mute toggle and the device icon opens the speaker / mic list, clicking a row
+        makes it the default (verified: source muted and restored, picker opened listing both outputs).
+        The active device is listed first and bright, the rest dim. The switch chevron and its reserved
+        slot are gone, so the bar got its 22px back, and with a single device the icon is inert
+        (verified: sink switchable -> icon clickable, source not -> disabled, percent still mutes)
+  - [x] past Config.mixerVisibleChannels (5) an arrow pages the app row, one arrow each side, the left one
+        only after you have paged, and the row slides with an eased 180ms. The cap really is 5 columns:
+        with 7 apps playing the row is 400 wide but the window clips at 284 and exactly 5 columns are
+        painted (counted from the pixels), the rest are behind the arrow
 - [x] Date / clock tooltip = the calendar below
+
+## Dev loop
+
+- [x] gotcha: quickshell does not watch config.js. A config-only edit reloads nothing, so the change never
+      reaches the running shell (`touch` is not enough either) — only a real .qml content change triggers
+      the file watcher, and that reload does re-import config.js (verified with a marker logged from
+      config.js: 0 reloads after editing it alone, 1 after a whitespace edit to shell.qml, marker printed).
+      So after a config change, restart quickshell or make any .qml content change to trigger a reload
 
 ## Calendar
 
@@ -134,8 +166,27 @@ Contracts (know before building):
 - tmp test tools (not part of the config, they live in /tmp and vanish on reboot): /tmp/vp/vpclick is
   a small zwlr_virtual_pointer_manager_v1 client that injects move/click/scroll, /tmp/bin has wtype
   so keys can be typed into a focused surface
-- check.js covers the desktop entry parsing, the app lookup, the calendar date helpers and the
-  Hyprland border and gap parsing: node check.js
+- check.js covers the desktop entry parsing, the app lookup, the calendar date helpers, the
+  Hyprland border, gap and animation parsing and the pipewire stream parsing: node check.js
+- PwNodePeakMonitor is unusable for the volume mixer on quickshell 0.3.1: it wants the capture stream's
+  channels to match the node's, so a mono stream spams "is missing channels present in capture stream",
+  and creating a monitor for every node of Pipewire.nodes segfaulted quickshell. The mixer instead polls
+  `pw-dump` (Helpers.parseRunningStreams) and trusts `info.state == "running"`, which the daemon upgrades
+  to running only while the stream actually drives the sink. Only polled while the tooltip is on screen
+  (`Window.window.visible`), so a closed mixer costs nothing
+- PwNode.properties comes back empty until a PwObjectTracker holds the node, so each stream row tracks its
+  own node: the app name and the icon candidates all live in that map. isStream / isSink / type are
+  constants (qmltypes marks them constant, they hold before the bind), media.class only arrives with the
+  bind, so the tracker is gated on isStream and never on a value read out of properties: gating it on the
+  properties-derived match both loops (tracker -> properties -> match -> tracker) and deadlocks input mode,
+  where an empty media class classifies as output and the row would never get tracked at all
+- PwNode.id is the node's global id, which is what pw-dump lists as the object id, so the running set from
+  pw-dump matches the model directly (the pactl sink input index is object.serial instead)
+- AppIcons.qml holds the .desktop grep and the icon resolution, shared by the dock and the volume mixer
+  instead of each keeping its own copy. A stream only carries application.name / application.icon-name and
+  those often miss (Helium is "helium" as an app but "helium-browser" as an icon), so the entry's Icon= is
+  what actually resolves; Quickshell.hasThemeIcon(Config.dockFallbackIcon) is false on this box, which is why
+  an app with no entry and no matching icon gets a glyph rather than a generic placeholder
 - the border and the spacing are not configured in this repo: HyprBorder.qml (shared by the bar and
   every tooltip) asks Hyprland for `general:col.active_border`, `general:border_size` and
   `general:gaps_in` / `general:gaps_out` (hyprctl getoption -j) and asks again on the `configreloaded`
