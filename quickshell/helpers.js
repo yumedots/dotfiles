@@ -150,6 +150,82 @@ function parseHyprAnimationSpeed(text, leaf) {
 	return null;
 }
 
+function isOutputStream(isStream, mediaClass) {
+	if (!isStream)
+		return false;
+
+	return String(mediaClass === undefined || mediaClass === null ? "" : mediaClass).indexOf("Input") < 0;
+}
+
+function isInputStream(isStream, mediaClass) {
+	if (!isStream)
+		return false;
+
+	return String(mediaClass === undefined || mediaClass === null ? "" : mediaClass).indexOf("Input") >= 0;
+}
+
+function streamApp(props) {
+	const values = props || {};
+	const binary = String(values["application.process.binary"] || "");
+	const icons = [];
+
+	if (values["application.icon-name"])
+		icons.push(String(values["application.icon-name"]));
+	if (values["application.name"])
+		icons.push(String(values["application.name"]).toLowerCase());
+	if (binary)
+		icons.push(binary.substring(binary.lastIndexOf("/") + 1));
+
+	return {
+		name: values["application.name"] || values["node.description"] || values["node.name"] || "",
+		icons: icons
+	};
+}
+
+function parseRunningStreams(text, direction) {
+	let dump;
+
+	try {
+		dump = JSON.parse(text);
+	} catch (error) {
+		return [];
+	}
+
+	const wanted = direction === "input" ? "Stream/Input" : "Stream/Output";
+	const ids = [];
+
+	(dump || []).forEach(function (object) {
+		if (!object || object.type !== "PipeWire:Interface:Node")
+			return;
+
+		const info = object.info || {};
+		const props = info.props || {};
+
+		if (String(props["media.class"] || "").indexOf(wanted) < 0)
+			return;
+		if (info.state !== "running")
+			return;
+
+		ids.push(object.id);
+	});
+
+	return ids;
+}
+
+function pageCount(contentWidth, viewWidth, step) {
+	if (viewWidth <= 0 || step <= 0 || contentWidth <= viewWidth)
+		return 1;
+
+	return Math.ceil((contentWidth - viewWidth) / step) + 1;
+}
+
+function pageOffset(page, contentWidth, viewWidth, step) {
+	const last = Math.max(0, contentWidth - viewWidth);
+	const wanted = Math.max(0, Math.floor(page)) * step;
+
+	return Math.max(0, Math.min(wanted, last));
+}
+
 function daysInMonth(year, month) {
 	return new Date(year, month + 1, 0).getDate();
 }

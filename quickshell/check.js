@@ -124,4 +124,51 @@ assert(parseHyprAnimationSpeed(animations, "fade") === null, "an inherited anima
 assert(parseHyprAnimationSpeed(animations, "nope") === null, "an unknown leaf has no speed");
 assert(parseHyprAnimationSpeed("not json", "windowsIn") === null, "garbage yields nothing");
 
+assert(isOutputStream(true, "Stream/Output/Audio"), "a playback stream counts as a playing app");
+assert(!isOutputStream(true, "Stream/Input/Audio"), "a capture stream is not a playing app");
+assert(!isOutputStream(false, "Audio/Sink"), "a sink is not an app stream");
+assert(isOutputStream(true, ""), "a stream without a media class is still an app stream");
+assert(isOutputStream(true, null), "a null media class is still an app stream");
+assert(isInputStream(true, "Stream/Input/Audio"), "a capture stream counts as an input stream");
+assert(!isInputStream(true, "Stream/Output/Audio"), "a playback stream is not an input stream");
+assert(!isInputStream(false, "Audio/Source"), "a source device is not an input stream");
+assert(!isInputStream(true, null), "a null media class is not an input stream");
+
+const streamProps = {
+	"application.name": "Firefox",
+	"application.icon-name": "firefox",
+	"application.process.binary": "/usr/lib/firefox/firefox"
+};
+assert(streamApp(streamProps).name === "Firefox", "the app name comes from the stream properties");
+assert(streamApp(streamProps).icons[0] === "firefox", "the app icon name is preferred");
+assert(streamApp({ "node.description": "Dummy Output" }).name === "Dummy Output", "a stream without an app name falls back to its description");
+assert(streamApp({ "application.process.binary": "/usr/bin/mpv" }).icons.indexOf("mpv") >= 0, "the icon falls back to the process binary");
+assert(streamApp(null).name === "" && streamApp(null).icons.length === 0, "missing properties yield nothing");
+
+const nodeDump = JSON.stringify([
+	{ id: 53, type: "PipeWire:Interface:Node", info: { state: "running", props: { "media.class": "Audio/Sink" } } },
+	{ id: 69, type: "PipeWire:Interface:Node", info: { state: "running", props: { "media.class": "Stream/Output/Audio" } } },
+	{ id: 70, type: "PipeWire:Interface:Node", info: { state: "suspended", props: { "media.class": "Stream/Output/Audio" } } },
+	{ id: 71, type: "PipeWire:Interface:Node", info: { state: "running", props: { "media.class": "Stream/Input/Audio" } } },
+	{ id: 72, type: "PipeWire:Interface:Link", info: { state: "running", props: {} } }
+]);
+
+assert(parseRunningStreams(nodeDump).length === 1 && parseRunningStreams(nodeDump)[0] === 69, "only a running playback stream counts as playing");
+assert(parseRunningStreams(nodeDump, "output").length === 1, "the default direction is playback");
+assert(parseRunningStreams(nodeDump, "input").length === 1 && parseRunningStreams(nodeDump, "input")[0] === 71, "only a running capture stream counts as recording");
+assert(parseRunningStreams("not json").length === 0, "a broken dump yields nothing");
+assert(parseRunningStreams("[]").length === 0, "an empty dump yields nothing");
+
+assert(pageCount(516, 284, 290) === 2, "two pages when the overflow fits in one step");
+assert(pageCount(900, 284, 290) === 4, "more pages as the overflow grows");
+assert(pageCount(284, 284, 290) === 1, "a row that fits is one page");
+assert(pageCount(100, 0, 290) === 1, "an unsized row is one page");
+assert(pageCount(516, 284, 0) === 1, "a zero step is one page");
+
+assert(pageOffset(0, 516, 284, 290) === 0, "the first page is not offset");
+assert(pageOffset(1, 516, 284, 290) === 232, "the last page clamps to the end of the row");
+assert(pageOffset(9, 516, 284, 290) === 232, "a page past the end still clamps");
+assert(pageOffset(-3, 516, 284, 290) === 0, "a negative page does not move back");
+assert(pageOffset(1, 900, 284, 290) === 290, "a middle page steps by exactly one page");
+
 console.log("check ok");
