@@ -17,23 +17,19 @@ PopupWindow {
 	property bool anchorHovered: false
 
 	property real anchorX: 0
-	property real anchorY: 0
 
 	readonly property real wantedX: root.anchorX + (root.anchorItem ? root.anchorItem.width : 0) / 2 - root.implicitWidth / 2
 	readonly property real limitX: (root.anchorWindow ? root.anchorWindow.width : 0) - root.implicitWidth
 
 	anchor.window: root.anchorWindow
-	anchor.rect.x: Math.round(Math.max(0, Math.min(root.wantedX, root.limitX)))
-	anchor.rect.y: Math.round(root.anchorY + (root.anchorItem ? root.anchorItem.height : 0) + root.gap)
+	anchor.rect.x: Math.round(Math.max(0, Math.min(root.wantedX + Config.tooltipOffsetX, root.limitX)))
+	anchor.rect.y: root.anchorWindow ? root.anchorWindow.height + border.gapsOut + Config.tooltipOffsetY : 0
 
 	function refreshAnchor() {
 		if (root.anchorItem === null || root.anchorWindow === null)
 			return;
 
-		const point = root.anchorItem.mapToItem(root.anchorWindow.contentItem, 0, 0);
-
-		root.anchorX = point.x;
-		root.anchorY = point.y;
+		root.anchorX = root.anchorItem.mapToItem(root.anchorWindow.contentItem, 0, 0).x;
 	}
 
 	implicitWidth: border.contentWidth + 2 * border.inset
