@@ -97,6 +97,40 @@ function parseHyprBorder(text) {
 	return border;
 }
 
+function parseHyprGaps(text) {
+	const gaps = { inner: null, outer: null };
+
+	String(text || "").split("\n").forEach(function (line) {
+		if (!line.trim())
+			return;
+
+		let option;
+
+		try {
+			option = JSON.parse(line);
+		} catch (error) {
+			return;
+		}
+
+		const raw = option.css !== undefined ? option.css : option.int;
+
+		if (raw === undefined)
+			return;
+
+		const value = parseFloat(String(raw).trim().split(/\s+/)[0]);
+
+		if (isNaN(value))
+			return;
+
+		if (String(option.option).indexOf("gaps_out") >= 0)
+			gaps.outer = value;
+		else if (String(option.option).indexOf("gaps_in") >= 0)
+			gaps.inner = value;
+	});
+
+	return gaps;
+}
+
 function daysInMonth(year, month) {
 	return new Date(year, month + 1, 0).getDate();
 }

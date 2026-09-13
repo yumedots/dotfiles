@@ -38,8 +38,10 @@ const barThickness = 1.5;
 const tooltipPadding = 8;
 const tooltipGap = 4;
 const tooltipCloseDelay = 150;
-const tooltipBorderWidth = 1;
-const tooltipBorderColor = "#ffffff";
+const borderFallbackWidth = 1;
+const borderFallbackColor = "#ffffff";
+const gapsInFallback = 8;
+const gapsOutFallback = 15;
 
 const calendarCellWidth = 26;
 const calendarCellHeight = 19;
