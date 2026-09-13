@@ -3,10 +3,45 @@
 ## Tooltips
 
 - [x] Shared tooltip popup (Tooltip.qml: black, square edges, 1px gradient border taken from the Hyprland config through HyprBorder.qml), opens on demand, closes with a small delay so the pointer can travel into it (Config.tooltipCloseDelay)
-- [ ] CPU tooltip
-  - [ ] per core usage as a block grid, one block per core, github contribution graph style, color mixed red -> cpuBase by load
-  - [ ] cpu model name, core/thread count and basic specs from /proc/cpuinfo
-  - [ ] the process eating the most CPU (name + %)
+- [x] CPU tooltip (CpuMonitor.qml, opened by clicking CpuStat like the calendar / mixer)
+  - [x] per core usage as a block grid, one block per core, github contribution graph style, the color mixed
+        Config.cpuIdle -> Config.cpuBase by load: no usage is a dark grey, and load is what paints the
+        purple, so a busy core stands out against the quiet ones instead of the whole grid being one
+        bright purple (the bar's own stat and the % texts in the card keep cpuBase -> red, the ramp the
+        bar has always used, and they are text on black so they stay legible). Config.cpuBlockColumns (16)
+        columns, the block size is derived from Config.cpuTooltipWidth so a full row always spans the
+        card, the gap is Config.cpuBlockGap (4). Verified from the pixels: blocks 11.25 logical square on
+        a 15.25 pitch, 16 per row, 56 threads as 4 rows, an idle core painted #2f2f2f (= cpuIdle) and a
+        loaded one landing between that and #a78bfa (= cpuBase), on a #000000 card
+  - [x] the model name (title, elided) with the overall load next to it, then the specs from
+        /proc/cpuinfo, e.g. `56 threads · 14 cores · 3.3 GHz · 35 MB` (cache is KB -> MB, the clock is the
+        fastest one in the file, missing keys are dropped from the line). The title and the specs line
+        are on the card's own ladder: the title is Config.foreground, the specs and the "Top processes"
+        heading are Config.cpuBase (the card's purple), so the card reads as one thing with the grid
+  - [x] the top CPU processes: name left (elided) in Config.foreground and the percentage right in
+        cpuBase -> red, the same load ramp as the overall % in the title (the names went purple for a
+        pass and were asked back to white: the purple is the card's, the rows stay readable).
+        `ps -eo pcpu=,comm= --sort=-pcpu` re-run every 2s, the sampler's own `ps` (and its zombie)
+        filtered out with Config.cpuTopIgnore: pcpu is an average over the process life, so the fresh
+        `ps` was showing up at 100-200% and topping the list (seen in the probe). Config.cpuTopMax (30)
+        caps the list and Config.cpuTopCount (5) is how many rows fit before it scrolls: the rows live
+        in a ListView (spacing Config.cpuProcsGap 6, delegate height taken from a hidden prototype Text
+        so the viewport is exactly cpuTopCount rows) with a 3px Config.muted rounded scrollbar pinned to
+        the card's right edge, taller than the track only when there is more to see. Verified on a
+        scratch instance: procs 30, listH 94 = 5*14 + 4*6, contentH 594 = 30*14 + 29*6, thumb 15 tall at
+        y 0 and y 79 (= the full 94-15 track) at the two ends, row width 231 = the 240 list minus the
+        thumb and the gap, and 21 thumb pixels in a screenshot of the real card
+  - [x] /proc/stat has exactly one reader: the bar's CpuStat (Helpers.parseCpuStat + cpuPercents, every
+        2s, a 150ms second sample on the first read so the bar does not sit at 0% for two seconds). It
+        exposes `pct` and `cores`, and the tooltip's CpuMonitor takes them through `source` (shell.qml:
+        `CpuMonitor { source: cpuStat }`), so the bar and its widget can no longer disagree (before this
+        each had its own FileView and cadence, and 1% next to 2% was normal) and the per core grid comes
+        from the same delta as the number above it. Opening the popup calls source.refresh() to take a
+        fresh sample. Verified: bar=1.8649 tooltip=1.8649 equal=true, barCores=56 tooltipCores=56
+        sameArray=true, bar text "2%" against the monitor's Math.round 2%
+  - [x] verified content box 264x241 logical (it was 264x201 with three process rows, so the taller
+        viewport is exactly the 2 extra rows of 20), fade and border from the shared Tooltip /
+        HyprBorder, no warnings on load, node check.js covers the parsing and the clamping
 - [ ] Memory tooltip
   - [ ] the process eating the most RAM (name + MB + %)
   - [ ] used / total / available / cached breakdown
