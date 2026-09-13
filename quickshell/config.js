@@ -67,6 +67,50 @@ const iconInput = "\u{f036c}";
 const iconPrev = "\u{f0141}";
 const iconNext = "\u{f0142}";
 
+const launcherWidth = 270;
+const launcherPadding = 12;
+const launcherGap = 8;
+const launcherInputHeight = 30;
+const launcherRowHeight = 28;
+const launcherFontSize = 15;
+const launcherIconSize = 20;
+const launcherIconSlot = 24;
+const launcherTextGap = 10;
+const launcherBackground = "#e0000000";
+const launcherSearchBox = "#1f1f1f";
+const launcherHighlight = "#2f2f2f";
+const launcherHighlightText = "#ffffff";
+const launcherUsageMax = 10;
+const launcherPrompt = "\uea6d";
+const launcherMaxRows = 12;
+const launcherMaxResults = 60;
+const launcherIgnoreApps = ["avahi-discover", "bssh", "bvnc"];
+const launcherFileDepth = 6;
+const launcherFileMax = 40;
+const launcherFileDebounce = 220;
+const launcherFileSkip = [".cache", ".git", "node_modules", ".local", ".cargo", ".rustup", ".npm"];
+const launcherMarks = { files: ".", clipboard: "$" };
+const launcherIconCommand = "\u{f018c}";
+const launcherIconCalc = "\uf00ec";
+const launcherIconFiles = "\u{f0967}";
+const launcherIconClipboard = "\uf07f";
+const launcherIconWindow = "\u{f05b1}";
+const launcherIconFile = "\u{f0213}";
+const launcherIconPin = "\ueba0";
+
+const launcherCommands = [
+	{ name: "Edit shell config", command: "code-insiders ~/.config/quickshell/config.js", keywords: ["quickshell"] },
+	{ name: "Edit hyprland config", command: "code-insiders ~/.config/hypr/hyprland.lua", keywords: ["hypr"] },
+	{ name: "Edit launcher shortcuts", command: "code-insiders ~/.config/quickshell/config.js", keywords: ["launcher"] }
+];
+
+const launcherActions = [
+	{ name: "Suspend", command: "systemctl suspend", glyph: "\u{f04b2}" },
+	{ name: "Log out", command: "hyprctl dispatch 'hl.dsp.exit()'", glyph: "\uea6e" },
+	{ name: "Reboot", command: "systemctl reboot", glyph: "\u{ead2}" },
+	{ name: "Shut down", command: "systemctl poweroff", glyph: "\u{f011}" }
+];
+
 const calendarCellWidth = 26;
 const calendarCellHeight = 19;
 const calendarPadding = 10;
@@ -95,7 +139,5 @@ const dockFallbackIcon = "application-x-executable";
 const dockLauncherIcon = "\uf135";
 const dockLauncherColor = muted;
 const dockLauncherSize = 30;
-const dockLauncherProcess = "fuzzel";
-const dockLauncherCommand = ["fuzzel", "--keyboard-focus=on-demand"];
 const dockPinned = ["footclient", "helium", "code-insiders"];
 const dockTerminalClasses = ["foot", "footclient"];
