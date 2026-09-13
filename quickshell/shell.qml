@@ -95,7 +95,11 @@ ShellRoot {
 				}
 
 				MemoryStat {
+					id: memoryStat
 					anchors.bottom: parent.bottom
+
+					onClicked: memoryPopup.toggle()
+					onExited: memoryPopup.scheduleClose()
 				}
 
 				VolumeStat {
@@ -136,6 +140,18 @@ ShellRoot {
 
 				CpuMonitor {
 					source: cpuStat
+				}
+			}
+
+			Tooltip {
+				id: memoryPopup
+
+				anchorWindow: bar
+				anchorItem: memoryStat
+				anchorHovered: memoryStat.hovered
+
+				MemoryMonitor {
+					source: memoryStat
 				}
 			}
 
