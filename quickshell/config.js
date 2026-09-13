@@ -18,12 +18,9 @@ const fontSize = 12;
 const valueSample = "0123456789.%G";
 const iconSize = 10;
 const trayIconSize = 11;
-const barTopPadding = 3;
 const spacing = 12;
-const sidePadding = 6;
 const workspacePadding = 1;
 const workspaceSpacing = 6;
-const workspaceLeftPadding = 6;
 
 const iconCpu = "\uf2db";
 const iconMemory = "\uefc5";

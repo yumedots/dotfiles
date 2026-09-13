@@ -18,9 +18,24 @@ ShellRoot {
 				right: true
 			}
 
-			implicitHeight: Math.ceil(right.implicitHeight) + Config.barTopPadding
+			margins {
+				top: border.gapsOut
+				left: border.gapsOut
+				right: border.gapsOut
+			}
+
+			readonly property real contentShift: (Math.ceil(right.implicitHeight) - clockText.implicitHeight) / 2
+
+			implicitHeight: Math.ceil(right.implicitHeight) + 2 * border.inset
 			exclusiveZone: implicitHeight
-			color: Config.background
+			color: "transparent"
+
+			HyprBorder {
+				id: border
+
+				anchors.fill: parent
+				padding: border.gapsIn
+			}
 
 			SystemClock {
 				id: clock
@@ -29,8 +44,9 @@ ShellRoot {
 
 			Workspaces {
 				anchors.left: parent.left
+				anchors.leftMargin: border.inset
 				anchors.bottom: parent.bottom
-				anchors.bottomMargin: cpuStat.textOffset
+				anchors.bottomMargin: cpuStat.textOffset + border.inset - bar.contentShift
 			}
 
 			BarText {
@@ -38,7 +54,7 @@ ShellRoot {
 
 				anchors.horizontalCenter: parent.horizontalCenter
 				anchors.bottom: parent.bottom
-				anchors.bottomMargin: cpuStat.textOffset
+				anchors.bottomMargin: cpuStat.textOffset + border.inset - bar.contentShift
 
 				text: Qt.formatDateTime(clock.date, "HH:mm")
 			}
@@ -47,8 +63,9 @@ ShellRoot {
 				id: right
 
 				anchors.right: parent.right
-				anchors.rightMargin: Config.sidePadding
+				anchors.rightMargin: border.inset
 				anchors.bottom: parent.bottom
+				anchors.bottomMargin: border.inset - bar.contentShift
 				spacing: Config.spacing
 
 				Tray {
@@ -95,7 +112,6 @@ ShellRoot {
 				anchorWindow: bar
 				anchorItem: dateText
 				anchorHovered: dateArea.containsMouse
-				padding: 0
 
 				Calendar {
 					today: clock.date
