@@ -92,5 +92,16 @@ PopupWindow {
 		padding: border.gapsIn
 		borderColors: root.borderColors
 		borderWidth: root.borderWidth
+		transformOrigin: Item.TopRight
+		opacity: root.visible ? 1 : 0
+		scale: root.visible ? 1 : Config.popupScale
+
+		Behavior on opacity {
+			NumberAnimation { duration: Config.popupDuration; easing.type: Easing.OutCubic }
+		}
+
+		Behavior on scale {
+			NumberAnimation { duration: Config.popupDuration; easing.type: Easing.OutCubic }
+		}
 	}
 }
