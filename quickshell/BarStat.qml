@@ -5,6 +5,9 @@ import "helpers.js" as Helpers
 Item {
 	id: root
 
+	signal clicked()
+	signal exited()
+
 	property real pct: 0
 	property color barColor: Config.red
 	property color textColor: root.barColor
@@ -108,5 +111,17 @@ Item {
 				color: Config.dim
 			}
 		}
+	}
+
+	readonly property alias hovered: area.containsMouse
+
+	MouseArea {
+		id: area
+
+		anchors.fill: parent
+		hoverEnabled: true
+
+		onClicked: root.clicked()
+		onExited: root.exited()
 	}
 }

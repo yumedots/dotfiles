@@ -6,11 +6,6 @@ import "helpers.js" as Helpers
 BarStat {
 	id: root
 
-	signal clicked()
-	signal exited()
-
-	readonly property alias hovered: area.containsMouse
-
 	property var prev: null
 	property string lastRead: ""
 	property var cores: []
@@ -61,15 +56,5 @@ BarStat {
 		interval: 150
 		repeat: false
 		onTriggered: statFile.reload()
-	}
-
-	MouseArea {
-		id: area
-
-		anchors.fill: parent
-		hoverEnabled: true
-
-		onClicked: root.clicked()
-		onExited: root.exited()
 	}
 }
