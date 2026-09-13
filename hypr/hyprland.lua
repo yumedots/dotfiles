@@ -20,7 +20,7 @@ hl.monitor({
 local terminal = "footclient" -- use footclient; the foot server is started at login
 local fileManager = "dolphin"
 local menu = "fuzzel"
-local wallpaper = "/home/gabriel/Documents/Wallpaper/Yosemite 2.jpg"
+local wallpaper = "/home/gabriel/Documents/Wallpaper/12-Monterey-Dark.jpg"
 
 
 -------------------
@@ -32,10 +32,10 @@ local wallpaper = "/home/gabriel/Documents/Wallpaper/Yosemite 2.jpg"
 -- Autostart necessary processes (like notifications daemons, status bars, etc.)
 -- Or execute your favorite apps at launch like this:
 hl.on("hyprland.start", function ()
-  hl.exec_cmd("hyprpaper -c /dev/null & foot --server & quickshell &")
+  hl.exec_cmd("awww-daemon & foot --server & quickshell &")
 end)
 hl.exec_cmd("foot --server &")
-hl.exec_cmd("hyprctl --batch \"hyprpaper preload '" .. wallpaper .. "' ; hyprpaper wallpaper , '" .. wallpaper .. "'\"")
+hl.exec_cmd("awww query 2>/dev/null | grep -qF 'image: " .. wallpaper .. "' || for i in $(seq 1 10); do awww img '" .. wallpaper .. "' && break; sleep 0.2; done")
 
 
 -------------------------------
