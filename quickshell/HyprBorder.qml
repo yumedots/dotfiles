@@ -11,6 +11,7 @@ Item {
 
 	property var borderColors: null
 	property real borderWidth: -1
+	property color backgroundColor: Config.background
 	property real padding: 0
 	property real borderOpacity: 1
 	property var hyprBorder: ({ colors: null, angle: 0, width: null })
@@ -24,6 +25,7 @@ Item {
 		? root.borderWidth
 		: (root.hyprBorder.width !== null ? root.hyprBorder.width : Config.borderFallbackWidth)
 	readonly property real themeAngle: root.hyprBorder.angle
+	readonly property var edges: Helpers.gradientEdges(root.themeColors, root.themeAngle, frame.width, frame.height, root.themeWidth)
 	readonly property real inset: root.themeWidth + root.padding
 	readonly property real gapsIn: root.hyprGaps.inner !== null ? root.hyprGaps.inner : Config.gapsInFallback
 	readonly property real gapsOut: root.hyprGaps.outer !== null ? root.hyprGaps.outer : Config.gapsOutFallback
@@ -88,26 +90,31 @@ Item {
 		clip: true
 
 		Rectangle {
-			id: gradient
-
-			opacity: root.borderOpacity
-			width: Math.max(frame.width, frame.height) * 1.5
-			height: width
-			anchors.centerIn: parent
-			rotation: root.themeAngle
-
-			gradient: Gradient {
-				orientation: Gradient.Horizontal
-
-				GradientStop { position: 0; color: root.themeColors[0] }
-				GradientStop { position: 1; color: root.themeColors[root.themeColors.length - 1] }
-			}
-		}
-
-		Rectangle {
 			anchors.fill: parent
 			anchors.margins: root.themeWidth
-			color: Config.background
+			color: root.backgroundColor
+		}
+
+		Repeater {
+			model: root.edges
+
+			delegate: Rectangle {
+				required property var modelData
+
+				x: modelData.x
+				y: modelData.y
+				width: modelData.width
+				height: modelData.height
+				visible: modelData.width > 0 && modelData.height > 0
+				opacity: root.borderOpacity
+
+				gradient: Gradient {
+					orientation: modelData.horizontal ? Gradient.Horizontal : Gradient.Vertical
+
+					GradientStop { position: 0; color: modelData.start }
+					GradientStop { position: 1; color: modelData.end }
+				}
+			}
 		}
 
 		Item {
