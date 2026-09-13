@@ -71,6 +71,11 @@ PopupWindow {
 		id: selfHover
 	}
 
+	MouseArea {
+		anchors.fill: parent
+		onClicked: root.close()
+	}
+
 	Timer {
 		id: closeTimer
 
