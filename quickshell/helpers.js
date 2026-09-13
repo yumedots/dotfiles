@@ -87,6 +87,23 @@ function launchCommand(entry, appId) {
 	return [command];
 }
 
+function togglePin(pins, appId) {
+	const kept = pins.filter(function (id) { return id.toLowerCase() !== appId.toLowerCase(); });
+
+	if (kept.length === pins.length)
+		kept.push(appId);
+
+	return kept;
+}
+
+function pinnedFromText(text) {
+	return (text || "").split("\n").map(function (line) { return line.trim(); }).filter(function (line) { return line !== ""; });
+}
+
+function shellQuote(arg) {
+	return "'" + arg.replace(/'/g, "'\\''") + "'";
+}
+
 function parseDesktopEntries(text) {
 	const entries = {};
 

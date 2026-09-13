@@ -75,5 +75,12 @@ assert(terminalAppId("FOOTCLIENT", "btop", ["foot", "footclient"]) === "btop", "
 assert(launchCommand({ exec: "btop", terminal: true }, "btop")[0] === "foot" && launchCommand({ exec: "btop", terminal: true }, "btop")[2] === "btop", "a Terminal=true app opens inside a terminal");
 assert(launchCommand({ exec: "code-insiders" }, "code-insiders")[0] === "code-insiders", "a regular app runs directly");
 assert(launchCommand(null, "footclient")[0] === "footclient", "an entry-less app runs as-is");
+assert(togglePin([], "yazi")[0] === "yazi", "pin adds to an empty list");
+assert(togglePin(["a", "b"], "c").length === 3, "pin keeps the rest");
+assert(togglePin(["a", "b"], "b").length === 1, "pin removes what is pinned");
+assert(togglePin(["a", "b"], "B").length === 1, "pin removal is case-insensitive");
+assert(pinnedFromText("yazi\nbtop\n\n")[0] === "yazi" && pinnedFromText("yazi\nbtop\n\n").length === 2, "pin file lines are trimmed and blanks dropped");
+assert(pinnedFromText("").length === 0, "a missing pin file yields nothing");
+assert(shellQuote("a b") === "'a b'", "shell quoting wraps spaces");
 
 console.log("check ok");

@@ -41,6 +41,7 @@ const calendarPadding = 10;
 const calendarHeaderHeight = 22;
 const calendarFooterHeight = 20;
 
+const dockEnabled = false;
 const dockIconSize = 34;
 const dockBottomPadding = 12;
 const dockTopPadding = dockBottomPadding;

@@ -128,5 +128,7 @@ ShellRoot {
 		}
 	}
 
-	Dock {}
+	Dock {
+		visible: Config.dockEnabled
+	}
 }

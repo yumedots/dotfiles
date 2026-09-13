@@ -26,6 +26,9 @@ PanelWindow {
 	property var applications: ({})
 	property var icons: ({})
 	property var apps: []
+	property string menuAppId: ""
+	property real menuX: 0
+	property real menuY: 0
 
 	function classOf(toplevel) {
 		return toplevel.lastIpcObject.class || "";
@@ -119,7 +122,80 @@ PanelWindow {
 		dock.launcherOpen = true;
 	}
 
-	onToplevelsChanged: settle.restart()
+	function isPinned(appId) {
+		return Config.dockPinned.some(function (id) { return id.toLowerCase() === appId.toLowerCase(); });
+	}
+
+	function togglePin(appId) {
+		Helpers.togglePin(Config.dockPinned, appId);
+		dock.writeConfigPins();
+		dock.computeApps();
+		dock.closeMenu();
+	}
+
+	function writeConfigPins() {
+		const pins = Config.dockPinned.map(function (id) { return "\"" + id.replace(/[\"\\]/g, "") + "\""; }).join(", ");
+
+		Quickshell.execDetached(["sh", "-c", "sed -i 's|^const dockPinned = .*$|const dockPinned = [" + pins + "]|' \"$HOME/.config/quickshell/config.js\""]);
+	}
+
+	function writePins() {
+		const args = dock.pinned.map(Helpers.shellQuote).join(" ");
+
+		Quickshell.execDetached(["sh", "-c", "mkdir -p \"$HOME/.local/share/quickshell\" && printf '%s\\n' " + args + " > \"$HOME/.local/share/quickshell/dock-pinned.txt\""]);
+	}
+
+	function closeWindowApp(appId) {
+		const windows = dock.windowsOf(appId);
+
+		if (!windows.length)
+			return;
+
+		let target = windows[0];
+
+		for (let i = 0; i < windows.length; i++) {
+			if (windows[i].address === dock.activeAddress) {
+				target = windows[i];
+				break;
+			}
+		}
+
+		dock.close(target);
+		dock.closeMenu();
+	}
+
+	function quitApp(appId) {
+		dock.windowsOf(appId).forEach(function (toplevel) { dock.close(toplevel); });
+		dock.closeMenu();
+	}
+
+	function close(toplevel) {
+		const address = toplevel.address.indexOf("0x") === 0 ? toplevel.address : "0x" + toplevel.address;
+
+		Hyprland.dispatch(Hyprland.usingLua
+			? "hl.dsp.close({ window = \"address:" + address + "\" })"
+			: "closewindow address:" + address);
+	}
+
+	function openMenu(item) {
+		const px = plate.x + row.x + item.x + item.width / 2;
+		const py = plate.y + row.y + item.y;
+
+		dock.menuX = Math.max(0, Math.round(px - menu.implicitWidth / 2));
+		dock.menuY = Math.round(py - menu.implicitHeight - Config.dockSpacing);
+		dock.menuAppId = item.appId;
+		menu.visible = true;
+	}
+
+	function closeMenu() {
+		menu.visible = false;
+		dock.menuAppId = "";
+	}
+
+	onToplevelsChanged: {
+		settle.restart();
+		dock.closeMenu();
+	}
 
 	onApplicationsChanged: {
 		dock.icons = ({});
@@ -134,6 +210,28 @@ PanelWindow {
 
 		stdout: StdioCollector {
 			onStreamFinished: dock.applications = Helpers.parseDesktopEntries(text)
+		}
+	}
+
+	Process {
+		id: pinFile
+
+		command: ["sh", "-c", "cat \"$HOME/.local/share/quickshell/dock-pinned.txt\" 2>/dev/null"]
+		running: true
+
+		stdout: StdioCollector {
+			onStreamFinished: {
+				const loaded = Helpers.pinnedFromText(text);
+
+				if (loaded.length) {
+					loaded.forEach(function (id) {
+						if (!dock.isPinned(id))
+							Helpers.togglePin(Config.dockPinned, id);
+					});
+
+					dock.computeApps();
+				}
+			}
 		}
 	}
 
@@ -264,7 +362,13 @@ PanelWindow {
 
 				MouseArea {
 					anchors.fill: parent
-					onClicked: dock.activate(item.appId)
+					acceptedButtons: Qt.LeftButton | Qt.RightButton
+					onClicked: (mouse) => {
+						if (mouse.button === Qt.RightButton)
+							dock.openMenu(item);
+						else
+							dock.activate(item.appId);
+					}
 				}
 			}
 		}
@@ -294,6 +398,100 @@ PanelWindow {
 			MouseArea {
 				anchors.fill: parent
 				onPressed: dock.toggleLauncher()
+			}
+		}
+	}
+
+	PopupWindow {
+		id: menu
+
+		anchor.window: dock
+		anchor.rect.x: dock.menuX
+		anchor.rect.y: dock.menuY
+
+		implicitWidth: menuBody.implicitWidth + Config.dockSpacing
+		implicitHeight: menuBody.implicitHeight + Config.dockSpacing
+		color: "transparent"
+		visible: false
+
+		Rectangle {
+			anchors.fill: parent
+			color: Config.background
+			radius: Config.dockRadius
+		}
+
+		MouseArea {
+			anchors.fill: parent
+			onClicked: dock.closeMenu()
+		}
+
+		Column {
+			id: menuBody
+
+			anchors.fill: parent
+			anchors.margins: Config.dockSpacing / 2
+			spacing: 2
+
+			Item {
+				implicitWidth: pinText.implicitWidth
+				implicitHeight: pinText.implicitHeight
+
+				Text {
+					id: pinText
+
+					anchors.fill: parent
+					font.family: Config.fontFamily
+					font.pixelSize: Config.fontSize
+					color: Config.foreground
+					text: dock.isPinned(dock.menuAppId) ? "Unpin from Dock" : "Pin to Dock"
+				}
+
+				MouseArea {
+					anchors.fill: parent
+					onClicked: dock.togglePin(dock.menuAppId)
+				}
+			}
+
+			Item {
+				visible: dock.menuAppId !== "" && dock.windowsOf(dock.menuAppId).length > 0
+				implicitWidth: closeText.implicitWidth
+				implicitHeight: closeText.implicitHeight
+
+				Text {
+					id: closeText
+
+					anchors.fill: parent
+					font.family: Config.fontFamily
+					font.pixelSize: Config.fontSize
+					color: Config.foreground
+					text: "Close"
+				}
+
+				MouseArea {
+					anchors.fill: parent
+					onClicked: dock.closeWindowApp(dock.menuAppId)
+				}
+			}
+
+			Item {
+				visible: dock.menuAppId !== "" && dock.windowsOf(dock.menuAppId).length > 0
+				implicitWidth: quitText.implicitWidth
+				implicitHeight: quitText.implicitHeight
+
+				Text {
+					id: quitText
+
+					anchors.fill: parent
+					font.family: Config.fontFamily
+					font.pixelSize: Config.fontSize
+					color: Config.foreground
+					text: "Quit"
+				}
+
+				MouseArea {
+					anchors.fill: parent
+					onClicked: dock.quitApp(dock.menuAppId)
+				}
 			}
 		}
 	}
