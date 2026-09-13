@@ -48,6 +48,12 @@
       the file watcher, and that reload does re-import config.js (verified with a marker logged from
       config.js: 0 reloads after editing it alone, 1 after a whitespace edit to shell.qml, marker printed).
       So after a config change, restart quickshell or make any .qml content change to trigger a reload
+- [x] hyprland config is Lua here (0.56), so `hyprctl keyword <opt> <value>` fails with "keyword can't
+      work with non-legacy parsers. Use eval". Use `hyprctl eval 'hl.config({ decoration = { blur = {
+      enabled = false } } })'` for a temporary change and `hyprctl reload` to re-read the file. Dispatch
+      needs the same form: `hyprctl dispatch 'hl.dsp.focus({ workspace = 1 })'` (`hl.dsp.workspace` is
+      not callable). Opening/closing the launcher moves focus, which can make Hyprland switch to the
+      window it restores, so pin the workspace again before comparing two screenshots
 
 ## Calendar
 
@@ -65,7 +71,7 @@
   capped at Config.dockMaxDots (5) plus a + when the app has more windows than that
 - [x] pinned shortcuts from Config.dockPinned, click launches when not running
 - [x] fuzzel as the launchpad, rightmost item after a separator, click toggles it open and closed
-- [ ] our own app launcher to replace fuzzel behind that button
+- [x] the launchpad button toggles the shell's own launcher (see below), no fuzzel process behind it
 - [x] fuzzel closes itself when focus leaves it (clicking an icon or a window dismisses it)
 - [x] rounded corners (Config.dockRadius), extra space above the icons (Config.dockTopPadding)
 - [x] no magnification
@@ -77,6 +83,147 @@
 - [ ] right click to pin/unpin and to close a window from the dock
 - [ ] app name label above the hovered icon, auto hide when idle
 - [ ] indicator for apps with an urgent window
+
+## App launcher
+
+Replaces fuzzel: a layer surface inside the shell with exclusive keyboard focus, toggled through an
+IpcHandler so the Hyprland bind and the dock's launchpad button both just toggle it. The card is
+HyprBorder, the same primitive behind the bar and every tooltip, so the border, the background and
+the fade duration come from the Hyprland config and match the rest of the shell.
+
+- [x] ALT + SPACE (`qs ipc call shell launcher`) and the dock's launchpad button open it (Dock emits
+      launcherRequested, no fuzzel process anywhere). Escape, Enter after running something or a click
+      outside the card closes it. Verified through the live shell: the ipc call exits 0 and the surface
+      maps as namespace launcher on the overlay layer with exclusive keyboard focus
+- [x] shaped like the old fuzzel: a narrow vertical card centred on the screen, 270x400 with twelve 28px
+      rows, 20px row icons, a 24px icon column and 16px text (measured on a scratch instance: cardW=270,
+      cardH=400 = 12*28 + the 30px input, the 8px column gap, 2*12px padding and 2*1px border, inset 13;
+      cardW/cardH/listHeight all come from Config). The width trades against height, so the card grows in Y (launcherMaxRows), not in X
+      (launcherWidth); the row is 28 so the highlight band is 28 tall and its content (icon and name,
+      both centred) sits in the middle of it (probe: row h=28 highlight=28 iconSize=20 for every row).
+      The size is constant whatever the list holds: listHeight is always launcherMaxRows * rowHeight, so
+      22 results, 1 result, 0 results, every prefix mode and the window switcher all measure 270x400 on
+      a scratch instance (listHeight 336 = 12*28) and the card 434x237.5 logical through the live
+      shell's compositor (the couple of pixels are the border, which the pixel run does not count)
+- [x] one text size and one icon size everywhere in the card, taken from the search bar: the prompt glyph
+      and every row icon / row pin glyph are Config.launcherIconSize (20), the typed text, the placeholder
+      and the row names are Config.launcherFontSize (16). Before this the prompt was fontSize+2, the input
+      fontSize+1, the pin iconSize-4 and the rows 15px, so the card mixed four glyph sizes. The highlight
+      band was briefly raised to the field's height (30) and is back to Config.launcherRowHeight (28) on
+      request. Verified: scratch probe field 244x30 with glyphPS=20 inputPS=16 and row h=28 hl=244x28
+      (field band 48 device px, highlight band 44.8 at a 1.6 scale)
+      (the empty-state row reserves the same list height, otherwise Column.implicitHeight drops the
+      hidden ListView and the card collapsed to 270x84 with no matches). The empty-state message ("nothing
+      matches", "no windows open") is centred in that empty area, horizontally in the card and
+      vertically in the list: measured from a screenshot, x-centroid 134.3 against the card
+      centre 135.0, band y 186-200 against the list centre 193
+- [x] the search icon owns a fixed slot and the row icons sit directly below it: Config.launcherIconSlot
+      (24) is the glyph's width (centred in it, prompt is U+EA6D), each row icon is centred in that same
+      0..24 column (a 20px icon lands at x=2) and the input and the names both start at the slot's right
+      edge plus Config.launcherTextGap (10), i.e. 34, so nothing shifts as you type and the text lines up
+      with the search field (probe: glyph x=0 w=24, rows iconX=2 iconW=20 nameX=34, input x=34 inputRight=234).
+      The field's placeholder reads "Type to search..." in both lists and the empty-state messages are
+      capitalised: "Nothing matches", "No windows open", "Nothing copied yet", "Type two letters or more
+      to search $HOME"
+- [x] the search field sits in its own box and the card is see-through: the field row is a Rectangle in
+      Config.launcherSearchBox (#1f1f1f, a dark grey that does not burn at night, measured 244x30 = the
+      card's inner width) and HyprBorder gained an overridable `backgroundColor` (default Config.background)
+      that the launcher sets to Config.launcherBackground (#e0000000, the alpha is the transparency). The
+      selected row is Config.launcherHighlight (#2f2f2f) instead of a full white flash and the text and
+      icon on it are Config.launcherHighlightText (probe: row0 highlight=#2f2f2f nameColor=#ffffff,
+      row1 highlight=#00000000)
+- [x] the appear fade is the widget one (borderOpacity: Math.pow(opacity, 8) plus the opacity Behavior at
+      card.appearDuration), verified through the fade: opacity 1.000 -> 0.209 -> 0.000 with the border at
+      0.000 while it is still descending, so no gradient flash. What is gone is the *scroll* animation:
+      the list is interactive: false with a WheelHandler that sets contentY directly, so the wheel jumps
+      one notch (60px) with no glide and a drag-release cannot coast. (The earlier "delete the animation"
+      pass removed the appear fade by mistake; restored)
+- [x] the card is centred in the strip *below* the bar, not on the whole screen: the launcher's surface
+      respects the bar's exclusive zone, so its window is 854 tall on this 900-tall screen (card at
+      window y 253, screen y 299). Clicking above the card but over the bar does not close it
+- [x] prompt is the search glyph (U+EA6D) while the query is plain or in the window switcher, and
+      switches to the mode glyph (`.`, `$`) once a prefix is typed
+- [x] search field with fuzzy matching, arrows move the highlight exactly one row, Enter runs the
+      highlighted entry. Arrows clamp at both ends like fuzzel's `next`/`prev` ("does not wrap around
+      when the last entry has been reached"): move(step) is a Math.min/max clamp, not a modulo, so the
+      last item stays the last item instead of jumping back to the top (verified on a scratch instance:
+      index 0 -> down x12 -> 12, down x40 -> 25 = count-1, up x60 -> 0)
+- [x] the row under the cursor must not grab the highlight while the list slides underneath a stationary
+      pointer, which is what made one arrow key skip rows: the delegate compares the pointer's *scene*
+      position (row.mapToItem(null, mouse.x, mouse.y), which is invariant under a scroll - verified
+      list.mapToItem(null,0,0) = the card's inner origin 836,-25) against root.hoverScene and only takes
+      the index when it moved. A synthetic pointer is impossible on this box (no xdotool/ydotool/wtype,
+      /dev/uinput is root-only, Hyprland's lua API has no cursor dispatcher), so the event half of it is
+      unverified here: the probe's stationary pointer never enters the surface at all (hoverScene stays
+      -1,-1 even with a row under it), so fixed and pre-fix builds behave identically in the probe
+- [x] sources: desktop apps (AppIcons/.desktop entries, NoDisplay, Hidden, entries with no Exec and
+      Config.launcherIgnoreApps skipped: 29 entries before the ignore list, 26 after), commands from
+      Config.launcherCommands, session actions from Config.launcherActions. Open windows are *not* here
+      any more: they live in the window switcher below (allEntries has 22 entries, 0 of them windows)
+- [x] window switcher: MOD + TAB (`qs ipc call shell windows`,      IpcHandler function windows() ->
+      launcherWindow.toggleWindows()) reuses the same card, only the list differs (still 270x400, same
+      search glyph prompt and the same "Type to search" placeholder; each row keeps the window glyph
+      U+F05B1). It lists
+      every open window, most recently
+      used first, straight from Hyprland's focusHistoryID - verified against `hyprctl clients`: the
+      switcher shows code-insiders(0), helium(1), footclient(2), footclient(3) in exactly that order.
+      Typing filters on title and class ("term" leaves the Nerd Fonts helium window), arrows/Enter work
+      like the launcher, app icons come from the same AppIcons lookup. MOD+TAB again closes, and the
+      apps launcher (ALT+SPACE, dock) always reopens in apps mode. The bind is live: hyprctl binds shows
+      modmask 64 key TAB
+- [x] session actions run as the user, no sudo, cleared with login1 first: suspend, logout, reboot,
+      shutdown (CanSuspend/CanReboot/CanPowerOff all answer yes, CanHibernate is na on this box). Lock
+      is deliberately absent: no locker is installed (no hyprlock/swaylock), so `loginctl lock-session`
+      would do nothing. Glyphs (all present in Hack Nerd Font, all confirmed to paint ink when rendered):
+      suspend U+F04B2, reboot U+EAD2, shutdown U+F011, logout U+F0342
+- [x] apps launch through `sh -c` with the full Exec line and the field codes stripped, so arguments
+      and `env VAR=…` wrappers survive (previously only the first token ran, so `--new-window` and
+      friends were dropped and an env wrapper would have run `env` itself)
+- [x] the calculator needs no prefix, Spotlight style: Helpers.calcEntry(query) returns a row when the
+      query has a digit and the whole thing parses, and buildResults puts it above the matching items, so
+      the result and the entries that match the number are in the same list (probe: "2*(3+4)" ->
+      ["calc|2*(3+4) = 14"], "7" -> no calculator row and no matches, "e" and "firefox" stay a search).
+      Enter copies the result with wl-copy, which cliphist then stores
+- [x] prefixes: `.` file search under $HOME, `$` clipboard history. The clipboard is the system's own
+      (cliphist): `cliphist list` is read (Helpers.parseClipboardList splits `id\tpreview`) and Enter runs
+      `cliphist decode <id> | wl-copy` (probe: `$` listed 3 real clips with their ids 5/2/1), so anything
+      else that stores to cliphist shows up here too. The shell's own file-per-clip watcher
+      (clipboard.sh, CLIPBOARD_KEEP, the clipWatch process) is gone, and the store side now runs from
+      hypr/hyprland.lua: `pgrep -f 'cliphist store' >/dev/null || wl-paste --watch cliphist store &`
+- [x] Ctrl+P pins the highlighted entry, pins sort first and survive restarts
+- [x] frecency ordering, the entries used most and most recently float up, also across restarts
+- [x] file search is debounced, depth limited and skips .cache/.git/node_modules/.local/.cargo so it
+      stays usable
+- [x] everything it remembers lives in one cache directory inside the config dir,
+      `quickshell/cache/launcher` (Quickshell.shellDir + "/cache/launcher", ignored by git through
+      `/quickshell/cache` in .gitignore; Quickshell.cacheDir turned out to be a per-instance hash dir
+      under ~/.cache that the old guard never mentioned): pins.txt and usage.txt (id, count, last used).
+      Verified live: after launching an app from the launcher the file is there,
+      cache/launcher/usage.txt with act:Shut down and app:code-insiders in it
+- [x] usage.txt is capped at Config.launcherUsageMax (10) entries, the most recently used ones, so the
+      file cannot grow without bound (Helpers.formatUsage(usage, max), verified: 12 launcher opens left
+      exactly 10 lines, the 10 newest)
+- [x] pins round trip: Ctrl+P on a row writes the id to pins.txt and the row shows the pin glyph
+      (probe: pinRequested=app:btop -> pins=["app:btop"], the btop++ row reports pinVisible=true and
+      pins.txt holds app:btop)
+- [x] check.js covers the calculator entry detection (`calcEntry`), the cliphist listing and the rest
+- [x] blur behind the card: the launcher requests it over ext_background_effect (Hyprland 0.56 supports
+      it), `BackgroundEffect.blurRegion: Region { item: card }` in Launcher.qml, so the compositor blurs
+      exactly the card rect and nothing else. Config.launcherBackground is the card alpha, `#b3000000`
+      (70%) now instead of the old 88% so the blur is actually visible. Hyprland side: decoration.blur
+      on (size 2, passes 1, noise 0) plus a `no_blur` window rule for `.*` so every normal window keeps
+      the exact look it had before. NOT done with a layer rule: `blur = true` on the fullscreen launcher
+      surface blurs the whole screen and the alpha mask plus the fade makes it flicker into stripes
+      (that is what the first attempt did). `ignore_alpha` is not needed either, the region comes from
+      the client
+  - [x] strength measured on one static text window behind the card (card padding strip, launcher
+        closed vs open, so the backdrop is identical). Share of the backdrop's detail that still shows
+        through the card, where no blur at all would be 30% (the card alpha):
+        size 1 / passes 1 -> 16.3%, size 2 / passes 1 -> 7.6% (the default now), size 2 / passes 2 ->
+        2.0%, size 3 / passes 2 -> 1.6%, size 4 / passes 3 -> 0.6% (all far too much). Outside the card
+        the number was byte-identical in every run (22.03), so only the card is ever touched. Both are
+        config values: change size/passes in hypr/hyprland.lua then `hyprctl reload`, or raise
+        Config.launcherBackground (80% = #cc000000) to hide more of the backdrop
 
 ## GitHub contributions widget
 
@@ -216,3 +363,34 @@ Contracts (know before building):
 
 
 Make switching workspaces with the mouse wheel faster while holding the SUPER button
+
+## Default actions (last step, not built yet)
+
+One place that says what "open", "edit", "terminal", "file manager", "browser" mean and which keys
+move around, so every widget asks the same source instead of each file hardcoding its own command and
+its own Qt.Key_*. Nothing here is built yet.
+
+Specs:
+
+- [ ] config.js: a `defaults` block (editor, terminal, fileManager, browser, imageViewer, pager) plus a
+      `keys` map for the movements every popup shares: up / down / left / right, next / previous,
+      accept / cancel, page up / page down, close
+- [ ] helpers.js: `openCommand(kind, path)` returning an argv list instead of a shell string, and
+      `keyAction(event, map)` turning a key event into an action name, so a widget names the action
+      ("up", "accept") and the map decides the chord
+- [ ] Launcher.qml, Calendar.qml, VolumeMixer.qml, Tooltip.qml and the bar take their keys from that
+      map instead of hardcoding Keys.onDownPressed / Qt.Key_PageDown / Ctrl+P
+- [ ] the editor, file manager and browser come from the desktop's own choice at runtime
+      (`xdg-settings get default-web-browser`, `xdg-mime query default inode/directory`) with
+      Config.defaults as the override, cached at startup, `xdg-open` as the last resort
+- [ ] launcher rows get "edit" and "reveal in file manager" on the `.` (file search) rows, and the
+      systemd/log paths on the tooltips where a path makes sense
+
+Contracts:
+
+- the key map renames keys, it is not a macro system: one key, one action, no sequences and no side
+  effects, and a widget that needs a key for something else (text entry in the launcher) keeps it
+- hyprland.lua stays the source of truth for global movement (window and workspace focus, the mouse
+  wheel binds); this only covers movement inside the shell's own surfaces
+- resolve each default once at startup and expose it read-only, so a broken `defaults` entry cannot
+  make a widget launch something surprising mid session

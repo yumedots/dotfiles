@@ -377,7 +377,7 @@ PanelWindow {
 					width: Config.launcherIconSlot
 					horizontalAlignment: Text.AlignHCenter
 					font.family: Config.fontFamily
-					font.pixelSize: Config.launcherFontSize + 2
+					font.pixelSize: Config.launcherIconSize
 					color: Config.foreground
 					text: root.prompt
 				}
@@ -395,7 +395,7 @@ PanelWindow {
 					selectByMouse: true
 					color: Config.foreground
 					font.family: Config.fontFamily
-					font.pixelSize: Config.launcherFontSize + 1
+					font.pixelSize: Config.launcherFontSize
 					text: root.query
 
 					onTextChanged: {
@@ -429,7 +429,7 @@ PanelWindow {
 					elide: Text.ElideRight
 					visible: input.text === ""
 					font.family: Config.fontFamily
-					font.pixelSize: input.font.pixelSize
+					font.pixelSize: Config.launcherFontSize
 					color: Config.muted
 					text: "Type to search..."
 				}
@@ -519,8 +519,8 @@ PanelWindow {
 						anchors.verticalCenter: parent.verticalCenter
 						visible: row.pinned
 						font.family: Config.fontFamily
-						font.pixelSize: Config.launcherIconSize - 4
-						color: row.active ? Config.launcherHighlightText : Config.dim
+					font.pixelSize: Config.launcherIconSize
+					color: row.active ? Config.launcherHighlightText : Config.dim
 						text: Config.launcherIconPin
 					}
 
