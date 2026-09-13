@@ -70,6 +70,80 @@ function parseGradient(text) {
 	return { colors: colors.length ? colors : null, angle: angle };
 }
 
+function colorChannels(text) {
+	const value = String(text === undefined || text === null ? "" : text).replace("#", "").trim().toLowerCase();
+
+	if (!/^[0-9a-f]+$/.test(value) || (value.length !== 6 && value.length !== 8))
+		return null;
+
+	const hex = value.length === 6 ? "ff" + value : value;
+
+	return [0, 2, 4, 6].map(function (at) { return parseInt(hex.substring(at, at + 2), 16); });
+}
+
+function mixColors(c1, c2, t) {
+	const a = colorChannels(c1);
+	const b = colorChannels(c2);
+
+	if (!a || !b)
+		return c1;
+
+	const clamped = Math.min(Math.max(t, 0), 1);
+
+	return "#" + a.map(function (channel, i) {
+		return Math.round(channel + (b[i] - channel) * clamped).toString(16).padStart(2, "0");
+	}).join("");
+}
+
+function gradientSample(colors, t) {
+	if (!colors || !colors.length)
+		return null;
+	if (colors.length < 2)
+		return colors[0];
+
+	return mixColors(colors[0], colors[colors.length - 1], t);
+}
+
+function gradientEdgeColors(colors, angle, width, height, edge) {
+	const span = Math.max(width, height) * 1.5;
+	const radians = (angle === undefined || angle === null ? 0 : angle) * Math.PI / 180;
+	const cos = Math.cos(radians);
+	const sin = Math.sin(radians);
+	const at = function (x, y) {
+		return ((x - width / 2) * cos + (y - height / 2) * sin + span / 2) / span;
+	};
+	const ends = edge === "bottom" ? [[0, height], [width, height]]
+		: edge === "left" ? [[0, 0], [0, height]]
+			: edge === "right" ? [[width, 0], [width, height]]
+				: [[0, 0], [width, 0]];
+
+	return {
+		horizontal: edge === "top" || edge === "bottom",
+		start: gradientSample(colors, at(ends[0][0], ends[0][1])),
+		end: gradientSample(colors, at(ends[1][0], ends[1][1]))
+	};
+}
+
+function gradientEdges(colors, angle, width, height, thickness) {
+	const sides = ["top", "bottom", "left", "right"];
+
+	return sides.map(function (edge) {
+		const sample = gradientEdgeColors(colors, angle, width, height, edge);
+		const long = edge === "top" || edge === "bottom";
+
+		return {
+			edge: edge,
+			x: edge === "right" ? width - thickness : 0,
+			y: edge === "bottom" ? height - thickness : (long ? 0 : thickness),
+			width: long ? width : thickness,
+			height: long ? thickness : Math.max(0, height - thickness * 2),
+			horizontal: sample.horizontal,
+			start: sample.start,
+			end: sample.end
+		};
+	});
+}
+
 function parseHyprBorder(text) {
 	const border = { colors: null, angle: 0, width: null };
 
@@ -250,13 +324,21 @@ function terminalAppId(cls, title, terminals) {
 	return commandWord(title);
 }
 
+function cleanExec(value) {
+	return String(value === undefined || value === null ? "" : value)
+		.replace(/%[uUfFiIcCkK]/g, "")
+		.replace(/%%/g, "%")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
 function launchCommand(entry, appId) {
-	const command = entry && entry.exec ? entry.exec : appId;
+	const line = entry && entry.execLine ? entry.execLine : (entry && entry.exec ? entry.exec : appId);
 
 	if (entry && entry.terminal)
-		return ["foot", "-e", command];
+		return ["foot", "-e", "sh", "-c", line];
 
-	return [command];
+	return ["sh", "-c", line];
 }
 
 function togglePin(pins, appId) {
@@ -307,10 +389,381 @@ function parseDesktopEntries(text) {
 			const command = value.split(/\s+/)[0];
 
 			entry.exec = command.substring(command.lastIndexOf("/") + 1);
+			entry.execLine = cleanExec(value);
 		}
 	});
 
 	return entries;
+}
+
+function windowAppCandidates(toplevel, terminals) {
+	const info = toplevel && toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
+	const className = info.class || "";
+
+	return { className: className, word: terminalAppId(className, info.title || "", terminals) };
+}
+
+function appEntries(entries, ignore) {
+	const out = [];
+	const skip = ignore || [];
+
+	Object.keys(entries || {}).forEach(function (id) {
+		const entry = entries[id];
+
+		if (!entry || entry.hidden || !entry.name || !entry.exec || skip.indexOf(id) >= 0)
+			return;
+
+		out.push({
+			id: "app:" + id,
+			kind: "app",
+			appId: id,
+			name: entry.name,
+			keywords: [id].concat(entry.exec ? [entry.exec] : []),
+			exec: entry.exec,
+			execLine: entry.execLine,
+			terminal: entry.terminal
+		});
+	});
+
+	return out;
+}
+
+function detectPrefix(query, marks) {
+	const text = String(query === undefined || query === null ? "" : query);
+	const modes = Object.keys(marks || {});
+
+	for (let i = 0; i < modes.length; i++) {
+		const mark = marks[modes[i]];
+
+		if (mark && text.indexOf(mark) === 0)
+			return { mode: modes[i], mark: mark, text: text.substring(mark.length) };
+	}
+
+	return { mode: "", mark: "", text: text };
+}
+
+function fuzzyScore(text, query) {
+	const target = String(text === undefined || text === null ? "" : text).toLowerCase();
+	const needle = String(query === undefined || query === null ? "" : query).toLowerCase();
+
+	if (!needle)
+		return 0;
+	if (target === needle)
+		return 1000;
+
+	let score = 0;
+	let at = 0;
+	let streak = 0;
+
+	for (let i = 0; i < needle.length; i++) {
+		const found = target.indexOf(needle[i], at);
+
+		if (found < 0)
+			return null;
+
+		streak = found === at ? streak + 1 : 0;
+		score += 10 + streak * 6;
+
+		if (found === 0)
+			score += 30;
+		else if (" -_/.".indexOf(target[found - 1]) >= 0)
+			score += 20;
+
+		at = found + 1;
+	}
+
+	return score - Math.max(0, target.length - needle.length) * 0.2;
+}
+
+function entryScore(entry, query) {
+	const names = [entry.name].concat(entry.keywords || []);
+	let best = null;
+
+	for (let i = 0; i < names.length; i++) {
+		const score = fuzzyScore(names[i], query);
+
+		if (score !== null && (best === null || score > best))
+			best = score;
+	}
+
+	return best;
+}
+
+function rankEntries(entries, query, pins, usage) {
+	const kept = [];
+
+	(entries || []).forEach(function (entry) {
+		const score = entryScore(entry, query);
+
+		if (score === null)
+			return;
+
+		const used = (usage || {})[entry.id] || { count: 0, last: 0 };
+
+		kept.push({ entry: entry, score: score, pin: (pins || []).indexOf(entry.id), count: used.count, last: used.last });
+	});
+
+	kept.sort(function (a, b) {
+		const pinnedA = a.pin < 0 ? 1 : 0;
+		const pinnedB = b.pin < 0 ? 1 : 0;
+
+		if (pinnedA !== pinnedB)
+			return pinnedA - pinnedB;
+		if (a.pin !== b.pin)
+			return a.pin - b.pin;
+		if (a.score !== b.score)
+			return b.score - a.score;
+		if (a.count !== b.count)
+			return b.count - a.count;
+		if (a.last !== b.last)
+			return b.last - a.last;
+
+		return String(a.entry.name).localeCompare(String(b.entry.name));
+	});
+
+	return kept.map(function (item) { return item.entry; });
+}
+
+function parseUsage(text) {
+	const usage = {};
+
+	String(text || "").split("\n").forEach(function (line) {
+		const parts = line.split("\t");
+
+		if (parts.length < 2 || !parts[0])
+			return;
+
+		const count = parseInt(parts[1], 10);
+		const last = parts.length > 2 ? parseInt(parts[2], 10) : 0;
+
+		usage[parts[0]] = { count: isNaN(count) ? 0 : count, last: isNaN(last) ? 0 : last };
+	});
+
+	return usage;
+}
+
+function formatUsage(usage, max) {
+	const kept = Object.keys(usage || {}).map(function (id) {
+		return { id: id, count: usage[id].count, last: usage[id].last };
+	});
+
+	const capped = max > 0 && kept.length > max
+		? kept.sort(function (a, b) { return (b.last - a.last) || (b.count - a.count); }).slice(0, max)
+		: kept;
+
+	return capped.sort(function (a, b) { return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0); }).map(function (entry) {
+		return entry.id + "\t" + entry.count + "\t" + entry.last;
+	}).join("\n");
+}
+
+function bumpUsage(usage, id, now) {
+	const next = {};
+
+	Object.keys(usage || {}).forEach(function (key) {
+		next[key] = { count: usage[key].count, last: usage[key].last };
+	});
+
+	next[id] = { count: (next[id] ? next[id].count : 0) + 1, last: now };
+
+	return next;
+}
+
+function calculate(expression) {
+	const text = String(expression === undefined || expression === null ? "" : expression).replace(/\s+/g, "");
+
+	if (!text)
+		return null;
+
+	const constants = { pi: Math.PI, e: Math.E };
+	const functions = { sqrt: Math.sqrt, abs: Math.abs, round: Math.round, floor: Math.floor, ceil: Math.ceil };
+	let at = 0;
+
+	function eat(character) {
+		if (text[at] === character) {
+			at += 1;
+			return true;
+		}
+
+		return false;
+	}
+
+	function parseExpression() {
+		let value = parseTerm();
+
+		if (value === null)
+			return null;
+
+		for (;;) {
+			if (eat("+")) {
+				const right = parseTerm();
+
+				if (right === null)
+					return null;
+				value += right;
+			} else if (eat("-")) {
+				const right = parseTerm();
+
+				if (right === null)
+					return null;
+				value -= right;
+			} else
+				return value;
+		}
+	}
+
+	function parseTerm() {
+		let value = parsePower();
+
+		if (value === null)
+			return null;
+
+		for (;;) {
+			if (eat("*")) {
+				const right = parsePower();
+
+				if (right === null)
+					return null;
+				value *= right;
+			} else if (eat("/")) {
+				const right = parsePower();
+
+				if (right === null || right === 0)
+					return null;
+				value /= right;
+			} else if (eat("%")) {
+				const right = parsePower();
+
+				if (right === null || right === 0)
+					return null;
+				value %= right;
+			} else
+				return value;
+		}
+	}
+
+	function parsePower() {
+		const base = parseUnary();
+
+		if (base === null)
+			return null;
+		if (!eat("^"))
+			return base;
+
+		const exponent = parsePower();
+
+		return exponent === null ? null : Math.pow(base, exponent);
+	}
+
+	function parseUnary() {
+		if (eat("-")) {
+			const value = parseUnary();
+
+			return value === null ? null : -value;
+		}
+		if (eat("+"))
+			return parseUnary();
+
+		return parseAtom();
+	}
+
+	function parseAtom() {
+		if (eat("(")) {
+			const value = parseExpression();
+
+			return value === null || !eat(")") ? null : value;
+		}
+
+		const word = /^[a-zA-Z]+/.exec(text.substring(at));
+
+		if (word) {
+			at += word[0].length;
+
+			if (eat("(")) {
+				const argument = parseExpression();
+
+				if (argument === null || !eat(")") || !functions[word[0]])
+					return null;
+
+				return functions[word[0]](argument);
+			}
+
+			return constants[word[0]] === undefined ? null : constants[word[0]];
+		}
+
+		const number = /^[0-9]*\.?[0-9]+/.exec(text.substring(at));
+
+		if (!number)
+			return null;
+
+		at += number[0].length;
+
+		return parseFloat(number[0]);
+	}
+
+	const result = parseExpression();
+
+	if (result === null || at !== text.length || !isFinite(result))
+		return null;
+
+	return result;
+}
+
+function formatNumber(value) {
+	if (value === null || value === undefined || !isFinite(value))
+		return "";
+
+	return String(Math.round(value * 1000000) / 1000000);
+}
+
+function fileSearchCommand(home, query, depth, max, skip) {
+	const skipNames = skip || [];
+	const prune = skipNames.map(function (name) { return "-name " + shellQuote(name); }).join(" -o ");
+	const inside = (prune ? "\\( " + prune + " \\) -prune -o " : "") + "-iname " + shellQuote("*" + query + "*") + " -print";
+
+	return ["sh", "-c", "find " + shellQuote(home) + " -maxdepth " + Math.max(1, Math.floor(depth)) + " "
+		+ inside + " 2>/dev/null | head -n " + Math.max(1, Math.floor(max))];
+}
+
+function parseClipboardList(text) {
+	const entries = [];
+
+	String(text || "").split("\n").forEach(function (line) {
+		const tab = line.indexOf("\t");
+
+		if (tab <= 0)
+			return;
+
+		const id = line.substring(0, tab).trim();
+		const preview = line.substring(tab + 1).trim();
+
+		if (id !== "" && preview !== "")
+			entries.push({ id: id, text: preview });
+	});
+
+	return entries;
+}
+
+function calcEntry(query) {
+	const text = String(query === undefined || query === null ? "" : query).trim();
+
+	if (!/[0-9]/.test(text))
+		return null;
+
+	const value = calculate(text);
+
+	if (value === null)
+		return null;
+
+	const out = formatNumber(value);
+
+	if (out === text)
+		return null;
+
+	return { id: "calc", kind: "calc", name: text + " = " + out, keywords: [], value: out };
+}
+
+function pathLines(text) {
+	return String(text || "").split("\n").map(function (line) { return line.trim(); }).filter(function (line) { return line !== ""; });
 }
 
 function lookupApp(entries, name) {
