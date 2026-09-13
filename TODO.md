@@ -2,7 +2,7 @@
 
 ## Tooltips
 
-- [x] Shared tooltip popup (Tooltip.qml: black, square edges, 1px gradient border taken from the Hyprland config), opens on demand, closes with a small delay so the pointer can travel into it (Config.tooltipCloseDelay)
+- [x] Shared tooltip popup (Tooltip.qml: black, square edges, 1px gradient border taken from the Hyprland config through HyprBorder.qml), opens on demand, closes with a small delay so the pointer can travel into it (Config.tooltipCloseDelay)
 - [ ] CPU tooltip
   - [ ] per core usage as a block grid, one block per core, github contribution graph style, color mixed red -> cpuBase by load
   - [ ] cpu model name, core/thread count and basic specs from /proc/cpuinfo
@@ -21,7 +21,7 @@
 
 - [x] month grid, weekday column names, today inverted
 - [x] two arrows each side: month (‹ ›) and year (« »), title click resets to today
-- [x] rewritten from scratch, click the date component at the far right opens it, leaving it closes it (verified by screenshot: 203x178 logical, 1px gradient border)
+- [x] rewritten from scratch, click the date component at the far right opens it, leaving it closes it (verified by screenshot: 220x174 logical, 1px gradient border)
 - [ ] optional: week numbers, ISO week, holidays
 
 ## Dock
@@ -45,6 +45,57 @@
 - [ ] right click to pin/unpin and to close a window from the dock
 - [ ] app name label above the hovered icon, auto hide when idle
 - [ ] indicator for apps with an urgent window
+
+## GitHub contributions widget
+
+A quickshell bar widget showing the user's own GitHub contributions for the last 90 days as a
+custom tile grid. Generic for any user, anonymous, no login, no token, nothing hardcoded: the
+identity comes from the user's own git config at runtime.
+
+- [ ] @username header, click opens https://github.com/<user> in the default browser
+- [ ] 90-day tile grid, custom drawn (no GitHub assets), color ramp mixed from Config.contribBase
+- [ ] tile click -> popup lists that day's contributions (repo, commit, type), each row
+      clickable -> browser to github.com/<owner>/<repo>/commit/<sha>
+- [ ] days with only private/unlisted contributions show the count + an "open profile" button
+- [ ] works offline from cache after the first fetch
+
+contrib.sh (one POSIX script, run via Process like MemoryStat.qml):
+
+- [ ] resolve: `git config --get user.email`; if it matches `+<login>@users.noreply.github.com`
+      the username is parsed from it offline, else fall back to the search API
+      `api.github.com/search/users?q=<email> in:email` (only matches a public profile email),
+      cache the login to ~/.config/quickshell/cache/gh-user
+- [ ] calendar: GET `github.com/users/<user>/contributions?from=<90 days ago>&to=<today>`, parse
+      the contribution-day tiles (data-date / data-level), cache to cache/calendar, output
+      `date|level` lines
+
+- [ ] events: GET `api.github.com/users/<user>/events`, cache to cache/events
+- [ ] day <date>: filter the cached events for that date, output repo / commit sha / type
+- [ ] open <url>: xdg-open
+- [ ] cache dir ~/.config/quickshell/cache, recreated if missing; calendar refreshed every few
+      hours, events hourly, day lists only filter the cache locally
+
+ContribGrid.qml next to the other bar stats:
+
+- [ ] Process runs contrib.sh, FileView reads the cache files, Timer sets the cadence
+- [ ] header @username clickable, grid is ~13 weeks x 7 of our own Rectangles colored by level
+      via helpers.mixColor, tile click -> Tooltip (Tooltip.qml pattern) with that day's events
+- [ ] day with count > 0 but no events -> just the count + open profile button
+
+Wiring:
+
+- [ ] shell.qml: ContribGrid into the right Row, config.js: contribBase color + sizing,
+      .gitignore: add /quickshell/cache
+
+Contracts (know before building):
+
+- the contributions endpoint is undocumented -> ponytail comment, upgrade path is GraphQL + PAT
+- both the day detail and the window are 90 days and public-only because the events feed is the
+  only anonymous source GitHub offers (same as the logged-out web); counts beyond that window are
+  deliberately not fetched, history is out of scope
+- private contributions (even publicized) never appear in the events feed, so those tiles show the
+  count only
+- anonymous API: 60 req/hr, hourly cache keeps it well under that
 
 # Notes on this machine
 
@@ -84,24 +135,31 @@
   a small zwlr_virtual_pointer_manager_v1 client that injects move/click/scroll, /tmp/bin has wtype
   so keys can be typed into a focused surface
 - check.js covers the desktop entry parsing, the app lookup, the calendar date helpers and the
-  Hyprland border parsing: node check.js
-- the tooltip border is not configured in this repo: Tooltip.qml asks Hyprland for
-  `general:col.active_border` and `general:border_size` (hyprctl getoption -j) and asks again on the
-  `configreloaded` event, so the hyprland config stays the single source of truth. `borderWidth`
-  (-1) and `borderColors` (null) override it per tooltip, e.g. `borderWidth: 0` for no border
+  Hyprland border and gap parsing: node check.js
+- the border and the spacing are not configured in this repo: HyprBorder.qml (shared by the bar and
+  every tooltip) asks Hyprland for `general:col.active_border`, `general:border_size` and
+  `general:gaps_in` / `general:gaps_out` (hyprctl getoption -j) and asks again on the `configreloaded`
+  event, so the hyprland config stays the single source of truth. `borderWidth` (-1) and
+  `borderColors` (null) override it per tooltip, e.g. `borderWidth: 0` for no border
+- the bar takes its whole spacing from those values: margins = gaps_out, the frame's padding =
+  gaps_in, and exclusiveZone is just the bar's height, so hyprland's own gaps leave as much space
+  below the bar as the bar has above it. The tooltip's padding is gaps_in as well, and it hangs
+  gaps_out below the bar
 - hyprctl prints colors as AARRGGBB, which is also what Qt parses an 8 digit hex string as, so
   "#" + the token is the color as is (ee33ccff -> opacity ee, rgb 33ccff). A value hyprland cannot
-  express as plain hex is dropped and the tooltip falls back to Config.tooltipBorderColor
-- the gradient border is a rotated rectangle the size of the diagonal clipped by the tooltip frame,
+  express as plain hex is dropped and the border falls back to Config.borderFallbackColor
+- the gradient border is a rotated rectangle the size of the diagonal clipped by the frame,
   with a hole cut by the background colored rectangle on top, because Qt's Gradient only offers
   Horizontal/Vertical orientation. Only the first and last color stop are used
 - `anchorItem.Window.window` is a raw Qt window, not the Quickshell one, and setting it made the
   popup never show ("not a quickshell window"), so Tooltip takes the window explicitly
-  (`anchorWindow: bar`) and positions itself from the anchor item with mapToItem
+  (`anchorWindow: bar`) and takes its x from the anchor item with mapToItem
 - mapToItem is not reactive, so a binding for the position was evaluated before layout and gave
   0,0 (popup off screen). Tooltip.refreshAnchor recomputes it every time the popup is shown
-- anchor.rect.y is measured from the bottom edge of the anchor window, not its top, so the popup
-  sits `rect.y` below the bar. Fine for this top bar, and the x is clamped to the window width so a
+- anchor.rect.y is measured from the bottom edge of the anchor window, not its top, and quickshell
+  adds the window's own margin on top of it, so `rect.y: 0` already lands the popup one bar margin
+  (gaps_out) under the bar, which is the same spacing the bar gets from the screen edge. The x is
+  clamped to the window width so a
   far right anchor (the date) still lands on screen. A bottom anchored tooltip (the dock) would
   need flipping up, which is not implemented yet
 
