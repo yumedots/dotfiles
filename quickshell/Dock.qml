@@ -23,8 +23,7 @@ PanelWindow {
 	readonly property var toplevels: Hyprland.toplevels.values
 	readonly property string activeAddress: Hyprland.activeToplevel ? Hyprland.activeToplevel.address : ""
 	readonly property int workspaceId: Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1
-	property var applications: ({})
-	property var icons: ({})
+	property var applications: appIcons.entries
 	property var apps: []
 	property string menuAppId: ""
 	property real menuX: 0
@@ -56,23 +55,7 @@ PanelWindow {
 	}
 
 	function iconOf(appId) {
-		if (!appId)
-			return "";
-
-		if (dock.icons[appId])
-			return dock.icons[appId];
-
-		const entry = dock.entryOf(appId);
-		const candidates = [entry ? entry.icon : "", appId, Config.dockFallbackIcon];
-
-		for (let i = 0; i < candidates.length; i++) {
-			if (candidates[i] && Quickshell.hasThemeIcon(candidates[i])) {
-				dock.icons[appId] = Quickshell.iconPath(candidates[i], true);
-				return dock.icons[appId];
-			}
-		}
-
-		return "";
+		return appIcons.iconOf(appId);
 	}
 
 	function computeApps() {
@@ -197,20 +180,10 @@ PanelWindow {
 		dock.closeMenu();
 	}
 
-	onApplicationsChanged: {
-		dock.icons = ({});
-		dock.computeApps();
-	}
+	onApplicationsChanged: dock.computeApps()
 
-	Process {
-		id: desktopFiles
-
-		command: ["sh", "-c", "grep -H -E '^(Name|Icon|StartupWMClass|Exec|NoDisplay|Hidden)=' /usr/share/applications/*.desktop \"$HOME/.local/share/applications\"/*.desktop 2>/dev/null"]
-		running: true
-
-		stdout: StdioCollector {
-			onStreamFinished: dock.applications = Helpers.parseDesktopEntries(text)
-		}
+	AppIcons {
+		id: appIcons
 	}
 
 	Process {
