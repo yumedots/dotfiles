@@ -303,7 +303,7 @@ Item {
 					anchors.top: parent.top
 					anchors.bottom: parent.bottom
 					width: Config.mixerFaderThickness
-					radius: width / 2
+					radius: 0
 					color: Config.dim
 				}
 
@@ -312,7 +312,7 @@ Item {
 					anchors.bottom: track.bottom
 					width: track.width
 					height: track.height * channel.level
-					radius: track.radius
+					radius: 0
 					color: channel.muted ? Config.muted : Config.foreground
 				}
 			}
@@ -441,7 +441,7 @@ Item {
 				anchors.left: parent.left
 				anchors.right: parent.right
 				height: Config.mixerFaderThickness
-				radius: height / 2
+				radius: 0
 				color: Config.dim
 			}
 
@@ -450,7 +450,7 @@ Item {
 				anchors.left: lineTrack.left
 				width: lineTrack.width * line.level
 				height: lineTrack.height
-				radius: height / 2
+				radius: 0
 				color: line.muted ? Config.muted : Config.foreground
 			}
 		}
