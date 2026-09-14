@@ -14,7 +14,6 @@ PanelWindow {
 	property bool mapped: false
 	property bool shown: false
 	property string query: ""
-	property int index: 0
 	property var pins: []
 	property string terminal: ""
 	property var usage: ({})
@@ -49,7 +48,7 @@ PanelWindow {
 
 	function open() {
 		root.query = "";
-		root.index = 0;
+		list.currentIndex = 0;
 		root.mapped = true;
 		root.files = [];
 		root.clips = [];
@@ -190,13 +189,7 @@ PanelWindow {
 	}
 
 	function move(step) {
-		const last = root.results.length - 1;
-
-		if (last < 0)
-			return;
-
-		root.index = Math.max(0, Math.min(last, root.index + step));
-		list.currentIndex = root.index;
+		list.move(step);
 	}
 
 	function writeFile(path, text) {
@@ -273,8 +266,6 @@ PanelWindow {
 		if (root.mode === "clipboard")
 			clipsList.running = true;
 	}
-
-	onResultsChanged: root.index = Math.max(0, Math.min(root.index, root.results.length - 1))
 
 	AppIcons {
 		id: appIcons
@@ -378,15 +369,14 @@ PanelWindow {
 				glyphSlot: Config.launcherIconSlot
 				glyphSize: Config.launcherIconSize
 				size: Config.launcherFontSize
-				placeholder: "Type to search..."
 				glyph: root.prompt
 				active: root.shown
 
 				onEdited: {
 					root.query = field.text;
-					root.index = 0;
+					list.currentIndex = 0;
 				}
-				onAccepted: root.activate(root.results[root.index])
+				onAccepted: root.activate(root.results[list.currentIndex])
 				onCanceled: root.close()
 				onNavigate: function (step) { root.move(step); }
 				onKeyPressed: function (event) {
@@ -395,7 +385,7 @@ PanelWindow {
 						return;
 
 					if (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier) {
-						root.pin(root.results[root.index]);
+						root.pin(root.results[list.currentIndex]);
 						event.accepted = true;
 					} else if (event.key === Qt.Key_PageDown) {
 						root.move(Config.launcherMaxRows);
@@ -417,7 +407,6 @@ PanelWindow {
 				rowHeight: Config.launcherRowHeight
 				rowSpacing: Config.launcherGap
 				model: root.results
-				onCurrentIndexChanged: root.index = list.currentIndex
 
 
 
@@ -430,7 +419,7 @@ PanelWindow {
 					width: list.width
 					height: Config.launcherRowHeight
 
-					readonly property bool active: row.index === root.index
+					readonly property bool active: row.index === list.currentIndex
 					readonly property bool pinned: root.pins.indexOf(row.modelData.id) >= 0
 
 					Item {

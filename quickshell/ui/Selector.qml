@@ -6,7 +6,7 @@ Item {
 
 	property alias model: list.model
 	property alias delegate: list.delegate
-	property alias currentIndex: list.currentIndex
+	property int currentIndex: 0
 	property int visibleRows: 5
 	property real rowHeight: 0
 	property real rowSpacing: Config.procsGap
@@ -19,15 +19,23 @@ Item {
 	implicitHeight: root.visibleRows * root.rowHeight + root.rowSpacing * Math.max(0, root.visibleRows - 1)
 	height: root.implicitHeight
 
+	onCurrentIndexChanged: root.applyIndex()
+
+	function applyIndex() {
+		if (list.currentIndex !== root.currentIndex)
+			list.currentIndex = root.currentIndex;
+
+		root.ensureVisible(root.currentIndex);
+	}
+
 	function move(step) {
 		if (list.count === 0) {
-			list.currentIndex = -1;
+			root.currentIndex = -1;
 			return;
 		}
 
-		const from = list.currentIndex < 0 ? 0 : list.currentIndex + step;
-		list.currentIndex = Math.max(0, Math.min(list.count - 1, from));
-		root.ensureVisible(list.currentIndex);
+		const from = root.currentIndex < 0 ? 0 : root.currentIndex + step;
+		root.currentIndex = Math.max(0, Math.min(list.count - 1, from));
 	}
 
 	function handleKey(event) {
@@ -64,13 +72,13 @@ Item {
 		list.contentY = Math.max(0, Math.min(max, next));
 	}
 
-	onCurrentIndexChanged: root.ensureVisible(root.currentIndex)
-
 	onCountChanged: {
 		if (list.count === 0)
-			list.currentIndex = -1;
-		else if (list.currentIndex >= list.count)
-			list.currentIndex = list.count - 1;
+			root.currentIndex = -1;
+		else if (root.currentIndex < 0)
+			root.currentIndex = 0;
+		else if (root.currentIndex >= list.count)
+			root.currentIndex = list.count - 1;
 	}
 
 	ListView {
@@ -90,9 +98,16 @@ Item {
 		highlightMoveDuration: 0
 		highlightResizeDuration: 0
 
+		onModelChanged: {
+			root.applyIndex();
+			Qt.callLater(root.applyIndex);
+		}
+
+		onCurrentIndexChanged: root.ensureVisible(list.currentIndex)
+
 		highlight: Rectangle {
 			color: Config.launcherHighlight
-			radius: 2
+			radius: 0
 		}
 	}
 

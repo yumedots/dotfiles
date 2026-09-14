@@ -52,10 +52,5 @@ Item {
 		rowHeight: prototype.implicitHeight
 		rowSpacing: Config.procsGap
 		scrollWidth: root.scrollWidth
-
-		onCurrentIndexChanged: {
-			if (root.currentIndex !== list.currentIndex)
-				root.currentIndex = list.currentIndex;
-		}
 	}
 }
