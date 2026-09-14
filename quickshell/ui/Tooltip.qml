@@ -17,6 +17,8 @@ PanelWindow {
 
 	property real anchorX: 0
 	property bool shown: false
+	property bool warmed: false
+	property bool revealed: false
 
 	readonly property bool atBottom: root.anchorWindow !== null && root.anchorWindow.atBottom === true
 	readonly property real wantedX: root.anchorX + (root.anchorItem ? root.anchorItem.width : 0) / 2 - root.implicitWidth / 2
@@ -57,14 +59,45 @@ PanelWindow {
 		root.refreshAnchor();
 		root.shown = true;
 		root.visible = true;
+
+		if (root.warmed)
+			root.revealed = true;
+		else {
+			warmup.sampled = -1;
+			warmup.restart();
+		}
+	}
+
+	Timer {
+		id: warmup
+
+		interval: 30
+		repeat: true
+		property real sampled: -1
+
+		onTriggered: {
+			if (root.implicitHeight !== warmup.sampled) {
+				warmup.sampled = root.implicitHeight;
+				return;
+			}
+
+			warmup.stop();
+			warmup.sampled = -1;
+			root.warmed = true;
+
+			if (root.shown)
+				root.revealed = true;
+		}
 	}
 
 	function close() {
+		root.revealed = false;
 		root.shown = false;
 		root.visible = false;
 	}
 
 	function hideNow() {
+		root.revealed = false;
 		root.shown = false;
 		root.visible = false;
 	}
@@ -89,5 +122,6 @@ PanelWindow {
 		borderColors: root.borderColors
 		borderWidth: root.borderWidth
 		borderOpacity: 1
+		visible: root.revealed
 	}
 }
