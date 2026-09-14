@@ -307,6 +307,15 @@ the fade duration come from the Hyprland config and match the rest of the shell.
       (probe: pinRequested=app:btop -> pins=["app:btop"], the btop++ row reports pinVisible=true and
       pins.txt holds app:btop)
 - [x] check.js covers the calculator entry detection (`calcEntry`), the cliphist listing and the rest
+- [x] a `Terminal=true` app opens inside the terminal the hyprland config names: the launcher cats
+      Config.launcherTerminalConfig (~/.config/hypr/hyprland.lua, with `~` expanded to $HOME and re-read
+      on every open), Helpers.terminalName takes the first `local terminal = "..."` line (quoted, or the
+      legacy `$terminal = kitty` form) with no fallback: whatever the config names is what runs. Verified
+      on a scratch shell: the probe reads terminal=footclient for this config and the command is
+      `footclient -e sh -c btop`; `-e` is what foot, footclient and alacritty all take. The real bug was
+      upstream of that: AppIcons' grep only asked for Name/Icon/StartupWMClass/Exec/NoDisplay/Hidden, so
+      `Terminal=true` was never parsed and btop ran bare with no terminal at all. Now grep reads it too,
+      and a real `footclient -e sh -c sleep` opens a foot window while `sh -c btop` would not
 - [x] the cards are solid, not blurred: there is no `BackgroundEffect` anywhere and Hyprland's
       decoration.blur stays off, so nothing behind any shell surface is sampled. Config.surface is the
       grey (#101010) and Config.surfaceAlpha (1) is the whole transparency knob, so the launcher, the
