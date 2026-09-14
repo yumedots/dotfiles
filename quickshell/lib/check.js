@@ -354,6 +354,21 @@ assert(topProcesses(parseTopProcesses("5 4 a\n4 3 b\n3 2 c\n2 1 d"), [], 2).leng
 assert(topProcesses(parseTopProcesses("5 1 a"), [], 0).length === 1, "a cap of zero keeps everything");
 assert(topProcesses(null, [], 3).length === 0, "no processes, no list");
 
+const beforeSort = parseTopProcesses("5.0 1 a\n4.0 2 b\n3.0 3 c");
+const afterSort = parseTopProcesses("9.0 3 c\n8.0 2 b\n7.0 1 a");
+const heldOrder = holdProcessOrder(beforeSort, afterSort);
+assert(heldOrder.length === 3 && heldOrder[0].pid === 1 && heldOrder[2].pid === 3, "the rows keep the order they were first seen in");
+assert(heldOrder[0].value === 7, "the values still come from the newest listing");
+const refilled = holdProcessOrder(beforeSort, parseTopProcesses("9.0 3 c\n8.0 2 b\n6.0 4 d"));
+assert(refilled.length === 3 && refilled[0].pid === 4 && refilled[1].pid === 2 && refilled[2].pid === 3, "a dead row is refilled in place, the rows below it stay put");
+const survivors = holdProcessOrder(beforeSort, parseTopProcesses("9.0 3 c\n8.0 1 a"));
+assert(survivors.length === 3 && survivors[0].pid === 1 && survivors[1].pid === 2 && survivors[2].pid === 3, "a vanished process keeps its row so nothing below it shifts");
+const shifted = holdProcessOrder(beforeSort, parseTopProcesses("9.0 3 c\n6.0 4 d"));
+assert(shifted.length === 3 && shifted[0].pid === 4 && shifted[1].pid === 2 && shifted[2].pid === 3, "the newcomer takes the top dead row, nothing below it moves");
+const grown = holdProcessOrder(beforeSort, parseTopProcesses("9.0 3 c\n8.0 2 b\n7.0 1 a\n6.0 4 d\n5.0 5 e"));
+assert(grown.length === 5 && grown[3].pid === 4 && grown[4].pid === 5, "with nothing dead the newcomers land at the end");
+assert(holdProcessOrder([], afterSort) === afterSort, "with nothing held the list is passed through");
+
 const searchable = parseTopProcesses("90.6 1 firefox\n10.0 2 Firefox Helper\n5.0 3 foot\n1.0 4 ps");
 assert(filterProcesses(searchable, ["ps"], "fire", 10).length === 2, "the filter is a case insensitive substring match");
 assert(filterProcesses(searchable, ["ps"], "FIRE", 10)[1].pid === 2, "the rows keep their pid through the filter");

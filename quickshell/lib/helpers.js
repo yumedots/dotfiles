@@ -965,6 +965,53 @@ function topProcesses(procs, ignore, max) {
 	return max > 0 ? kept.slice(0, max) : kept;
 }
 
+function holdProcessOrder(previous, incoming) {
+	const rows = incoming || [];
+	const held = previous || [];
+
+	if (held.length === 0)
+		return rows;
+
+	const alive = {};
+	const out = [];
+	const stale = [];
+
+	rows.forEach(function (row) {
+		alive[row.pid] = row;
+	});
+
+	held.forEach(function (row) {
+		const fresh = alive[row.pid];
+
+		if (fresh === undefined) {
+			out.push(row);
+			stale.push(out.length - 1);
+			return;
+		}
+
+		out.push(fresh);
+		delete alive[row.pid];
+	});
+
+	const spare = [];
+
+	rows.forEach(function (row) {
+		if (alive[row.pid] !== undefined) {
+			spare.push(row);
+			delete alive[row.pid];
+		}
+	});
+
+	let used = 0;
+
+	stale.forEach(function (slot) {
+		if (used < spare.length)
+			out[slot] = spare[used++];
+	});
+
+	return out.concat(spare.slice(used));
+}
+
 function barLayoutDefault() {
 	return {
 		position: "top",
