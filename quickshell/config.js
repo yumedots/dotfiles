@@ -2,7 +2,7 @@
 
 const background = "#000000";
 const surface = "#101010";
-const surfaceAlpha = 0.7;
+const surfaceAlpha = 1;
 const surfaceTranslucent = "#" + ("0" + Math.round(surfaceAlpha * 255).toString(16)).slice(-2) + surface.slice(1);
 const foreground = "#ffffff";
 const dim = "#3f3f3f";
