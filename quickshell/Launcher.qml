@@ -519,8 +519,8 @@ PanelWindow {
 						anchors.verticalCenter: parent.verticalCenter
 						visible: row.pinned
 						font.family: Config.fontFamily
-					font.pixelSize: Config.launcherIconSize
-					color: row.active ? Config.launcherHighlightText : Config.dim
+						font.pixelSize: Config.launcherIconSize
+						color: Config.foreground
 						text: Config.launcherIconPin
 					}
 
