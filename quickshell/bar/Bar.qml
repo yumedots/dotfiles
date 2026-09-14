@@ -77,10 +77,30 @@ PanelWindow {
 	}
 
 	function openExclusive(widget) {
-		bar.closePopups(widget);
+		if (widget !== null && bar.openWidget === widget) {
+			bar.openWidget = null;
+			popupClose.stop();
+			bar.closePopups(null);
+
+			return;
+		}
+
+		bar.openWidget = widget;
 
 		if (widget && typeof widget.togglePopup === "function")
 			widget.togglePopup();
+
+		popupClose.restart();
+	}
+
+	property var openWidget: null
+
+	Timer {
+		id: popupClose
+
+		interval: Config.popupCloseDelay
+
+		onTriggered: bar.closePopups(bar.openWidget)
 	}
 
 	function toggleWidget(id) {

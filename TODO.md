@@ -51,8 +51,12 @@
 - the widget keys are the other half of the launcher's IpcHandler: MOD+Z cpu, MOD+X memory, MOD+C
   volume, MOD+S calendar (hypr/binds.lua -> hypr/programs.lua -> `qs ipc call shell <name>`), and
   shell.qml calls bars.instances[0].toggleWidget(id). That indirection is the fix, not decoration:
-  Bar.toggleWidget -> openExclusive closes whichever card is open before opening the next (only one
-  widget on screen, kept from the earlier pass), and going through the bar's own registry of live
+  Bar.toggleWidget -> openExclusive opens the next card before closing the previous one, one timer tick
+  later (Config.popupCloseDelay, 60ms) - closing first handed keyboard focus back to the toplevel for the
+  ~22ms it takes the new layer surface to map, so every switch flashed the window active and back
+  (`closelayer` -> `activewindow>>code-insiders` -> `openlayer`, measured off the Hyprland socket). With
+  the delayed close the same measurement is openlayer then closelayer, no activewindow event at all, and
+  exactly one card is mapped either way, and going through the bar's own registry of live
   widgets is what never worked before - the click path called root.toggle() inside Bar, where the root
   id is `bar`, so every click from the bar threw a ReferenceError and only the widgets whose handles
   were reachable elsewhere still opened. The keys use named keys, so a bound key cannot be a stale
