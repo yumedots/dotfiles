@@ -11,13 +11,22 @@
       config.js          every knob, at the root so it is the first file you see
       lib/               helpers.js (the parsing and the formatting) and check.js (the self-check)
       ui/                the shared primitives every surface draws with: HyprBorder, Tooltip, BarStat,
-                         BarText, ProcessList
+                         BarText, ProcessList, and a qmldir that names them
       services/          AppIcons, the shared .desktop entry and icon lookup, no surface of its own
       bar/               Bar.qml, the bar surface, and bar/widgets/ (CpuStat, MemoryStat, VolumeStat,
                          Tray, Workspaces), each stat owning its tooltip's wiring
       tooltips/          Calendar, CpuMonitor, MemoryMonitor, VolumeMixer, one file each
       dock/, launcher/   the other two surfaces
       cache/             the gitignored state: pins, usage
+- the shared folders are real QML modules and the `qmldir` is what names what each one exposes, so
+  nothing spells a `../..` path any more: `import qs` for the root module (Config and Helpers),
+  `import qs.ui` for the primitives and `import qs.services` for AppIcons. Verified: a qmldir can
+  expose a .js file directly, the `as Config` alias is then not needed, a `.pragma library` file works
+  and a module folder can be lowercase (checked on a scratch shell, then on the live one)
+- gotcha: the module at the shell root is what declares config.js, because config.js sits at the root
+  and a qmldir can only name files inside its own folder. A qmldir entry pointing at a missing file
+  fails the whole module and the whole config with it ("File not found"), silently at first: that is
+  how lib/qmldir kept the shell from loading for a few minutes, and why lib/ no longer has one
 - no comments in the config files (the hyprland example comments were stripped): the why, the
   measurements and the gotchas live here and in LAUNCHER.md
 - the shell's own launcher shortcuts point at the real paths, e.g. "Edit shell config" opens
