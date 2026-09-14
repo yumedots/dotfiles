@@ -1,5 +1,29 @@
 # TODO
 
+## Layout
+
+- hypr/: hyprland.lua is the entry point and only `require`s the rest - monitors.lua, programs.lua
+  (terminal, fileManager, menu, windowSwitcher, wallpaper), envs.lua, looknfeel.lua, layouts.lua,
+  input.lua, binds.lua, rules.lua, autostart.lua. Editing a topic means editing its own file, and the
+  terminal the launcher reads lives in programs.lua
+- quickshell/ is laid out one folder per thing, the entry file doing nothing but hosting them:
+      shell.qml          the composition root: the IpcHandler, a bar per screen, the dock, the launcher
+      config.js          every knob, at the root so it is the first file you see
+      lib/               helpers.js (the parsing and the formatting) and check.js (the self-check)
+      ui/                the shared primitives every surface draws with: HyprBorder, Tooltip, BarStat,
+                         BarText, ProcessList
+      services/          AppIcons, the shared .desktop entry and icon lookup, no surface of its own
+      bar/               Bar.qml, the bar surface, and bar/widgets/ (CpuStat, MemoryStat, VolumeStat,
+                         Tray, Workspaces), each stat owning its tooltip's wiring
+      tooltips/          Calendar, CpuMonitor, MemoryMonitor, VolumeMixer, one file each
+      dock/, launcher/   the other two surfaces
+      cache/             the gitignored state: pins, usage
+- no comments in the config files (the hyprland example comments were stripped): the why, the
+  measurements and the gotchas live here and in LAUNCHER.md
+- the shell's own launcher shortcuts point at the real paths, e.g. "Edit shell config" opens
+  quickshell/config.js and "Edit hyprland config" opens ~/.config/hypr (the folder, not one file)
+- sway/ and waybar/ are gone: nothing here uses them any more
+
 ## Tooltips
 
 - [x] Shared tooltip popup (Tooltip.qml: black, square edges, 1px gradient border taken from the Hyprland config through HyprBorder.qml), opens on demand, closes with a small delay so the pointer can travel into it (Config.tooltipCloseDelay)
@@ -50,7 +74,7 @@
         sameArray=true, bar text "2%" against the monitor's Math.round 2%
   - [x] verified content box 264x241 logical (it was 264x201 with three process rows, so the taller
         viewport is exactly the 2 extra rows of 20), fade and border from the shared Tooltip /
-        HyprBorder, no warnings on load, node check.js covers the parsing and the clamping
+        HyprBorder, no warnings on load, node lib/check.js covers the parsing and the clamping
 - [x] Memory tooltip (MemoryMonitor.qml, opened by clicking MemoryStat like the cpu one)
   - [x] /proc/meminfo is parsed once, in the bar's MemoryStat (Helpers.parseMeminfo), and the card takes
         it through `source` (shell.qml: `MemoryMonitor { source: memoryStat }`), so the bar's number and
@@ -289,7 +313,12 @@ the fade duration come from the Hyprland config and match the rest of the shell.
       `cliphist decode <id> | wl-copy` (probe: `$` listed 3 real clips with their ids 5/2/1), so anything
       else that stores to cliphist shows up here too. The shell's own file-per-clip watcher
       (clipboard.sh, CLIPBOARD_KEEP, the clipWatch process) is gone, and the store side now runs from
-      hypr/hyprland.lua: `pgrep -f 'cliphist store' >/dev/null || wl-paste --watch cliphist store &`
+      hypr/autostart.lua: `pgrep -x wl-paste >/dev/null || wl-paste --watch cliphist store &`. The
+      watcher never started before because `pgrep -f 'cliphist store'` matches the shell running it
+      (the pattern is in its own command line), so it always answered "already running" and the watcher
+      was never spawned. `pgrep -x wl-paste` asks about the real process. It lives in
+      `hl.on("hyprland.start")`, so it starts with the compositor - after a plain `hyprctl reload` on a
+      session that predates it, start it once by hand
 - [x] Ctrl+P pins the highlighted entry, pins sort first and survive restarts
 - [x] frecency ordering, the entries used most and most recently float up, also across restarts
 - [x] file search is debounced, depth limited and skips .cache/.git/node_modules/.local/.cargo so it
@@ -308,9 +337,10 @@ the fade duration come from the Hyprland config and match the rest of the shell.
       pins.txt holds app:btop)
 - [x] check.js covers the calculator entry detection (`calcEntry`), the cliphist listing and the rest
 - [x] a `Terminal=true` app opens inside the terminal the hyprland config names: the launcher cats
-      Config.launcherTerminalConfig (~/.config/hypr/hyprland.lua, with `~` expanded to $HOME and re-read
-      on every open), Helpers.terminalName takes the first `local terminal = "..."` line (quoted, or the
-      legacy `$terminal = kitty` form) with no fallback: whatever the config names is what runs. Verified
+      Config.launcherTerminalConfig (~/.config/hypr/programs.lua, with `~` expanded to $HOME and re-read
+      on every open), Helpers.terminalName takes the first `terminal = "..."` line (the table entry in
+      programs.lua, the older `local terminal = "..."` form, or the legacy `$terminal = kitty` one) with
+      no fallback: whatever the config names is what runs. Verified
       on a scratch shell: the probe reads terminal=footclient for this config and the command is
       `footclient -e sh -c btop`; `-e` is what foot, footclient and alacritty all take. The real bug was
       upstream of that: AppIcons' grep only asked for Name/Icon/StartupWMClass/Exec/NoDisplay/Hidden, so
@@ -410,7 +440,7 @@ Contracts (know before building):
   a small zwlr_virtual_pointer_manager_v1 client that injects move/click/scroll, /tmp/bin has wtype
   so keys can be typed into a focused surface
 - check.js covers the desktop entry parsing, the app lookup, the calendar date helpers, the
-  Hyprland border, gap and animation parsing and the pipewire stream parsing: node check.js
+  Hyprland border, gap and animation parsing and the pipewire stream parsing: node lib/check.js
 - PwNodePeakMonitor is unusable for the volume mixer on quickshell 0.3.1: it wants the capture stream's
   channels to match the node's, so a mono stream spams "is missing channels present in capture stream",
   and creating a monitor for every node of Pipewire.nodes segfaulted quickshell. The mixer instead polls
@@ -486,7 +516,8 @@ Contracts:
 
 - the key map renames keys, it is not a macro system: one key, one action, no sequences and no side
   effects, and a widget that needs a key for something else (text entry in the launcher) keeps it
-- hyprland.lua stays the source of truth for global movement (window and workspace focus, the mouse
-  wheel binds); this only covers movement inside the shell's own surfaces
+- hypr/hyprland.lua and the files it requires stay the source of truth for global movement (window
+  and workspace focus, the mouse wheel binds); this only covers movement inside the shell's own
+  surfaces
 - resolve each default once at startup and expose it read-only, so a broken `defaults` entry cannot
   make a widget launch something surprising mid session
