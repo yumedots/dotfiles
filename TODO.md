@@ -60,6 +60,17 @@
 
 ## Tooltips
 
+- [x] BUG, the first open after a cold start showed the card's bottom stretched with the row colours
+      smeared down it, and only on the cpu and memory cards. Cause: a layer surface is mapped before its
+      content has been laid out, so the surface is born at the pre-layout height and then resized a few
+      frames later; the compositor presents the old, small buffer stretched into the new size. Not a
+      Quickshell-side number (`root.height` was already the final 272 from the first 16ms tick) - polling
+      `hyprctl -j layers` after the open showed the surface at h=73 for 40-78ms and 272 from 78ms on,
+      which is also why the second open was always fine (the content is laid out by then). The card is
+      mapped straight away now but its border is hidden (`visible: root.revealed`) until a 140ms warmup
+      timer has passed, so the resize happens while the surface draws nothing. Verified: four frames
+      grabbed in a row after a cold first open are empty, empty, empty, then the full 87..517 card - no
+      small or stretched frame in between, and the second open is unchanged
 - [x] Shared tooltip popup (Tooltip.qml: black, square edges, 1px gradient border taken from the Hyprland config through HyprBorder.qml), opens on demand, closes with a small delay so the pointer can travel into it (Config.tooltipCloseDelay)
 - [x] CPU tooltip (CpuMonitor.qml, opened by clicking CpuStat like the calendar / mixer)
   - [x] per core usage as a block grid, one block per core, github contribution graph style, the color mixed
@@ -81,8 +92,9 @@
         pass and were asked back to white: the purple is the card's, the rows stay readable).
         `ps -eo pcpu=,comm= --sort=-pcpu` re-run every 2s, the sampler's own `ps` (and its zombie)
         filtered out with Config.psIgnore: pcpu is an average over the process life, so the fresh
-        `ps` was showing up at 100-200% and topping the list (seen in the probe). Config.cpuTopMax (30)
-        caps the list and Config.cpuTopCount (5) is how many rows fit before it scrolls: the rows live
+        `ps` was showing up at 100-200% and topping the list (seen in the probe). The list is not capped:
+        every process `ps` reports is in it (647 here) and Config.cpuTopCount (5) is how many rows fit
+        before it scrolls: the rows live
         in ProcessList.qml (a shared viewport: spacing Config.procsGap 6, row height from a hidden
         prototype Text, delegate width/height read off ListView.view.rowWidth/rowHeight, and a 3px
         Config.muted rounded scrollbar pinned to the card's right edge, taller than the track only when
@@ -120,7 +132,7 @@
         decimal), then a 4px usage bar in Config.dim with the load colour filling it, then the top
         processes by RSS
   - [x] the process eating the most RAM: `ps -eo rss=,comm= --sort=-rss` re-run every 2s while the card
-        is on screen, capped at Config.memoryTopMax (30) and shown Config.memoryTopCount (5) rows at a
+        is on screen, uncapped like the cpu card and shown Config.memoryTopCount (5) rows at a
         time with the same ProcessList viewport as the cpu card (Config.psIgnore drops the sampler's own
         `ps`). Each row is just `name` in Config.foreground and the amount right aligned in
         Config.memoryBase: Helpers.sizeText picks the unit from the size, GB at a gigabyte or more, then
@@ -207,7 +219,7 @@
       monitor.searching, so the close timer cannot fire while you type), Escape clears it, `q` force
       quits the highlighted process (Helpers.killCommand + Config.procKillSignal) and arrows / hjkl move
       the selection in the shared ProcessList. Typing filters every process, not just the top N:
-      Helpers.filterProcesses over the same parsed `ps` output, capped at Config.procSearchMax
+      Helpers.filterProcesses over the same parsed `ps` output, uncapped like the list itself
 - [x] Date / clock tooltip = the calendar below
 
 ## Input
@@ -222,8 +234,58 @@
       s through `qs ipc call shell <name>`) and close with Escape; the launcher and its window switcher
       close with Escape; the calendar moves with hjkl / arrows and the mixer with h l and j k + Enter
 - [x] the search field shows one hint, `f to type` (Config.procSearchHint), in the glyph's fixed slot,
-      instead of a `f` keycap followed by a separate "Type to search" line; the box width comes from
-      Config.procSearchWidth so it does not resize as the hint changes
+      instead of a `f` keycap followed by a separate "Type to search" line. The box hugs its own content
+      (the hint text, not a fixed width: a fixed 120 made the field 149 wide, and since it is anchored
+      right that put its glyph at x95 on top of the end of the "Top processes" heading at x106). It is
+      measured now: field x146 w94, icon at 150..163, hint at 171..236, heading ends at 106. While a
+      filter is open the field takes exactly the room left of the heading (band - heading - 3*spacing)
+      instead of Math.max(implicitWidth, ...), so widening it can never reach back over the heading
+- [x] hjkl reaches the lists through one focus owner. The card root has `focus: true` and forwards
+      keys: f opens the filter, Escape closes, anything else goes to the shared ProcessList (so hjkl and
+      q work with no filter open). While the filter is open the input owns the letters, arrows move the
+      selection (onNavigate) and only q is taken back for the kill - typing "hypr" would otherwise move
+      the highlight four times. `f`/Escape while the filter is open are the input's, and the card root
+      returns `true` from onPressed only through the selector, so a key is never both a movement and a
+      character. Verified against the live shell by injecting keys (hyprctl dispatch
+      'hl.dsp.send_key_state({ mods = 0, key = "j", state = "down" })'): the highlight walked with
+      j j j, h walked it back up a page, f opened the filter, h y p filtered 200 -> 200 -> 2 without
+      moving the selection, Down moved it, Escape cleared and a second Escape closed the card, and q on
+      a searched process killed the `sleep 300` started for the test
+- [x] the highlight survives the list repainting. `procs` is a new array every 2s poll, and a fresh
+      model resets the ListView's currentIndex to 0, so the selection snapped back to the top mid-navi-
+      gation. Selector now keeps its own currentIndex as the source of truth, re-applies it on
+      onModelChanged (immediately and once more via Qt.callLater, in case the refill lands after the
+      handler) and the model is only ever written back through the selector. Verified: highlight at row
+      3 stayed at row 3 across two polls that before moved it back to row 0
+- [x] the highlight is a plain rectangle (radius 0). It was radius 2, and because the ListView clips
+      the highlight at scrollWidth + rowSpacing the right corners were cut mid-radius, which is why the
+      launcher looked rounded and the cards looked rounded on one side only. Verified from the pixels:
+      all four corners of the 231x14 highlight are solid #2f2f2f
+- [x] "Nothing matches" (Config.procNoMatch) is centred in the box the rows would have used: the
+      message takes `height: procList.implicitHeight` with AlignVCenter and the empty list is hidden,
+      where before the list kept its height and the message added a line under it, stretching the card
+      517 -> 549 physical and pinning the text to the bottom. Verified: the card is back to 87..517 and
+      the message sits at y403..417 inside the 336..486 list band, the same pattern the launcher already
+      uses for its empty state (an Item the height of the list with the Text centred in it)
+- [x] the selection is anchored to the process, not the row number. Keeping the row still is not
+      enough on its own: both lists are re-sorted every poll, so the row under the highlight became a
+      different process every 2s (much more visible on the RAM card, where RSS reorders far more than
+      pcpu does - that is the "highlighter jumps" that was left). Selector now takes a `keyField`
+      (ProcessList passes "pid"), remembers the selected key on every move and, on each model change,
+      reselects the row that key is now on; if the process is gone it keeps the row. Verified from the
+      pixels: the name inside the highlight rendered byte-identical ("Helium") before and after a poll
+      that moved the highlight from y368 to y400. Set `keyField: ""` in ProcessList.qml to go back to
+      row-stable instead (one line, no other change)
+- [x] every process is listed, not the top 30. Config.cpuTopMax / memoryTopMax (30) and procSearchMax
+      (200) are gone and the helpers are called without a max (`max > 0` was the only thing that sliced).
+      This machine has 648 `ps` rows, so the cards were showing 5% of them and a search for "h" stopped
+      at 200 (it is 217 now). Verified through the same helpers in node against the real `ps` output:
+      648 parsed, 647 after Config.psIgnore, and the card's scrollbar thumb is now at its 12px floor
+      (it was 14.9 logical with 30 rows), which is what a 12000px content height looks like
+- [x] the "Top processes" heading has the same inset as the search bar: `anchors.leftMargin:
+      Config.procSearchPadding` instead of Config.spacing. Measured off the band: the heading ink used
+      to start 11.9 logical from the left edge while the `f to type` hint ended 4.4 from the right,
+      now both are 4
 - [ ] the tray lost its click handler with the rest of the mouse code and has no keyboard path yet:
       it needs a selection over the icons (h l) and Enter / Shift+Enter to activate
 
