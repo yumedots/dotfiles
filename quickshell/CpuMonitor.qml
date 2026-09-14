@@ -139,6 +139,13 @@ Item {
 			}
 		}
 
+		Rectangle {
+			width: column.width
+			height: 1
+			visible: root.procs.length > 0
+			color: Config.dim
+		}
+
 		Text {
 			width: column.width
 			visible: root.procs.length > 0
@@ -146,7 +153,7 @@ Item {
 			font.family: Config.fontFamily
 			font.pixelSize: Config.fontSize
 			color: Config.cpuBase
-			text: "Top processes"
+			text: Config.topProcessTitle
 		}
 
 		ProcessList {

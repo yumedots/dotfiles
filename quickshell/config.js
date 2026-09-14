@@ -88,6 +88,7 @@ const memorySeparator = 1;
 const memoryWarnAt = 60;
 const memoryDangerAt = 85;
 const procsGap = 6;
+const topProcessTitle = "Top processes";
 const psIgnore = ["ps", "ps <defunct>"];
 const cpuPollMs = 1000;
 
