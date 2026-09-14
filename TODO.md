@@ -149,8 +149,8 @@
       config.js: 0 reloads after editing it alone, 1 after a whitespace edit to shell.qml, marker printed).
       So after a config change, restart quickshell or make any .qml content change to trigger a reload
 - [x] hyprland config is Lua here (0.56), so `hyprctl keyword <opt> <value>` fails with "keyword can't
-      work with non-legacy parsers. Use eval". Use `hyprctl eval 'hl.config({ decoration = { blur = {
-      enabled = false } } })'` for a temporary change and `hyprctl reload` to re-read the file. Dispatch
+      work with non-legacy parsers. Use eval". Use `hyprctl eval 'hl.config({ general = { gaps_out = 8 } })'`
+      for a temporary change and `hyprctl reload` to re-read the file. Dispatch
       needs the same form: `hyprctl dispatch 'hl.dsp.focus({ workspace = 1 })'` (`hl.dsp.workspace` is
       not callable). Opening/closing the launcher moves focus, which can make Hyprland switch to the
       window it restores, so pin the workspace again before comparing two screenshots
@@ -225,10 +225,10 @@ the fade duration come from the Hyprland config and match the rest of the shell.
       The field's placeholder reads "Type to search..." in both lists and the empty-state messages are
       capitalised: "Nothing matches", "No windows open", "Nothing copied yet", "Type two letters or more
       to search $HOME"
-- [x] the search field sits in its own box and the card is see-through: the field row is a Rectangle in
+- [x] the search field sits in its own box and the card is the shared surface colour: the field row is a Rectangle in
       Config.launcherSearchBox (#1f1f1f, a dark grey that does not burn at night, measured 244x30 = the
-      card's inner width) and HyprBorder gained an overridable `backgroundColor` (default Config.background)
-      that the launcher sets to Config.launcherBackground (#e0000000, the alpha is the transparency). The
+      card's inner width) and HyprBorder gained an overridable `backgroundColor` (default Config.surfaceTranslucent)
+      that the launcher sets to the same shared value. The
       selected row is Config.launcherHighlight (#2f2f2f) instead of a full white flash and the text and
       icon on it are Config.launcherHighlightText (probe: row0 highlight=#2f2f2f nameColor=#ffffff,
       row1 highlight=#00000000)
@@ -307,23 +307,10 @@ the fade duration come from the Hyprland config and match the rest of the shell.
       (probe: pinRequested=app:btop -> pins=["app:btop"], the btop++ row reports pinVisible=true and
       pins.txt holds app:btop)
 - [x] check.js covers the calculator entry detection (`calcEntry`), the cliphist listing and the rest
-- [x] blur behind the card: the launcher requests it over ext_background_effect (Hyprland 0.56 supports
-      it), `BackgroundEffect.blurRegion: Region { item: card }` in Launcher.qml, so the compositor blurs
-      exactly the card rect and nothing else. Config.launcherBackground is the card alpha, `#b3000000`
-      (70%) now instead of the old 88% so the blur is actually visible. Hyprland side: decoration.blur
-      on (size 2, passes 1, noise 0) plus a `no_blur` window rule for `.*` so every normal window keeps
-      the exact look it had before. NOT done with a layer rule: `blur = true` on the fullscreen launcher
-      surface blurs the whole screen and the alpha mask plus the fade makes it flicker into stripes
-      (that is what the first attempt did). `ignore_alpha` is not needed either, the region comes from
-      the client
-  - [x] strength measured on one static text window behind the card (card padding strip, launcher
-        closed vs open, so the backdrop is identical). Share of the backdrop's detail that still shows
-        through the card, where no blur at all would be 30% (the card alpha):
-        size 1 / passes 1 -> 16.3%, size 2 / passes 1 -> 7.6% (the default now), size 2 / passes 2 ->
-        2.0%, size 3 / passes 2 -> 1.6%, size 4 / passes 3 -> 0.6% (all far too much). Outside the card
-        the number was byte-identical in every run (22.03), so only the card is ever touched. Both are
-        config values: change size/passes in hypr/hyprland.lua then `hyprctl reload`, or raise
-        Config.launcherBackground (80% = #cc000000) to hide more of the backdrop
+- [x] the cards are solid, not blurred: there is no `BackgroundEffect` anywhere and Hyprland's
+      decoration.blur stays off, so nothing behind any shell surface is sampled. Config.surface is the
+      grey (#101010) and Config.surfaceAlpha (1) is the whole transparency knob, so the launcher, the
+      bar and the widgets all share it; lower it to make every card see-through again
 
 ## GitHub contributions widget
 
