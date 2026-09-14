@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell.Hyprland
-import "../../ui"
-import "../../config.js" as Config
+import qs.ui
+import qs
 
 Row {
 	id: root

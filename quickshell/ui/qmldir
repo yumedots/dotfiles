@@ -1,0 +1,6 @@
+module ui
+HyprBorder 1.0 HyprBorder.qml
+Tooltip 1.0 Tooltip.qml
+BarStat 1.0 BarStat.qml
+BarText 1.0 BarText.qml
+ProcessList 1.0 ProcessList.qml

@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell.Services.Pipewire
-import "../../ui"
-import "../../config.js" as Config
+import qs.ui
+import qs
 
 BarStat {
 	id: root

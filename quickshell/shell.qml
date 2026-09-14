@@ -1,10 +1,10 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs
 import "bar"
 import "dock"
 import "launcher"
-import "config.js" as Config
 
 ShellRoot {
 	IpcHandler {

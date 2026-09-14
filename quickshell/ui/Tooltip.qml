@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell
-import "../config.js" as Config
+import qs
 
 PopupWindow {
 	id: root

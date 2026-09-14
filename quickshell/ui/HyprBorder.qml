@@ -1,8 +1,7 @@
 import QtQuick
 import Quickshell.Hyprland
 import Quickshell.Io
-import "../config.js" as Config
-import "../lib/helpers.js" as Helpers
+import qs
 
 Item {
 	id: root

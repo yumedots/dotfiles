@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell.Services.SystemTray
 import Quickshell.Widgets
-import "../../config.js" as Config
+import qs
 
 Row {
 	id: root

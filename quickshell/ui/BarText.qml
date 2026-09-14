@@ -1,5 +1,5 @@
 import QtQuick
-import "../config.js" as Config
+import qs
 
 Item {
 	id: root

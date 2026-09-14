@@ -3,10 +3,9 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Widgets
-import "../ui"
-import "../services"
-import "../config.js" as Config
-import "../lib/helpers.js" as Helpers
+import qs.ui
+import qs
+import qs.services
 
 PanelWindow {
 	id: dock

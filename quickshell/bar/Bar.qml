@@ -1,9 +1,9 @@
 import QtQuick
 import Quickshell
+import qs.ui
+import qs
 import "widgets"
-import "../ui"
 import "../tooltips"
-import "../config.js" as Config
 
 PanelWindow {
 	id: bar
