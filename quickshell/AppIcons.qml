@@ -54,7 +54,7 @@ Item {
 	Process {
 		id: desktopFiles
 
-		command: ["sh", "-c", "grep -H -E '^(Name|Icon|StartupWMClass|Exec|NoDisplay|Hidden)=' /usr/share/applications/*.desktop \"$HOME/.local/share/applications\"/*.desktop 2>/dev/null"]
+		command: ["sh", "-c", "grep -H -E '^(Name|Icon|StartupWMClass|Exec|NoDisplay|Hidden|Terminal)=' /usr/share/applications/*.desktop \"$HOME/.local/share/applications\"/*.desktop 2>/dev/null"]
 
 		stdout: StdioCollector {
 			onStreamFinished: root.entries = Helpers.parseDesktopEntries(text)
