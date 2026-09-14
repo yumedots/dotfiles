@@ -119,7 +119,7 @@ Item {
 		height: Math.max(12, list.height * list.height / Math.max(1, list.contentHeight))
 		x: root.width - width
 		y: list.contentY / Math.max(1, list.contentHeight - list.height) * (list.height - height)
-		radius: width / 2
+		radius: 0
 		color: Config.muted
 	}
 }

@@ -173,7 +173,7 @@ Item {
 
 					width: root.blockSize
 					height: root.blockSize
-					radius: 2
+					radius: 0
 					color: root.blockColor(modelData)
 				}
 			}
