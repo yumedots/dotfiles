@@ -108,6 +108,7 @@ const launcherSearchBox = "#1f1f1f";
 const launcherHighlight = "#2f2f2f";
 const launcherHighlightText = "#ffffff";
 const launcherUsageMax = 10;
+const launcherTerminalConfig = "~/.config/hypr/hyprland.lua";
 const launcherPrompt = "\uea6d";
 const launcherMaxRows = 12;
 const launcherMaxResults = 60;

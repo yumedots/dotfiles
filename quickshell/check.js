@@ -128,7 +128,13 @@ assert(terminalAppId("footclient", "yazi: .config", ["foot", "footclient"]) === 
 assert(terminalAppId("footclient", "gabriel@archlinux:~", ["foot", "footclient"]) === "", "a plain prompt has no command");
 assert(terminalAppId("code-insiders", "notes.md - Code", ["foot", "footclient"]) === "code-insiders", "a non-terminal keeps the class");
 assert(terminalAppId("FOOTCLIENT", "btop", ["foot", "footclient"]) === "btop", "terminal classes match case-insensitively");
-assert(launchCommand({ exec: "btop", terminal: true }, "btop").join(" ") === "foot -e sh -c btop", "a Terminal=true app opens inside a terminal");
+assert(launchCommand({ exec: "btop", terminal: true }, "btop", "footclient").join(" ") === "footclient -e sh -c btop", "a Terminal=true app opens inside the configured terminal");
+assert(launchCommand({ exec: "btop", terminal: true }, "btop", "ghostty").join(" ") === "ghostty -e sh -c btop", "the terminal is exactly the one that was read");
+assert(terminalName('local terminal = "footclient" -- the foot server is started at login\n') === "footclient", "the terminal comes out of the hyprland lua");
+assert(terminalName("$terminal = kitty\n") === "kitty", "the legacy unquoted form is read too");
+assert(terminalName("decoration = { blur = { enabled = false } }\n") === "", "a config without a terminal names nothing");
+assert(terminalName("") === "", "an empty config names nothing");
+assert(terminalName('local otherterminal = "x"\n') === "", "a lookalike variable is not the terminal");
 assert(launchCommand({ exec: "code-insiders" }, "code-insiders").join(" ") === "sh -c code-insiders", "a regular app runs through the shell");
 assert(launchCommand(null, "footclient").join(" ") === "sh -c footclient", "an entry-less app runs through the shell");
 assert(launchCommand({ execLine: "helium-browser --new-window" }, "helium-browser").join(" ") === "sh -c helium-browser --new-window", "the full exec line keeps the arguments");

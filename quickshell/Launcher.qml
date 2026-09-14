@@ -16,6 +16,7 @@ PanelWindow {
 	property int index: 0
 	property point hoverScene: Qt.point(-1, -1)
 	property var pins: []
+	property string terminal: ""
 	property var usage: ({})
 	property var files: []
 	property var clips: []
@@ -25,6 +26,7 @@ PanelWindow {
 	readonly property string search: root.windows ? root.query : root.prefix.text
 	readonly property string mode: root.windows ? "windows" : root.prefix.mode
 	readonly property string home: Quickshell.env("HOME")
+	readonly property string terminalConfig: Config.launcherTerminalConfig.replace("~", root.home)
 	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
 	readonly property var results: root.buildResults()
 	readonly property int listHeight: Config.launcherMaxRows * Config.launcherRowHeight
@@ -54,6 +56,7 @@ PanelWindow {
 		Hyprland.refreshToplevels();
 		pinsFile.running = true;
 		usageFile.running = true;
+		terminalFile.running = true;
 		Qt.callLater(function () {
 			root.shown = true;
 			input.forceActiveFocus();
@@ -233,7 +236,7 @@ PanelWindow {
 			return;
 
 		if (entry.kind === "app")
-			Quickshell.execDetached(Helpers.launchCommand(entry, entry.appId));
+			Quickshell.execDetached(Helpers.launchCommand(entry, entry.appId, root.terminal));
 		else if (entry.kind === "window")
 			root.focusWindow(entry.address);
 		else if (entry.kind === "command" || entry.kind === "action")
@@ -293,6 +296,16 @@ PanelWindow {
 
 		stdout: StdioCollector {
 			onStreamFinished: root.usage = Helpers.parseUsage(text)
+		}
+	}
+
+	Process {
+		id: terminalFile
+
+		command: ["sh", "-c", "cat " + Helpers.shellQuote(root.terminalConfig) + " 2>/dev/null"]
+
+		stdout: StdioCollector {
+			onStreamFinished: root.terminal = Helpers.terminalName(text)
 		}
 	}
 

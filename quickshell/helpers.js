@@ -332,13 +332,20 @@ function cleanExec(value) {
 		.trim();
 }
 
-function launchCommand(entry, appId) {
+function launchCommand(entry, appId, terminal) {
 	const line = entry && entry.execLine ? entry.execLine : (entry && entry.exec ? entry.exec : appId);
 
 	if (entry && entry.terminal)
-		return ["foot", "-e", "sh", "-c", line];
+		return [terminal, "-e", "sh", "-c", line];
 
 	return ["sh", "-c", line];
+}
+
+function terminalName(text) {
+	const source = String(text === undefined || text === null ? "" : text);
+	const match = /(?:^|\n)[ \t]*(?:local[ \t]+)?\$?terminal[ \t]*=[ \t]*["']?([^"'\s]+)["']?/.exec(source);
+
+	return match ? match[1] : "";
 }
 
 function togglePin(pins, appId) {
