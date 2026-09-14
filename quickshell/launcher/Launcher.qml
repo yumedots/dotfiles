@@ -4,8 +4,10 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Widgets
-import "config.js" as Config
-import "helpers.js" as Helpers
+import "../ui"
+import "../services"
+import "../config.js" as Config
+import "../lib/helpers.js" as Helpers
 
 PanelWindow {
 	id: root

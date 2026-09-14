@@ -131,6 +131,7 @@ assert(terminalAppId("FOOTCLIENT", "btop", ["foot", "footclient"]) === "btop", "
 assert(launchCommand({ exec: "btop", terminal: true }, "btop", "footclient").join(" ") === "footclient -e sh -c btop", "a Terminal=true app opens inside the configured terminal");
 assert(launchCommand({ exec: "btop", terminal: true }, "btop", "ghostty").join(" ") === "ghostty -e sh -c btop", "the terminal is exactly the one that was read");
 assert(terminalName('local terminal = "footclient" -- the foot server is started at login\n') === "footclient", "the terminal comes out of the hyprland lua");
+assert(terminalName('    terminal       = "footclient",\n') === "footclient", "the table entry in programs.lua is read too");
 assert(terminalName("$terminal = kitty\n") === "kitty", "the legacy unquoted form is read too");
 assert(terminalName("decoration = { blur = { enabled = false } }\n") === "", "a config without a terminal names nothing");
 assert(terminalName("") === "", "an empty config names nothing");

@@ -1,6 +1,11 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "ui"
+import "bar/widgets"
+import "tooltips"
+import "launcher"
+import "dock"
 import "config.js" as Config
 
 ShellRoot {

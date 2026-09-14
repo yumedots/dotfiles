@@ -3,8 +3,10 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Pipewire
 import Quickshell.Widgets
-import "config.js" as Config
-import "helpers.js" as Helpers
+import "../ui"
+import "../services"
+import "../config.js" as Config
+import "../lib/helpers.js" as Helpers
 
 Item {
 	id: root

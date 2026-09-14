@@ -127,9 +127,9 @@ const launcherIconFile = "\u{f0213}";
 const launcherIconPin = "\ueba0";
 
 const launcherCommands = [
-	{ name: "Edit shell config", command: "code-insiders ~/.config/quickshell/lib/config.js", keywords: ["quickshell"] },
+	{ name: "Edit shell config", command: "code-insiders ~/.config/quickshell/config.js", keywords: ["quickshell"] },
 	{ name: "Edit hyprland config", command: "code-insiders ~/.config/hypr", keywords: ["hypr"] },
-	{ name: "Edit launcher shortcuts", command: "code-insiders ~/.config/quickshell/lib/config.js", keywords: ["launcher"] }
+	{ name: "Edit launcher shortcuts", command: "code-insiders ~/.config/quickshell/config.js", keywords: ["launcher"] }
 ];
 
 const launcherActions = [

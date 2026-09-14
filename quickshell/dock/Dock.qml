@@ -3,8 +3,10 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Widgets
-import "config.js" as Config
-import "helpers.js" as Helpers
+import "../ui"
+import "../services"
+import "../config.js" as Config
+import "../lib/helpers.js" as Helpers
 
 PanelWindow {
 	id: dock
@@ -108,7 +110,7 @@ PanelWindow {
 	function writeConfigPins() {
 		const pins = Config.dockPinned.map(function (id) { return "\"" + id.replace(/[\"\\]/g, "") + "\""; }).join(", ");
 
-		Quickshell.execDetached(["sh", "-c", "sed -i 's|^const dockPinned = .*$|const dockPinned = [" + pins + "]|' \"$HOME/.config/quickshell/config.js\""]);
+		Quickshell.execDetached(["sh", "-c", "sed -i 's|^const dockPinned = .*$|const dockPinned = [" + pins + "]|' \"" + Quickshell.shellDir + "/config.js\""]);
 	}
 
 	function writePins() {

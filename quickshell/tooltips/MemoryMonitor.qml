@@ -1,8 +1,9 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "config.js" as Config
-import "helpers.js" as Helpers
+import "../ui"
+import "../config.js" as Config
+import "../lib/helpers.js" as Helpers
 
 Item {
 	id: root
