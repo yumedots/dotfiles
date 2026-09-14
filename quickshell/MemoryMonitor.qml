@@ -62,7 +62,7 @@ Item {
 		];
 
 		if (divider > 0) {
-			parts.push({ value: 0, color: Config.foreground, divider: divider });
+			parts.push({ value: 0, color: Config.surfaceTranslucent, divider: divider });
 			parts.push({ value: m.swapUsed, color: Config.memorySwap });
 			parts.push({ value: m.swapFree, color: Config.memoryFree });
 		}

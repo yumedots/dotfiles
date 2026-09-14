@@ -227,7 +227,7 @@ PanelWindow {
 
 		width: row.implicitWidth + Config.dockSidePadding * 2
 		height: row.implicitHeight + Config.dockBottomPadding + Config.dockTopPadding
-		color: Config.background
+		color: Config.surfaceTranslucent
 		radius: Config.dockRadius
 	}
 
@@ -359,7 +359,7 @@ PanelWindow {
 
 		Rectangle {
 			anchors.fill: parent
-			color: Config.background
+			color: Config.surfaceTranslucent
 			radius: Config.dockRadius
 		}
 

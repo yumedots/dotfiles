@@ -350,7 +350,7 @@ PanelWindow {
 		width: Config.launcherWidth
 		height: column.implicitHeight + card.inset * 2
 		padding: Config.launcherPadding
-		backgroundColor: Config.launcherBackground
+		backgroundColor: Config.surfaceTranslucent
 		opacity: root.shown ? 1 : 0
 		borderOpacity: Math.pow(opacity, 8)
 

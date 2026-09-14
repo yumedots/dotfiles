@@ -11,7 +11,7 @@ Item {
 
 	property var borderColors: null
 	property real borderWidth: -1
-	property color backgroundColor: Config.background
+	property color backgroundColor: Config.surfaceTranslucent
 	property real padding: 0
 	property real borderOpacity: 1
 	property var hyprBorder: ({ colors: null, angle: 0, width: null })

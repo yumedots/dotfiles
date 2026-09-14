@@ -594,7 +594,7 @@ Item {
 
 		Rectangle {
 			anchors.fill: parent
-			color: Config.background
+			color: Config.surface
 		}
 
 		PwObjectTracker {

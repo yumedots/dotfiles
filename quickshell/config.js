@@ -1,6 +1,9 @@
 .pragma library
 
 const background = "#000000";
+const surface = "#101010";
+const surfaceAlpha = 0.7;
+const surfaceTranslucent = "#" + ("0" + Math.round(surfaceAlpha * 255).toString(16)).slice(-2) + surface.slice(1);
 const foreground = "#ffffff";
 const dim = "#3f3f3f";
 const red = "#e05252";
@@ -101,7 +104,6 @@ const launcherFontSize = 16;
 const launcherIconSize = 20;
 const launcherIconSlot = 24;
 const launcherTextGap = 10;
-const launcherBackground = "#e0000000";
 const launcherSearchBox = "#1f1f1f";
 const launcherHighlight = "#2f2f2f";
 const launcherHighlightText = "#ffffff";
