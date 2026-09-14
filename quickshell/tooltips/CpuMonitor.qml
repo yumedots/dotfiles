@@ -191,12 +191,15 @@ Item {
 				anchors.verticalCenter: parent.verticalCenter
 				boxColor: "transparent"
 				size: Config.fontSize
-				keyLabel: Config.procHintKey
+				keyLabel: Config.procSearchHint
 				active: root.searching
 				width: root.searching ? Math.max(searchField.implicitWidth, headerBox.width - listTitle.implicitWidth - 3 * Config.spacing) : searchField.implicitWidth
 
 				onEdited: root.filter = searchField.text
 				onNavigate: function (step) { procList.move(step); }
+				onKeyPressed: function (event) {
+					procList.handleKey(event);
+				}
 				onCanceled: {
 					root.searching = false;
 					root.filter = "";
@@ -231,7 +234,7 @@ Item {
 
 					font.family: Config.fontFamily
 					font.pixelSize: Config.fontSize
-					color: Config.foreground
+					color: procList.currentIndex === index ? Config.launcherHighlightText : Config.foreground
 					text: modelData.name
 				}
 

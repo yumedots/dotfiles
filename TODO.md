@@ -11,8 +11,9 @@
       config.js          every knob, at the root so it is the first file you see
       lib/               helpers.js (the parsing and the formatting) and check.js (the self-check)
       ui/                the shared primitives every surface draws with: HyprBorder, Tooltip, BarStat,
-                         BarText, ProcessList, SearchField (the one search box the launcher and both
-                         monitor cards draw), and a qmldir that names them
+                         BarText, Selector (the one keyboard list the launcher, the process lists and the
+                         window switcher scroll with), ProcessList, SearchField (the one search box the
+                         launcher and both monitor cards draw), and a qmldir that names them
       services/          AppIcons, the shared .desktop entry and icon lookup, no surface of its own
       topbarlayout.json  what the bar holds and where: left / center / right slots, position,
                          transparent, centerAnchor, and a settings blob per entry
@@ -208,6 +209,23 @@
       the selection in the shared ProcessList. Typing filters every process, not just the top N:
       Helpers.filterProcesses over the same parsed `ps` output, capped at Config.procSearchMax
 - [x] Date / clock tooltip = the calendar below
+
+## Input
+
+- [x] one selector primitive, ui/Selector.qml, is what every list scrolls with: the launcher, both
+      monitor process lists and the window switcher get the highlight, the immediate scroll (contentY is
+      set, nothing animates, so the highlighted row is the row that moves) and the same 3px scrollbar
+      from one place. The process lists had grown their own ListView + highlight + wheel handler, which
+      is why the selection lagged the pointer, jumped rows and slid instead of moving
+- [x] quickshell is keyboard only: no MouseArea, TapHandler or WheelHandler left outside the dock, and
+      every TextInput has selectByMouse: false. Widgets open and close with their MOD bind (z / x / c /
+      s through `qs ipc call shell <name>`) and close with Escape; the launcher and its window switcher
+      close with Escape; the calendar moves with hjkl / arrows and the mixer with h l and j k + Enter
+- [x] the search field shows one hint, `f to type` (Config.procSearchHint), in the glyph's fixed slot,
+      instead of a `f` keycap followed by a separate "Type to search" line; the box width comes from
+      Config.procSearchWidth so it does not resize as the hint changes
+- [ ] the tray lost its click handler with the rest of the mouse code and has no keyboard path yet:
+      it needs a selection over the icons (h l) and Enter / Shift+Enter to activate
 
 ## Dev loop
 

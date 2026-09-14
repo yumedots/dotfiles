@@ -15,7 +15,6 @@ PanelWindow {
 	property bool shown: false
 	property string query: ""
 	property int index: 0
-	property point hoverScene: Qt.point(-1, -1)
 	property var pins: []
 	property string terminal: ""
 	property var usage: ({})
@@ -197,7 +196,7 @@ PanelWindow {
 			return;
 
 		root.index = Math.max(0, Math.min(last, root.index + step));
-		list.positionViewAtIndex(root.index, ListView.Contain);
+		list.currentIndex = root.index;
 	}
 
 	function writeFile(path, text) {
@@ -352,11 +351,6 @@ PanelWindow {
 		}
 	}
 
-	MouseArea {
-		anchors.fill: parent
-		onClicked: root.close()
-	}
-
 	HyprBorder {
 		id: card
 
@@ -396,6 +390,10 @@ PanelWindow {
 				onCanceled: root.close()
 				onNavigate: function (step) { root.move(step); }
 				onKeyPressed: function (event) {
+					list.handleKey(event);
+					if (event.accepted)
+						return;
+
 					if (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier) {
 						root.pin(root.results[root.index]);
 						event.accepted = true;
@@ -409,26 +407,19 @@ PanelWindow {
 				}
 			}
 
-			ListView {
+			Selector {
 				id: list
 
 				width: column.width
 				height: root.listHeight
 				visible: root.results.length > 0
+				visibleRows: Config.launcherMaxRows
+				rowHeight: Config.launcherRowHeight
+				rowSpacing: Config.launcherGap
 				model: root.results
-				currentIndex: root.index
-				clip: true
-				interactive: false
-				boundsBehavior: Flickable.StopAtBounds
+				onCurrentIndexChanged: root.index = list.currentIndex
 
-				WheelHandler {
-					onWheel: (event) => {
-						const last = Math.max(0, list.contentHeight - list.height);
 
-						list.contentY = Math.max(0, Math.min(last, list.contentY - event.angleDelta.y / 2));
-						event.accepted = true;
-					}
-				}
 
 				delegate: Item {
 					id: row
@@ -441,11 +432,6 @@ PanelWindow {
 
 					readonly property bool active: row.index === root.index
 					readonly property bool pinned: root.pins.indexOf(row.modelData.id) >= 0
-
-					Rectangle {
-						anchors.fill: parent
-						color: row.active ? Config.launcherHighlight : "transparent"
-					}
 
 					Item {
 						id: rowIcon
@@ -496,22 +482,6 @@ PanelWindow {
 						font.pixelSize: Config.launcherIconSize
 						color: Config.foreground
 						text: Config.launcherIconPin
-					}
-
-					MouseArea {
-						anchors.fill: parent
-						hoverEnabled: true
-
-						onPositionChanged: (mouse) => {
-							const scene = row.mapToItem(null, mouse.x, mouse.y);
-							const moved = scene.x !== root.hoverScene.x || scene.y !== root.hoverScene.y;
-
-							root.hoverScene = scene;
-
-							if (moved)
-								root.index = row.index;
-						}
-						onClicked: root.activate(row.modelData)
 					}
 				}
 			}
