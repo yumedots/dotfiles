@@ -9,10 +9,11 @@ Item {
 
 	property var source: null
 	property var allProcs: []
+	property var heldProcs: []
 	property bool searching: false
 	property string filter: ""
 
-	readonly property var procs: root.searching || root.filter !== "" ? Helpers.filterProcesses(root.allProcs, Config.psIgnore, root.filter, Config.procSearchMax) : Helpers.topProcesses(root.allProcs, Config.psIgnore, Config.memoryTopMax)
+	readonly property var procs: root.searching || root.filter !== "" ? Helpers.filterProcesses(root.allProcs, Config.psIgnore, root.filter) : (root.heldProcs.length > 0 ? root.heldProcs : Helpers.topProcesses(root.allProcs, Config.psIgnore))
 	readonly property bool showList: root.procs.length > 0 || root.searching
 
 	focus: true
@@ -28,23 +29,35 @@ Item {
 	implicitHeight: column.implicitHeight + Config.memoryTooltipPadding * 2
 
 	onOnScreenChanged: {
-		if (root.onScreen && root.source && root.source.refresh)
+		if (!root.onScreen)
+			return;
+
+		root.heldProcs = Helpers.topProcesses(root.allProcs, Config.psIgnore);
+
+		if (root.source && root.source.refresh)
 			root.source.refresh();
 	}
 
+	Component.onCompleted: ramProcesses.reload()
+
 	Keys.onPressed: function (event) {
-		if (event.text === Config.procHintKey && !root.searching) {
+		if (root.searching)
+			return;
+
+		if (event.text === Config.procHintKey) {
 			root.searching = true;
 			event.accepted = true;
-		} else if (event.key === Qt.Key_Escape && !root.searching) {
+		} else if (event.key === Qt.Key_Escape) {
 			root.closeRequested();
 			event.accepted = true;
+		} else {
+			procList.handleKey(event);
 		}
 	}
 
 	onSearchingChanged: {
 		if (!root.searching)
-			procList.forceActiveFocus();
+			root.forceActiveFocus();
 	}
 
 	function dangerColorFor(load) {
@@ -124,7 +137,10 @@ Item {
 		}
 
 		stdout: StdioCollector {
-			onStreamFinished: root.allProcs = Helpers.parseTopProcesses(text)
+			onStreamFinished: {
+				root.allProcs = Helpers.parseTopProcesses(text);
+				root.heldProcs = Helpers.holdProcessOrder(root.heldProcs, Helpers.topProcesses(root.allProcs, Config.psIgnore));
+			}
 		}
 	}
 
@@ -245,7 +261,7 @@ Item {
 				id: listTitle
 
 				anchors.left: parent.left
-				anchors.leftMargin: Config.spacing
+				anchors.leftMargin: Config.procSearchPadding
 				anchors.verticalCenter: parent.verticalCenter
 
 				font.family: Config.fontFamily
@@ -262,13 +278,15 @@ Item {
 				boxColor: "transparent"
 				size: Config.fontSize
 				keyLabel: Config.procSearchHint
+				placeholder: Config.procSearchHint
 				active: root.searching
-				width: root.searching ? Math.max(searchField.implicitWidth, headerBox.width - listTitle.implicitWidth - 3 * Config.spacing) : searchField.implicitWidth
+				width: searchField.implicitWidth
 
 				onEdited: root.filter = searchField.text
 				onNavigate: function (step) { procList.move(step); }
 				onKeyPressed: function (event) {
-					procList.handleKey(event);
+					if (event.text === Config.procKillKey)
+						procList.handleKey(event);
 				}
 				onCanceled: {
 					root.searching = false;
@@ -283,7 +301,7 @@ Item {
 
 			width: column.width
 			visibleRows: Config.memoryTopCount
-			visible: root.showList
+			visible: root.showList && root.procs.length > 0
 			model: root.procs
 
 			onKillRequested: function (proc) {
@@ -323,8 +341,10 @@ Item {
 
 		Text {
 			width: column.width
+			height: procList.implicitHeight
 			visible: root.showList && root.procs.length === 0
 			horizontalAlignment: Text.AlignHCenter
+			verticalAlignment: Text.AlignVCenter
 
 			font.family: Config.fontFamily
 			font.pixelSize: Config.fontSize
