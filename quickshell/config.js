@@ -38,6 +38,7 @@ const barThickness = 1.5;
 
 const tooltipOffsetX = 0;
 const tooltipOffsetY = -8;
+const popupCloseDelay = 60;
 const borderFallbackWidth = 1;
 const borderFallbackColor = "#ffffff";
 const gapsInFallback = 8;
