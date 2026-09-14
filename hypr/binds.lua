@@ -1,40 +1,26 @@
-local vars = require("programs")
+local programs = require("programs")
+local actions = require("actions")
 local mainMod = "SUPER"
 
-hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(vars.terminal))
-local closeWindowBind = hl.bind(mainMod .. " + Q", hl.dsp.window.close())
-hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("command -v hyprshutdown >/dev/null 2>&1 && hyprshutdown || hyprctl dispatch 'hl.dsp.exit()'"))
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(vars.fileManager))
+for i = 1, 10 do
+    local key = i % 10
+    hl.bind(mainMod .. " + " .. key,         hl.dsp.focus({ workspace = i }))
+    hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i }))
+end
 
-local FLOAT_SCALE = 0.7
-local shrunkOnFloat = {}
-hl.bind(mainMod .. " + SPACE", function()
-    local win = hl.get_active_window()
-    if not win or not win.mapped then return end
-
-    if win.floating then
-        hl.dispatch(hl.dsp.window.float({ action = "unset" }))
-        return
-    end
-
-    local tiledW, tiledH = 0, 0
-    if type(win.size) == "table" then
-        tiledW, tiledH = win.size.x or 0, win.size.y or 0
-    end
-    hl.dispatch(hl.dsp.window.float({ action = "set" }))
-
-    local fwin = hl.get_active_window()
-    if fwin and type(fwin.size) == "table" and tiledW > 0
-       and not shrunkOnFloat[win.address]
-       and (fwin.size.x or 0) >= tiledW * 0.95 then
-        shrunkOnFloat[win.address] = true
-        hl.dispatch(hl.dsp.window.resize({ x = math.floor(tiledW * FLOAT_SCALE), y = math.floor(tiledH * FLOAT_SCALE) }))
-        hl.dispatch(hl.dsp.window.center())
-    end
-end)
-hl.bind( "ALT + SPACE", hl.dsp.exec_cmd(vars.menu))
-hl.bind(mainMod .. " + TAB", hl.dsp.exec_cmd(vars.windowSwitcher))
+hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(programs.terminal))
+hl.bind(mainMod .. " + Q", hl.dsp.window.close())
+hl.bind(mainMod .. " + M", hl.dsp.exec_cmd(programs.session))
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(programs.fileManager))
+hl.bind(mainMod .. " + SPACE", actions.floatToggle)
+hl.bind("ALT + SPACE", hl.dsp.exec_cmd(programs.menu))
+hl.bind(mainMod .. " + TAB", hl.dsp.exec_cmd(programs.windowSwitcher))
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
+
+hl.bind(mainMod .. " + Z", hl.dsp.exec_cmd(programs.cpu))
+hl.bind(mainMod .. " + X", hl.dsp.exec_cmd(programs.memory))
+hl.bind(mainMod .. " + C", hl.dsp.exec_cmd(programs.volume))
+hl.bind(mainMod .. " + S", hl.dsp.exec_cmd(programs.calendar))
 
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
@@ -46,13 +32,7 @@ hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.move({ direction = "right" 
 hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.move({ direction = "up" }))
 hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.move({ direction = "down" }))
 
-for i = 1, 10 do
-    local key = i % 10
-    hl.bind(mainMod .. " + " .. key,             hl.dsp.focus({ workspace = i}))
-    hl.bind(mainMod .. " + SHIFT + " .. key,     hl.dsp.window.move({ workspace = i }))
-end
-
-hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))
+hl.bind(mainMod .. " + G",         hl.dsp.workspace.toggle_special("magic"))
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.window.move({ workspace = "special:magic" }))
 
 hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))

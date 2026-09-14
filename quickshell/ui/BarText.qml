@@ -8,6 +8,7 @@ Item {
 	property color color: Config.foreground
 	property int pixelSize: Config.fontSize
 	property real padding: 0
+	readonly property real baselineLift: Math.ceil(Config.barThickness)
 
 	readonly property var sampleInk: metrics.tightBoundingRect
 

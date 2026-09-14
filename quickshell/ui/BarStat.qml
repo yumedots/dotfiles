@@ -21,6 +21,7 @@ Item {
 	readonly property real inkAbove: Math.max(-iconsMetrics.tightBoundingRect.y, -valueMetrics.tightBoundingRect.y)
 	readonly property real inkBelow: Math.max(iconsMetrics.tightBoundingRect.y + iconsMetrics.tightBoundingRect.height, root.valueBelow)
 	readonly property real textOffset: root.implicitHeight - root.inkAbove - root.valueBelow
+	readonly property real baselineLift: 0
 
 	implicitWidth: Config.lineLength + root.gap
 	readonly property real contentHeight: Math.round(root.inkAbove + root.inkBelow)

@@ -60,7 +60,7 @@ PanelWindow {
 		terminalFile.running = true;
 		Qt.callLater(function () {
 			root.shown = true;
-			input.forceActiveFocus();
+			field.focusInput();
 		});
 	}
 
@@ -73,6 +73,7 @@ PanelWindow {
 		root.shown = false;
 		root.mapped = false;
 		root.query = "";
+		field.clear();
 		findTimer.stop();
 		findFiles.running = false;
 	}
@@ -365,12 +366,7 @@ PanelWindow {
 		height: column.implicitHeight + card.inset * 2
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
-		opacity: root.shown ? 1 : 0
-		borderOpacity: Math.pow(opacity, 8)
-
-		Behavior on opacity {
-			NumberAnimation { duration: card.appearDuration; easing.type: Easing.OutCubic }
-		}
+		visible: root.shown
 
 		Column {
 			id: column
@@ -378,74 +374,38 @@ PanelWindow {
 			width: parent.width
 			spacing: Config.launcherGap
 
-			Rectangle {
+			SearchField {
+				id: field
+
 				width: parent.width
-				height: Config.launcherInputHeight
-				color: Config.launcherSearchBox
+				boxHeight: Config.launcherInputHeight
+				padding: 0
+				gap: Config.launcherTextGap
+				glyphSlot: Config.launcherIconSlot
+				glyphSize: Config.launcherIconSize
+				size: Config.launcherFontSize
+				placeholder: "Type to search..."
+				glyph: root.prompt
+				active: root.shown
 
-				Text {
-					id: fieldGlyph
-
-					anchors.left: parent.left
-					anchors.verticalCenter: parent.verticalCenter
-					width: Config.launcherIconSlot
-					horizontalAlignment: Text.AlignHCenter
-					font.family: Config.fontFamily
-					font.pixelSize: Config.launcherIconSize
-					color: Config.foreground
-					text: root.prompt
+				onEdited: {
+					root.query = field.text;
+					root.index = 0;
 				}
-
-				TextInput {
-					id: input
-
-					anchors.left: fieldGlyph.right
-					anchors.leftMargin: Config.launcherTextGap
-					anchors.right: parent.right
-					anchors.rightMargin: Config.launcherTextGap
-					anchors.verticalCenter: parent.verticalCenter
-					focus: root.shown
-					clip: true
-					selectByMouse: true
-					color: Config.foreground
-					font.family: Config.fontFamily
-					font.pixelSize: Config.launcherFontSize
-					text: root.query
-
-					onTextChanged: {
-						root.query = text;
-						root.index = 0;
+				onAccepted: root.activate(root.results[root.index])
+				onCanceled: root.close()
+				onNavigate: function (step) { root.move(step); }
+				onKeyPressed: function (event) {
+					if (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier) {
+						root.pin(root.results[root.index]);
+						event.accepted = true;
+					} else if (event.key === Qt.Key_PageDown) {
+						root.move(Config.launcherMaxRows);
+						event.accepted = true;
+					} else if (event.key === Qt.Key_PageUp) {
+						root.move(-Config.launcherMaxRows);
+						event.accepted = true;
 					}
-
-					Keys.onDownPressed: root.move(1)
-					Keys.onUpPressed: root.move(-1)
-					Keys.onReturnPressed: root.activate(root.results[root.index])
-					Keys.onEnterPressed: root.activate(root.results[root.index])
-					Keys.onEscapePressed: root.close()
-					Keys.onPressed: (event) => {
-						if (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier) {
-							root.pin(root.results[root.index]);
-							event.accepted = true;
-						} else if (event.key === Qt.Key_PageDown) {
-							root.move(Config.launcherMaxRows);
-							event.accepted = true;
-						} else if (event.key === Qt.Key_PageUp) {
-							root.move(-Config.launcherMaxRows);
-							event.accepted = true;
-						}
-					}
-				}
-
-				Text {
-					anchors.left: input.left
-					anchors.right: input.right
-					anchors.verticalCenter: parent.verticalCenter
-					elide: Text.ElideRight
-					visible: input.text === ""
-					font.family: Config.fontFamily
-					font.pixelSize: Config.launcherFontSize
-					color: Config.muted
-					text: "Type to search..."
 				}
 			}
 

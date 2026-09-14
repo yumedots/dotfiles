@@ -255,19 +255,6 @@ PanelWindow {
 				visible: item.appId !== ""
 				width: Config.dockIconSize
 				height: Config.dockIconSize
-				transformOrigin: Item.Center
-	opacity: item.appId === "" ? 0 : 1
-	scale: item.appId === "" ? Config.dockEnterScale : 1
-
-	Behavior on opacity {
-		NumberAnimation { duration: Config.dockEnterDuration; easing.type: Easing.OutCubic }
-	}
-
-	Behavior on scale {
-		NumberAnimation { duration: Config.dockEnterDuration; easing.type: Easing.OutCubic }
-	}
-
-
 				IconImage {
 					anchors.fill: parent
 					implicitSize: Config.dockIconSize

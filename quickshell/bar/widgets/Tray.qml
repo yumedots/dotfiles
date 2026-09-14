@@ -7,6 +7,8 @@ Row {
 	id: root
 	spacing: 10
 
+	readonly property real baselineLift: Math.ceil(Config.barThickness)
+
 	Repeater {
 		model: SystemTray.items
 

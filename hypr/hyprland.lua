@@ -1,5 +1,6 @@
 require("monitors")
 require("programs")
+require("actions")
 require("envs")
 require("looknfeel")
 require("layouts")

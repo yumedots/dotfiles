@@ -454,12 +454,8 @@ Item {
 					Row {
 						id: content
 
-						x: -root.offset
+						 x: -root.offset
 						spacing: Config.mixerChannelGap
-
-						Behavior on x {
-							NumberAnimation { duration: Config.mixerPageDuration; easing.type: Easing.OutCubic }
-						}
 
 						Row {
 							id: outputs

@@ -11,10 +11,13 @@
       config.js          every knob, at the root so it is the first file you see
       lib/               helpers.js (the parsing and the formatting) and check.js (the self-check)
       ui/                the shared primitives every surface draws with: HyprBorder, Tooltip, BarStat,
-                         BarText, ProcessList, and a qmldir that names them
+                         BarText, ProcessList, SearchField (the one search box the launcher and both
+                         monitor cards draw), and a qmldir that names them
       services/          AppIcons, the shared .desktop entry and icon lookup, no surface of its own
-      bar/               Bar.qml, the bar surface, and bar/widgets/ (CpuStat, MemoryStat, VolumeStat,
-                         Tray, Workspaces), each stat owning its tooltip's wiring
+      topbarlayout.json  what the bar holds and where: left / center / right slots, position,
+                         transparent, centerAnchor, and a settings blob per entry
+      bar/               Bar.qml, the bar surface, and bar/widgets/ (Workspaces, Clock, Date, Tray,
+                         CpuStat, MemoryStat, VolumeStat, Spacer), each stat owning its tooltip's wiring
       tooltips/          Calendar, CpuMonitor, MemoryMonitor, VolumeMixer, one file each
       dock/, launcher/   the other two surfaces
       cache/             the gitignored state: pins, usage
@@ -32,6 +35,27 @@
 - the shell's own launcher shortcuts point at the real paths, e.g. "Edit shell config" opens
   quickshell/config.js and "Edit hyprland config" opens ~/.config/hypr (the folder, not one file)
 - sway/ and waybar/ are gone: nothing here uses them any more
+- topbarlayout.json is what the bar is built from, not the QML: bar.position (top/bottom),
+  bar.transparent, bar.centerAnchor (the entry the center row is pinned around, so the clock stays
+  centered while the rows beside it change width) and bar.layout.left/center/right as lists of
+  { "id": ... } entries that each carry their own settings (a spacer takes `size`, the clock a
+  `format`). Bar.qml maps an id to a component (componentFor) and hands the entry to the widget as
+  `settings`, so adding a widget is a file edit plus one case; the default layout is the right slot
+  the bar has always had (workspaces | clock | tray, cpu, memory, volume, date). Helpers.parseBarLayout
+  is pure and check.js covers it (missing file, broken JSON, a slot that is not a list, a position
+  that is neither top nor bottom, entries with no id all fall back; an explicitly empty slot stays
+  empty). It hot reloads without a restart: the FileView sets watchChanges and calls reload() on
+  fileChanged, and bar.layout is a binding over its text() - verified by flipping `transparent` and
+  watching the bar band go from #101010 to the wallpaper and back, twice
+- the widget keys are the other half of the launcher's IpcHandler: MOD+Z cpu, MOD+X memory, MOD+C
+  volume, MOD+S calendar (hypr/binds.lua -> hypr/programs.lua -> `qs ipc call shell <name>`), and
+  shell.qml calls bars.instances[0].toggleWidget(id). That indirection is the fix, not decoration:
+  Bar.toggleWidget -> openExclusive closes whichever card is open before opening the next (only one
+  widget on screen, kept from the earlier pass), and going through the bar's own registry of live
+  widgets is what never worked before - the click path called root.toggle() inside Bar, where the root
+  id is `bar`, so every click from the bar threw a ReferenceError and only the widgets whose handles
+  were reachable elsewhere still opened. The keys use named keys, so a bound key cannot be a stale
+  object reference
 
 ## Tooltips
 
@@ -172,6 +196,17 @@
         only after you have paged, and the row slides with an eased 180ms. The cap really is 5 columns:
         with 7 apps playing the row is 400 wide but the window clips at 284 and exactly 5 columns are
         painted (counted from the pixels), the rest are behind the arrow
+- [x] the search box is one primitive, shared, not a copy per card: ui/SearchField.qml (also what the
+      launcher types into) is the box, the prompt glyph, the placeholder, the `f` hint and the key
+      handling; the monitor cards only pass a size and a few knobs. In a card the heading and the field
+      share one full-width band in Config.launcherSearchBox, which doubles as the separator between the
+      meters above and the list below - measured on the cpu card: the band runs its whole 282 width, 27
+      tall, the white glyph at x230-242 with the muted `f` keycap beside it, the heading at the left
+      (verified from a screenshot). `f` opens the field and pins the card (Tooltip.pinned =
+      monitor.searching, so the close timer cannot fire while you type), Escape clears it, `q` force
+      quits the highlighted process (Helpers.killCommand + Config.procKillSignal) and arrows / hjkl move
+      the selection in the shared ProcessList. Typing filters every process, not just the top N:
+      Helpers.filterProcesses over the same parsed `ps` output, capped at Config.procSearchMax
 - [x] Date / clock tooltip = the calendar below
 
 ## Dev loop
@@ -489,12 +524,13 @@ Contracts (know before building):
   (`anchorWindow: bar`) and takes its x from the anchor item with mapToItem
 - mapToItem is not reactive, so a binding for the position was evaluated before layout and gave
   0,0 (popup off screen). Tooltip.refreshAnchor recomputes it every time the popup is shown
-- anchor.rect.y is measured from the bottom edge of the anchor window, not its top, and quickshell
-  adds the window's own margin on top of it, so `rect.y: 0` already lands the popup one bar margin
-  (gaps_out) under the bar, which is the same spacing the bar gets from the screen edge. The x is
-  clamped to the window width so a
-  far right anchor (the date) still lands on screen. A bottom anchored tooltip (the dock) would
-  need flipping up, which is not implemented yet
+- the tooltip is the Tooltip primitive, and since it has to hold the keyboard for the monitor cards
+  it is a PanelWindow on the top layer, not a PopupWindow. The one thing that moved with it: a
+  layer surface is positioned inside the *usable* area, i.e. below the bar's exclusive zone, while a
+  popup was positioned in screen coordinates, so the same margin lands one bar lower (the tooltip sat
+  at y99 instead of 53). `hang` is now gaps_out + tooltipOffsetY = 7 below the bar bottom either way,
+  and it no longer needs the bar's height in it. Verified from the pixels: the card's border row at
+  logical y53.1 and its surface at 54.4, the same place the popup version had it
 
 
 Make switching workspaces with the mouse wheel faster while holding the SUPER button

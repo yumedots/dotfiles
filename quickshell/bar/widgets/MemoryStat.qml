@@ -2,10 +2,12 @@ import QtQuick
 import Quickshell.Io
 import qs.ui
 import qs
+import "../../tooltips"
 
 BarStat {
 	id: root
 
+	property var bar: null
 	property var memory: null
 
 	readonly property real usedGB: root.memory ? root.memory.used / 1024 / 1024 : 0
@@ -28,6 +30,16 @@ BarStat {
 		memFile.reload();
 	}
 
+	function togglePopup() {
+		popup.toggle();
+	}
+
+	function closePopup() {
+		popup.hideNow();
+	}
+
+	onClicked: root.bar ? root.bar.openExclusive(root) : popup.toggle()
+
 	FileView {
 		id: memFile
 
@@ -44,5 +56,21 @@ BarStat {
 		repeat: true
 		triggeredOnStart: true
 		onTriggered: memFile.reload()
+	}
+
+	Tooltip {
+		id: popup
+
+		anchorWindow: root.bar
+		anchorItem: root
+		wantsKeyboard: true
+		pinned: monitor.searching
+
+		MemoryMonitor {
+			id: monitor
+
+			source: root
+			onCloseRequested: popup.close()
+		}
 	}
 }

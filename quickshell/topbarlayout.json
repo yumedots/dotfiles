@@ -1,0 +1,23 @@
+{
+	"version": 1,
+	"bar": {
+		"position": "top",
+		"transparent": false,
+		"centerAnchor": "clock",
+		"layout": {
+			"left": [
+				{ "id": "workspaces" }
+			],
+			"center": [
+				{ "id": "clock" }
+			],
+			"right": [
+				{ "id": "tray" },
+				{ "id": "cpu" },
+				{ "id": "memory" },
+				{ "id": "volume" },
+				{ "id": "date" }
+			]
+		}
+	}
+}

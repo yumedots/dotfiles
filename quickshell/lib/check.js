@@ -152,16 +152,6 @@ assert(pinnedFromText("yazi\nbtop\n\n")[0] === "yazi" && pinnedFromText("yazi\nb
 assert(pinnedFromText("").length === 0, "a missing pin file yields nothing");
 assert(shellQuote("a b") === "'a b'", "shell quoting wraps spaces");
 
-const animations = JSON.stringify([[
-	{ name: "windowsIn", overridden: true, speed: 1.6 },
-	{ name: "fade", overridden: false, speed: 0 }
-]]);
-
-assert(parseHyprAnimationSpeed(animations, "windowsIn") === 160, "an overridden animation speed becomes milliseconds");
-assert(parseHyprAnimationSpeed(animations, "fade") === null, "an inherited animation has no own speed");
-assert(parseHyprAnimationSpeed(animations, "nope") === null, "an unknown leaf has no speed");
-assert(parseHyprAnimationSpeed("not json", "windowsIn") === null, "garbage yields nothing");
-
 assert(isOutputStream(true, "Stream/Output/Audio"), "a playback stream counts as a playing app");
 assert(!isOutputStream(true, "Stream/Input/Audio"), "a capture stream is not a playing app");
 assert(!isOutputStream(false, "Audio/Sink"), "a sink is not an app stream");
@@ -353,16 +343,29 @@ assert(cpuSpecLine(info) === "2 threads \u00b7 14 cores \u00b7 3.2 GHz \u00b7 35
 assert(cpuSpecLine(parseCpuInfo("")) === "", "an unreadable cpuinfo has no spec line");
 assert(parseCpuInfo("processor\t: 0").cores === 1, "without a cpu cores line the thread count stands in");
 
-const processes = parseTopProcesses("90.6 freebuff\n39.1 freebuff\n 4.6 helium\n\nnot a process\n");
+const processes = parseTopProcesses("90.6  4711 freebuff\n39.1  4712 freebuff\n 4.6  4713 helium\n\nnot a process\n");
 assert(processes.length === 3, "one entry per ps line, the noise is dropped");
-assert(processes[0].name === "freebuff" && processes[0].value === 90.6, "the name and the value are split");
-assert(parseTopProcesses("12.5 tmux: server")[0].name === "tmux: server", "a name with spaces survives");
+assert(processes[0].name === "freebuff" && processes[0].value === 90.6 && processes[0].pid === 4711, "the name, the pid and the value are split");
+assert(parseTopProcesses("12.5 99 tmux: server")[0].name === "tmux: server", "a name with spaces survives");
 assert(parseTopProcesses("%CPU COMMAND").length === 0, "a header line is not a process");
 assert(parseTopProcesses("").length === 0, "an empty listing has no processes");
-assert(topProcesses(parseTopProcesses("200 ps\n40 freebuff\n10 ps <defunct>"), ["ps", "ps <defunct>"], 3)[0].name === "freebuff", "the sampling process and its zombie are filtered out");
-assert(topProcesses(parseTopProcesses("5 a\n4 b\n3 c\n2 d"), [], 2).length === 2, "the list is capped");
-assert(topProcesses(parseTopProcesses("5 a"), [], 0).length === 1, "a cap of zero keeps everything");
+assert(topProcesses(parseTopProcesses("200 9 ps\n40 8 freebuff\n10 7 ps <defunct>"), ["ps", "ps <defunct>"], 3)[0].name === "freebuff", "the sampling process and its zombie are filtered out");
+assert(topProcesses(parseTopProcesses("5 4 a\n4 3 b\n3 2 c\n2 1 d"), [], 2).length === 2, "the list is capped");
+assert(topProcesses(parseTopProcesses("5 1 a"), [], 0).length === 1, "a cap of zero keeps everything");
 assert(topProcesses(null, [], 3).length === 0, "no processes, no list");
+
+const searchable = parseTopProcesses("90.6 1 firefox\n10.0 2 Firefox Helper\n5.0 3 foot\n1.0 4 ps");
+assert(filterProcesses(searchable, ["ps"], "fire", 10).length === 2, "the filter is a case insensitive substring match");
+assert(filterProcesses(searchable, ["ps"], "FIRE", 10)[1].pid === 2, "the rows keep their pid through the filter");
+assert(filterProcesses(searchable, ["ps"], "oot", 10).length === 1, "a filter only matches what contains it");
+assert(filterProcesses(searchable, ["ps"], "zzz", 10).length === 0, "a filter that matches nothing returns nothing");
+assert(filterProcesses(searchable, ["ps"], "ps", 10).length === 0, "the sampler stays hidden while filtering");
+assert(filterProcesses(searchable, [], "", 2).length === 2, "an empty filter is everything, capped");
+assert(filterProcesses(searchable, [], "", 0).length === 4, "a cap of zero keeps everything");
+assert(filterProcesses(null, [], "x", 5).length === 0, "no processes, no matches");
+assert(killCommand(4711, "-9").join(" ") === "kill -9 4711", "force quit is a kill of that pid");
+assert(killCommand(4711, "-15").join(" ") === "kill -15 4711", "the signal comes from the caller");
+assert(killCommand(0, "-9").length === 0, "a row without a pid is not killed");
 
 const mem = parseMeminfo("MemTotal:       32763188 kB\nMemFree:        26602464 kB\nMemAvailable:   28637116 kB\nBuffers:          106552 kB\nCached:          2406664 kB\nSwapTotal:       8388604 kB\nSwapFree:        7340032 kB\n");
 assert(mem.total === 32763188 && mem.used === 32763188 - 28637116, "used is total minus available");
@@ -394,5 +397,21 @@ assert(gbText(32763188) === "31.2 GB", "a real total formats to one decimal");
 assert(sizeText(1024 * 1024) === "1.0 GB" && sizeText(1024 * 1024 * 3.5) === "3.5 GB", "a gigabyte or more is shown in GB");
 assert(sizeText(1024 * 1024 - 1) === "1024.0 MB" && sizeText(620 * 1024) === "620.0 MB", "below a gigabyte it drops to MB");
 assert(sizeText(999) === "999 KB" && sizeText(0) === "0 KB", "below a megabyte it stays in KB");
+
+const layout = parseBarLayout(JSON.stringify({ version: 1, bar: { position: "bottom", transparent: true, centerAnchor: "date", layout: { left: [{ id: "workspaces" }, { id: "spacer", size: 12 }], center: [{ id: "clock", format: "HH:mm" }], right: [{ id: "date" }] } } }));
+assert(layout.position === "bottom" && layout.transparent === true, "the bar position and the transparent flag are read");
+assert(layout.centerAnchor === "date", "centerAnchor names the item the center is pinned to");
+assert(layout.left.length === 2 && layout.left[1].size === 12, "the slots keep the entries and their own settings");
+assert(layout.center[0].format === "HH:mm", "an entry can carry a format");
+assert(layout.right.length === 1 && layout.right[0].id === "date", "the right slot is read on its own");
+
+const defaultLayout = parseBarLayout("");
+assert(defaultLayout.position === "top" && defaultLayout.left[0].id === "workspaces", "a missing file falls back to the default layout");
+assert(defaultLayout.right.map(function (entry) { return entry.id; }).join(",") === "tray,cpu,memory,volume,date", "the default right slot is the layout this bar has always had");
+assert(parseBarLayout("{ broken").center[0].id === "clock", "a broken file falls back to the default layout");
+assert(parseBarLayout('{"bar": {"layout": {"left": "nope"}}}').left[0].id === "workspaces", "a slot that is not a list falls back to the default");
+assert(parseBarLayout('{"bar": {"layout": {"left": []}}}').left.length === 0, "an empty slot is left empty, not filled with the default");
+assert(parseBarLayout('{"bar": {"layout": {"left": [{"name": "x"}, 3, {"id": "tray"}]}}}').left.length === 1, "entries without an id are dropped");
+assert(parseBarLayout('{"bar": {"position": "left"}}').position === "top", "a position that is neither top nor bottom is top");
 
 console.log("check ok");

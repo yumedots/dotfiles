@@ -8,7 +8,16 @@ Item {
 	id: root
 
 	property var source: null
-	property var procs: []
+	property var allProcs: []
+	property bool searching: false
+	property string filter: ""
+
+	readonly property var procs: root.searching || root.filter !== "" ? Helpers.filterProcesses(root.allProcs, Config.psIgnore, root.filter, Config.procSearchMax) : Helpers.topProcesses(root.allProcs, Config.psIgnore, Config.memoryTopMax)
+	readonly property bool showList: root.procs.length > 0 || root.searching
+
+	focus: true
+
+	signal closeRequested()
 
 	readonly property var mem: root.source ? root.source.memory : null
 	readonly property real pct: root.mem ? root.mem.pct : 0
@@ -21,6 +30,21 @@ Item {
 	onOnScreenChanged: {
 		if (root.onScreen && root.source && root.source.refresh)
 			root.source.refresh();
+	}
+
+	Keys.onPressed: function (event) {
+		if (event.text === Config.procHintKey && !root.searching) {
+			root.searching = true;
+			event.accepted = true;
+		} else if (event.key === Qt.Key_Escape && !root.searching) {
+			root.closeRequested();
+			event.accepted = true;
+		}
+	}
+
+	onSearchingChanged: {
+		if (!root.searching)
+			procList.forceActiveFocus();
 	}
 
 	function dangerColorFor(load) {
@@ -92,7 +116,7 @@ Item {
 	Process {
 		id: ramProcesses
 
-		command: ["ps", "-eo", "rss=,comm=", "--sort=-rss"]
+		command: ["ps", "-eo", "rss=,pid=,comm=", "--sort=-rss"]
 
 		function reload() {
 			if (!ramProcesses.running)
@@ -100,7 +124,7 @@ Item {
 		}
 
 		stdout: StdioCollector {
-			onStreamFinished: root.procs = Helpers.topProcesses(Helpers.parseTopProcesses(text), Config.psIgnore, Config.memoryTopMax)
+			onStreamFinished: root.allProcs = Helpers.parseTopProcesses(text)
 		}
 	}
 
@@ -210,27 +234,58 @@ Item {
 		}
 
 		Rectangle {
-			width: column.width
-			height: 1
-			visible: root.procs.length > 0
-			color: Config.dim
-		}
+			id: headerBox
 
-		Text {
 			width: column.width
-			visible: root.procs.length > 0
+			height: searchField.implicitHeight
+			visible: root.showList
+			color: Config.launcherSearchBox
 
-			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
-			color: Config.memoryBase
-			text: Config.topProcessTitle
+			Text {
+				id: listTitle
+
+				anchors.left: parent.left
+				anchors.leftMargin: Config.spacing
+				anchors.verticalCenter: parent.verticalCenter
+
+				font.family: Config.fontFamily
+				font.pixelSize: Config.fontSize
+				color: Config.memoryBase
+				text: Config.topProcessTitle
+			}
+
+			SearchField {
+				id: searchField
+
+				anchors.right: parent.right
+				anchors.verticalCenter: parent.verticalCenter
+				boxColor: "transparent"
+				size: Config.fontSize
+				keyLabel: Config.procHintKey
+				active: root.searching
+				width: root.searching ? Math.max(searchField.implicitWidth, headerBox.width - listTitle.implicitWidth - 3 * Config.spacing) : searchField.implicitWidth
+
+				onEdited: root.filter = searchField.text
+				onNavigate: function (step) { procList.move(step); }
+				onCanceled: {
+					root.searching = false;
+					root.filter = "";
+					searchField.clear();
+				}
+			}
 		}
 
 		ProcessList {
+			id: procList
+
 			width: column.width
 			visibleRows: Config.memoryTopCount
-			visible: root.procs.length > 0
+			visible: root.showList
 			model: root.procs
+
+			onKillRequested: function (proc) {
+				Quickshell.execDetached(Helpers.killCommand(proc.pid, Config.procKillSignal));
+			}
 
 			delegate: Item {
 				required property var modelData
@@ -262,5 +317,17 @@ Item {
 				}
 			}
 		}
+
+		Text {
+			width: column.width
+			visible: root.showList && root.procs.length === 0
+			horizontalAlignment: Text.AlignHCenter
+
+			font.family: Config.fontFamily
+			font.pixelSize: Config.fontSize
+			color: Config.muted
+			text: Config.procNoMatch
+		}
+
 	}
 }

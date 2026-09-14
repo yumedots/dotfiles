@@ -7,6 +7,7 @@ Row {
 	id: root
 	spacing: Config.workspaceSpacing
 
+	readonly property real baselineLift: Math.ceil(Config.barThickness)
 	readonly property int pool: 10
 	readonly property var persistentIds: [1, 2, 3, 4]
 	property var ids: []

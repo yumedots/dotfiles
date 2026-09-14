@@ -205,25 +205,6 @@ function parseHyprGaps(text) {
 	return gaps;
 }
 
-function parseHyprAnimationSpeed(text, leaf) {
-	let groups;
-
-	try {
-		groups = JSON.parse(text);
-	} catch (error) {
-		return null;
-	}
-
-	const list = [].concat.apply([], groups);
-
-	for (let i = 0; i < list.length; i++) {
-		if (list[i] && list[i].name === leaf)
-			return list[i].overridden && list[i].speed > 0 ? Math.round(list[i].speed * 100) : null;
-	}
-
-	return null;
-}
-
 function isOutputStream(isStream, mediaClass) {
 	if (!isStream)
 		return false;
@@ -885,13 +866,30 @@ function parseTopProcesses(text) {
 	const out = [];
 
 	String(text || "").split("\n").forEach(function (line) {
-		const match = /^\s*([0-9]+(?:\.[0-9]+)?)\s+(.+?)\s*$/.exec(line);
+		const match = /^\s*([0-9]+(?:\.[0-9]+)?)\s+([0-9]+)\s+(.+?)\s*$/.exec(line);
 
 		if (match)
-			out.push({ name: match[2], value: parseFloat(match[1]) });
+			out.push({ name: match[3], pid: parseInt(match[2], 10), value: parseFloat(match[1]) });
 	});
 
 	return out;
+}
+
+function filterProcesses(procs, ignore, query, max) {
+	const skip = ignore || [];
+	const wanted = String(query === undefined || query === null ? "" : query).toLowerCase();
+	const kept = (procs || []).filter(function (proc) {
+		return skip.indexOf(proc.name) < 0 && proc.name.toLowerCase().indexOf(wanted) >= 0;
+	});
+
+	return max > 0 ? kept.slice(0, max) : kept;
+}
+
+function killCommand(pid, signal) {
+	if (!pid)
+		return [];
+
+	return ["kill", signal || "-9", String(pid)];
 }
 
 function parseMeminfo(text) {
@@ -965,6 +963,48 @@ function topProcesses(procs, ignore, max) {
 	});
 
 	return max > 0 ? kept.slice(0, max) : kept;
+}
+
+function barLayoutDefault() {
+	return {
+		position: "top",
+		transparent: false,
+		centerAnchor: "clock",
+		left: [{ id: "workspaces" }],
+		center: [{ id: "clock" }],
+		right: [{ id: "tray" }, { id: "cpu" }, { id: "memory" }, { id: "volume" }, { id: "date" }]
+	};
+}
+
+function parseBarLayout(text) {
+	const fallback = barLayoutDefault();
+	let data;
+
+	try {
+		data = JSON.parse(String(text === undefined || text === null ? "" : text));
+	} catch (error) {
+		return fallback;
+	}
+
+	const bar = data && data.bar ? data.bar : {};
+	const layout = bar.layout ? bar.layout : {};
+	const slot = function (name) {
+		const list = layout[name];
+
+		if (!Array.isArray(list))
+			return fallback[name];
+
+		return list.filter(function (entry) { return entry && typeof entry.id === "string" && entry.id !== ""; });
+	};
+
+	return {
+		position: bar.position === "bottom" ? "bottom" : "top",
+		transparent: bar.transparent === true,
+		centerAnchor: typeof bar.centerAnchor === "string" ? bar.centerAnchor : fallback.centerAnchor,
+		left: slot("left"),
+		center: slot("center"),
+		right: slot("right")
+	};
 }
 
 function lookupApp(entries, name) {

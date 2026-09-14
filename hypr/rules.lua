@@ -5,6 +5,13 @@ local suppressMaximizeRule = hl.window_rule({
     suppress_event = "maximize",
 })
 
+hl.layer_rule({
+    name  = "static-shell-layers",
+    match = { namespace = "^(tooltip|launcher)$" },
+
+    no_anim = true,
+})
+
 hl.window_rule({
     name  = "fix-xwayland-drags",
     match = {

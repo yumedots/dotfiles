@@ -1,28 +1,49 @@
 import QtQuick
 import Quickshell
+import Quickshell.Wayland
 import qs
 
-PopupWindow {
+PanelWindow {
 	id: root
 
 	default property alias content: border.content
 
 	property Item anchorItem
 	property var anchorWindow
-	property int closeDelay: Config.tooltipCloseDelay
 	property var borderColors: null
 	property real borderWidth: -1
-	property bool anchorHovered: false
+	property bool wantsKeyboard: false
 
 	property real anchorX: 0
 	property bool shown: false
 
+	readonly property bool atBottom: root.anchorWindow !== null && root.anchorWindow.atBottom === true
 	readonly property real wantedX: root.anchorX + (root.anchorItem ? root.anchorItem.width : 0) / 2 - root.implicitWidth / 2
 	readonly property real limitX: (root.anchorWindow ? root.anchorWindow.width : 0) - root.implicitWidth
+	readonly property real hang: Math.round(border.gapsOut + Config.tooltipOffsetY)
 
-	anchor.window: root.anchorWindow
-	anchor.rect.x: Math.round(Math.max(0, Math.min(root.wantedX + Config.tooltipOffsetX, root.limitX)))
-	anchor.rect.y: root.anchorWindow ? root.anchorWindow.height + border.gapsOut + Config.tooltipOffsetY : 0
+	screen: root.anchorWindow ? root.anchorWindow.screen : null
+
+	anchors {
+		top: !root.atBottom
+		bottom: root.atBottom
+		left: true
+	}
+
+	margins.top: root.atBottom ? 0 : root.hang
+	margins.bottom: root.atBottom ? root.hang : 0
+	margins.left: Math.round(border.gapsOut + Math.max(0, Math.min(root.wantedX + Config.tooltipOffsetX, root.limitX)))
+
+	implicitWidth: border.contentWidth + 2 * border.inset
+	implicitHeight: border.contentHeight + 2 * border.inset
+
+	exclusiveZone: 0
+	color: "transparent"
+	visible: false
+
+	WlrLayershell.layer: WlrLayer.Top
+	WlrLayershell.namespace: "tooltip"
+	WlrLayershell.keyboardFocus: root.wantsKeyboard && root.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
 	function refreshAnchor() {
 		if (root.anchorItem === null || root.anchorWindow === null)
@@ -31,23 +52,20 @@ PopupWindow {
 		root.anchorX = root.anchorItem.mapToItem(root.anchorWindow.contentItem, 0, 0).x;
 	}
 
-	implicitWidth: border.contentWidth + 2 * border.inset
-	implicitHeight: border.contentHeight + 2 * border.inset
-
-	color: "transparent"
-	visible: false
-
 	function open() {
-		closeTimer.stop();
-		hideTimer.stop();
+		root.refreshAnchor();
 		root.shown = true;
 		root.visible = true;
 	}
 
 	function close() {
-		closeTimer.stop();
 		root.shown = false;
-		hideTimer.restart();
+		root.visible = false;
+	}
+
+	function hideNow() {
+		root.shown = false;
+		root.visible = false;
 	}
 
 	function toggle() {
@@ -57,58 +75,18 @@ PopupWindow {
 			root.open();
 	}
 
-	function scheduleClose() {
-		if (root.shown)
-			closeTimer.restart();
-	}
-
 	onVisibleChanged: {
-		if (root.visible)
-			root.refreshAnchor();
-		else
-			closeTimer.stop();
-	}
-
-	HoverHandler {
-		id: selfHover
-	}
-
-	MouseArea {
-		anchors.fill: parent
-		onClicked: root.close()
-	}
-
-	Timer {
-		id: closeTimer
-
-		interval: root.closeDelay
-
-		onTriggered: {
-			if (!selfHover.hovered && !root.anchorHovered)
-				root.close();
-		}
-	}
-
-	Timer {
-		id: hideTimer
-
-		interval: border.appearDuration + 30
-
-		onTriggered: root.visible = false
+		if (!root.visible)
+			root.shown = false;
 	}
 
 	HyprBorder {
 		id: border
 
 		anchors.fill: parent
-		opacity: root.shown ? 1 : 0
 		padding: border.gapsIn
 		borderColors: root.borderColors
 		borderWidth: root.borderWidth
-		borderOpacity: Math.pow(opacity, 8)
-
-		Behavior on opacity {
-			NumberAnimation { duration: border.appearDuration; easing.type: Easing.OutCubic }
-		}
+		borderOpacity: 1
 	}
 }

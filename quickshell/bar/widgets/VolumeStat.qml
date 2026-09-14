@@ -2,9 +2,12 @@ import QtQuick
 import Quickshell.Services.Pipewire
 import qs.ui
 import qs
+import "../../tooltips"
 
 BarStat {
 	id: root
+
+	property var bar: null
 
 	readonly property var sink: Pipewire.defaultAudioSink
 	readonly property real volume: root.sink && root.sink.audio ? root.sink.audio.volume : 0
@@ -18,7 +21,26 @@ BarStat {
 		: Config.iconVolumeLow
 	value: Math.round(root.pct) + "%"
 
+	function togglePopup() {
+		popup.toggle();
+	}
+
+	function closePopup() {
+		popup.hideNow();
+	}
+
+	onClicked: root.bar ? root.bar.openExclusive(root) : popup.toggle()
+
 	PwObjectTracker {
 		objects: [Pipewire.defaultAudioSink]
+	}
+
+	Tooltip {
+		id: popup
+
+		anchorWindow: root.bar
+		anchorItem: root
+
+		VolumeMixer {}
 	}
 }

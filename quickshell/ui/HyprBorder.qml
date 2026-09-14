@@ -15,7 +15,6 @@ Item {
 	property real borderOpacity: 1
 	property var hyprBorder: ({ colors: null, angle: 0, width: null })
 	property var hyprGaps: ({ inner: null, outer: null })
-	property var hyprAnimation: ({ windowsIn: null })
 
 	readonly property var themeColors: root.borderColors !== null
 		? root.borderColors
@@ -28,24 +27,20 @@ Item {
 	readonly property real inset: root.themeWidth + root.padding
 	readonly property real gapsIn: root.hyprGaps.inner !== null ? root.hyprGaps.inner : Config.gapsInFallback
 	readonly property real gapsOut: root.hyprGaps.outer !== null ? root.hyprGaps.outer : Config.gapsOutFallback
-	readonly property real appearDuration: root.hyprAnimation.windowsIn !== null ? root.hyprAnimation.windowsIn : Config.popupFallbackDuration
 
 	readonly property alias contentWidth: body.childrenRect.width
 	readonly property alias contentHeight: body.childrenRect.height
 
 	Component.onCompleted: {
 		hyprOptions.reload();
-		hyprAnimation.reload();
 	}
 
 	Connections {
 		target: Hyprland
 
 		function onRawEvent(event) {
-			if (event.name === "configreloaded") {
+			if (event.name === "configreloaded")
 				hyprOptions.reload();
-				hyprAnimation.reload();
-			}
 		}
 	}
 
@@ -64,21 +59,6 @@ Item {
 				root.hyprBorder = Helpers.parseHyprBorder(text);
 				root.hyprGaps = Helpers.parseHyprGaps(text);
 			}
-		}
-	}
-
-	Process {
-		id: hyprAnimation
-
-		command: ["hyprctl", "-j", "animations"]
-
-		function reload() {
-			if (!hyprAnimation.running)
-				hyprAnimation.running = true;
-		}
-
-		stdout: StdioCollector {
-			onStreamFinished: root.hyprAnimation = { windowsIn: Helpers.parseHyprAnimationSpeed(text, "windowsIn") }
 		}
 	}
 

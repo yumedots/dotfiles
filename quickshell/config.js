@@ -36,14 +36,16 @@ const barCells = 15;
 const lineLength = 45;
 const barThickness = 1.5;
 
-const tooltipCloseDelay = 50;
 const tooltipOffsetX = 0;
 const tooltipOffsetY = -8;
-const popupFallbackDuration = 160;
 const borderFallbackWidth = 1;
 const borderFallbackColor = "#ffffff";
 const gapsInFallback = 8;
 const gapsOutFallback = 15;
+
+const barLayoutFile = "topbarlayout.json";
+const clockFormat = "HH:mm";
+const dateFormat = "yyyy-MM-dd";
 
 const mixerChannelWidth = 72;
 const mixerChannelGap = 6;
@@ -57,7 +59,6 @@ const mixerIdleChannels = 2;
 const mixerArrowSize = 14;
 const mixerArrowGap = 6;
 const mixerRowGap = 10;
-const mixerPageDuration = 180;
 const mixerListRowHeight = 20;
 const mixerListGap = 8;
 const mixerMaxVolume = 1;
@@ -94,6 +95,15 @@ const procsGap = 6;
 const topProcessTitle = "Top processes";
 const psIgnore = ["ps", "ps <defunct>"];
 const cpuPollMs = 1000;
+
+const procSearchMax = 200;
+const procSearchPlaceholder = "Type to search";
+const procSearchPadding = 4;
+const procSearchMinWidth = 140;
+const procKillSignal = "-9";
+const procNoMatch = "Nothing matches";
+const procHintKey = "f";
+const procKillKey = "q";
 
 const launcherWidth = 270;
 const launcherPadding = 12;
@@ -153,8 +163,6 @@ const dockSpacing = 18;
 const dockSidePadding = dockSpacing;
 const dockBottomMargin = 6;
 const dockGap = 0;
-const dockEnterDuration = 180;
-const dockEnterScale = 0.6;
 const dockDotSize = 4;
 const dockDotGap = 3;
 const dockDotSpacing = 4;

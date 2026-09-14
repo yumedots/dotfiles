@@ -2,10 +2,12 @@ import QtQuick
 import Quickshell.Io
 import qs.ui
 import qs
+import "../../tooltips"
 
 BarStat {
 	id: root
 
+	property var bar: null
 	property var prev: null
 	property string lastRead: ""
 	property var cores: []
@@ -35,6 +37,16 @@ BarStat {
 		statFile.reload();
 	}
 
+	function togglePopup() {
+		popup.toggle();
+	}
+
+	function closePopup() {
+		popup.hideNow();
+	}
+
+	onClicked: root.bar ? root.bar.openExclusive(root) : popup.toggle()
+
 	FileView {
 		id: statFile
 		path: "/proc/stat"
@@ -56,5 +68,21 @@ BarStat {
 		interval: 150
 		repeat: false
 		onTriggered: statFile.reload()
+	}
+
+	Tooltip {
+		id: popup
+
+		anchorWindow: root.bar
+		anchorItem: root
+		wantsKeyboard: true
+		pinned: monitor.searching
+
+		CpuMonitor {
+			id: monitor
+
+			source: root
+			onCloseRequested: popup.close()
+		}
 	}
 }
