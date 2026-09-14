@@ -4,9 +4,6 @@ import qs
 Item {
 	id: root
 
-	signal clicked()
-	signal exited()
-
 	property real pct: 0
 	property color barColor: Config.red
 	property color textColor: root.barColor
@@ -54,7 +51,6 @@ Item {
 		anchors.left: parent.left
 		anchors.top: parent.top
 		anchors.bottom: parent.bottom
-
 		width: Config.lineLength
 
 		Text {
@@ -62,7 +58,6 @@ Item {
 
 			x: 0
 			y: root.inkAbove - root.iconAscent
-
 			font.family: Config.fontFamily
 			font.pixelSize: Config.iconSize
 			color: root.textColor
@@ -72,16 +67,14 @@ Item {
 		Text {
 			id: labelValue
 
-			x: labelIcon.width
-			y: root.inkAbove - root.valueAscent
-
-			width: Math.max(labelValue.implicitWidth, content.width - labelIcon.width)
-			horizontalAlignment: Text.AlignHCenter
-
-			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
-			color: root.textColor
-			text: root.value
+		x: labelIcon.width
+		y: root.inkAbove - root.valueAscent
+		width: Math.max(labelValue.implicitWidth, content.width - labelIcon.width)
+		horizontalAlignment: Text.AlignHCenter
+		font.family: Config.fontFamily
+		font.pixelSize: Config.fontSize
+		color: root.textColor
+		text: root.value
 		}
 
 		Item {
@@ -89,7 +82,6 @@ Item {
 
 			anchors.left: parent.left
 			anchors.bottom: parent.bottom
-
 			width: parent.width
 			height: Config.barThickness
 
@@ -111,17 +103,5 @@ Item {
 				color: Config.dim
 			}
 		}
-	}
-
-	readonly property alias hovered: area.containsMouse
-
-	MouseArea {
-		id: area
-
-		anchors.fill: parent
-		hoverEnabled: true
-
-		onClicked: root.clicked()
-		onExited: root.exited()
 	}
 }

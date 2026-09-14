@@ -12,6 +12,7 @@ PanelWindow {
 	property var anchorWindow
 	property var borderColors: null
 	property real borderWidth: -1
+	property bool pinned: false
 	property bool wantsKeyboard: false
 
 	property real anchorX: 0

@@ -67,15 +67,6 @@ Row {
 			text: "" + ws.workspaceId
 			padding: Config.workspacePadding
 			color: root.focusedId === ws.workspaceId ? Config.workspaceActive : Config.workspaceInactive
-
-			MouseArea {
-				anchors.fill: parent
-				anchors.leftMargin: -Config.workspaceSpacing / 2
-				anchors.rightMargin: -Config.workspaceSpacing / 2
-
-				onClicked: root.focusWorkspace(ws.workspaceId)
-				onWheel: (wheel) => root.scroll(wheel.angleDelta.y < 0 ? 1 : -1)
-			}
 		}
 	}
 }

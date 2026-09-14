@@ -27,7 +27,8 @@ Rectangle {
 	readonly property real slot: root.glyphSlot > 0 ? root.glyphSlot : icon.implicitWidth
 	readonly property real lineHeight: Math.round(root.size * 1.6)
 
-	implicitWidth: 2 * root.padding + root.slot + root.gap + (root.hint ? keycap.implicitWidth : Config.procSearchMinWidth)
+	implicitWidth: 2 * root.padding + root.slot + root.gap + (root.hint ? Config.procSearchWidth : Config.procSearchMinWidth)
+
 	implicitHeight: root.boxHeight > 0 ? root.boxHeight : root.lineHeight + 2 * root.padding
 	color: root.boxColor
 	radius: 0
@@ -87,7 +88,7 @@ Rectangle {
 		visible: !root.hint
 		clip: true
 		focus: root.active
-		selectByMouse: true
+		selectByMouse: false
 		color: Config.foreground
 		font.family: Config.fontFamily
 		font.pixelSize: root.size

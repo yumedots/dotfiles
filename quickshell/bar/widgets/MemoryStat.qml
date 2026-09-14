@@ -38,7 +38,6 @@ BarStat {
 		popup.hideNow();
 	}
 
-	onClicked: root.bar ? root.bar.openExclusive(root) : popup.toggle()
 
 	FileView {
 		id: memFile

@@ -23,17 +23,6 @@ Row {
 				source: modelData.icon
 				implicitSize: Config.trayIconSize
 			}
-
-			MouseArea {
-				anchors.fill: parent
-				acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-				onClicked: function (mouse) {
-					if (mouse.button === Qt.LeftButton)
-						modelData.activate();
-					else
-						modelData.secondaryActivate();
-				}
-			}
 		}
 	}
 }

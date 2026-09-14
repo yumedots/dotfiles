@@ -18,6 +18,12 @@ Item {
 	property var runningInput: []
 	property string picker: ""
 	property int page: 0
+	property int targetIndex: 0
+	property int pickerIndex: 0
+
+	signal closeRequested()
+
+	focus: true
 
 	readonly property real channelsMaxWidth: Config.mixerVisibleChannels * Config.mixerChannelWidth + (Config.mixerVisibleChannels - 1) * Config.mixerChannelGap
 	readonly property real idleWidth: Config.mixerIdleChannels * Config.mixerChannelWidth + (Config.mixerIdleChannels - 1) * Config.mixerChannelGap
@@ -34,6 +40,96 @@ Item {
 	implicitHeight: body.implicitHeight + Config.mixerPadding * 2
 
 	onLastPageChanged: root.page = Math.min(root.page, root.lastPage)
+	onPickerChanged: root.pickerIndex = 0
+
+	readonly property var targetNodes: {
+		const nodes = Pipewire.nodes.values ? Pipewire.nodes.values : [];
+		const list = [];
+
+		for (let i = 0; i < nodes.length; i++) {
+			const node = nodes[i];
+
+			if (root.shownStream(node) && (!Config.mixerOnlyPlaying || root.playing(node)))
+				list.push(node);
+		}
+
+		if (root.sink)
+			list.push(root.sink);
+		if (root.source)
+			list.push(root.source);
+
+		return list;
+	}
+
+	readonly property var selectedNode: root.targetNodes.length > 0
+		? root.targetNodes[Math.max(0, Math.min(root.targetIndex, root.targetNodes.length - 1))]
+		: null
+
+	function moveTarget(step) {
+		const last = root.targetNodes.length - 1;
+
+		if (last < 0)
+			return;
+
+		root.targetIndex = Math.max(0, Math.min(last, root.targetIndex + step));
+	}
+
+	function nudgeVolume(step) {
+		const node = root.selectedNode;
+
+		if (!node || !node.audio)
+			return;
+
+		node.audio.volume = Math.max(0, Math.min(node.audio.volume + step, Config.mixerMaxVolume));
+	}
+
+	Keys.onPressed: function (event) {
+		if (event.key === Qt.Key_Escape) {
+			if (root.picker !== "")
+				root.picker = "";
+			else
+				root.closeRequested();
+
+			event.accepted = true;
+			return;
+		}
+
+		if (root.picker !== "") {
+			if (event.text === "j" || event.key === Qt.Key_Down)
+				root.pickerIndex = Math.min(Math.max(0, root.devices.length - 1), root.pickerIndex + 1);
+			else if (event.text === "k" || event.key === Qt.Key_Up)
+				root.pickerIndex = Math.max(0, root.pickerIndex - 1);
+			else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+				root.makeDefault(root.picker, root.devices[root.pickerIndex]);
+			else
+				return;
+
+			event.accepted = true;
+			return;
+		}
+
+		if (event.text === "h" || event.key === Qt.Key_Left)
+			root.moveTarget(-1);
+		else if (event.text === "l" || event.key === Qt.Key_Right)
+			root.moveTarget(1);
+		else if (event.text === "j")
+			root.nudgeVolume(-Config.mixerStep);
+		else if (event.text === "k")
+			root.nudgeVolume(Config.mixerStep);
+		else if (event.text === "m")
+			root.toggleMute(root.selectedNode);
+		else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+			if (root.sameNode(root.selectedNode, root.sink))
+				root.openPicker("output");
+			else if (root.sameNode(root.selectedNode, root.source))
+				root.openPicker("input");
+			else
+				return;
+		} else
+			return;
+
+		event.accepted = true;
+	}
 
 	function setVolume(node, value) {
 		if (!node || !node.audio)
@@ -178,6 +274,7 @@ Item {
 		signal moved(real value)
 		signal toggled()
 
+		readonly property bool selected: root.sameNode(channel.node, root.selectedNode)
 		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 		readonly property int percent: Math.round(channel.volume * 100)
 		readonly property real level: Math.max(0, Math.min(channel.volume / Config.mixerMaxVolume, 1))
@@ -218,17 +315,6 @@ Item {
 					radius: track.radius
 					color: channel.muted ? Config.muted : Config.foreground
 				}
-
-				MouseArea {
-					anchors.fill: parent
-
-					function seek(mouse) {
-						channel.moved(Config.mixerMaxVolume * (1 - Math.max(0, Math.min(mouse.y / fader.height, 1))));
-					}
-
-					onPressed: (mouse) => seek(mouse)
-					onPositionChanged: (mouse) => { if (pressed) seek(mouse); }
-				}
 			}
 
 			Text {
@@ -236,7 +322,7 @@ Item {
 				horizontalAlignment: Text.AlignHCenter
 				font.family: Config.fontFamily
 				font.pixelSize: Config.fontSize
-				color: channel.muted ? Config.muted : Config.foreground
+				color: channel.selected ? Config.launcherHighlightText : (channel.muted ? Config.muted : Config.foreground)
 				text: channel.percent + "%"
 			}
 
@@ -262,11 +348,6 @@ Item {
 					color: channel.muted ? Config.muted : Config.foreground
 					text: channel.glyph
 				}
-
-				MouseArea {
-					anchors.fill: parent
-					onClicked: channel.toggled()
-				}
 			}
 		}
 	}
@@ -285,6 +366,7 @@ Item {
 		signal toggled()
 		signal opened()
 
+		readonly property bool selected: root.sameNode(line.node, root.selectedNode)
 		readonly property real level: Math.max(0, Math.min(line.volume / Config.mixerMaxVolume, 1))
 		readonly property int percent: Math.round(line.volume * 100)
 
@@ -327,12 +409,6 @@ Item {
 				color: Config.red
 				visible: line.recording
 			}
-
-			MouseArea {
-				anchors.fill: parent
-				enabled: line.switchable
-				onClicked: line.opened()
-			}
 		}
 
 		Text {
@@ -344,13 +420,8 @@ Item {
 			horizontalAlignment: Text.AlignRight
 			font.family: Config.fontFamily
 			font.pixelSize: Config.fontSize
-			color: line.muted ? Config.muted : Config.foreground
+			color: line.selected ? Config.launcherHighlightText : (line.muted ? Config.muted : Config.foreground)
 			text: line.percent + "%"
-
-			MouseArea {
-				anchors.fill: parent
-				onClicked: line.toggled()
-			}
 		}
 
 		Item {
@@ -381,17 +452,6 @@ Item {
 				height: lineTrack.height
 				radius: height / 2
 				color: line.muted ? Config.muted : Config.foreground
-			}
-
-			MouseArea {
-				anchors.fill: parent
-
-				function seek(mouse) {
-					line.moved(Config.mixerMaxVolume * Math.max(0, Math.min(mouse.x / lineFader.width, 1)));
-				}
-
-				onPressed: (mouse) => seek(mouse)
-				onPositionChanged: (mouse) => { if (pressed) seek(mouse); }
 			}
 		}
 	}
@@ -434,11 +494,6 @@ Item {
 						color: Config.foreground
 						text: Config.iconPrev
 						visible: root.page > 0
-
-						MouseArea {
-							anchors.fill: parent
-							onClicked: root.page = Math.max(0, root.page - 1)
-						}
 					}
 				}
 
@@ -535,11 +590,6 @@ Item {
 						color: Config.foreground
 						text: Config.iconNext
 						visible: root.page < root.lastPage
-
-						MouseArea {
-							anchors.fill: parent
-							onClicked: root.page = Math.min(root.lastPage, root.page + 1)
-						}
 					}
 				}
 			}
@@ -617,6 +667,7 @@ Item {
 
 					readonly property var node: option.modelData
 					readonly property bool active: root.sameNode(option.node, root.picker === "input" ? root.source : root.sink)
+					readonly property bool highlighted: option.index === root.pickerIndex
 
 					width: options.width
 					height: Config.mixerListRowHeight
@@ -628,7 +679,7 @@ Item {
 						anchors.verticalCenter: parent.verticalCenter
 						font.family: Config.fontFamily
 						font.pixelSize: Config.mixerIconSize
-						color: option.active ? Config.foreground : Config.muted
+						color: option.active || option.highlighted ? Config.foreground : Config.muted
 						text: root.picker === "input" ? Config.iconInput : Config.iconOutput
 					}
 
@@ -640,22 +691,11 @@ Item {
 						elide: Text.ElideRight
 						font.family: Config.fontFamily
 						font.pixelSize: Config.fontSize
-						color: option.active ? Config.foreground : Config.muted
+						color: option.active || option.highlighted ? Config.launcherHighlightText : Config.muted
 						text: option.node ? option.node.description : ""
-					}
-
-					MouseArea {
-						anchors.fill: parent
-						onClicked: root.makeDefault(root.picker, option.node)
 					}
 				}
 			}
-		}
-
-		MouseArea {
-			anchors.fill: parent
-			z: -1
-			onClicked: root.picker = ""
 		}
 	}
 }

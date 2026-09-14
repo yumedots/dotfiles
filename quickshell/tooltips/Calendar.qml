@@ -5,7 +5,29 @@ Item {
 	id: root
 
 	property date today: new Date()
-	property int monthOffset: 0
+
+	signal closeRequested()
+
+	focus: true
+
+	Keys.onPressed: function (event) {
+		if (event.key === Qt.Key_Escape)
+			root.closeRequested();
+		else if (event.key === Qt.Key_Left || event.text === "h")
+			root.shift(-1);
+		else if (event.key === Qt.Key_Right || event.text === "l")
+			root.shift(1);
+		else if (event.key === Qt.Key_Up || event.text === "k")
+			root.shift(-12);
+		else if (event.key === Qt.Key_Down || event.text === "j")
+			root.shift(12);
+		else if (event.key === Qt.Key_Home)
+			root.reset();
+		else
+			return;
+
+		event.accepted = true;
+	}
 
 	readonly property date first: new Date(root.today.getFullYear(), root.today.getMonth() + root.monthOffset, 1)
 	readonly property int year: root.first.getFullYear()
@@ -50,10 +72,6 @@ Item {
 			font.pixelSize: Config.fontSize
 			color: Config.foreground
 			text: arrow.glyph
-		}
-
-		TapHandler {
-			onTapped: arrow.fired()
 		}
 	}
 
@@ -104,10 +122,6 @@ Item {
 			font.pixelSize: Config.fontSize
 			color: Config.foreground
 			text: Qt.formatDate(root.first, "MMMM yyyy")
-
-			TapHandler {
-				onTapped: root.reset()
-			}
 		}
 	}
 

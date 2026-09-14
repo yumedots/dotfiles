@@ -24,21 +24,17 @@ BarText {
 		precision: SystemClock.Seconds
 	}
 
-	MouseArea {
-		id: area		anchors.fill: parent
-
-		onClicked: root.bar ? root.bar.openExclusive(root) : popup.toggle()
-
-	}
-
 	Tooltip {
 		id: popup
 
 		anchorWindow: root.bar
 		anchorItem: root
+		wantsKeyboard: true
 
 		Calendar {
 			today: clock.date
+
+			onCloseRequested: popup.close()
 		}
 	}
 }

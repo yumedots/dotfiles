@@ -29,8 +29,6 @@ BarStat {
 		popup.hideNow();
 	}
 
-	onClicked: root.bar ? root.bar.openExclusive(root) : popup.toggle()
-
 	PwObjectTracker {
 		objects: [Pipewire.defaultAudioSink]
 	}
@@ -40,7 +38,10 @@ BarStat {
 
 		anchorWindow: root.bar
 		anchorItem: root
+		wantsKeyboard: true
 
-		VolumeMixer {}
+		VolumeMixer {
+			onCloseRequested: popup.close()
+		}
 	}
 }
