@@ -108,7 +108,7 @@ const launcherSearchBox = "#1f1f1f";
 const launcherHighlight = "#2f2f2f";
 const launcherHighlightText = "#ffffff";
 const launcherUsageMax = 10;
-const launcherTerminalConfig = "~/.config/hypr/hyprland.lua";
+const launcherTerminalConfig = "~/.config/hypr/programs.lua";
 const launcherPrompt = "\uea6d";
 const launcherMaxRows = 12;
 const launcherMaxResults = 60;
@@ -127,9 +127,9 @@ const launcherIconFile = "\u{f0213}";
 const launcherIconPin = "\ueba0";
 
 const launcherCommands = [
-	{ name: "Edit shell config", command: "code-insiders ~/.config/quickshell/config.js", keywords: ["quickshell"] },
-	{ name: "Edit hyprland config", command: "code-insiders ~/.config/hypr/hyprland.lua", keywords: ["hypr"] },
-	{ name: "Edit launcher shortcuts", command: "code-insiders ~/.config/quickshell/config.js", keywords: ["launcher"] }
+	{ name: "Edit shell config", command: "code-insiders ~/.config/quickshell/lib/config.js", keywords: ["quickshell"] },
+	{ name: "Edit hyprland config", command: "code-insiders ~/.config/hypr", keywords: ["hypr"] },
+	{ name: "Edit launcher shortcuts", command: "code-insiders ~/.config/quickshell/lib/config.js", keywords: ["launcher"] }
 ];
 
 const launcherActions = [
