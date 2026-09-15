@@ -95,6 +95,8 @@ const procsGap = 6;
 const topProcessTitle = "Top processes";
 const psIgnore = ["ps", "ps <defunct>"];
 const cpuPollMs = 1000;
+const procFade = 0.8;
+const procFadeOpacity = 0.8;
 
 const procSearchPlaceholder = "Type to search";
 const procSearchHint = "f to type";
