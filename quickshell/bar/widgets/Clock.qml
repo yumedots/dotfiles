@@ -12,7 +12,7 @@ BarText {
 
 	readonly property string stamp: Qt.formatDateTime(clock.date, root.settings && root.settings.format ? root.settings.format : Config.clockFormat)
 
-	text: Config.iconClock + "  " + root.stamp
+	text: root.stamp
 
 	function openPopup() {
 		popup.open();

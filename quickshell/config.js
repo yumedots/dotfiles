@@ -28,7 +28,6 @@ const workspaceSpacing = 6;
 
 const iconCpu = "\uf2db";
 const iconMemory = "\uefc5";
-const iconClock = "\ue641";
 const iconBell = "\uf0f3";
 const iconDown = "\uf078";
 const iconUp = "\uf077";
