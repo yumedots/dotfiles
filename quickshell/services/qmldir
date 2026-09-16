@@ -1,2 +1,3 @@
 module services
-AppIcons 1.0 AppIcons.qml
+singleton AppIcons 1.0 AppIcons.qml
+singleton Notifications 1.0 Notifications.qml
