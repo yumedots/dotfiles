@@ -98,24 +98,6 @@ assert(parseHyprGaps("hyprctl: command not found").outer === null, "unreadable o
 
 const namedColor = parseGradient("rgba(ff0000ff) 90deg");
 assert(namedColor.angle === 90 && namedColor.colors === null, "a token that is not a plain hex color is dropped");
-assert(nextIndex(["a", "b", "c"], "a") === 1, "next window");
-assert(nextIndex(["a", "b", "c"], "c") === 0, "window cycling wraps around");
-assert(nextIndex(["a", "b", "c"], "zz") === 0, "an unfocused app starts at its first window");
-assert(nextIndex(["only"], "only") === 0, "a single window cycles to itself");
-assert(nextIndex([], "a") === -1, "no windows");
-
-const win = function (ws, x, y) { return { workspace: { id: ws }, lastIpcObject: { at: [x, y] } }; };
-const left = win(3, 100, 0);
-const right = win(3, 900, 0);
-const above = win(3, 100, 400);
-const elsewhere = win(9, 50, 0);
-
-assert(orderedWindows([right, left, elsewhere], 3)[0] === left, "the leftmost window on this workspace comes first");
-assert(orderedWindows([right, left, elsewhere], 3)[2] === elsewhere, "windows on other workspaces come last");
-assert(orderedWindows([right, elsewhere, left], 3)[1] === right, "same column falls through to the next window");
-assert(orderedWindows([above, left], 3)[0] === left, "same x orders by y");
-assert(orderedWindows([elsewhere], 3).length === 1, "a single window stays put");
-
 assert(commandWord("btop") === "btop", "a bare command is the running program");
 assert(commandWord("nvim notes.md") === "nvim", "arguments are dropped");
 assert(commandWord("Zathura a.pdf") === "zathura", "the command is lowercased");

@@ -7,7 +7,7 @@
   input.lua, binds.lua, rules.lua, autostart.lua. Editing a topic means editing its own file, and the
   terminal the launcher reads lives in programs.lua
 - quickshell/ is laid out one folder per thing, the entry file doing nothing but hosting them:
-      shell.qml          the composition root: the IpcHandler, a bar per screen, the dock, the launcher
+      shell.qml          the composition root: the IpcHandler, a bar per screen, the launcher
       config.js          every knob, at the root so it is the first file you see
       lib/               helpers.js (the parsing and the formatting) and check.js (the self-check)
       ui/                the shared primitives every surface draws with: HyprBorder, Tooltip, BarStat,
@@ -20,7 +20,7 @@
       bar/               Bar.qml, the bar surface, and bar/widgets/ (Workspaces, Clock, Date, Tray,
                          CpuStat, MemoryStat, VolumeStat, Spacer), each stat owning its tooltip's wiring
       tooltips/          Calendar, CpuMonitor, MemoryMonitor, VolumeMixer, one file each
-      dock/, launcher/   the other two surfaces
+      launcher/          the launcher surface
       cache/             the gitignored state: pins, usage
 - the shared folders are real QML modules and the `qmldir` is what names what each one exposes, so
   nothing spells a `../..` path any more: `import qs` for the root module (Config and Helpers),
@@ -233,7 +233,7 @@
       set, nothing animates, so the highlighted row is the row that moves) and the same 3px scrollbar
       from one place. The process lists had grown their own ListView + highlight + wheel handler, which
       is why the selection lagged the pointer, jumped rows and slid instead of moving
-- [x] quickshell is keyboard only: no MouseArea, TapHandler or WheelHandler left outside the dock, and
+- [x] quickshell is keyboard only: no MouseArea, TapHandler or WheelHandler left anywhere, and
       every TextInput has selectByMouse: false. Widgets open and close with their MOD bind (z / x / c /
       s through `qs ipc call shell <name>`) and close with Escape; the launcher and its window switcher
       close with Escape; the calendar moves with hjkl / arrows and the mixer with h l and j k + Enter
@@ -314,37 +314,15 @@
 - [x] rewritten from scratch, click the date component at the far right opens it, leaving it closes it (verified by screenshot: 220x174 logical, 1px gradient border)
 - [ ] optional: week numbers, ISO week, holidays
 
-## Dock
-
-- [x] black, square edged dock centered at the bottom, floats over windows
-- [x] every open window as an icon, grouped per app class, icons resolved from the .desktop files like fuzzel does
-- [x] click focuses the closest window (this workspace first, then the most recent), clicking again cycles
-- [x] round dot per running window in a stable per window order, the focused window's dot is bright,
-  capped at Config.dockMaxDots (5) plus a + when the app has more windows than that
-- [x] pinned shortcuts from Config.dockPinned, click launches when not running
-- [x] fuzzel as the launchpad, rightmost item after a separator, click toggles it open and closed
-- [x] the launchpad button toggles the shell's own launcher (see below), no fuzzel process behind it
-- [x] fuzzel closes itself when focus leaves it (clicking an icon or a window dismisses it)
-- [x] rounded corners (Config.dockRadius), extra space above the icons (Config.dockTopPadding)
-- [x] no magnification
-- [x] the reserved zone ends at the dock's top edge, so the only space left above it is the window gap from the Hyprland config (gaps_out), Config.dockGap adds more on request
-- [x] new windows and new apps appear as soon as they open, and disappear when they close
-- [x] a program running in a terminal window shows up as its own dock entry with its own .desktop
-  icon (btop, yazi, nvim) and that window stops counting as one of the terminal's windows, click
-  focuses it. Works through foot --server too, because the shell puts the command in the title
-- [ ] right click to pin/unpin and to close a window from the dock
-- [ ] app name label above the hovered icon, auto hide when idle
-- [ ] indicator for apps with an urgent window
-
 ## App launcher
 
 Replaces fuzzel: a layer surface inside the shell with exclusive keyboard focus, toggled through an
-IpcHandler so the Hyprland bind and the dock's launchpad button both just toggle it. The card is
+IpcHandler so the Hyprland bind just toggles it. The card is
 HyprBorder, the same primitive behind the bar and every tooltip, so the border, the background and
 the fade duration come from the Hyprland config and match the rest of the shell.
 
-- [x] ALT + SPACE (`qs ipc call shell launcher`) and the dock's launchpad button open it (Dock emits
-      launcherRequested, no fuzzel process anywhere). Escape, Enter after running something or a click
+- [x] ALT + SPACE (`qs ipc call shell launcher`) opens it (no fuzzel process anywhere). Escape, Enter
+      after running something or a click
       outside the card closes it. Verified through the live shell: the ipc call exits 0 and the surface
       maps as namespace launcher on the overlay layer with exclusive keyboard focus
 - [x] shaped like the old fuzzel: a narrow vertical card centred on the screen, 270x400 with twelve 28px
@@ -421,7 +399,7 @@ the fade duration come from the Hyprland config and match the rest of the shell.
       switcher shows code-insiders(0), helium(1), footclient(2), footclient(3) in exactly that order.
       Typing filters on title and class ("term" leaves the Nerd Fonts helium window), arrows/Enter work
       like the launcher, app icons come from the same AppIcons lookup. MOD+TAB again closes, and the
-      apps launcher (ALT+SPACE, dock) always reopens in apps mode. The bind is live: hyprctl binds shows
+      apps launcher (ALT+SPACE) always reopens in apps mode. The bind is live: hyprctl binds shows
       modmask 64 key TAB
 - [x] session actions run as the user, no sudo, cleared with login1 first: suspend, logout, reboot,
       shutdown (CanSuspend/CanReboot/CanPowerOff all answer yes, CanHibernate is na on this box). Lock
@@ -535,21 +513,21 @@ Contracts (know before building):
 - quickshell 0.3.1 (extra/quickshell) returns 0 entries from DesktopEntries.applications, byId and
   heuristicLookup, so app icons come from helpers.parseDesktopEntries over `grep -H` of the .desktop
   files: id, then StartupWMClass, then Exec basename, then the lowercased Name
-- a second PanelWindow inside Variants kills the first one, the bar and the dock have to be siblings
-  inside a ShellRoot
+- a second PanelWindow inside Variants kills the first one, the bar and the launcher have to be
+  siblings inside a ShellRoot
 - HyprlandToplevel.address has no 0x prefix, dispatching needs it added back:
   hl.dsp.focus({ window = "address:0x..." }) (or focuswindow address:0x... on a classic config)
 - a freshly opened window arrives in Hyprland.toplevels with an empty lastIpcObject (no class, no pid),
   so classOf() returned "" and the window was skipped. Hyprland.refreshToplevels() fills it in, which
-  is why the dock only refreshed on movewindow/changefloatingmode before
+  is why the app list only refreshed on movewindow/changefloatingmode before
 - a block bodied `property var` binding that reads Hyprland.toplevels.values does not re-evaluate when
-  the model changes (a plain `toplevels.length` binding does), so the dock recomputes its app list
-  imperatively on Hyprland window events instead of binding it
+  the model changes (a plain `toplevels.length` binding does), so a window list has to be recomputed
+  imperatively on Hyprland window events instead of bound
 - with foot --server every window reports the server's pid (all footclient windows share pid 1287),
   so the program running inside a window cannot be identified from the window. A terminal that owns
   its window does report its own pid (plain `foot -e btop` -> foot pid, btop as its child), which is
   what an in terminal app detection needs
-- a terminal window's dock identity comes from its title: helpers.commandWord takes the first word
+- a terminal window's app identity comes from its title: helpers.commandWord takes the first word
   of the title and only accepts a bare name (no / and no ~), so a shell prompt title never matches.
   oh-my-zsh's termsupport already puts the running command in the title (omz_termsupport_preexec),
   no plugin needed, and it works through foot --server because the title is per window
@@ -559,8 +537,8 @@ Contracts (know before building):
   foot --server restart happens, windows spawned by the old server still run bash
 - Hyprland.activeToplevel is the reliable "which window is focused", toplevel.activated lags
 - while a layer surface holds exclusive keyboard focus (fuzzel's default), Hyprland drops pointer
-  clicks on our other layer surfaces, so the bar and dock look dead under it (clicks on normal
-  windows still work). fuzzel is launched with --keyboard-focus=on-demand from the dock, typing still
+  clicks on our other layer surfaces, so the bar looks dead under it (clicks on normal
+  windows still work). fuzzel is launched with --keyboard-focus=on-demand, typing still
   reaches it, and then the launcher button can toggle it
 - the launcher keeps its own open/closed state (a 400ms pgrep poll syncs it) instead of checking
   pgrep on click, because fuzzel exits on keyboard focus loss and would otherwise be relaunched
@@ -583,10 +561,10 @@ Contracts (know before building):
   where an empty media class classifies as output and the row would never get tracked at all
 - PwNode.id is the node's global id, which is what pw-dump lists as the object id, so the running set from
   pw-dump matches the model directly (the pactl sink input index is object.serial instead)
-- AppIcons.qml holds the .desktop grep and the icon resolution, shared by the dock and the volume mixer
+- AppIcons.qml holds the .desktop grep and the icon resolution, shared by the launcher and the volume mixer
   instead of each keeping its own copy. A stream only carries application.name / application.icon-name and
   those often miss (Helium is "helium" as an app but "helium-browser" as an icon), so the entry's Icon= is
-  what actually resolves; Quickshell.hasThemeIcon(Config.dockFallbackIcon) is false on this box, which is why
+  what actually resolves; Quickshell.hasThemeIcon(Config.fallbackIcon) is false on this box, which is why
   an app with no entry and no matching icon gets a glyph rather than a generic placeholder
 - the border and the spacing are not configured in this repo: HyprBorder.qml (shared by the bar and
   every tooltip) asks Hyprland for `general:col.active_border`, `general:border_size` and

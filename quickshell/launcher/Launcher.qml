@@ -122,7 +122,7 @@ PanelWindow {
 
 		return values.map(function (toplevel) {
 			const info = toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
-			const candidates = Helpers.windowAppCandidates(toplevel, Config.dockTerminalClasses);
+			const candidates = Helpers.windowAppCandidates(toplevel, Config.terminalClasses);
 			const appId = candidates.word && appIcons.iconOf(candidates.word) ? candidates.word : candidates.className;
 
 			return {

@@ -18,34 +18,6 @@ function mixColor(c1, c2, t) {
 	return out;
 }
 
-function orderedWindows(windows, workspaceId) {
-	const field = function (win) {
-		const here = win.workspace && win.workspace.id === workspaceId ? 0 : 1;
-		const at = win.lastIpcObject && win.lastIpcObject.at ? win.lastIpcObject.at : [0, 0];
-
-		return [here, win.workspace ? win.workspace.id : 0, at[0], at[1]];
-	};
-
-	return windows.slice().sort(function (a, b) {
-		const fa = field(a);
-		const fb = field(b);
-
-		for (let i = 0; i < fa.length; i++) {
-			if (fa[i] !== fb[i])
-				return fa[i] - fb[i];
-		}
-
-		return 0;
-	});
-}
-
-function nextIndex(list, value) {
-	if (!list.length)
-		return -1;
-
-	return (list.indexOf(value) + 1) % list.length;
-}
-
 function filledCells(pct, cells) {
 	return Math.min(Math.max(Math.round((pct / 100) * cells), 0), cells);
 }

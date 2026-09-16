@@ -25,7 +25,7 @@ Item {
 			return "";
 
 		const entry = root.entryOf(appId);
-		const candidates = [entry ? entry.icon : ""].concat(fallbacks).concat([appId, Config.dockFallbackIcon]);
+		const candidates = [entry ? entry.icon : ""].concat(fallbacks).concat([appId, Config.fallbackIcon]);
 
 		for (let i = 0; i < candidates.length; i++) {
 			if (!candidates[i] || !Quickshell.hasThemeIcon(candidates[i]))

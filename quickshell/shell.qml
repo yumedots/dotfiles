@@ -3,7 +3,6 @@ import Quickshell
 import Quickshell.Io
 import qs
 import "bar"
-import "dock"
 import "launcher"
 
 ShellRoot {
@@ -50,11 +49,6 @@ ShellRoot {
 		model: Quickshell.screens
 
 		Bar {}
-	}
-
-	Dock {
-		visible: Config.dockEnabled
-		onLauncherRequested: launcherWindow.toggle()
 	}
 
 	Launcher {
