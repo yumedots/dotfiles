@@ -21,6 +21,7 @@ hl.bind(mainMod .. " + Z", hl.dsp.exec_cmd(programs.cpu))
 hl.bind(mainMod .. " + X", hl.dsp.exec_cmd(programs.memory))
 hl.bind(mainMod .. " + C", hl.dsp.exec_cmd(programs.volume))
 hl.bind(mainMod .. " + S", hl.dsp.exec_cmd(programs.calendar))
+hl.bind(mainMod .. " + D", hl.dsp.exec_cmd(programs.contributions))
 
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))

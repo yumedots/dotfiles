@@ -8,5 +8,6 @@ return {
     memory         = "qs ipc call shell memory",
     volume         = "qs ipc call shell volume",
     calendar       = "qs ipc call shell calendar",
+    contributions  = "qs ipc call shell github",
     wallpaper      = "/home/gabriel/Documents/Wallpaper/12-Monterey-Dark.jpg",
 }
