@@ -32,6 +32,7 @@ const iconBell = "\uf0f3";
 const iconDown = "\uf078";
 const iconUp = "\uf077";
 const iconRight = "\uf054";
+const iconGithub = "\uf09b";
 const iconVolumeLow = "\uf026";
 const iconVolumeMid = "\uf027";
 const iconVolumeHigh = "\uf028";
@@ -185,6 +186,17 @@ const notifySweepWidth = 30;
 const notifyTimeout = 6000;
 const notifyDismissKey = "d";
 const notifyClearKey = "x";
+
+const contribBase = "#7bd88f";
+const contribEmpty = "#1f1f1f";
+const contribWeeks = 19;
+const contribCell = 10;
+const contribGap = 3;
+const contribCacheMs = 21600000;
+const contribUser = "";
+const contribTooltipWidth = 244;
+const contribTooltipPadding = 12;
+const contribAvatar = 24;
 
 const fallbackIcon = "application-x-executable";
 const terminalClasses = ["foot", "footclient"];

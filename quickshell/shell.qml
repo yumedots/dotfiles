@@ -41,6 +41,11 @@ ShellRoot {
 			if (bars.instances.length > 0)
 				bars.instances[0].toggleWidget("notify", true);
 		}
+
+		function github() {
+			if (bars.instances.length > 0)
+				bars.instances[0].toggleWidget("github", true);
+		}
 	}
 
 	Variants {

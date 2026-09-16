@@ -17,7 +17,7 @@
 				{ "id": "cpu" },
 				{ "id": "memory" },
 				{ "id": "volume" },
-				{ "id": "date" }
+				{ "id": "github" }
 			]
 		}
 	}
