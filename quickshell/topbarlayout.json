@@ -13,6 +13,7 @@
 			],
 			"right": [
 				{ "id": "tray" },
+				{ "id": "notify" },
 				{ "id": "cpu" },
 				{ "id": "memory" },
 				{ "id": "volume" },

@@ -39,6 +39,9 @@ const iconVolumeHigh = "\uf028";
 const barCells = 15;
 const lineLength = 45;
 const barThickness = 1.5;
+const barSweepMs = 1400;
+const sweepFade = 0.45;
+const sweepSteps = 5;
 
 const tooltipOffsetX = 0;
 const tooltipOffsetY = -8;

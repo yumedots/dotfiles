@@ -37,6 +37,11 @@ ShellRoot {
 			if (bars.instances.length > 0)
 				bars.instances[0].toggleWidget("date");
 		}
+
+		function notifications() {
+			if (bars.instances.length > 0)
+				bars.instances[0].toggleWidget("notify", true);
+		}
 	}
 
 	Variants {

@@ -41,6 +41,7 @@ PanelWindow {
 		if (id === "workspaces") return workspacesComponent;
 		if (id === "clock") return clockComponent;
 		if (id === "date") return dateComponent;
+		if (id === "notify") return notifyComponent;
 		if (id === "tray") return trayComponent;
 		if (id === "cpu") return cpuComponent;
 		if (id === "memory") return memoryComponent;
@@ -114,6 +115,7 @@ PanelWindow {
 	Component { id: workspacesComponent; Workspaces {} }
 	Component { id: clockComponent; Clock {} }
 	Component { id: dateComponent; Date {} }
+	Component { id: notifyComponent; NotifyStat {} }
 	Component { id: trayComponent; Tray {} }
 	Component { id: cpuComponent; CpuStat {} }
 	Component { id: memoryComponent; MemoryStat {} }

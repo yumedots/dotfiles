@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import qs
 
 Item {
@@ -10,6 +11,9 @@ Item {
 	property string icon: ""
 	property string value: ""
 	property real gap: 0
+	property bool showBar: true
+	property bool sweep: false
+	property real sweepWidth: 0
 
 	readonly property int filled: Helpers.filledCells(root.pct, Config.barCells)
 	readonly property real valueAscent: -valueMetrics.boundingRect.y
@@ -22,7 +26,7 @@ Item {
 
 	implicitWidth: Config.lineLength + root.gap
 	readonly property real contentHeight: Math.round(root.inkAbove + root.inkBelow)
-	implicitHeight: root.contentHeight + Math.ceil(Config.barThickness)
+	implicitHeight: root.contentHeight + (root.showBar ? Math.ceil(Config.barThickness) : 0)
 
 	TextMetrics {
 		id: iconsMetrics
@@ -80,14 +84,22 @@ Item {
 		Item {
 			id: line
 
+			visible: root.showBar
 			anchors.left: parent.left
 			anchors.bottom: parent.bottom
 			width: parent.width
 			height: Config.barThickness
+			clip: true
+
+			Rectangle {
+				anchors.fill: parent
+				color: Config.dim
+			}
 
 			Rectangle {
 				id: fill
 
+				visible: !root.sweep
 				anchors.left: parent.left
 				anchors.top: parent.top
 				anchors.bottom: parent.bottom
@@ -95,12 +107,60 @@ Item {
 				color: root.barColor
 			}
 
-			Rectangle {
-				anchors.left: fill.right
-				anchors.right: parent.right
+			Item {
+				id: sweepLine
+
+				visible: root.sweep && root.filled > 0
 				anchors.top: parent.top
 				anchors.bottom: parent.bottom
-				color: Config.dim
+				width: root.sweepWidth > 0 ? Math.min(root.sweepWidth, line.width) : line.width
+
+				readonly property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
+				readonly property int steps: Math.max(1, Config.sweepSteps)
+				readonly property int deviceWidth: Math.max(sweepLine.steps, Math.round(width * sweepLine.dpr))
+				readonly property int fadePixels: Math.round(sweepLine.deviceWidth * Config.sweepFade)
+
+				property real travel: -sweepLine.deviceWidth
+
+				function edge(step) {
+					return Math.round(step * sweepLine.fadePixels / sweepLine.steps);
+				}
+
+				function toLocal(pixels) {
+					return pixels / sweepLine.dpr;
+				}
+
+				x: sweepLine.toLocal(Math.round(sweepLine.travel))
+
+				Repeater {
+					model: sweepLine.steps
+
+					delegate: Rectangle {
+						required property int index
+
+						x: sweepLine.toLocal(sweepLine.edge(index))
+						width: sweepLine.toLocal(sweepLine.edge(index + 1) - sweepLine.edge(index))
+						anchors.top: parent.top
+						anchors.bottom: parent.bottom
+						color: root.barColor
+						opacity: (index + 1) / (sweepLine.steps + 1)
+					}
+				}
+
+				Rectangle {
+					anchors.top: parent.top
+					anchors.bottom: parent.bottom
+					x: sweepLine.toLocal(sweepLine.fadePixels)
+					width: sweepLine.toLocal(sweepLine.deviceWidth - sweepLine.fadePixels)
+					color: root.barColor
+				}
+
+				NumberAnimation on travel {
+					from: -sweepLine.deviceWidth
+					to: Math.round(line.width * sweepLine.dpr)
+					duration: Config.barSweepMs
+					loops: Animation.Infinite
+				}
 			}
 		}
 	}
