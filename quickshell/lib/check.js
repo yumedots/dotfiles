@@ -404,7 +404,7 @@ assert(layout.right.length === 1 && layout.right[0].id === "date", "the right sl
 
 const defaultLayout = parseBarLayout("");
 assert(defaultLayout.position === "top" && defaultLayout.left[0].id === "workspaces", "a missing file falls back to the default layout");
-assert(defaultLayout.right.map(function (entry) { return entry.id; }).join(",") === "tray,cpu,memory,volume,date", "the default right slot is the layout this bar has always had");
+assert(defaultLayout.right.map(function (entry) { return entry.id; }).join(",") === "tray,notify,cpu,memory,volume,github", "the default right slot is the layout this bar has always had");
 assert(parseBarLayout("{ broken").center[0].id === "clock", "a broken file falls back to the default layout");
 assert(parseBarLayout('{"bar": {"layout": {"left": "nope"}}}').left[0].id === "workspaces", "a slot that is not a list falls back to the default");
 assert(parseBarLayout('{"bar": {"layout": {"left": []}}}').left.length === 0, "an empty slot is left empty, not filled with the default");
@@ -413,5 +413,82 @@ assert(parseBarLayout('{"bar": {"position": "left"}}').position === "top", "a po
 
 assert(plainText("<b>hi</b> &amp; <i>there</i><br>line") === "hi & there line", "markup is stripped from a notification body");
 assert(plainText("") === "" && plainText(null) === "", "an empty body stays empty");
+
+const contributions = parseContributions([
+	'<td data-date="2026-09-11" data-level="1"></td><tool-tip>3 contributions on September 11th.</tool-tip>',
+	'<td data-date="2026-09-12" data-level="4"></td><tool-tip>No contributions on September 12th.</tool-tip>',
+	'<h2>599\n      contributions\n        in the last year</h2>'
+].join("\n"));
+
+assert(contributions.days.length === 2, "one row per tile");
+assert(contributions.days[0].count === 3 && contributions.days[0].level === 1, "the tooltip gives the day its count");
+assert(contributions.days[1].count === 0 && contributions.days[1].level === 4, "no contributions is a count of zero, not a missing day");
+assert(contributions.total === 599, "the year total is read");
+assert(parseContributions("").days.length === 0 && parseContributions(null).total === 0, "an empty feed parses to nothing");
+
+const contribCells = contribGrid([
+	{ date: "2026-09-07", level: 1, count: 1 },
+	{ date: "2026-09-11", level: 2, count: 4 },
+	{ date: "2026-09-12", level: 3, count: 9 }
+], 2);
+
+assert(contribCells.length === 14, "the grid is always 7 rows by the requested weeks");
+assert(contribCells.filter(Boolean).length === 3, "only the days that were fetched take a cell");
+assert(contribCells[6 * 2 + 1].count === 9, "the last day lands on its weekday row, in the last column");
+assert(contribCells[1 * 2 + 1].count === 1 && contribCells[5 * 2 + 1].count === 4, "the same week keeps one column, one row per weekday");
+assert(contribGrid([], 13).length === 91, "an empty feed still returns a full empty grid");
+
+const weekCells = contribGrid([
+	{ date: "2026-09-13", level: 1, count: 1 },
+	{ date: "2026-09-14", level: 2, count: 4 },
+	{ date: "2026-09-05", level: 1, count: 2 },
+	{ date: "2026-09-06", level: 3, count: 7 }
+], 3);
+
+assert(weekCells[0 * 3 + 2].count === 1 && weekCells[1 * 3 + 2].count === 4, "a week fills from its sunday down the newest column");
+assert(weekCells[0 * 3 + 1].count === 7 && weekCells[6 * 3 + 0].count === 2, "a roll is a calendar week: saturday the 5th stays in its own week, not the one after it");
+assert(weekIndex(new Date("2023-12-31T00:00:00")) !== weekIndex(new Date("2023-12-30T00:00:00")), "a roll turns over on sunday (2023-12-31 is a sunday)");
+
+const rollDays = [
+	{ date: "2026-09-13", level: 1, count: 1 },
+	{ date: "2026-09-14", level: 2, count: 4 }
+];
+const rollNow = contribGrid(rollDays, 3, "2026-09-15");
+const rollNext = contribGrid(rollDays, 3, "2026-09-22");
+
+assert(rollNow[0 * 3 + 2].count === 1 && rollNow[1 * 3 + 2].count === 4, "the days of this week land in the last roll");
+assert(rollNext[0 * 3 + 1].count === 1 && rollNext[1 * 3 + 1].count === 4, "a week later the same days sit one roll further left");
+assert(rollNext[0 * 3 + 2] === null && rollNext[1 * 3 + 2] === null, "the new roll starts empty, not with placeholder boxes");
+
+const rollKept = contribGrid([
+	{ date: "2026-08-30", level: 4, count: 9 },
+	{ date: "2026-09-13", level: 1, count: 1 }
+], 2, "2026-09-08");
+const rollDropped = contribGrid([
+	{ date: "2026-08-30", level: 4, count: 9 },
+	{ date: "2026-09-13", level: 1, count: 1 }
+], 2, "2026-09-15");
+
+assert(rollKept[0].count === 9, "a day still inside the window keeps its cell");
+assert(rollDropped.filter(function (cell) { return cell && cell.count === 9; }).length === 0, "a week later the oldest roll is dropped");
+assert(contribGrid(rollDays, 3, "2026-09-15").filter(function (cell) { return cell !== null; }).length === 2, "only the days that happened get a cell");
+assert(weekIndex(new Date("2024-01-06T00:00:00")) === weekIndex(new Date("2023-12-31T00:00:00")), "sunday through saturday are one roll");
+
+const partialWeek = contribGrid([
+	{ date: "2026-09-13", level: 1, count: 1 },
+	{ date: "2026-09-14", level: 4, count: 44 },
+	{ date: "2026-09-15", level: 0, count: 0 },
+	{ date: "2026-09-16", level: 0, count: 0 }
+], 3, "2026-09-14");
+
+assert(partialWeek.filter(Boolean).length === 2, "days after today never take a cell");
+assert(partialWeek[0 * 3 + 2].date === "2026-09-13" && partialWeek[1 * 3 + 2].date === "2026-09-14", "the current roll holds only its sunday and monday");
+
+const scrambled = contribGrid([
+	{ date: "2026-09-14", count: 2 },
+	{ date: "2026-09-06", count: 1 }
+], 2);
+
+assert(scrambled[1 * 2 + 1].count === 2 && scrambled[0].count === 1, "a feed in any order still lands on its own weekday and week");
 
 console.log("check ok");
