@@ -214,7 +214,7 @@ Item {
 
 		const app = Helpers.streamApp(node.properties);
 
-		return appIcons.iconOf(app.name, app.icons);
+		return AppIcons.iconOf(app.name, app.icons);
 	}
 
 	function openPicker(direction) {
@@ -235,10 +235,6 @@ Item {
 
 	PwObjectTracker {
 		objects: [root.sink, root.source]
-	}
-
-	AppIcons {
-		id: appIcons
 	}
 
 	Timer {

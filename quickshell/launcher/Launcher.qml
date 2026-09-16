@@ -124,7 +124,7 @@ PanelWindow {
 		return values.map(function (toplevel) {
 			const info = toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
 			const candidates = Helpers.windowAppCandidates(toplevel, Config.terminalClasses);
-			const appId = candidates.word && appIcons.iconOf(candidates.word) ? candidates.word : candidates.className;
+			const appId = candidates.word && AppIcons.iconOf(candidates.word) ? candidates.word : candidates.className;
 
 			return {
 				id: "win:" + toplevel.address,
@@ -141,7 +141,7 @@ PanelWindow {
 	}
 
 	function allEntries() {
-		return root.actionEntries().concat(root.commandEntries()).concat(Helpers.appEntries(appIcons.entries, Config.launcherIgnoreApps));
+		return root.actionEntries().concat(root.commandEntries()).concat(Helpers.appEntries(AppIcons.entries, Config.launcherIgnoreApps));
 	}
 
 	function buildResults() {
@@ -266,10 +266,6 @@ PanelWindow {
 	onModeChanged: {
 		if (root.mode === "clipboard")
 			clipsList.running = true;
-	}
-
-	AppIcons {
-		id: appIcons
 	}
 
 	Process {
@@ -435,7 +431,7 @@ PanelWindow {
 							anchors.centerIn: parent
 							implicitSize: Config.launcherIconSize
 							visible: row.modelData.appId !== undefined && row.modelData.appId !== ""
-							source: row.modelData.appId !== undefined && row.modelData.appId !== "" ? appIcons.iconOf(row.modelData.appId) : ""
+							source: row.modelData.appId !== undefined && row.modelData.appId !== "" ? AppIcons.iconOf(row.modelData.appId) : ""
 						}
 
 						Text {
