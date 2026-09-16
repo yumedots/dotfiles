@@ -95,9 +95,9 @@ Item {
 		}
 
 		if (root.picker !== "") {
-			if (event.text === "j" || event.key === Qt.Key_Down)
+			if (event.text === "j")
 				root.pickerIndex = Math.min(Math.max(0, root.devices.length - 1), root.pickerIndex + 1);
-			else if (event.text === "k" || event.key === Qt.Key_Up)
+			else if (event.text === "k")
 				root.pickerIndex = Math.max(0, root.pickerIndex - 1);
 			else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
 				root.makeDefault(root.picker, root.devices[root.pickerIndex]);
@@ -108,9 +108,9 @@ Item {
 			return;
 		}
 
-		if (event.text === "h" || event.key === Qt.Key_Left)
+		if (event.text === "h")
 			root.moveTarget(-1);
-		else if (event.text === "l" || event.key === Qt.Key_Right)
+		else if (event.text === "l")
 			root.moveTarget(1);
 		else if (event.text === "j")
 			root.nudgeVolume(-Config.mixerStep);

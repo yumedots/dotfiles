@@ -375,7 +375,6 @@ PanelWindow {
 				}
 				onAccepted: root.activate(root.results[list.currentIndex])
 				onCanceled: root.close()
-				onNavigate: function (step) { root.move(step); }
 				onKeyPressed: function (event) {
 					list.handleKey(event);
 					if (event.accepted)
@@ -383,12 +382,6 @@ PanelWindow {
 
 					if (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier) {
 						root.pin(root.results[list.currentIndex]);
-						event.accepted = true;
-					} else if (event.key === Qt.Key_PageDown) {
-						root.move(Config.launcherMaxRows);
-						event.accepted = true;
-					} else if (event.key === Qt.Key_PageUp) {
-						root.move(-Config.launcherMaxRows);
 						event.accepted = true;
 					}
 				}

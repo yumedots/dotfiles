@@ -20,7 +20,6 @@ Rectangle {
 	signal accepted()
 	signal canceled()
 	signal edited()
-	signal navigate(int step)
 	signal keyPressed(var event)
 
 	readonly property bool hint: !root.active && root.keyLabel !== ""
@@ -99,16 +98,6 @@ Rectangle {
 
 		Keys.onEscapePressed: function (event) {
 			root.canceled();
-			event.accepted = true;
-		}
-
-		Keys.onUpPressed: function (event) {
-			root.navigate(-1);
-			event.accepted = true;
-		}
-
-		Keys.onDownPressed: function (event) {
-			root.navigate(1);
 			event.accepted = true;
 		}
 

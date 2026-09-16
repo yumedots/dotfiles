@@ -287,7 +287,6 @@ Item {
 				width: searchField.implicitWidth
 
 				onEdited: root.filter = searchField.text
-				onNavigate: function (step) { procList.move(step); }
 				onKeyPressed: function (event) {
 					if (event.text === Config.procKillKey)
 						procList.handleKey(event);
