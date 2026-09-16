@@ -28,6 +28,7 @@ Item {
 	readonly property real blockSize: (Config.cpuTooltipWidth - (Config.cpuBlockColumns - 1) * Config.cpuBlockGap) / Config.cpuBlockColumns
 	readonly property int blockRows: Math.max(1, Math.ceil(root.cores.length / Config.cpuBlockColumns))
 	readonly property string spec: Helpers.cpuSpecLine(root.info)
+	readonly property real vizHeight: root.blockRows * (root.blockSize + Config.cpuBlockGap) - Config.cpuBlockGap
 
 	implicitWidth: Config.cpuTooltipWidth + Config.cpuTooltipPadding * 2
 	implicitHeight: column.implicitHeight + Config.cpuTooltipPadding * 2
@@ -156,26 +157,19 @@ Item {
 
 
 		Item {
+			id: visualizer
+
 			width: column.width
-			height: root.blockRows * (root.blockSize + Config.cpuBlockGap) - Config.cpuBlockGap
+			height: root.vizHeight
 
-			Repeater {
-				model: root.cores
+			CellGrid {
+				id: coreGrid
 
-				delegate: Rectangle {
-					required property real modelData
-					required property int index
-
-					readonly property int columnIndex: index % Config.cpuBlockColumns
-
-					x: columnIndex * (root.blockSize + Config.cpuBlockGap)
-					y: Math.floor(index / Config.cpuBlockColumns) * (root.blockSize + Config.cpuBlockGap)
-
-					width: root.blockSize
-					height: root.blockSize
-					radius: 0
-					color: root.blockColor(modelData)
-				}
+				values: root.cores
+				columns: Config.cpuBlockColumns
+				cellSize: root.blockSize
+				gap: Config.cpuBlockGap
+				colorFor: function (value) { return root.blockColor(value); }
 			}
 		}
 

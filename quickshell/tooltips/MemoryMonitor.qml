@@ -108,9 +108,10 @@ Item {
 		let x = 0;
 
 		return parts.map(function (part) {
+			const share = part.divider ? part.divider : width * part.value / m.pool;
 			const out = {
 				x: x,
-				width: part.divider ? part.divider : width * part.value / m.pool,
+				width: part.divider || part.value <= 0 ? share : Math.max(Config.memoryMinSegment, share),
 				color: part.color
 			};
 
@@ -200,8 +201,10 @@ Item {
 		}
 
 		Item {
+			id: visualizer
+
 			width: column.width
-			height: 8
+			height: Config.memoryVizHeight
 			visible: root.mem !== null
 
 			Repeater {
