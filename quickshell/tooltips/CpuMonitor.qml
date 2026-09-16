@@ -239,15 +239,6 @@ Item {
 				required property int index
 
 				readonly property bool active: procList.currentIndex === row.index
-				readonly property real fade: {
-					const view = ListView.view;
-
-					if (!view || view.height <= row.height)
-						return 0;
-
-					return Math.max(0, Math.min(1, (row.y - view.contentY) / (view.height - row.height)));
-				}
-				readonly property real keep: row.active || row.fade <= 0 ? 1 : 1 - row.fade * Config.procFadeOpacity
 
 				width: ListView.view.rowWidth
 				height: ListView.view.rowHeight
@@ -260,8 +251,7 @@ Item {
 
 					font.family: Config.fontFamily
 					font.pixelSize: Config.fontSize
-					color: row.active ? Config.launcherHighlightText : Helpers.mixColors(Config.foreground, Config.cpuBase, row.fade * Config.procFade)
-					opacity: row.keep
+					color: row.active ? Config.launcherHighlightText : Config.foreground
 					text: modelData.name
 				}
 
@@ -273,7 +263,6 @@ Item {
 					font.family: Config.fontFamily
 					font.pixelSize: Config.fontSize
 					color: root.colorFor(modelData.value)
-					opacity: row.keep
 					text: modelData.value.toFixed(1) + "%"
 				}
 			}
