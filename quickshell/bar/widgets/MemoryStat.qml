@@ -30,12 +30,16 @@ BarStat {
 		memFile.reload();
 	}
 
-	function togglePopup() {
-		popup.toggle();
+	function openPopup() {
+		popup.open();
 	}
 
 	function closePopup() {
 		popup.hideNow();
+	}
+
+	function isPopupOpen() {
+		return popup.shown;
 	}
 
 

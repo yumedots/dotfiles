@@ -11,8 +11,12 @@ BarText {
 
 	text: Qt.formatDateTime(clock.date, Config.dateFormat)
 
-	function togglePopup() {
-		popup.toggle();
+	function openPopup() {
+		popup.open();
+	}
+
+	function isPopupOpen() {
+		return popup.shown;
 	}
 
 	function closePopup() {

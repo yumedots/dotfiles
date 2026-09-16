@@ -21,12 +21,16 @@ BarStat {
 		: Config.iconVolumeLow
 	value: Math.round(root.pct) + "%"
 
-	function togglePopup() {
-		popup.toggle();
+	function openPopup() {
+		popup.open();
 	}
 
 	function closePopup() {
 		popup.hideNow();
+	}
+
+	function isPopupOpen() {
+		return popup.shown;
 	}
 
 	PwObjectTracker {

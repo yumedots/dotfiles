@@ -76,35 +76,39 @@ PanelWindow {
 		});
 	}
 
-	function openExclusive(widget) {
-		if (widget !== null && bar.openWidget === widget) {
-			bar.openWidget = null;
+	function openExclusive(widget, keyboard) {
+		const open = widget && typeof widget.isPopupOpen === "function" && widget.isPopupOpen();
+
+		if (widget && typeof widget.wantKeyboard === "function")
+			widget.wantKeyboard(keyboard === true);
+
+		if (open) {
 			popupClose.stop();
 			bar.closePopups(null);
 
 			return;
 		}
 
-		bar.openWidget = widget;
+		bar.lastOpened = widget;
 
-		if (widget && typeof widget.togglePopup === "function")
-			widget.togglePopup();
+		if (widget && typeof widget.openPopup === "function")
+			widget.openPopup();
 
 		popupClose.restart();
 	}
-
-	property var openWidget: null
 
 	Timer {
 		id: popupClose
 
 		interval: Config.popupCloseDelay
 
-		onTriggered: bar.closePopups(bar.openWidget)
+		onTriggered: bar.closePopups(bar.lastOpened)
 	}
 
-	function toggleWidget(id) {
-		bar.openExclusive(bar.widgets[id]);
+	property var lastOpened: null
+
+	function toggleWidget(id, keyboard) {
+		bar.openExclusive(bar.widgets[id], keyboard);
 	}
 
 	Component { id: workspacesComponent; Workspaces {} }
