@@ -40,6 +40,26 @@ assert(lookupApp(entries, "") === null, "empty names return null");
 assert(daysInMonth(2024, 1) === 29 && daysInMonth(2026, 1) === 28, "february length");
 assert(mondayIndex(new Date(2024, 0, 1)) === 0, "2024-01-01 is a monday");
 assert(mondayIndex(new Date(2026, 8, 1)) === 1, "2026-09-01 is a tuesday");
+
+const lastDay = new Date(2026, 8, 30);
+assert(shiftDays(lastDay, 1).getMonth() === 9 && shiftDays(lastDay, 1).getDate() === 1, "a day forward crosses into the next month");
+assert(shiftDays(new Date(2026, 0, 1), -1).getMonth() === 11 && shiftDays(new Date(2026, 0, 1), -1).getDate() === 31, "a day back crosses into the previous december");
+assert(shiftDays(new Date(2026, 8, 30), 7).getMonth() === 9 && shiftDays(new Date(2026, 8, 30), 7).getDate() === 7, "a week forward keeps the weekday");
+assert(shiftDays(new Date(2026, 8, 15), -7).getDate() === 8, "a week back keeps the weekday");
+assert(shiftMonths(new Date(2026, 0, 31), 1).getDate() === 28, "a month forward clamps the 31st to a shorter month");
+assert(shiftMonths(new Date(2026, 11, 15), 1).getFullYear() === 2027 && shiftMonths(new Date(2026, 11, 15), 1).getMonth() === 0, "a month forward crosses into the next year");
+assert(shiftMonths(new Date(2026, 0, 15), -1).getFullYear() === 2025, "a month back crosses into the previous year");
+assert(shiftYears(new Date(2024, 1, 29), 1).getDate() === 28, "a year forward clamps the 29th of february");
+assert(shiftDays(lastDay, 0).getDate() === 30, "shifting by nothing leaves the day alone");
+
+let tallest = 0;
+
+for (let year = 2020; year <= 2030; year++) {
+	for (let month = 0; month < 12; month++)
+		tallest = Math.max(tallest, Math.ceil((mondayIndex(new Date(year, month, 1)) + daysInMonth(year, month)) / 7));
+}
+
+assert(tallest === 6, "every month of the decade fits six weeks, so the grid never needs more");
 assert(filledCells(50, 15) === 8 && filledCells(200, 15) === 15, "filled cells clamp");
 
 const border = parseHyprBorder([
@@ -98,6 +118,7 @@ assert(parseHyprGaps("hyprctl: command not found").outer === null, "unreadable o
 
 const namedColor = parseGradient("rgba(ff0000ff) 90deg");
 assert(namedColor.angle === 90 && namedColor.colors === null, "a token that is not a plain hex color is dropped");
+
 assert(commandWord("btop") === "btop", "a bare command is the running program");
 assert(commandWord("nvim notes.md") === "nvim", "arguments are dropped");
 assert(commandWord("Zathura a.pdf") === "zathura", "the command is lowercased");

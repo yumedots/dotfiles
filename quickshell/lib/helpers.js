@@ -261,6 +261,36 @@ function mondayIndex(date) {
 	return (date.getDay() + 6) % 7;
 }
 
+function shiftDays(date, days) {
+	const next = new Date(date.getTime());
+
+	next.setDate(next.getDate() + days);
+
+	return next;
+}
+
+function shiftMonths(date, months) {
+	const next = new Date(date.getTime());
+	const day = next.getDate();
+
+	next.setDate(1);
+	next.setMonth(next.getMonth() + months);
+	next.setDate(Math.min(day, daysInMonth(next.getFullYear(), next.getMonth())));
+
+	return next;
+}
+
+function shiftYears(date, years) {
+	const next = new Date(date.getTime());
+	const day = next.getDate();
+
+	next.setDate(1);
+	next.setFullYear(next.getFullYear() + years);
+	next.setDate(Math.min(day, daysInMonth(next.getFullYear(), next.getMonth())));
+
+	return next;
+}
+
 function commandWord(title) {
 	const word = (title || "").split(" ")[0].replace(/:$/, "");
 

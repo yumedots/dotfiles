@@ -34,7 +34,7 @@ ShellRoot {
 
 		function calendar() {
 			if (bars.instances.length > 0)
-				bars.instances[0].toggleWidget("date");
+				bars.instances[0].toggleWidget("clock", true);
 		}
 
 		function notifications() {

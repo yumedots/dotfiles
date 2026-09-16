@@ -1,202 +1,238 @@
 import QtQuick
+import Quickshell
 import qs
 
 Item {
 	id: root
 
-	property date today: new Date()
-
 	signal closeRequested()
 
 	focus: true
 
+	property date cursor: new Date()
+	property date today: clock.date
+
+	readonly property int year: root.cursor.getFullYear()
+	readonly property int month: root.cursor.getMonth()
+	readonly property int length: Helpers.daysInMonth(root.year, root.month)
+	readonly property int leading: Helpers.mondayIndex(new Date(root.year, root.month, 1))
+	readonly property int days: Config.calendarRows * 7
+	readonly property int previousLength: Helpers.daysInMonth(root.month === 0 ? root.year - 1 : root.year, (root.month + 11) % 12)
+	readonly property real gridWidth: Config.calendarCellWidth * 7
+	readonly property string monthText: Qt.formatDate(new Date(root.year, root.month, 1), "MMMM")
+	readonly property string yearText: String(root.year)
+
+	implicitWidth: root.gridWidth + Config.calendarPadding * 2
+	implicitHeight: column.implicitHeight + Config.calendarPadding * 2
+
+	SystemClock {
+		id: clock
+
+		precision: SystemClock.Seconds
+	}
+
+	function step(days) {
+		root.cursor = Helpers.shiftDays(root.cursor, days);
+	}
+
+	function stepMonths(months) {
+		root.cursor = Helpers.shiftMonths(root.cursor, months);
+	}
+
+	function stepYears(years) {
+		root.cursor = Helpers.shiftYears(root.cursor, years);
+	}
+
+	function isToday(day) {
+		return day === root.today.getDate()
+			&& root.month === root.today.getMonth()
+			&& root.year === root.today.getFullYear();
+	}
+
+	function isCursor(day) {
+		return day === root.cursor.getDate() && root.month === root.cursor.getMonth()
+			&& root.year === root.cursor.getFullYear();
+	}
+
+	function dayLabel(index) {
+		const day = index - root.leading + 1;
+
+		if (day >= 1 && day <= root.length)
+			return String(day);
+
+		return day < 1 ? String(root.previousLength + day) : String(day - root.length);
+	}
+
 	Keys.onPressed: function (event) {
-		if (event.key === Qt.Key_Escape)
+		if (event.key === Qt.Key_Escape) {
 			root.closeRequested();
-		else if (event.key === Qt.Key_Left || event.text === "h")
-			root.shift(-1);
-		else if (event.key === Qt.Key_Right || event.text === "l")
-			root.shift(1);
-		else if (event.key === Qt.Key_Up || event.text === "k")
-			root.shift(-12);
-		else if (event.key === Qt.Key_Down || event.text === "j")
-			root.shift(12);
-		else if (event.key === Qt.Key_Home)
-			root.reset();
-		else
+		} else if (event.text === "h") {
+			root.step(-1);
+		} else if (event.text === "l") {
+			root.step(1);
+		} else if (event.text === "k") {
+			root.step(-7);
+		} else if (event.text === "j") {
+			root.step(7);
+		} else if (event.text === "s") {
+			root.stepMonths(-1);
+		} else if (event.text === "d") {
+			root.stepMonths(1);
+		} else if (event.text === "a") {
+			root.stepYears(-1);
+		} else if (event.text === "f") {
+			root.stepYears(1);
+		} else if (event.text === "r") {
+			root.cursor = new Date(root.today);
+		} else {
 			return;
+		}
 
 		event.accepted = true;
 	}
 
-	readonly property date first: new Date(root.today.getFullYear(), root.today.getMonth() + root.monthOffset, 1)
-	readonly property int year: root.first.getFullYear()
-	readonly property int month: root.first.getMonth()
-	readonly property int length: Helpers.daysInMonth(root.year, root.month)
-	readonly property int leading: Helpers.mondayIndex(root.first)
-	readonly property int rows: Math.ceil((root.leading + root.length) / 7)
-	readonly property real gridWidth: Config.calendarCellWidth * 7
+	Column {
+		id: column
 
-	implicitWidth: root.gridWidth + Config.calendarPadding * 2
-	implicitHeight: Config.calendarPadding * 2
-		+ Config.calendarHeaderHeight
-		+ Config.calendarCellHeight
-		+ Config.calendarCellHeight * root.rows
-
-	function shift(months) {
-		root.monthOffset += months;
-	}
-
-	function reset() {
-		root.monthOffset = 0;
-	}
-
-	function isToday(day) {
-		return root.monthOffset === 0 && day === root.today.getDate();
-	}
-
-	component Arrow: Item {
-		id: arrow
-
-		property string glyph
-		signal fired()
-
-		implicitWidth: label.implicitWidth + 10
-		implicitHeight: Config.calendarHeaderHeight
-
-		Text {
-			id: label
-
-			anchors.centerIn: parent
-			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
-			color: Config.foreground
-			text: arrow.glyph
-		}
-	}
-
-	Item {
-		id: header
-
-		anchors.top: parent.top
-		anchors.topMargin: Config.calendarPadding
-		anchors.horizontalCenter: parent.horizontalCenter
+		x: Config.calendarPadding
+		y: Config.calendarPadding
 		width: root.gridWidth
-		height: Config.calendarHeaderHeight
+		spacing: 6
 
-		Row {
-			anchors.left: parent.left
-			anchors.verticalCenter: parent.verticalCenter
-			spacing: 2
+		Rectangle {
+			id: box
 
-			Arrow {
-				glyph: "«"
-				onFired: root.shift(-12)
-			}
+			width: column.width
+			height: boxColumn.implicitHeight + Config.procSearchPadding * 2
+			color: Config.launcherSearchBox
 
-			Arrow {
-				glyph: "‹"
-				onFired: root.shift(-1)
-			}
-		}
+			Column {
+				id: boxColumn
 
-		Row {
-			anchors.right: parent.right
-			anchors.verticalCenter: parent.verticalCenter
-			spacing: 2
+				anchors.left: parent.left
+				anchors.right: parent.right
+				anchors.verticalCenter: parent.verticalCenter
+				spacing: 2
 
-			Arrow {
-				glyph: "›"
-				onFired: root.shift(1)
-			}
+				Item {
+					width: boxColumn.width
+					height: Math.max(title.height, arrows.height)
 
-			Arrow {
-				glyph: "»"
-				onFired: root.shift(12)
-			}
-		}
+					Row {
+						id: title
 
-		Text {
-			anchors.centerIn: parent
-			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
-			color: Config.foreground
-			text: Qt.formatDate(root.first, "MMMM yyyy")
-		}
-	}
+						x: Config.procSearchPadding
+						spacing: 6
 
-	Rectangle {
-		anchors.top: header.top
-		anchors.bottom: weekdays.bottom
-		anchors.left: header.left
-		anchors.right: header.right
-		color: "transparent"
-		border.width: 1
-		border.color: Config.foreground
-	}
+						Text {
+							id: month
 
-	Row {
-		id: weekdays
+							font.family: Config.fontFamily
+							font.pixelSize: Config.fontSize
+							color: Config.calendarBase
+							text: root.monthText
+						}
 
-		anchors.top: header.bottom
-		anchors.horizontalCenter: parent.horizontalCenter
+						Text {
+							id: yearLabel
 
-		Repeater {
-			model: 7
+							font.family: Config.fontFamily
+							font.pixelSize: Config.fontSize
+							color: Config.calendarBase
+							text: root.yearText
+						}
+					}
 
-			delegate: Text {
-				required property int index
+					Row {
+						id: arrows
 
-				width: Config.calendarCellWidth
-				height: Config.calendarCellHeight
-				horizontalAlignment: Text.AlignHCenter
-				verticalAlignment: Text.AlignVCenter
-				font.family: Config.fontFamily
-				font.pixelSize: Config.fontSize
-				color: Config.foreground
-				text: Qt.formatDate(new Date(2024, 0, 1 + index), "ddd")
-			}
-		}
-	}
+						anchors.right: parent.right
+						anchors.rightMargin: Config.procSearchPadding
+						anchors.verticalCenter: parent.verticalCenter
+						spacing: Config.calendarArrowGap
 
-	Item {
-		id: grid
+						Text {
+							font.family: Config.fontFamily
+							font.pixelSize: Config.calendarArrowSize
+							color: Config.calendarBase
+							text: Config.iconPrev
+						}
 
-		anchors.top: weekdays.bottom
-		anchors.horizontalCenter: parent.horizontalCenter
-		width: root.gridWidth
-		height: Config.calendarCellHeight * root.rows
-
-		Repeater {
-			model: root.rows * 7
-
-			delegate: Item {
-				id: cell
-
-				required property int index
-
-				readonly property int day: cell.index - root.leading + 1
-				readonly property bool inside: cell.day >= 1 && cell.day <= root.length
-
-				x: (cell.index % 7) * Config.calendarCellWidth
-				y: Math.floor(cell.index / 7) * Config.calendarCellHeight
-				width: Config.calendarCellWidth
-				height: Config.calendarCellHeight
-
-				Rectangle {
-					anchors.centerIn: parent
-					width: Math.min(parent.width, parent.height) - 2
-					height: width
-					color: Config.foreground
-					visible: cell.inside && root.isToday(cell.day)
+						Text {
+							font.family: Config.fontFamily
+							font.pixelSize: Config.calendarArrowSize
+							color: Config.calendarBase
+							text: Config.iconNext
+						}
+					}
 				}
 
-				Text {
-					anchors.centerIn: parent
-					font.family: Config.fontFamily
-					font.pixelSize: Config.fontSize
-					color: root.isToday(cell.day) ? Config.background : Config.foreground
-					text: cell.inside ? cell.day : ""
+				Row {
+					id: weekdays
+
+					Repeater {
+						model: 7
+
+						delegate: Text {
+							required property int index
+
+							width: Config.calendarCellWidth
+							height: Config.calendarCellHeight
+							horizontalAlignment: Text.AlignHCenter
+							verticalAlignment: Text.AlignVCenter
+							font.family: Config.fontFamily
+							font.pixelSize: Config.fontSize
+							color: Config.muted
+							text: Qt.formatDate(new Date(2024, 0, 1 + index), "ddd")
+						}
+					}
+				}
+			}
+		}
+
+		Item {
+			id: grid
+
+			width: column.width
+			height: Config.calendarCellHeight * Config.calendarRows
+
+			Repeater {
+				model: root.days
+
+				delegate: Item {
+					id: cell
+
+					required property int index
+
+					readonly property int day: cell.index - root.leading + 1
+					readonly property bool inside: cell.day >= 1 && cell.day <= root.length
+
+					x: (cell.index % 7) * Config.calendarCellWidth
+					y: Math.floor(cell.index / 7) * Config.calendarCellHeight
+					width: Config.calendarCellWidth
+					height: Config.calendarCellHeight
+
+					Rectangle {
+						anchors.fill: parent
+						visible: cell.inside && root.isToday(cell.day)
+						color: Config.calendarTodayBox
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						visible: cell.inside && root.isCursor(cell.day)
+						color: "transparent"
+						border.width: Config.calendarCursorBorder
+						border.color: Config.calendarCursor
+					}
+
+					Text {
+						anchors.centerIn: parent
+						font.family: Config.fontFamily
+						font.pixelSize: Config.fontSize
+						color: cell.inside ? Config.foreground : Config.dim
+						text: root.dayLabel(cell.index)
+					}
 				}
 			}
 		}

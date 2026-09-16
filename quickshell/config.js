@@ -28,6 +28,7 @@ const workspaceSpacing = 6;
 
 const iconCpu = "\uf2db";
 const iconMemory = "\uefc5";
+const iconClock = "\ue641";
 const iconBell = "\uf0f3";
 const iconDown = "\uf078";
 const iconUp = "\uf077";
@@ -53,8 +54,7 @@ const gapsInFallback = 8;
 const gapsOutFallback = 15;
 
 const barLayoutFile = "topbarlayout.json";
-const clockFormat = "HH:mm";
-const dateFormat = "yyyy-MM-dd";
+const clockFormat = "ddd MMM d h:mm AP";
 
 const mixerChannelWidth = 72;
 const mixerChannelGap = 6;
@@ -162,9 +162,14 @@ const launcherActions = [
 
 const calendarCellWidth = 26;
 const calendarCellHeight = 19;
+const calendarRows = 6;
+const calendarCursor = foreground;
+const calendarCursorBorder = 1;
 const calendarPadding = 10;
-const calendarHeaderHeight = 22;
-
+const calendarBase = foreground;
+const calendarArrowSize = 14;
+const calendarArrowGap = 6;
+const calendarTodayBox = launcherSearchBox;
 
 const notifyBase = foreground;
 const notifyWidth = 280;
