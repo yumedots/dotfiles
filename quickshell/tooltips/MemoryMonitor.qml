@@ -33,6 +33,7 @@ Item {
 			return;
 
 		root.heldProcs = Helpers.topProcesses(root.allProcs, Config.psIgnore);
+		procList.currentIndex = -1;
 
 		if (root.source && root.source.refresh)
 			root.source.refresh();

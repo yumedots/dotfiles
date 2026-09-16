@@ -58,6 +58,7 @@ PanelWindow {
 		terminalFile.running = true;
 		Qt.callLater(function () {
 			root.shown = true;
+			list.currentIndex = 0;
 			field.focusInput();
 		});
 	}

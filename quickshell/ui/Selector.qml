@@ -6,11 +6,11 @@ Item {
 
 	property alias model: list.model
 	property alias delegate: list.delegate
-	property int currentIndex: 0
+	property int currentIndex: -1
 	property int visibleRows: 5
 	property real rowHeight: 0
 	property real rowSpacing: Config.procsGap
-	property real scrollWidth: 3
+	property real scrollWidth: Config.scrollbarWidth
 
 	readonly property int count: list.count
 	readonly property var current: list.currentItem ? list.currentItem.modelData : null
@@ -34,7 +34,7 @@ Item {
 			return;
 		}
 
-		const from = root.currentIndex < 0 ? 0 : root.currentIndex + step;
+		const from = root.currentIndex < 0 ? (step > 0 ? 0 : list.count - 1) : root.currentIndex + step;
 		root.currentIndex = Math.max(0, Math.min(list.count - 1, from));
 	}
 
@@ -75,8 +75,6 @@ Item {
 	onCountChanged: {
 		if (list.count === 0)
 			root.currentIndex = -1;
-		else if (root.currentIndex < 0)
-			root.currentIndex = 0;
 		else if (root.currentIndex >= list.count)
 			root.currentIndex = list.count - 1;
 	}

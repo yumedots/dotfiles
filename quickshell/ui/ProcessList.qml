@@ -12,7 +12,6 @@ Item {
 
 	readonly property var current: list.current
 	readonly property int count: list.count
-	readonly property real scrollWidth: list.scrollWidth
 	readonly property real rowHeight: prototype.implicitHeight
 	readonly property real rowWidth: list.rowWidth
 
@@ -51,6 +50,5 @@ Item {
 		visibleRows: root.visibleRows
 		rowHeight: prototype.implicitHeight
 		rowSpacing: Config.procsGap
-		scrollWidth: root.scrollWidth
 	}
 }
