@@ -28,6 +28,10 @@ const workspaceSpacing = 6;
 
 const iconCpu = "\uf2db";
 const iconMemory = "\uefc5";
+const iconBell = "\uf0f3";
+const iconDown = "\uf078";
+const iconUp = "\uf077";
+const iconRight = "\uf054";
 const iconVolumeLow = "\uf026";
 const iconVolumeMid = "\uf027";
 const iconVolumeHigh = "\uf028";
@@ -95,6 +99,7 @@ const procsGap = 6;
 const topProcessTitle = "Top processes";
 const psIgnore = ["ps", "ps <defunct>"];
 const cpuPollMs = 1000;
+const scrollbarWidth = 2;
 const procFade = 0.8;
 const procFadeOpacity = 0.8;
 
@@ -155,6 +160,28 @@ const calendarCellWidth = 26;
 const calendarCellHeight = 19;
 const calendarPadding = 10;
 const calendarHeaderHeight = 22;
+
+
+const notifyBase = foreground;
+const notifyWidth = 280;
+const notifyPadding = 12;
+const notifyPaddingY = 0;
+const notifyRowHeight = 38;
+const notifyRowPadding = 4;
+const notifySlot = 30;
+const notifySlotGap = 10;
+const notifyBellSize = 28;
+const notifyAppFontSize = 11;
+const notifyVisibleRows = 5;
+const notifyHistory = 50;
+const notifyGoneOpacity = 0.55;
+const notifyEmpty = "Nothing yet";
+const notifySeparator = 1;
+const notifySeparatorColor = foreground;
+const notifySweepWidth = 30;
+const notifyTimeout = 6000;
+const notifyDismissKey = "d";
+const notifyClearKey = "x";
 
 const dockEnabled = false;
 const dockIconSize = 34;

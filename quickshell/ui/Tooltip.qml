@@ -14,6 +14,8 @@ PanelWindow {
 	property real borderWidth: -1
 	property bool pinned: false
 	property bool wantsKeyboard: false
+	property bool alignRight: false
+	property real contentPadding: -1
 
 	property real anchorX: 0
 	property bool shown: false
@@ -35,7 +37,9 @@ PanelWindow {
 
 	margins.top: root.atBottom ? 0 : root.hang
 	margins.bottom: root.atBottom ? root.hang : 0
-	margins.left: Math.round(border.gapsOut + Math.max(0, Math.min(root.wantedX + Config.tooltipOffsetX, root.limitX)))
+	margins.left: root.alignRight
+		? Math.round((root.screen ? root.screen.width : root.implicitWidth) - root.implicitWidth - border.gapsOut)
+		: Math.round(border.gapsOut + Math.max(0, Math.min(root.wantedX + Config.tooltipOffsetX, root.limitX)))
 
 	implicitWidth: border.contentWidth + 2 * border.inset
 	implicitHeight: border.contentHeight + 2 * border.inset
@@ -118,7 +122,7 @@ PanelWindow {
 		id: border
 
 		anchors.fill: parent
-		padding: border.gapsIn
+		padding: root.contentPadding >= 0 ? root.contentPadding : border.gapsIn
 		borderColors: root.borderColors
 		borderWidth: root.borderWidth
 		borderOpacity: 1

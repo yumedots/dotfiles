@@ -429,4 +429,7 @@ assert(parseBarLayout('{"bar": {"layout": {"left": []}}}').left.length === 0, "a
 assert(parseBarLayout('{"bar": {"layout": {"left": [{"name": "x"}, 3, {"id": "tray"}]}}}').left.length === 1, "entries without an id are dropped");
 assert(parseBarLayout('{"bar": {"position": "left"}}').position === "top", "a position that is neither top nor bottom is top");
 
+assert(plainText("<b>hi</b> &amp; <i>there</i><br>line") === "hi & there line", "markup is stripped from a notification body");
+assert(plainText("") === "" && plainText(null) === "", "an empty body stays empty");
+
 console.log("check ok");
