@@ -7,3 +7,4 @@ ProcessList 1.0 ProcessList.qml
 Selector 1.0 Selector.qml
 SearchField 1.0 SearchField.qml
 NotificationRow 1.0 NotificationRow.qml
+CellGrid 1.0 CellGrid.qml
