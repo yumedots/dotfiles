@@ -92,7 +92,7 @@ Item {
 	Process {
 		id: topProcesses
 
-		command: ["ps", "-eo", "pcpu=,pid=,comm=", "--sort=-pcpu"]
+		command: ["ps", "-eo", "pcpu=,pid=,comm:16=,args=", "--sort=-pcpu"]
 
 		function reload() {
 			if (!topProcesses.running)

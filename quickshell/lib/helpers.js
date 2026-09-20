@@ -954,13 +954,22 @@ function cpuSpecLine(info) {
 }
 
 function parseTopProcesses(text) {
+	const psCommWidth = 16;
 	const out = [];
 
 	String(text || "").split("\n").forEach(function (line) {
 		const match = /^\s*([0-9]+(?:\.[0-9]+)?)\s+([0-9]+)\s+(.+?)\s*$/.exec(line);
 
-		if (match)
-			out.push({ name: match[3], pid: parseInt(match[2], 10), value: parseFloat(match[1]) });
+		if (!match)
+			return;
+
+		const rest = match[3];
+		const name = rest.slice(0, psCommWidth).trim();
+
+		if (name === "")
+			return;
+
+		out.push({ name: name, pid: parseInt(match[2], 10), value: parseFloat(match[1]), cmd: rest.slice(psCommWidth).trim() });
 	});
 
 	return out;
@@ -970,7 +979,8 @@ function filterProcesses(procs, ignore, query, max) {
 	const skip = ignore || [];
 	const wanted = String(query === undefined || query === null ? "" : query).toLowerCase();
 	const kept = (procs || []).filter(function (proc) {
-		return skip.indexOf(proc.name) < 0 && proc.name.toLowerCase().indexOf(wanted) >= 0;
+		return skip.indexOf(proc.name) < 0
+			&& (proc.name.toLowerCase().indexOf(wanted) >= 0 || String(proc.cmd || "").toLowerCase().indexOf(wanted) >= 0);
 	});
 
 	return max > 0 ? kept.slice(0, max) : kept;

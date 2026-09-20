@@ -384,6 +384,9 @@ const processes = parseTopProcesses("90.6  4711 freebuff\n39.1  4712 freebuff\n 
 assert(processes.length === 3, "one entry per ps line, the noise is dropped");
 assert(processes[0].name === "freebuff" && processes[0].value === 90.6 && processes[0].pid === 4711, "the name, the pid and the value are split");
 assert(parseTopProcesses("12.5 99 tmux: server")[0].name === "tmux: server", "a name with spaces survives");
+assert(parseTopProcesses("12.5 99 tmux: server    /usr/bin/tmux new")[0].name === "tmux: server", "the ps comm field is padded to a fixed width");
+assert(parseTopProcesses("12.5 99 tmux: server    /usr/bin/tmux new")[0].cmd === "/usr/bin/tmux new", "the command line is kept beside the name");
+assert(parseTopProcesses("12.5 99 freebuff        /usr/sbin/cline --help")[0].cmd === "/usr/sbin/cline --help", "the padded command line has no leading space");
 assert(parseTopProcesses("%CPU COMMAND").length === 0, "a header line is not a process");
 assert(parseTopProcesses("").length === 0, "an empty listing has no processes");
 assert(topProcesses(parseTopProcesses("200 9 ps\n40 8 freebuff\n10 7 ps <defunct>"), ["ps", "ps <defunct>"], 3)[0].name === "freebuff", "the sampling process and its zombie are filtered out");
@@ -412,6 +415,10 @@ assert(filterProcesses(searchable, ["ps"], "FIRE", 10)[1].pid === 2, "the rows k
 assert(filterProcesses(searchable, ["ps"], "oot", 10).length === 1, "a filter only matches what contains it");
 assert(filterProcesses(searchable, ["ps"], "zzz", 10).length === 0, "a filter that matches nothing returns nothing");
 assert(filterProcesses(searchable, ["ps"], "ps", 10).length === 0, "the sampler stays hidden while filtering");
+const scripted = parseTopProcesses("5.0 1 node            /usr/sbin/cline --help\n9.0 2 node            /usr/bin/other");
+assert(filterProcesses(scripted, [], "cline", 10).length === 1, "a filter also matches the command line, not only the process name");
+assert(filterProcesses(scripted, [], "cline", 10)[0].name === "node", "a command line match keeps the executable name");
+assert(filterProcesses(scripted, ["node"], "cline", 10).length === 0, "the ignore list still matches on the name");
 assert(filterProcesses(searchable, [], "", 2).length === 2, "an empty filter is everything, capped");
 assert(filterProcesses(searchable, [], "", 0).length === 4, "a cap of zero keeps everything");
 assert(filterProcesses(null, [], "x", 5).length === 0, "no processes, no matches");

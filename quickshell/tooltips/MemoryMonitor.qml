@@ -136,7 +136,7 @@ Item {
 	Process {
 		id: ramProcesses
 
-		command: ["ps", "-eo", "rss=,pid=,comm=", "--sort=-rss"]
+		command: ["ps", "-eo", "rss=,pid=,comm:16=,args=", "--sort=-rss"]
 
 		function reload() {
 			if (!ramProcesses.running)
