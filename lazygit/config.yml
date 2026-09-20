@@ -1,0 +1,145 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/jesseduffield/lazygit/master/schema/config.json
+
+gui:
+  nerdFontsVersion: "3"
+  showListFooter: false
+  # Single flat list instead of a tree: folders can't be selected, so the main
+  # view always shows one file's diff (no `diff --git` header soup). You can
+  # toggle the tree back on/off at any time with the ` (backtick) key.
+  showFileTree: false
+  showFileIcons: true
+  showCommandLog: false
+  showRandomTip: false
+  showBottomLine: true
+  showPanelJumps: true
+  sidePanelWidth: 0.3333
+  border: rounded
+  # Accordion: the focused side panel gets taller, so the Files panel you're
+  # working in shows many more rows. '3' means 3x as tall as the other panels.
+  expandFocusedSidePanel: true
+  expandedSidePanelWeight: 3
+  # Panels with little content (branches/stash) shrink to fit, and the rows they
+  # give back go to the taller panels.
+  shrinkSidePanelsToContent: true
+  scrollPastBottom: true
+  scrollOffMargin: 2
+  mouseEvents: true
+  skipAmendWarning: true
+  skipDiscardChangeWarning: true
+  skipStashWarning: true
+  skipNoStagedFilesWarning: true
+
+  theme:
+    # VSCode dark theme colors
+    activeBorderColor:
+      - '#007acc'
+      - bold
+    inactiveBorderColor:
+      - '#3c3c3c'
+    searchingActiveBorderColor:
+      - '#e0e0e0'
+      - bold
+    optionsTextColor:
+      - '#007acc'
+    selectedLineBgColor:
+      - '#264f78'
+    inactiveViewSelectedLineBgColor:
+      - '#2a2d2e'
+    cherryPickedCommitFgColor:
+      - '#007acc'
+    cherryPickedCommitBgColor:
+      - '#264f78'
+    markedBaseCommitFgColor:
+      - '#007acc'
+    markedBaseCommitBgColor:
+      - '#4d4d4d'
+    unstagedChangesColor:
+      - '#f44747'
+    defaultFgColor:
+      - '#cccccc'
+
+  # Side panels, top to bottom. An omitted name is hidden (only files,
+  # branches and commits are required). Entries sharing a bracket are tabs.
+  sidePanels:
+    - [files, worktrees, submodules]
+    - [commits, reflog]
+    - [branches, remotes, tags]
+    - [stash]
+
+  commitLength:
+    show: true
+
+  filterMode: substring
+
+git:
+  # Diff renderers, cycled with '|': 'clean' hides git's per-file header lines
+  # above each hunk (no `diff --git`, no `index`, no `---`/`+++` path lines,
+  # no `@@`) so the main view shows ONLY the differences. The filter is
+  # embedded inline below -- no script file needed -- and works for files,
+  # commits, branches and stash diffs alike. 'default' is git's plain
+  # diff ('|' to go back at any time).
+  diffRenderers:
+    - name: clean
+      # Single-line perl filter (same regexes as the filter described above):
+      # drops git's header/metadata lines, passes diff payload lines through
+      # untouched -- including content that itself starts with --- or +++.
+      command: perl -ne "next if m{^(\e\[[0-9;]*m)*(diff --git|old mode|new mode|deleted file mode|new file mode) }; next if m{^(\e\[[0-9;]*m)*index [0-9a-f]+\.\.}; next if m{^(\e\[[0-9;]*m)*(similarity index|dissimilarity index) }; next if m{^(\e\[[0-9;]*m)*rename (?:from|to) }; next if m{^(\e\[[0-9;]*m)*Binary files }; next if m{^(\e\[[0-9;]*m)*--- (?:a\/|\/dev\/null)}; next if m{^(\e\[[0-9;]*m)*\+\+\+ (?:b\/|\/dev\/null)}; next if m{^(\e\[[0-9;]*m)*@@ }; print;"
+    - type: rawGit
+      name: default
+  commit:
+    signOff: false
+    autoWrapCommitMessage: true
+    autoWrapWidth: 72
+  merging:
+    manualCommit: false
+    args: ""
+  mainBranches:
+    - master
+    - main
+  autoFetch: true
+  autoRefresh: true
+  autoDetectExternalChanges: true
+  fetchAll: true
+  autoStageResolvedConflicts: true
+  ignoreWhitespaceInDiffView: false
+  diffContextSize: 3
+  log:
+    order: topo-order
+    showGraph: always
+    showWholeGraph: false
+  localBranchSortOrder: date
+  remoteBranchSortOrder: date
+  truncateCopiedCommitHashesTo: 12
+
+os:
+  editPreset: 'vscode'
+  open: 'open {{filename}}'
+
+# --- where the file lives ---------------------------------------------------
+# `D` on the Files panel: pops up the parent directory of the highlighted
+# change. VSCode-style "guest/": repo root shows as `./`. This also resolves the
+# "only show the diff when the cursor is on a file" request -- since the tree is
+# flat you can never land on a folder row, so every highlighted row IS a file.
+# (Free single keys in the files context: G, T, N, U are all unbound; `D` avoids
+# `d` entirely since `d` means Discard.)
+customCommands:
+  - key: 'D'
+    context: 'files'
+    description: 'Where: show parent directory of the file'
+    command: 'f={{.SelectedFile.Name | quote}}; d=$(dirname -- "$f" 2>/dev/null || dirname "$f"); [ "$d" = . ] && d=.; printf "%s/\n" "$d"'
+    output: 'popup'
+    outputTitle: 'directory of {{.SelectedFile.Name}}'
+
+confirmOnQuit: false
+quitOnTopLevelReturn: false
+disableStartupPopups: true
+promptToReturnFromSubprocess: false
+
+update:
+  method: background
+  days: 14
+
+refresher:
+  refreshInterval: 10
+  fetchInterval: 60
+  externalChangeCheckInterval: 2
