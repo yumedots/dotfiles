@@ -41,8 +41,39 @@ assert(lookupApp(entries, "hidden") === null, "NoDisplay entries are skipped");
 assert(lookupApp(entries, "nope") === null, "unknown ids return null");
 assert(lookupApp(entries, "") === null, "empty names return null");
 assert(daysInMonth(2024, 1) === 29 && daysInMonth(2026, 1) === 28, "february length");
-assert(mondayIndex(new Date(2024, 0, 1)) === 0, "2024-01-01 is a monday");
-assert(mondayIndex(new Date(2026, 8, 1)) === 1, "2026-09-01 is a tuesday");
+assert(weekdayOffset(new Date(2024, 0, 1), 1) === 0, "2024-01-01 is a monday");
+assert(weekdayOffset(new Date(2026, 8, 1), 1) === 1, "2026-09-01 is a tuesday in a monday week");
+assert(weekdayOffset(new Date(2026, 8, 1), 0) === 2, "and a tuesday two cells into a sunday week");
+assert(weekdayOffset(new Date(2026, 8, 1), 9) === weekdayOffset(new Date(2026, 8, 1), 1), "a week start off the calendar falls back to monday");
+assert(weekdayLabels(1)[0] === "Mon" && weekdayLabels(1)[6] === "Sun", "a monday week runs mon to sun");
+assert(weekdayLabels(0)[0] === "Sun" && weekdayLabels(0)[6] === "Sat", "a sunday week runs sun to sat");
+assert(dateKey(new Date(2026, 8, 5)) === "2026-09-05", "keys pad the month and the day");
+const mondayGrid = monthGrid(2026, 8, 1, "2026-09-15", "2026-09-01", 6);
+assert(mondayGrid.length === 6, "a monday week month is six rows");
+assert(mondayGrid[0][0].key === "2026-08-31" && mondayGrid[0][0].inMonth === false, "a month starting mid week leads with the previous month");
+assert(mondayGrid[0][1].key === "2026-09-01" && mondayGrid[0][1].cursor === true, "the cursor lands on its own cell");
+assert(mondayGrid[2][1].key === "2026-09-15" && mondayGrid[2][1].today === true, "today lands on its own cell");
+assert(mondayGrid[2][1].cursor === false, "and is not the cursor");
+assert(mondayGrid[0][3].weekend === false && mondayGrid[0][5].weekend === true, "weekends are marked");
+assert(mondayGrid.every(function (row) { return row.length === 7; }), "every row holds seven days");
+
+const sundayGrid = monthGrid(2026, 8, 0, "", "", 6);
+assert(sundayGrid[0][0].key === "2026-08-30", "a sunday week leads one day earlier");
+assert(sundayGrid[0][2].key === "2026-09-01", "and still lands on the first of the month");
+assert(monthGrid(2026, 1, 1, "", "", 6).length === 6, "february is six rows tall too");
+
+const midnight = new Date(2026, 8, 15, 0, 0, 0);
+const noon = new Date(2026, 8, 15, 12, 0, 0);
+assert(dayProgress(noon) === 0.5, "noon is half the day gone");
+assert(progressPercent(dayProgress(midnight)) === 0 && progressPercent(dayProgress(new Date(2026, 8, 15, 23, 59))) === 100, "a day runs 0 to 100");
+assert(progressPercent(monthProgress(midnight)) === 47, "the 15th of a 30 day month is 47 percent done");
+assert(progressPercent(monthProgress(new Date(2026, 8, 30))) === 97, "the last day of the month is not quite over");
+assert(progressPercent(yearProgress(midnight)) === 70, "september 15 is 70 percent of the year");
+assert(progressPercent(yearProgress(new Date(2026, 0, 1))) === 0 && progressPercent(yearProgress(new Date(2026, 11, 31, 12))) === 100, "a year runs 0 to 100");
+assert(progressPercent(yearProgress(new Date(2024, 11, 31, 12))) === 100, "a leap year is 366 days long");
+assert(lifeProgress(1980, 90, 2026) === 46 / 90, "life runs from the birth year");
+assert(progressPercent(lifeProgress(1980, 90, 2026)) === 51, "and reports a percent");
+assert(lifeProgress(0, 90, 2026) === 0 && lifeProgress(2030, 90, 2026) === 0, "an unset or future birth year leaves the meter empty");
 
 const lastDay = new Date(2026, 8, 30);
 assert(shiftDays(lastDay, 1).getMonth() === 9 && shiftDays(lastDay, 1).getDate() === 1, "a day forward crosses into the next month");
@@ -59,7 +90,7 @@ let tallest = 0;
 
 for (let year = 2020; year <= 2030; year++) {
 	for (let month = 0; month < 12; month++)
-		tallest = Math.max(tallest, Math.ceil((mondayIndex(new Date(year, month, 1)) + daysInMonth(year, month)) / 7));
+		tallest = Math.max(tallest, Math.ceil((weekdayOffset(new Date(year, month, 1), 1) + daysInMonth(year, month)) / 7));
 }
 
 assert(tallest === 6, "every month of the decade fits six weeks, so the grid never needs more");
