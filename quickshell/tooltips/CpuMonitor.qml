@@ -14,6 +14,8 @@ Item {
 	property string filter: ""
 
 	readonly property bool searching: searchField.typing
+	readonly property color accentInk: Helpers.pick(Config.mono, Config.cpuBase, Config.cpuBaseMono)
+	readonly property color peakInk: Helpers.pick(Config.mono, Config.cpuPeak, Config.cpuPeakMono)
 	readonly property bool filtering: root.searching || root.filter !== ""
 	readonly property var procs: root.filtering ? Helpers.filterProcesses(root.allProcs, Config.psIgnore, root.filter) : (root.heldProcs.length > 0 ? root.heldProcs : Helpers.topProcesses(root.allProcs, Config.psIgnore))
 	readonly property bool showList: root.procs.length > 0 || root.filtering
@@ -73,11 +75,11 @@ Item {
 
 
 	function colorFor(load) {
-		return Helpers.mixColors(Config.cpuBase, Config.red, load / 100);
+		return Helpers.mixColors(root.accentInk, root.peakInk, load / 100);
 	}
 
 	function blockColor(load) {
-		return Helpers.mixColors(Config.cpuIdle, Config.cpuBase, load / 100);
+		return Helpers.mixColors(Config.cpuIdle, root.accentInk, load / 100);
 	}
 
 	FileView {
@@ -158,7 +160,7 @@ Item {
 
 			font.family: Config.fontFamily
 			font.pixelSize: Config.fontSize
-			color: Config.cpuBase
+			color: root.accentInk
 			text: root.spec
 		}
 
@@ -197,7 +199,7 @@ Item {
 
 				font.family: Config.fontFamily
 				font.pixelSize: Config.fontSize
-				color: Config.cpuBase
+				color: root.accentInk
 				text: Config.topProcessTitle
 			}
 
