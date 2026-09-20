@@ -209,7 +209,7 @@ const calendarWeatherUnitSize = 12;
 const calendarWeatherNameSize = 18;
 const calendarWeatherNameWidth = 130;
 const calendarWeatherGap = 6;
-const calendarHeaderGap = 6;
+const calendarHeaderGap = -5;
 
 const weatherLocation = "";
 const weatherCoords = "";
