@@ -13,6 +13,7 @@ Item {
 
 	readonly property var cells: Github.grid
 	readonly property int weeks: Config.contribWeeks
+	readonly property color accentInk: Helpers.pick(Config.mono, Config.contribBase, Config.contribBaseMono)
 
 	implicitWidth: Config.contribTooltipWidth + Config.contribTooltipPadding * 2
 	implicitHeight: column.implicitHeight + Config.contribTooltipPadding * 2
@@ -26,7 +27,7 @@ Item {
 		if (!value || !value.level)
 			return Config.contribEmpty;
 
-		return Helpers.mixColors(Config.contribEmpty, Config.contribBase, Math.min(4, value.level) / 4);
+		return Helpers.mixColors(Config.contribEmpty, root.accentInk, Math.min(4, value.level) / 4);
 	}
 
 	function statusLine() {
@@ -73,7 +74,7 @@ Item {
 					visible: avatar.status !== Image.Ready
 					font.family: Config.fontFamily
 					font.pixelSize: Math.round(slot.height * 0.6)
-					color: Config.contribBase
+					color: root.accentInk
 					text: Config.iconGithub
 				}
 
@@ -97,7 +98,7 @@ Item {
 				elide: Text.ElideRight
 				font.family: Config.fontFamily
 				font.pixelSize: Config.fontSize
-				color: Config.contribBase
+				color: root.accentInk
 				text: root.statusLine()
 			}
 
@@ -108,7 +109,7 @@ Item {
 				anchors.verticalCenter: parent.verticalCenter
 				font.family: Config.fontFamily
 				font.pixelSize: Config.fontSize
-				color: Config.contribBase
+				color: root.accentInk
 				text: Github.total > 0 ? Github.total + " this year" : ""
 			}
 
