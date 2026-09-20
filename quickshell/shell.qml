@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import qs
 import qs.ui
@@ -83,6 +84,18 @@ ShellRoot {
 
 		function github() {
 			shellRoot.openWidget("github", true);
+		}
+	}
+
+	Connections {
+		target: Hyprland
+
+		function onActiveToplevelChanged() {
+			if (!Hyprland.activeToplevel)
+				return;
+
+			shellRoot.closeWidgets();
+			launcherWindow.close();
 		}
 	}
 

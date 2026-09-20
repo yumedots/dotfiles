@@ -23,32 +23,42 @@ PanelWindow {
 	property bool revealed: false
 
 	readonly property bool atBottom: root.anchorWindow !== null && root.anchorWindow.atBottom === true
-	readonly property real wantedX: root.anchorX + (root.anchorItem ? root.anchorItem.width : 0) / 2 - root.implicitWidth / 2
-	readonly property real limitX: (root.anchorWindow ? root.anchorWindow.width : 0) - root.implicitWidth
+	readonly property real wantedX: root.anchorX + (root.anchorItem ? root.anchorItem.width : 0) / 2 - root.cardWidth / 2
+	readonly property real limitX: (root.anchorWindow ? root.anchorWindow.width : 0) - root.cardWidth
 	readonly property real hang: Math.round(border.gapsOut + Config.tooltipOffsetY)
 
 	screen: root.anchorWindow ? root.anchorWindow.screen : null
 
+	readonly property bool modal: root.wantsKeyboard
+	readonly property real scale: root.screen && root.screen.devicePixelRatio > 0 ? root.screen.devicePixelRatio : 1
+	readonly property real cardWidth: Helpers.snap(border.contentWidth + 2 * border.inset, root.scale)
+	readonly property real cardHeight: Helpers.snap(border.contentHeight + 2 * border.inset, root.scale)
+	readonly property real cardX: Helpers.snap(root.alignRight
+		? (root.screen ? root.screen.width : root.cardWidth) - root.cardWidth - border.gapsOut
+		: border.gapsOut + Math.max(0, Math.min(root.wantedX + Config.tooltipOffsetX, root.limitX)), root.scale)
+	readonly property real cardY: Helpers.snap(root.atBottom
+		? (root.screen ? root.screen.height : root.cardHeight) - root.hang - root.cardHeight
+		: root.hang, root.scale)
+
 	anchors {
-		top: !root.atBottom
-		bottom: root.atBottom
+		top: root.modal || !root.atBottom
+		bottom: root.modal || root.atBottom
 		left: true
+		right: root.modal
 	}
 
-	margins.top: root.atBottom ? 0 : root.hang
-	margins.bottom: root.atBottom ? root.hang : 0
-	margins.left: root.alignRight
-		? Math.round((root.screen ? root.screen.width : root.implicitWidth) - root.implicitWidth - border.gapsOut)
-		: Math.round(border.gapsOut + Math.max(0, Math.min(root.wantedX + Config.tooltipOffsetX, root.limitX)))
+	margins.top: root.modal || root.atBottom ? 0 : root.hang
+	margins.bottom: root.modal || !root.atBottom ? 0 : root.hang
+	margins.left: root.modal ? 0 : root.cardX
 
-	implicitWidth: border.contentWidth + 2 * border.inset
-	implicitHeight: border.contentHeight + 2 * border.inset
+	implicitWidth: root.cardWidth
+	implicitHeight: root.cardHeight
 
 	exclusiveZone: 0
 	color: "transparent"
 	visible: false
 
-	WlrLayershell.layer: WlrLayer.Top
+	WlrLayershell.layer: WlrLayer.Overlay
 	WlrLayershell.namespace: "tooltip"
 	WlrLayershell.keyboardFocus: root.wantsKeyboard && root.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
@@ -80,8 +90,8 @@ PanelWindow {
 		property real sampled: -1
 
 		onTriggered: {
-			if (root.implicitHeight !== warmup.sampled) {
-				warmup.sampled = root.implicitHeight;
+			if (root.cardHeight !== warmup.sampled) {
+				warmup.sampled = root.cardHeight;
 				return;
 			}
 
@@ -118,22 +128,45 @@ PanelWindow {
 			root.shown = false;
 	}
 
-	HyprBorder {
-		id: border
+	MouseArea {
+		id: backdrop
 
 		anchors.fill: parent
-		padding: root.contentPadding >= 0 ? root.contentPadding : border.gapsIn
-		borderColors: root.borderColors
-		borderWidth: root.borderWidth
-		borderOpacity: 1
-		visible: root.revealed
+		acceptedButtons: Qt.AllButtons
 
-		Keys.onPressed: function (event) {
-			if (event.key !== Qt.Key_Escape)
+		onPressed: function (mouse) {
+			if (root.modal && card.contains(card.mapFromItem(backdrop, mouse.x, mouse.y)))
 				return;
 
 			root.close();
-			event.accepted = true;
+		}
+	}
+
+	Item {
+		id: card
+
+		x: root.modal ? root.cardX : 0
+		y: root.modal ? root.cardY : 0
+		width: root.cardWidth
+		height: root.cardHeight
+
+		HyprBorder {
+			id: border
+
+			anchors.fill: parent
+			padding: root.contentPadding >= 0 ? root.contentPadding : border.gapsIn
+			borderColors: root.borderColors
+			borderWidth: root.borderWidth
+			borderOpacity: 1
+			visible: root.revealed
+
+			Keys.onPressed: function (event) {
+				if (event.key !== Qt.Key_Escape)
+					return;
+
+				root.close();
+				event.accepted = true;
+			}
 		}
 	}
 }

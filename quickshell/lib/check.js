@@ -114,6 +114,8 @@ assert(unsetBorder.colors === null && unsetBorder.width === 3, "an unset gradien
 const brokenBorder = parseHyprBorder("hyprctl: command not found\n\n");
 assert(brokenBorder.colors === null && brokenBorder.width === null && brokenBorder.angle === 0, "unreadable output leaves the tooltip on its fallback border");
 
+assert(snap(1303, 1.6) === 1303.125 && snap(73.25, 1.6) === 73.125, "snapping lands on whole device pixels");
+assert(snap(20, 0) === 20, "a missing scale leaves the value alone");
 assert(mixColors("#000000", "#ffffff", 0.5) === "#ff808080", "colours mix at the midpoint");
 assert(mixColors("#e0000000", "#e0ffffff", 1) === "#e0ffffff", "mixing keeps the alpha channel");
 assert(mixColors("#33ccff", "#00ff99", 0) === "#ff33ccff", "a six digit colour is treated as opaque");

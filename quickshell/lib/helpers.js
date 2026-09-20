@@ -57,6 +57,12 @@ function pick(mono, color, monoColor) {
 	return mono ? monoColor : color;
 }
 
+function snap(value, scale) {
+	const unit = scale > 0 ? scale : 1;
+
+	return Math.round(value * unit) / unit;
+}
+
 function mixColors(c1, c2, t) {
 	const a = colorChannels(c1);
 	const b = colorChannels(c2);
