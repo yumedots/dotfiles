@@ -205,7 +205,7 @@ PanelWindow {
 		anchors.rightMargin: border.inset
 		anchors.bottom: parent.bottom
 		anchors.bottomMargin: border.inset
-		spacing: Config.spacing
+		spacing: Config.barStatSpacing
 
 		Repeater {
 			model: bar.layout.right
