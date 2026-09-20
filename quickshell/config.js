@@ -106,7 +106,6 @@ const psIgnore = ["ps", "ps <defunct>"];
 const cpuPollMs = 1000;
 const scrollbarWidth = 2;
 
-const procSearchPlaceholder = "Type to search";
 const procSearchHint = "f to type";
 const procSearchPadding = 4;
 const procSearchMinWidth = 140;

@@ -11,11 +11,12 @@ Item {
 	property var info: ({ model: "", cores: 0, threads: 0, mhz: 0, cache: 0 })
 	property var allProcs: []
 	property var heldProcs: []
-	property bool searching: false
 	property string filter: ""
 
-	readonly property var procs: root.searching || root.filter !== "" ? Helpers.filterProcesses(root.allProcs, Config.psIgnore, root.filter) : (root.heldProcs.length > 0 ? root.heldProcs : Helpers.topProcesses(root.allProcs, Config.psIgnore))
-	readonly property bool showList: root.procs.length > 0 || root.searching
+	readonly property bool searching: searchField.typing
+	readonly property bool filtering: root.searching || root.filter !== ""
+	readonly property var procs: root.filtering ? Helpers.filterProcesses(root.allProcs, Config.psIgnore, root.filter) : (root.heldProcs.length > 0 ? root.heldProcs : Helpers.topProcesses(root.allProcs, Config.psIgnore))
+	readonly property bool showList: root.procs.length > 0 || root.filtering
 
 	focus: true
 
@@ -34,8 +35,12 @@ Item {
 	implicitHeight: column.implicitHeight + Config.cpuTooltipPadding * 2
 
 	onOnScreenChanged: {
-		if (!root.onScreen)
+		if (!root.onScreen) {
+			searchField.clear();
+			searchField.typing = false;
+			root.filter = "";
 			return;
+		}
 
 		root.heldProcs = Helpers.topProcesses(root.allProcs, Config.psIgnore);
 		procList.currentIndex = -1;
@@ -51,7 +56,7 @@ Item {
 			return;
 
 		if (event.text === Config.procHintKey) {
-			root.searching = true;
+			searchField.startTyping();
 			event.accepted = true;
 		} else if (event.key === Qt.Key_Escape) {
 			root.closeRequested();
@@ -59,12 +64,13 @@ Item {
 		} else {
 			procList.handleKey(event);
 		}
-	}
+	}		onSearchingChanged: {
+			if (!root.searching)
+				root.forceActiveFocus();
+		}
 
-	onSearchingChanged: {
-		if (!root.searching)
-			root.forceActiveFocus();
-	}
+
+
 
 	function colorFor(load) {
 		return Helpers.mixColors(Config.cpuBase, Config.red, load / 100);
@@ -202,21 +208,10 @@ Item {
 				anchors.verticalCenter: parent.verticalCenter
 				boxColor: "transparent"
 				size: Config.fontSize
-				keyLabel: Config.procSearchHint
-				placeholder: Config.procSearchHint
-				active: root.searching
+				hintKey: Config.procSearchHint
 				width: searchField.implicitWidth
 
 				onEdited: root.filter = searchField.text
-				onKeyPressed: function (event) {
-					if (event.text === Config.procKillKey)
-						procList.handleKey(event);
-				}
-				onCanceled: {
-					root.searching = false;
-					root.filter = "";
-					searchField.clear();
-				}
 			}
 		}
 

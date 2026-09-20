@@ -39,7 +39,7 @@ PanelWindow {
 
 	WlrLayershell.layer: WlrLayer.Overlay
 	WlrLayershell.namespace: "launcher"
-	WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+	WlrLayershell.keyboardFocus: root.mapped ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 	WlrLayershell.focusable: true
 
 	exclusiveZone: 0
@@ -59,7 +59,7 @@ PanelWindow {
 		Qt.callLater(function () {
 			root.shown = true;
 			list.currentIndex = 0;
-			field.focusInput();
+			card.forceActiveFocus();
 		});
 	}
 
@@ -191,6 +191,41 @@ PanelWindow {
 
 	function move(step) {
 		list.move(step);
+	}
+
+	function handleKeys(event) {
+		if (event.text === Config.procHintKey) {
+			field.startTyping();
+			event.accepted = true;
+			return;
+		}
+
+		if (event.key === Qt.Key_Escape) {
+			root.close();
+			event.accepted = true;
+			return;
+		}
+
+		list.handleKey(event);
+
+		if (event.accepted)
+			return;
+
+		root.pinKey(event);
+	}
+
+	function handleTypingKeys(event) {
+		if (event.key === Qt.Key_Escape)
+			return;
+
+		root.pinKey(event);
+	}
+
+	function pinKey(event) {
+		if (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier) {
+			root.pin(root.results[list.currentIndex]);
+			event.accepted = true;
+		}
 	}
 
 	function writeFile(path, text) {
@@ -349,6 +384,9 @@ PanelWindow {
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
 		visible: root.shown
+		focus: true
+
+		Keys.onPressed: function (event) { root.handleKeys(event); }
 
 		Column {
 			id: column
@@ -367,23 +405,17 @@ PanelWindow {
 				glyphSize: Config.launcherIconSize
 				size: Config.launcherFontSize
 				glyph: root.prompt
-				active: root.shown
+				hintKey: Config.procSearchHint
 
 				onEdited: {
 					root.query = field.text;
 					list.currentIndex = 0;
 				}
 				onAccepted: root.activate(root.results[list.currentIndex])
-				onCanceled: root.close()
-				onKeyPressed: function (event) {
-					list.handleKey(event);
-					if (event.accepted)
-						return;
-
-					if (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier) {
-						root.pin(root.results[list.currentIndex]);
-						event.accepted = true;
-					}
+				onKeyPressed: function (event) { root.handleTypingKeys(event); }
+				onTypingChanged: {
+					if (!field.typing)
+						card.forceActiveFocus();
 				}
 			}
 

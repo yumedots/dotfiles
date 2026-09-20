@@ -6,9 +6,8 @@ Rectangle {
 
 	property alias text: input.text
 	property string glyph: Config.launcherPrompt
-	property string keyLabel: ""
-	property string placeholder: Config.procSearchPlaceholder
-	property bool active: false
+	property string hintKey: ""
+	property bool typing: false
 	property color boxColor: Config.launcherSearchBox
 	property real size: Config.launcherFontSize
 	property real glyphSize: Math.round(root.size * 1.25)
@@ -22,11 +21,11 @@ Rectangle {
 	signal edited()
 	signal keyPressed(var event)
 
-	readonly property bool hint: !root.active && root.keyLabel !== ""
+	readonly property bool hint: !root.typing && root.hintKey !== "" && input.text === ""
 	readonly property real slot: root.glyphSlot > 0 ? root.glyphSlot : icon.implicitWidth
 	readonly property real lineHeight: Math.round(root.size * 1.6)
 
-	implicitWidth: 2 * root.padding + root.slot + root.gap + (root.keyLabel !== "" ? keycap.implicitWidth : Config.procSearchMinWidth)
+	implicitWidth: 2 * root.padding + root.slot + root.gap + (root.hintKey !== "" ? keycap.implicitWidth : Config.procSearchMinWidth)
 	implicitHeight: root.boxHeight > 0 ? root.boxHeight : root.lineHeight + 2 * root.padding
 	color: root.boxColor
 	radius: 0
@@ -35,12 +34,16 @@ Rectangle {
 		input.forceActiveFocus();
 	}
 
+	function startTyping() {
+		root.typing = true;
+	}
+
 	function clear() {
 		input.text = "";
 	}
 
-	onActiveChanged: {
-		if (root.active)
+	onTypingChanged: {
+		if (root.typing)
 			root.focusInput();
 	}
 
@@ -71,7 +74,7 @@ Rectangle {
 		font.family: Config.fontFamily
 		font.pixelSize: root.size
 		color: Config.muted
-		text: root.keyLabel
+		text: root.hintKey
 	}
 
 	TextInput {
@@ -85,7 +88,7 @@ Rectangle {
 
 		visible: !root.hint
 		clip: true
-		focus: root.active
+		focus: root.typing
 		selectByMouse: false
 		color: Config.foreground
 		font.family: Config.fontFamily
@@ -97,6 +100,7 @@ Rectangle {
 		onTextEdited: root.edited()
 
 		Keys.onEscapePressed: function (event) {
+			root.typing = false;
 			root.canceled();
 			event.accepted = true;
 		}
@@ -104,18 +108,5 @@ Rectangle {
 		Keys.onPressed: function (event) {
 			root.keyPressed(event);
 		}
-	}
-
-	Text {
-		id: placeholderText
-
-		anchors.left: input.left
-		anchors.verticalCenter: parent.verticalCenter
-
-		visible: !root.hint && input.text === ""
-		font.family: Config.fontFamily
-		font.pixelSize: root.size
-		color: Config.muted
-		text: root.placeholder
 	}
 }
