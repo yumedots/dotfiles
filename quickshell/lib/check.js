@@ -7,6 +7,9 @@ function assert(condition, message) {
 		throw new Error(message);
 }
 
+const Config = new Function(fs.readFileSync(__dirname + "/../config.js", "utf8").replace(".pragma library", "")
+	+ "\nreturn { weatherCodes: weatherCodes, weatherCoords: weatherCoords, weatherIcon: weatherIcon, weatherLoadingIcon: weatherLoadingIcon, weatherLocation: weatherLocation, weatherStationCount: weatherStationCount };")();
+
 const entries = parseDesktopEntries([
 	"/usr/share/applications/foot.desktop:Name=Foot",
 	"/usr/share/applications/foot.desktop:Exec=foot --server",
@@ -511,5 +514,111 @@ const scrambled = contribGrid([
 ], 2);
 
 assert(scrambled[1 * 2 + 1].count === 2 && scrambled[0].count === 1, "a feed in any order still lands on its own weekday and week");
+
+const degrees = splitTemp("86°F");
+
+assert(degrees.value === "86" && degrees.unit === "°F", "the temperature splits so the unit can be drawn smaller");
+assert(splitTemp("3°C").value === "3" && splitTemp("3°C").unit === "°C", "a celsius reading splits the same way");
+assert(splitTemp("0").value === "0" && splitTemp("0").unit === "", "a temperature with no unit keeps its number");
+assert(splitTemp("").value === "" && splitTemp("").unit === "", "no temperature splits into nothing");
+
+const geo = parseWeatherGeo(JSON.stringify({
+	results: [
+		{ name: "Springfield", admin1: "Massachusetts", country: "United States", country_code: "US", latitude: 42.1, longitude: -72.59 },
+		{ name: "Springfield", admin1: "Illinois", country: "United States", country_code: "US", latitude: 39.78, longitude: -89.65 }
+	]
+}), "IL");
+
+assert(geo.lat === 39.78 && geo.lon === -89.65, "the region hint picks the second Springfields over the first");
+assert(geo.place === "Springfield, Illinois", "the resolved place is what the card shows");
+assert(parseWeatherGeo("{\"results\":[]}", "IL") === null && parseWeatherGeo("not json", "") === null, "a lookup that finds nothing is not a location");
+assert(parseWeatherGeo(JSON.stringify({ results: [{ name: "Reykjavik", admin1: "Capital Region", latitude: 64.1, longitude: -21.9 }] }), "Capital").place === "Reykjavik, Capital Region", "the region hint also matches the area name");
+assert(parseWeatherGeo(JSON.stringify({ results: [{ name: "Springfield", admin1: "Massachusetts", latitude: 42.1, longitude: -72.6 }] }), "IL").lat === 42.1, "when the region is nowhere in the results the first one is used");
+
+assert(parseCoords("39.78,-89.65").lat === 39.78 && parseCoords(" 12 , -3.5 ").lon === -3.5, "coordinates in the config skip the lookup");
+assert(parseCoords("Springfield, IL") === null && parseCoords("") === null, "a place name is not a coordinate pair");
+
+assert(weatherGeoUrl("Springfield, IL").indexOf("name=Springfield") > 0, "only the city part of the config goes into the lookup");
+assert(weatherGeoUrl("Springfield, IL").indexOf("count=8") > 0, "the lookup asks for enough candidates to find the right region");
+assert(weatherForecastUrl(1, 2).indexOf("latitude=1&longitude=2") > 0, "the forecast is asked for the resolved coordinates");
+assert(weatherForecastUrl(1, 2).indexOf("weather_code") > 0, "the forecast asks for the condition code");
+
+const current = parseWeatherCurrent(JSON.stringify({
+	current_units: { temperature_2m: "°F", wind_speed_10m: "mp/h" },
+	current: { temperature_2m: 77.4, apparent_temperature: 86.2, relative_humidity_2m: 89, wind_speed_10m: 3.5, weather_code: 63, precipitation: 1.2 }
+}));
+
+assert(current.code === 63 && current.precip === 1.2 && current.temp === "77°F", "the open meteo response becomes the temperature");
+assert(current.feels === "86°F" && current.wind === "4mph" && current.humidity === "89%", "feels, wind and humidity come out of the same response");
+assert(parseWeatherCurrent("{}") === null && parseWeatherCurrent("nope") === null, "a response with no current block is no weather");
+assert(parseWeatherCurrent(JSON.stringify({ current: { temperature_2m: 70, apparent_temperature: 70, relative_humidity_2m: 50, wind_speed_10m: 1, weather_code: 0 } })).precip === 0, "no precipitation field reads as dry");
+
+assert(weatherCodeFor(3, 0) === 3, "overcast and dry stays overcast");
+assert(weatherCodeFor(3, 0.4) === 61, "overcast and wet is rain, whatever the model code says");
+assert(weatherCodeFor(0, 2) === 61, "a clear code with water coming down is rain too");
+assert(weatherCodeFor(63, 1) === 63 && weatherCodeFor(95, 3) === 95, "a code that already says rain keeps its own severity");
+
+assert(weatherCodeInfo(63, Config.weatherCodes, "?").glyph === "\u{f0597}" && weatherCodeInfo(63, Config.weatherCodes, "?").name === "Rain", "code 63 is rain and draws the rainy glyph");
+assert(weatherCodeInfo(0, Config.weatherCodes, "?").glyph === "\u{f0599}", "a clear sky draws the sun");
+assert(weatherCodeInfo(95, Config.weatherCodes, "?").glyph === "\u{f0593}" && weatherCodeInfo(96, Config.weatherCodes, "?").glyph === "\u{f067e}", "a plain thunderstorm and a hailstorm are different glyphs");
+assert(weatherCodeInfo(1234, Config.weatherCodes, "?").glyph === "?" && weatherCodeInfo(1234, Config.weatherCodes, "?").name === "", "a code nobody mapped falls back");
+assert(Config.weatherCodes[3].glyph !== Config.weatherCodes[63].glyph, "overcast and rain are not the same icon");
+
+const pointsText = JSON.stringify({ properties: { observationStations: "https://api.weather.gov/gridpoints/ILX/74,47/stations" } });
+
+assert(parseWeatherPoints(pointsText + "\n@@QS@@\n") === "https://api.weather.gov/gridpoints/ILX/74,47/stations", "a single answer parses even with the batch separator stuck on the end");
+assert(parseWeatherPoints(pointsText) === "https://api.weather.gov/gridpoints/ILX/74,47/stations", "the point lookup gives the station list for those coordinates");
+assert(parseWeatherPoints("{}") === null && parseWeatherPoints("Not Found") === null, "a place outside the states has no station list");
+
+const stationIds = parseWeatherStationIds(JSON.stringify({
+	features: [
+		{ properties: { stationIdentifier: "KSPI" }, geometry: { coordinates: [-89.68, 39.84] } },
+		{ properties: { stationIdentifier: "KPIA" }, geometry: { coordinates: [-89.69, 40.66] } },
+		{ properties: { stationIdentifier: "KMDH" }, geometry: { coordinates: [-89.25, 37.78] } },
+		{ properties: { stationIdentifier: "KORD" }, geometry: { coordinates: [-87.9, 41.98] } },
+		{ properties: {}, geometry: { coordinates: [-72.5, 42.1] } }
+	]
+}), 39.7955, -89.6432, 2);
+
+assert(stationIds.length === 2 && stationIds[0] === "KSPI" && stationIds[1] === "KPIA", "the stations are sorted by distance and capped at the configured count");
+assert(parseWeatherStationIds("{}", 0, 0, 3).length === 0, "a station list with nothing in it yields no stations");
+
+assert(weatherCodeFromText("Heavy Rain and Fog/Mist") === 65, "the station wording is what decides the condition, heavy rain first");
+assert(weatherCodeFromText("Light Rain") === 61 && weatherCodeFromText("Light Drizzle") === 61, "rain and drizzle are both rain");
+assert(weatherCodeFromText("Chance Showers And Thunderstorms") === 95, "a thunderstorm outranks the showers in the same sentence");
+assert(weatherCodeFromText("Partly Cloudy") === 2 && weatherCodeFromText("Cloudy") === 3 && weatherCodeFromText("Clear") === 0, "cloud words and clear words stay dry");
+assert(weatherCodeFromText("Mostly Cloudy") === 3 && weatherCodeFromText("Mostly Sunny") === 2, "mostly cloudy is overcast, mostly sunny is not");
+assert(weatherCodeFromText("Haze") === 45 && weatherCodeFromText("Freezing Rain") === 66 && weatherCodeFromText("Blizzard") === 75, "haze, freezing rain and blizzard all land somewhere sensible");
+assert(weatherCodeFromText("") === -1 && weatherCodeFromText("Volcanic Ash") === -1, "wording nobody mapped is not a condition");
+
+const observationRows = parseWeatherObservations(JSON.stringify({ properties: { textDescription: "Haze" } }) + "@@QS@@"
+	+ JSON.stringify({ properties: { textDescription: "Heavy Rain and Fog/Mist", precipitationLastHour: { value: 2.5 } } })
+	+ "@@QS@@" + JSON.stringify({ properties: {} }));
+
+assert(observationRows.length === 2 && observationRows[1].text === "Heavy Rain and Fog/Mist", "each station response in the batch is its own reading");
+assert(weatherObservationCode(observationRows) === 65, "a wet station anywhere in the batch is what the card shows, not the dry one nearest to you");
+assert(weatherObservationCode(parseWeatherObservations(JSON.stringify({ properties: { textDescription: "Cloudy" } }))) === 3, "with no wet station the nearest reading is used");
+assert(weatherObservationCode([{ text: "Cloudy", code: 3, precip: 0.4 }]) === 61, "water measured in the last hour counts even when the wording says cloudy");
+assert(weatherObservationCode([]) === -1 && weatherObservationCode([{ text: "", code: -1, precip: 0 }]) === -1, "a batch with nothing usable leaves the model code alone");
+
+assert(weatherRequest("u1 u2").indexOf("@@QS@@") > 0 && weatherRequest("u1 u2").indexOf("u1 u2") > 0, "the batch request joins the stations and marks where each answer ends");
+assert(weatherRequest("u1").indexOf("-w '") > 0, "the separator is a format string, so curl cannot mistake it for a file to read");
+assert(weatherObservationUrl("KSPI").indexOf("/stations/KSPI/observations/latest") > 0, "an observation is asked for by station id");
+assert(weatherPointsUrl(39.8, -89.6).indexOf("points/39.8,-89.6") > 0, "the point lookup is asked for our own coordinates");
+
+const weatherIcons = [Config.weatherIcon, Config.weatherLoadingIcon];
+const codeKeys = Object.keys(Config.weatherCodes);
+
+for (let i = 0; i < codeKeys.length; i++) {
+	weatherIcons.push(Config.weatherCodes[codeKeys[i]].glyph);
+	assert(Config.weatherCodes[codeKeys[i]].name !== "", "weather code " + codeKeys[i] + " has a name");
+}
+
+for (let i = 0; i < weatherIcons.length; i++) {
+	const glyph = weatherIcons[i];
+	const point = glyph.codePointAt(0);
+
+	assert(glyph.length === 2 && point >= 0xf0000 && point <= 0xf1fff, "a weather glyph is one five digit code point and not a four digit escape plus a stray character: " + JSON.stringify(glyph));
+}
 
 console.log("check ok");

@@ -169,6 +169,47 @@ const calendarBase = foreground;
 const calendarArrowSize = 14;
 const calendarArrowGap = 6;
 const calendarTodayBox = launcherSearchBox;
+const calendarWeatherNameWidth = 130;
+const calendarWeatherGap = 6;
+const calendarHeaderGap = 6;
+
+const weatherLocation = "";
+const weatherCoords = "";
+const weatherStationCount = 3;
+const weatherRefreshMs = 120000;
+const weatherCacheMs = 120000;
+const weatherIcon = "\u{f0f2f}";
+const weatherLoadingIcon = "\u{f18f6}";
+const weatherCodes = {
+	0: { name: "Clear", glyph: "\u{f0599}" },
+	1: { name: "Mainly clear", glyph: "\u{f0595}" },
+	2: { name: "Partly cloudy", glyph: "\u{f0595}" },
+	3: { name: "Overcast", glyph: "\u{f0590}" },
+	45: { name: "Fog", glyph: "\u{f0591}" },
+	48: { name: "Freezing fog", glyph: "\u{f0591}" },
+	51: { name: "Light drizzle", glyph: "\u{f0f33}" },
+	53: { name: "Drizzle", glyph: "\u{f0597}" },
+	55: { name: "Dense drizzle", glyph: "\u{f0597}" },
+	56: { name: "Freezing drizzle", glyph: "\u{f067f}" },
+	57: { name: "Freezing drizzle", glyph: "\u{f067f}" },
+	61: { name: "Light rain", glyph: "\u{f0597}" },
+	63: { name: "Rain", glyph: "\u{f0597}" },
+	65: { name: "Heavy rain", glyph: "\u{f0596}" },
+	66: { name: "Freezing rain", glyph: "\u{f067f}" },
+	67: { name: "Freezing rain", glyph: "\u{f067f}" },
+	71: { name: "Light snow", glyph: "\u{f0598}" },
+	73: { name: "Snow", glyph: "\u{f0598}" },
+	75: { name: "Heavy snow", glyph: "\u{f0f36}" },
+	77: { name: "Snow grains", glyph: "\u{f0598}" },
+	80: { name: "Light showers", glyph: "\u{f0f33}" },
+	81: { name: "Rain showers", glyph: "\u{f0597}" },
+	82: { name: "Violent showers", glyph: "\u{f0596}" },
+	85: { name: "Snow showers", glyph: "\u{f0f34}" },
+	86: { name: "Heavy snow showers", glyph: "\u{f0f36}" },
+	95: { name: "Thunderstorm", glyph: "\u{f0593}" },
+	96: { name: "Storm with hail", glyph: "\u{f067e}" },
+	99: { name: "Storm with hail", glyph: "\u{f067e}" }
+};
 
 const notifyBase = foreground;
 const notifyWidth = 280;
