@@ -34,8 +34,9 @@ Item {
 			return;
 		}
 
-		const from = root.currentIndex < 0 ? (step > 0 ? 0 : list.count - 1) : root.currentIndex + step;
-		root.currentIndex = Math.max(0, Math.min(list.count - 1, from));
+		const from = root.currentIndex < 0 ? (step > 0 ? -1 : 0) : root.currentIndex;
+
+		root.currentIndex = ((from + step) % list.count + list.count) % list.count;
 	}
 
 	function handleKey(event) {
