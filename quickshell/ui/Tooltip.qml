@@ -127,5 +127,13 @@ PanelWindow {
 		borderWidth: root.borderWidth
 		borderOpacity: 1
 		visible: root.revealed
+
+		Keys.onPressed: function (event) {
+			if (event.key !== Qt.Key_Escape)
+				return;
+
+			root.close();
+			event.accepted = true;
+		}
 	}
 }

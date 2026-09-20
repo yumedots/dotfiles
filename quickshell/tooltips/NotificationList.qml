@@ -133,10 +133,7 @@ Item {
 
 	Keys.onPressed: function (event) {
 		if (event.key === Qt.Key_Escape) {
-			if (root.opened)
-				root.back();
-			else
-				root.closeRequested();
+			root.closeRequested();
 
 			event.accepted = true;
 		} else if (event.text === "j") {

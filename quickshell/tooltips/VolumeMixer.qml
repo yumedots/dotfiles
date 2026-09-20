@@ -85,10 +85,7 @@ Item {
 
 	Keys.onPressed: function (event) {
 		if (event.key === Qt.Key_Escape) {
-			if (root.picker !== "")
-				root.picker = "";
-			else
-				root.closeRequested();
+			root.closeRequested();
 
 			event.accepted = true;
 			return;
