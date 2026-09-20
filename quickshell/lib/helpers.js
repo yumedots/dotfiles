@@ -469,7 +469,7 @@ function parseDesktopEntries(text) {
 		else if (key === "Terminal")
 			entry.terminal = value === "true";
 		else if (key === "Exec" && !entry.exec) {
-			const command = value.split(/\s+/)[0];
+			const command = value.split(/\s+/)[0].replace(/["']/g, "");
 
 			entry.exec = command.substring(command.lastIndexOf("/") + 1);
 			entry.execLine = cleanExec(value);
