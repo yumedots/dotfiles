@@ -255,6 +255,12 @@ PanelWindow {
 			return;
 		}
 
+		if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+			root.activate(root.results[list.currentIndex]);
+			event.accepted = true;
+			return;
+		}
+
 		list.handleKey(event);
 
 		if (event.accepted)
