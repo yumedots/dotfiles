@@ -20,6 +20,7 @@ PanelWindow {
 	property var files: []
 	property var clips: []
 	property bool windows: false
+	property int winIndex: 0
 
 	readonly property var prefix: Helpers.detectPrefix(root.query, Config.launcherMarks)
 	readonly property string search: root.windows ? root.query : root.prefix.text
@@ -59,6 +60,7 @@ PanelWindow {
 		Qt.callLater(function () {
 			root.shown = true;
 			list.currentIndex = 0;
+			root.winIndex = 0;
 
 			if (root.windows)
 				card.forceActiveFocus();
@@ -197,7 +199,50 @@ PanelWindow {
 		list.move(step);
 	}
 
+	function stepWindows(step) {
+		const count = root.results.length;
+
+		if (count === 0) {
+			root.winIndex = 0;
+			return;
+		}
+
+		root.winIndex = ((root.winIndex + step) % count + count) % count;
+	}
+
+	function handleSwitcherKeys(event) {
+		if (event.key === Qt.Key_Escape) {
+			root.close();
+			event.accepted = true;
+			return;
+		}
+
+		if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+			root.activate(root.results[root.winIndex]);
+			event.accepted = true;
+			return;
+		}
+
+		if (event.text === "h")
+			root.stepWindows(-1);
+		else if (event.text === "l")
+			root.stepWindows(1);
+		else if (event.text === "k")
+			root.stepWindows(-windowsGrid.columns);
+		else if (event.text === "j")
+			root.stepWindows(windowsGrid.columns);
+		else
+			return;
+
+		event.accepted = true;
+	}
+
 	function handleKeys(event) {
+		if (root.windows) {
+			root.handleSwitcherKeys(event);
+			return;
+		}
+
 		if (event.text === Config.procHintKey) {
 			field.startTyping();
 			event.accepted = true;
@@ -389,8 +434,8 @@ PanelWindow {
 
 		anchors.centerIn: parent
 
-		width: Config.launcherWidth
-		height: column.implicitHeight + card.inset * 2
+		width: root.windows ? windowsGrid.width + card.inset * 2 : Config.launcherWidth
+		height: root.windows ? windowsGrid.height + card.inset * 2 : column.implicitHeight + card.inset * 2
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
 		visible: root.shown
@@ -401,6 +446,7 @@ PanelWindow {
 		Column {
 			id: column
 
+			visible: !root.windows
 			width: parent.width
 			spacing: Config.launcherGap
 
@@ -525,6 +571,77 @@ PanelWindow {
 					color: Config.muted
 					text: root.emptyText()
 				}
+			}
+		}
+
+		Item {
+			id: windowsGrid
+
+			readonly property real cell: Config.windowsGridCell
+			readonly property int count: root.results.length
+			readonly property real freeWidth: (root.screen ? root.screen.width : root.width) - Config.windowsRowMargin
+			readonly property int columns: Math.max(1, Math.min(count, Math.floor(freeWidth / cell)))
+			readonly property int index: Math.min(root.winIndex, Math.max(0, count - 1))
+			readonly property real emptyWidth: count === 0 ? emptyText.implicitWidth : 0
+
+			visible: root.windows
+			width: Math.max(columns * cell, emptyWidth)
+			height: Math.ceil(Math.max(count, 1) / columns) * cell
+			clip: true
+
+			onCountChanged: root.winIndex = Math.min(root.winIndex, Math.max(0, count - 1))
+
+			Rectangle {
+				visible: windowsGrid.count > 0
+				x: (windowsGrid.index % windowsGrid.columns) * windowsGrid.cell
+				y: Math.floor(windowsGrid.index / windowsGrid.columns) * windowsGrid.cell
+				width: windowsGrid.cell
+				height: windowsGrid.cell
+				color: Config.launcherHighlight
+			}
+
+			Repeater {
+				model: root.results
+
+				delegate: Item {
+					id: iconCell
+
+					required property var modelData
+					required property int index
+
+					readonly property string icon: modelData.appId !== undefined && modelData.appId !== "" ? AppIcons.iconOf(modelData.appId) : ""
+					x: (index % windowsGrid.columns) * windowsGrid.cell
+					y: Math.floor(index / windowsGrid.columns) * windowsGrid.cell
+					width: windowsGrid.cell
+					height: windowsGrid.cell
+
+					IconImage {
+						anchors.centerIn: parent
+						implicitSize: Config.windowsIconSize
+						visible: iconCell.icon !== ""
+						source: iconCell.icon
+					}
+
+					Text {
+						anchors.centerIn: parent
+						visible: iconCell.icon === ""
+						font.family: Config.fontFamily
+						font.pixelSize: Config.windowsIconSize
+						color: Config.foreground
+						text: root.rowGlyph(iconCell.modelData)
+					}
+				}
+			}
+
+			Text {
+				id: emptyText
+
+				anchors.centerIn: parent
+				visible: windowsGrid.count === 0
+				font.family: Config.fontFamily
+				font.pixelSize: Config.launcherFontSize
+				color: Config.muted
+				text: root.emptyText()
 			}
 		}
 	}
