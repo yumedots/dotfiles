@@ -6,6 +6,7 @@ Item {
 	id: root
 
 	property real pct: 0
+	property string mode: Config.barStatMode
 	property color barColor: Config.red
 	property color textColor: root.barColor
 	property string icon: ""
@@ -15,6 +16,7 @@ Item {
 	property bool sweep: false
 	property real sweepWidth: 0
 
+	readonly property bool iconMode: root.mode === "icon"
 	readonly property int filled: Helpers.filledCells(root.pct, Config.barCells)
 	readonly property real valueAscent: -valueMetrics.boundingRect.y
 	readonly property real iconAscent: -iconMetrics.boundingRect.y
@@ -24,7 +26,7 @@ Item {
 	readonly property real textOffset: root.implicitHeight - root.inkAbove - root.valueBelow
 	readonly property real baselineLift: 0
 
-	implicitWidth: Config.lineLength + root.gap
+	implicitWidth: root.iconMode ? Math.ceil(iconMetrics.width + root.gap) : Config.lineLength + root.gap
 	readonly property real contentHeight: Math.round(root.inkAbove + root.inkBelow)
 	implicitHeight: root.contentHeight + (root.showBar ? Math.ceil(Config.barThickness) : 0)
 
@@ -66,12 +68,11 @@ Item {
 			font.pixelSize: Config.iconSize
 			color: root.textColor
 			text: root.icon
-		}
-
-		Text {
+		}		Text {
 			id: labelValue
 
-		x: labelIcon.width
+			visible: !root.iconMode
+			x: labelIcon.width
 		y: root.inkAbove - root.valueAscent
 		width: Math.max(labelValue.implicitWidth, content.width - labelIcon.width)
 		horizontalAlignment: Text.AlignHCenter
@@ -84,7 +85,7 @@ Item {
 		Item {
 			id: line
 
-			visible: root.showBar
+			visible: root.showBar && !root.iconMode
 			anchors.left: parent.left
 			anchors.bottom: parent.bottom
 			width: parent.width

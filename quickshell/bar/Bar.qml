@@ -139,6 +139,8 @@ PanelWindow {
 			onLoaded: {
 				if (item.settings !== undefined)
 					item.settings = modelData;
+				if (item.mode !== undefined && modelData.mode !== undefined)
+					item.mode = modelData.mode;
 				if (item.bar !== undefined)
 					item.bar = bar;
 				bar.register(modelData.id, item);
