@@ -55,7 +55,7 @@ Item {
 	Process {
 		id: desktopFiles
 
-		command: ["sh", "-c", "grep -H -E '^(Name|Icon|StartupWMClass|Exec|NoDisplay|Hidden|Terminal)=' /usr/share/applications/*.desktop \"$HOME/.local/share/applications\"/*.desktop 2>/dev/null"]
+		command: ["sh", "-c", "for dir in \"$HOME/.local/share\" $(echo \"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\" | tr ':' ' '); do grep -H -E '^(Name|Icon|StartupWMClass|Exec|NoDisplay|Hidden|Terminal)=' \"$dir/applications\"/*.desktop 2>/dev/null; done"]
 
 		stdout: StdioCollector {
 			onStreamFinished: root.entries = Helpers.parseDesktopEntries(text)
