@@ -13,7 +13,8 @@ BarStat {
 	value: Github.login !== "" ? String(Github.todayCount) : ""
 	pct: Math.min(4, Github.todayLevel) * 100 / 4
 	barColor: Github.login === "" ? Config.dim : Config.contribBase
-	textColor: Github.login === "" ? Config.dim : Config.contribBase
+	textColor: Config.contribBase
+	dim: Github.login === ""
 
 	function openPopup() {
 		popup.open();

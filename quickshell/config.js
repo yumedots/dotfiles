@@ -39,6 +39,7 @@ const iconVolumeHigh = "\uf028";
 
 const barCells = 15;
 const barStatMode = "icon";
+const barStatMono = true;
 const lineLength = 45;
 const barThickness = 1.5;
 const barSweepMs = 1400;

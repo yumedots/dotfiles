@@ -7,6 +7,9 @@ Item {
 
 	property real pct: 0
 	property string mode: Config.barStatMode
+	property bool mono: Config.barStatMono
+	property bool dim: false
+	property color dimColor: Config.dim
 	property color barColor: Config.red
 	property color textColor: root.barColor
 	property string icon: ""
@@ -17,6 +20,7 @@ Item {
 	property real sweepWidth: 0
 
 	readonly property bool iconMode: root.mode === "icon"
+	readonly property color inkColor: root.dim ? root.dimColor : (root.mono ? Config.foreground : root.textColor)
 	readonly property int filled: Helpers.filledCells(root.pct, Config.barCells)
 	readonly property real valueAscent: -valueMetrics.boundingRect.y
 	readonly property real iconAscent: -iconMetrics.boundingRect.y
@@ -66,20 +70,22 @@ Item {
 			y: root.inkAbove - root.iconAscent
 			font.family: Config.fontFamily
 			font.pixelSize: Config.iconSize
-			color: root.textColor
+			color: root.inkColor
 			text: root.icon
-		}		Text {
+		}
+
+		Text {
 			id: labelValue
 
 			visible: !root.iconMode
 			x: labelIcon.width
-		y: root.inkAbove - root.valueAscent
-		width: Math.max(labelValue.implicitWidth, content.width - labelIcon.width)
-		horizontalAlignment: Text.AlignHCenter
-		font.family: Config.fontFamily
-		font.pixelSize: Config.fontSize
-		color: root.textColor
-		text: root.value
+			y: root.inkAbove - root.valueAscent
+			width: Math.max(labelValue.implicitWidth, content.width - labelIcon.width)
+			horizontalAlignment: Text.AlignHCenter
+			font.family: Config.fontFamily
+			font.pixelSize: Config.fontSize
+			color: root.inkColor
+			text: root.value
 		}
 
 		Item {
