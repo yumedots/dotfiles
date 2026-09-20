@@ -173,7 +173,7 @@ PanelWindow {
 		id: leftRow
 
 		anchors.left: parent.left
-		anchors.leftMargin: border.inset
+		anchors.leftMargin: border.inset + Config.barPadding
 		anchors.bottom: parent.bottom
 		anchors.bottomMargin: border.inset
 		spacing: Config.spacing
@@ -202,7 +202,7 @@ PanelWindow {
 		id: rightRow
 
 		anchors.right: parent.right
-		anchors.rightMargin: border.inset
+		anchors.rightMargin: border.inset + Config.barPadding
 		anchors.bottom: parent.bottom
 		anchors.bottomMargin: border.inset
 		spacing: Config.barStatSpacing
