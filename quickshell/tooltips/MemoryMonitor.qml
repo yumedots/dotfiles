@@ -298,7 +298,7 @@ Item {
 
 			width: column.width
 			visibleRows: Config.memoryTopCount
-			visible: root.showList && root.procs.length > 0
+			visible: root.showList
 			model: root.procs
 
 			onKillRequested: function (proc) {
@@ -339,19 +339,6 @@ Item {
 					text: Helpers.sizeText(modelData.value)
 				}
 			}
-		}
-
-		Text {
-			width: column.width
-			height: procList.implicitHeight
-			visible: root.showList && root.procs.length === 0
-			horizontalAlignment: Text.AlignHCenter
-			verticalAlignment: Text.AlignVCenter
-
-			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
-			color: Config.muted
-			text: Config.procNoMatch
 		}
 
 	}

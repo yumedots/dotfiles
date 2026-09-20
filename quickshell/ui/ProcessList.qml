@@ -9,9 +9,11 @@ Item {
 	property alias currentIndex: list.currentIndex
 	property int visibleRows: 5
 	property string killKey: Config.procKillKey
+	property string emptyText: Config.procNoMatch
 
 	readonly property var current: list.current
 	readonly property int count: list.count
+	readonly property bool empty: root.count === 0
 	readonly property real rowHeight: prototype.implicitHeight
 	readonly property real rowWidth: list.rowWidth
 
@@ -47,8 +49,21 @@ Item {
 		id: list
 
 		anchors.fill: parent
+		visible: !root.empty
 		visibleRows: root.visibleRows
 		rowHeight: prototype.implicitHeight
 		rowSpacing: Config.procsGap
+	}
+
+	Text {
+		anchors.fill: parent
+		visible: root.empty
+		horizontalAlignment: Text.AlignHCenter
+		verticalAlignment: Text.AlignVCenter
+
+		font.family: Config.fontFamily
+		font.pixelSize: Config.fontSize
+		color: Config.muted
+		text: root.emptyText
 	}
 }
