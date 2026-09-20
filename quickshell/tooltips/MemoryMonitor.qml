@@ -13,6 +13,11 @@ Item {
 	property string filter: ""
 
 	readonly property bool searching: searchField.typing
+	readonly property color accentInk: Helpers.pick(Config.mono, Config.memoryBase, Config.memoryBaseMono)
+	readonly property color cachedInk: Helpers.pick(Config.mono, Config.memoryCached, Config.memoryCachedMono)
+	readonly property color buffersInk: Helpers.pick(Config.mono, Config.memoryBuffers, Config.memoryBuffersMono)
+	readonly property color warnInk: Helpers.pick(Config.mono, Config.memoryWarn, Config.memoryWarnMono)
+	readonly property color dangerInk: Helpers.pick(Config.mono, Config.memoryDanger, Config.memoryDangerMono)
 	readonly property bool filtering: root.searching || root.filter !== ""
 	readonly property var procs: root.filtering ? Helpers.filterProcesses(root.allProcs, Config.psIgnore, root.filter) : (root.heldProcs.length > 0 ? root.heldProcs : Helpers.topProcesses(root.allProcs, Config.psIgnore))
 	readonly property bool showList: root.procs.length > 0 || root.filtering
@@ -67,7 +72,7 @@ Item {
 	}
 
 	function dangerColorFor(load) {
-		return Helpers.dangerColor(Config.memoryBase, Config.memoryWarn, Config.memoryDanger, Config.memoryWarnAt, Config.memoryDangerAt, load);
+		return Helpers.dangerColor(root.accentInk, root.warnInk, root.dangerInk, Config.memoryWarnAt, Config.memoryDangerAt, load);
 	}
 
 	function usage() {
@@ -78,8 +83,8 @@ Item {
 
 		const rows = [
 			{ label: "used", text: Helpers.sizeText(m.used), color: root.dangerColorFor(root.pct) },
-			{ label: "cached", text: Helpers.sizeText(m.cached), color: Config.memoryCached },
-			{ label: "buffers", text: Helpers.sizeText(m.buffers), color: Config.memoryBuffers }
+			{ label: "cached", text: Helpers.sizeText(m.cached), color: root.cachedInk },
+			{ label: "buffers", text: Helpers.sizeText(m.buffers), color: root.buffersInk }
 		];
 
 		if (m.swapTotal > 0)
@@ -99,8 +104,8 @@ Item {
 		const divider = m.swapTotal > 0 ? Config.memorySeparator : 0;
 		const parts = [
 			{ value: m.used, color: root.dangerColorFor(root.pct) },
-			{ value: m.cached, color: Config.memoryCached },
-			{ value: m.buffers, color: Config.memoryBuffers },
+			{ value: m.cached, color: root.cachedInk },
+			{ value: m.buffers, color: root.buffersInk },
 			{ value: m.ramFree, color: Config.memoryFree }
 		];
 
@@ -202,7 +207,7 @@ Item {
 
 			font.family: Config.fontFamily
 			font.pixelSize: Config.fontSize
-			color: Config.memoryBase
+			color: root.accentInk
 			text: root.mem ? Helpers.sizeText(root.mem.committed) + " of " + Helpers.sizeText(root.mem.pool) : ""
 		}
 
@@ -275,7 +280,7 @@ Item {
 
 				font.family: Config.fontFamily
 				font.pixelSize: Config.fontSize
-				color: Config.memoryBase
+				color: root.accentInk
 				text: Config.topProcessTitle
 			}
 
