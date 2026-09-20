@@ -28,10 +28,14 @@ Item {
 		const candidates = [entry ? entry.icon : ""].concat(fallbacks).concat([appId, Config.fallbackIcon]);
 
 		for (let i = 0; i < candidates.length; i++) {
-			if (!candidates[i] || !Quickshell.hasThemeIcon(candidates[i]))
+			if (!candidates[i])
 				continue;
 
-			const path = Quickshell.iconPath(candidates[i], true);
+			const named = String(candidates[i]);
+			const path = named.indexOf("/") >= 0 ? named : (Quickshell.hasThemeIcon(named) ? Quickshell.iconPath(named, true) : "");
+
+			if (path === "")
+				continue;
 
 			if (appId)
 				root.resolved[appId] = path;
