@@ -659,4 +659,32 @@ for (let i = 0; i < weatherIcons.length; i++) {
 	assert(glyph.length === 2 && point >= 0xf0000 && point <= 0xf1fff, "a weather glyph is one five digit code point and not a four digit escape plus a stray character: " + JSON.stringify(glyph));
 }
 
+const accents = {
+	cpuBase: "#a78bfa",
+	cpuPeak: "#e05252",
+	memoryBase: "#7bd88f",
+	memoryCached: "#44774f",
+	memoryBuffers: "#2f5136",
+	memoryWarn: "#d8b04a",
+	memoryDanger: "#e05252",
+	contribBase: "#7bd88f"
+};
+const accentNames = Object.keys(accents);
+
+const palette = new Function(fs.readFileSync(__dirname + "/../config.js", "utf8").replace(".pragma library", "")
+	+ "\nreturn { mono: mono, " + accentNames.map(function (name) { return name + ": " + name + ", " + name + "Mono: " + name + "Mono"; }).join(", ") + " };")();
+
+for (let i = 0; i < accentNames.length; i++) {
+	const name = accentNames[i];
+	const channels = colorChannels(palette[name + "Mono"]);
+
+	assert(palette[name] === accents[name], "mono leaves the " + name + " accent alone, got " + palette[name]);
+	assert(channels !== null, name + "Mono is a colour");
+	assert(channels[1] === channels[2] && channels[2] === channels[3], "mono runs " + name + " grey, got " + palette[name + "Mono"]);
+	assert(pick(true, palette[name], palette[name + "Mono"]) === palette[name + "Mono"], "mono picks the mono " + name);
+	assert(pick(false, palette[name], palette[name + "Mono"]) === accents[name], "colour mode picks the accent " + name);
+}
+
+assert(palette.mono === true, "mono is on");
+
 console.log("check ok");

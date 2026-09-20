@@ -9,12 +9,21 @@ const dim = "#3f3f3f";
 const red = "#e05252";
 const muted = "#5c5c5c";
 
+const mono = true;
+const monoLight = "#cfcfcf";
+const monoMid = "#9a9a9a";
+const monoSoft = "#6f6f6f";
+
 const workspaceActive = "#ffffff";
 const workspaceInactive = "#5c5c5c";
 
 const cpuBase = "#a78bfa";
+const cpuBaseMono = foreground;
+const cpuPeak = red;
+const cpuPeakMono = monoMid;
 const cpuIdle = "#2f2f2f";
 const memoryBase = "#7bd88f";
+const memoryBaseMono = foreground;
 const volumeBase = "#ffffff";
 
 const fontFamily = "Hack Nerd Font";
@@ -94,11 +103,15 @@ const memoryTooltipWidth = 240;
 const memoryTooltipPadding = 12;
 const memoryTopCount = 5;
 const memoryCached = "#44774f";
+const memoryCachedMono = monoLight;
 const memoryBuffers = "#2f5136";
+const memoryBuffersMono = monoMid;
 const memoryFree = "#3f3f3f";
 const memorySwap = foreground;
 const memoryWarn = "#d8b04a";
+const memoryWarnMono = monoLight;
 const memoryDanger = "#e05252";
+const memoryDangerMono = monoSoft;
 const memorySeparator = 1;
 const memoryMinSegment = 2;
 const memoryVizHeight = 12;
@@ -258,6 +271,7 @@ const notifyDismissKey = "d";
 const notifyClearKey = "x";
 
 const contribBase = "#7bd88f";
+const contribBaseMono = foreground;
 const contribEmpty = "#1f1f1f";
 const contribWeeks = 19;
 const contribCell = 10;

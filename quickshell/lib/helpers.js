@@ -53,6 +53,10 @@ function colorChannels(text) {
 	return [0, 2, 4, 6].map(function (at) { return parseInt(hex.substring(at, at + 2), 16); });
 }
 
+function pick(mono, color, monoColor) {
+	return mono ? monoColor : color;
+}
+
 function mixColors(c1, c2, t) {
 	const a = colorChannels(c1);
 	const b = colorChannels(c2);
