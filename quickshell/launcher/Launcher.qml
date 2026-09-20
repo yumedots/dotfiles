@@ -59,7 +59,11 @@ PanelWindow {
 		Qt.callLater(function () {
 			root.shown = true;
 			list.currentIndex = 0;
-			card.forceActiveFocus();
+
+			if (root.windows)
+				card.forceActiveFocus();
+			else
+				field.startTyping();
 		});
 	}
 
@@ -217,6 +221,12 @@ PanelWindow {
 	function handleTypingKeys(event) {
 		if (event.key === Qt.Key_Escape)
 			return;
+
+		if (event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
+			list.move(event.key === Qt.Key_Up ? -1 : 1);
+			event.accepted = true;
+			return;
+		}
 
 		root.pinKey(event);
 	}
