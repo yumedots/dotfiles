@@ -22,7 +22,7 @@ const fontSize = 12;
 const valueSample = "0123456789.%G";
 const iconSize = 10;
 const trayIconSize = 11;
-const spacing = 12;
+const spacing = 20;
 const workspacePadding = 1;
 const workspaceSpacing = 6;
 
