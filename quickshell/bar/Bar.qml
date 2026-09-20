@@ -77,6 +77,14 @@ PanelWindow {
 		});
 	}
 
+	function anyPopupOpen() {
+		return Object.keys(bar.widgets).some(function (id) {
+			const item = bar.widgets[id];
+
+			return item && typeof item.isPopupOpen === "function" && item.isPopupOpen();
+		});
+	}
+
 	function openExclusive(widget, keyboard) {
 		const open = widget && typeof widget.isPopupOpen === "function" && widget.isPopupOpen();
 
@@ -84,7 +92,6 @@ PanelWindow {
 			widget.wantKeyboard(keyboard === true);
 
 		if (open) {
-			popupClose.stop();
 			bar.closePopups(null);
 
 			return;
@@ -95,15 +102,9 @@ PanelWindow {
 		if (widget && typeof widget.openPopup === "function")
 			widget.openPopup();
 
-		popupClose.restart();
-	}
-
-	Timer {
-		id: popupClose
-
-		interval: Config.popupCloseDelay
-
-		onTriggered: bar.closePopups(bar.lastOpened)
+		Handoff.run(function () {
+			bar.closePopups(bar.lastOpened);
+		});
 	}
 
 	property var lastOpened: null

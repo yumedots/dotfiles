@@ -8,3 +8,4 @@ Selector 1.0 Selector.qml
 SearchField 1.0 SearchField.qml
 NotificationRow 1.0 NotificationRow.qml
 CellGrid 1.0 CellGrid.qml
+singleton Handoff 1.0 Handoff.qml
