@@ -5,7 +5,9 @@ Tooltip 1.0 Tooltip.qml
 BarStat 1.0 BarStat.qml
 BarText 1.0 BarText.qml
 ProcessList 1.0 ProcessList.qml
+ProcessPanel 1.0 ProcessPanel.qml
 Selector 1.0 Selector.qml
+Scrollbar 1.0 Scrollbar.qml
 SearchField 1.0 SearchField.qml
 NotificationRow 1.0 NotificationRow.qml
 CellGrid 1.0 CellGrid.qml
