@@ -108,4 +108,10 @@ Rectangle {
 			root.keyPressed(event);
 		}
 	}
+
+	MouseArea {
+		anchors.fill: parent
+
+		onClicked: root.startTyping()
+	}
 }

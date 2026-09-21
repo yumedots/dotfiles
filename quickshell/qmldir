@@ -4,6 +4,7 @@ Color 1.0 lib/color.js
 Shell 1.0 lib/shell.js
 Parse 1.0 lib/parse.js
 Apps 1.0 lib/apps.js
+Entries 1.0 lib/entries.js
 Dates 1.0 lib/dates.js
 System 1.0 lib/system.js
 Forecast 1.0 lib/forecast.js

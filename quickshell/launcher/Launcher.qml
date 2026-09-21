@@ -15,24 +15,27 @@ PanelWindow {
 	property var pins: []
 	property string terminal: ""
 	property var usage: ({})
-	property var files: []
+	property var saved: []
+	property string group: ""
+	property string forced: ""
 
 	readonly property int windowColumns: windowsGrid.columns
 	property var clips: []
 	property bool windows: false
 	property int winIndex: 0
 
-	readonly property var prefix: Apps.detectPrefix(root.query, Config.launcherMarks)
-	readonly property string search: root.windows ? root.query : root.prefix.text
-	readonly property string mode: root.windows ? "windows" : root.prefix.mode
+	readonly property var prefix: Apps.detectPrefix(root.query, Entries.modeMarks(Config.launcherModes))
+	readonly property string search: root.windows || root.group !== "" || root.forced !== "" ? root.query : root.prefix.text
+	readonly property string mode: root.windows ? "windows" : (root.group !== "" ? "group:" + root.group : (root.forced !== "" ? root.forced : root.prefix.mode))
 	readonly property string home: Quickshell.env("HOME")
 	readonly property string terminalConfig: Config.launcherTerminalConfig.replace("~", root.home)
 	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
+	readonly property var appEntries: Entries.appEntries(AppIcons.entries, Config.launcherIgnoreApps, Config.launcherAppAliases)
 	readonly property var results: Apps.results(root.mode, root.search, {
-		files: root.files,
 		clips: root.clips,
 		windows: root.windowEntries(),
-		entries: root.allEntries(),
+		entries: Entries.all(Config, root.appEntries, root.saved),
+		groups: ({ apps: root.appEntries }),
 		pins: root.pins,
 		usage: root.usage,
 		calc: Parse.calcEntry(root.search)
@@ -40,8 +43,8 @@ PanelWindow {
 	readonly property int listHeight: Config.launcherMaxRows * Config.launcherRowHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width
 
-	readonly property string modeGlyph: root.mode === "files" ? Config.launcherIconFiles : Config.launcherIconClipboard
-	readonly property string prompt: root.mode === "" || root.mode === "windows" ? Config.launcherPrompt : root.modeGlyph
+	readonly property var modeInfo: Entries.modeInfo(root.mode, Config)
+	readonly property string prompt: root.modeInfo && root.modeInfo.glyph ? root.modeInfo.glyph : Config.launcherPrompt
 
 	anchors.top: true
 	anchors.left: true
@@ -66,22 +69,20 @@ PanelWindow {
 
 	function open() {
 		root.query = "";
-		root.files = [];
 		root.clips = [];
+		root.group = "";
+		root.forced = "";
 		Hyprland.refreshToplevels();
 		pinsFile.running = true;
 		usageFile.running = true;
 		terminalFile.running = true;
+		savedFile.running = true;
 		root.shown = true;
 		root.mapped = true;
 		Qt.callLater(function () {
 			list.currentIndex = 0;
 			root.winIndex = 0;
-
-			if (root.windows)
-				card.forceActiveFocus();
-			else
-				field.startTyping();
+			card.forceActiveFocus();
 		});
 	}
 
@@ -94,9 +95,10 @@ PanelWindow {
 		root.shown = false;
 		root.mapped = false;
 		root.query = "";
+		root.group = "";
+		root.forced = "";
 		field.clear();
-		findTimer.stop();
-		findFiles.running = false;
+		field.typing = false;
 	}
 
 	function toggle() {
@@ -137,37 +139,19 @@ PanelWindow {
 		});
 	}
 
-	function allEntries() {
-		return Apps.actionEntries(Config.launcherActions)
-			.concat(Apps.commandEntries(Config.launcherCommands))
-			.concat(Apps.appEntries(AppIcons.entries, Config.launcherIgnoreApps));
-	}
-
 	function rowGlyph(entry) {
-		if (!entry)
-			return "";
-
-		if (entry.kind === "command")
-			return Config.launcherIconCommand;
-		if (entry.kind === "action")
-			return entry.glyph;
-		if (entry.kind === "window")
-			return Config.launcherIconWindow;
-		if (entry.kind === "file")
-			return Config.launcherIconFile;
-		if (entry.kind === "clip")
-			return Config.launcherIconClipboard;
-
-		return Config.launcherIconCalc;
+		return Entries.glyphOf(entry, Config);
 	}
 
 	function emptyText() {
-		if (root.mode === "files")
-			return "Type two letters or more to search " + root.home;
 		if (root.mode === "clipboard")
 			return "Nothing copied yet";
 		if (root.mode === "windows")
 			return "No windows open";
+		if (root.mode === "calc")
+			return "Type an expression";
+		if (root.group !== "")
+			return "Nothing here";
 
 		return "Nothing matches";
 	}
@@ -188,7 +172,19 @@ PanelWindow {
 			return;
 		}
 
+		if (Input.save(event)) {
+			root.saveQuery();
+			event.accepted = true;
+			return;
+		}
+
 		if (Input.cancel(event)) {
+		if (root.group !== "" || root.forced !== "") {
+			root.leaveGroup();
+				event.accepted = true;
+				return;
+			}
+
 			root.close();
 			event.accepted = true;
 			return;
@@ -200,10 +196,10 @@ PanelWindow {
 			return;
 		}
 
-		list.handleKey(event);
-
-		if (event.accepted)
+		if (root.navigate(Input.direction(event))) {
+			event.accepted = true;
 			return;
+		}
 
 		root.pinKey(event);
 	}
@@ -212,15 +208,41 @@ PanelWindow {
 		if (Input.cancel(event))
 			return;
 
-		const step = Input.arrow(event, 1, 0);
+		if (Input.save(event)) {
+			root.saveQuery();
+			event.accepted = true;
+			return;
+		}
 
-		if (step !== 0) {
-			list.move(step);
+		if (root.navigate(Input.arrows[event.key] || "")) {
 			event.accepted = true;
 			return;
 		}
 
 		root.pinKey(event);
+	}
+
+	function navigate(dir) {
+		if (dir === "right") {
+			root.activate(root.results[list.currentIndex]);
+			return true;
+		}
+
+		if (dir === "left") {
+			if (root.group !== "" || root.forced !== "")
+				root.leaveGroup();
+			else
+				root.close();
+
+			return true;
+		}
+
+		if (dir === "down" || dir === "up") {
+			list.move(dir === "down" ? 1 : -1);
+			return true;
+		}
+
+		return false;
 	}
 
 	function pinKey(event) {
@@ -231,12 +253,28 @@ PanelWindow {
 		event.accepted = true;
 	}
 
+	function leaveGroup() {
+		root.group = "";
+		root.forced = "";
+		root.query = "";
+		field.clear();
+		list.currentIndex = 0;
+	}
+
+	function saveQuery() {
+		if (root.query === "" || root.windows)
+			return;
+
+		root.saved = Entries.toggleCustom(root.saved, root.query);
+		root.writeFile(root.stateDir + "/entries.txt", Entries.formatCustom(root.saved));
+	}
+
 	function writeFile(path, text) {
 		Quickshell.execDetached(Shell.writeCommand(path, text));
 	}
 
 	function remember(entry) {
-		if (!Apps.rememberable(entry))
+		if (!Entries.rememberable(entry))
 			return;
 
 		root.usage = Apps.bumpUsage(root.usage, entry.id, Date.now());
@@ -244,7 +282,7 @@ PanelWindow {
 	}
 
 	function pin(entry) {
-		if (!Apps.rememberable(entry))
+		if (!Entries.rememberable(entry))
 			return;
 
 		root.pins = Apps.togglePin(root.pins, entry.id);
@@ -267,11 +305,28 @@ PanelWindow {
 		if (!entry)
 			return;
 
+		if (entry.kind === "mode") {
+			root.group = "";
+			root.forced = entry.mode;
+			root.query = "";
+			field.clear();
+			list.currentIndex = 0;
+			return;
+		}
+
+		if (entry.kind === "group") {
+			root.group = entry.group;
+			root.query = "";
+			field.clear();
+			list.currentIndex = 0;
+			return;
+		}
+
 		if (entry.kind === "app")
 			Quickshell.execDetached(Apps.launchCommand(entry, entry.appId, root.terminal));
 		else if (entry.kind === "window")
 			root.focusWindow(entry.address);
-		else if (entry.kind === "command" || entry.kind === "action")
+		else if (entry.kind === "command" || entry.kind === "action" || entry.kind === "saved")
 			Quickshell.execDetached(["sh", "-c", entry.command]);
 		else if (entry.kind === "calc")
 			root.copy(entry.value);
@@ -282,22 +337,6 @@ PanelWindow {
 
 		root.remember(entry);
 		root.close();
-	}
-
-	onSearchChanged: {
-		if (root.mode !== "files") {
-			findTimer.stop();
-			root.files = [];
-			return;
-		}
-
-		if (root.search.length < 2) {
-			root.files = [];
-			findTimer.stop();
-			return;
-		}
-
-		findTimer.restart();
 	}
 
 	onModeChanged: {
@@ -326,6 +365,16 @@ PanelWindow {
 	}
 
 	Request {
+		id: savedFile
+
+		command: Shell.readCommand(root.stateDir + "/entries.txt")
+
+		onDone: function (text) {
+			root.saved = Entries.customEntries(text);
+		}
+	}
+
+	Request {
 		id: terminalFile
 
 		command: Shell.readCommand(root.terminalConfig)
@@ -341,28 +390,7 @@ PanelWindow {
 		command: ["sh", "-c", "cliphist list 2>/dev/null | head -n " + Config.launcherMaxResults]
 
 		onDone: function (text) {
-			root.clips = Apps.clipEntries(Parse.parseClipboardList(text));
-		}
-	}
-
-	Request {
-		id: findFiles
-
-		command: Shell.fileSearchCommand(root.home, root.search, Config.launcherFileDepth, Config.launcherFileMax, Config.launcherFileSkip)
-
-		onDone: function (text) {
-			root.files = Apps.fileEntries(Parse.pathLines(text));
-		}
-	}
-
-	Timer {
-		id: findTimer
-
-		interval: Config.launcherFileDebounce
-
-		onTriggered: {
-			findFiles.running = false;
-			findFiles.running = true;
+			root.clips = Entries.clipEntries(Parse.parseClipboardList(text));
 		}
 	}
 
@@ -446,7 +474,7 @@ PanelWindow {
 					height: Config.launcherRowHeight
 
 					readonly property bool active: row.index === list.currentIndex
-					readonly property bool pinned: root.pins.indexOf(row.modelData.id) >= 0
+					readonly property bool pinned: root.pins.indexOf(row.modelData.id) >= 0 || row.modelData.kind === "saved"
 
 					Item {
 						id: rowIcon
@@ -497,6 +525,12 @@ PanelWindow {
 						font.pixelSize: Config.launcherIconSize
 						color: Config.foreground
 						text: Config.launcherIconPin
+					}
+
+					MouseArea {
+						anchors.fill: parent
+
+						onClicked: root.activate(row.modelData)
 					}
 				}
 			}

@@ -24,8 +24,10 @@ Item {
 	function applyIndex() {
 		if (list.currentIndex !== root.currentIndex)
 			list.currentIndex = root.currentIndex;
+	}
 
-		root.ensureVisible(root.currentIndex);
+	function scroll(step) {
+		list.contentY = Util.clamp(list.contentY + step, 0, Math.max(0, list.contentHeight - list.height));
 	}
 
 	function move(step) {
@@ -37,6 +39,7 @@ Item {
 		const from = root.currentIndex < 0 ? (step > 0 ? -1 : 0) : root.currentIndex;
 
 		root.currentIndex = ((from + step) % list.count + list.count) % list.count;
+		root.ensureVisible(root.currentIndex);
 	}
 
 	function handleKey(event) {
@@ -89,10 +92,18 @@ Item {
 			Qt.callLater(root.applyIndex);
 		}
 
-		onCurrentIndexChanged: root.ensureVisible(list.currentIndex)
-
 		highlight: Highlight {
 			fillParent: false
+		}
+
+		MouseArea {
+			anchors.fill: parent
+			acceptedButtons: Qt.NoButton
+
+			onWheel: function (wheel) {
+				root.scroll(wheel.angleDelta.y > 0 ? -(root.rowHeight + root.rowSpacing) : (root.rowHeight + root.rowSpacing));
+				wheel.accepted = true;
+			}
 		}
 	}
 

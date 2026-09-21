@@ -136,31 +136,6 @@ function windowAppCandidates(toplevel, terminals) {
 	return { className: className, word: terminalAppId(className, info.title || "", terminals) };
 }
 
-function appEntries(entries, ignore) {
-	const out = [];
-	const skip = ignore || [];
-
-	Object.keys(entries || {}).forEach(function (id) {
-		const entry = entries[id];
-
-		if (!entry || !entry.name || !entry.exec || skip.indexOf(id) >= 0)
-			return;
-
-		out.push({
-			id: "app:" + id,
-			kind: "app",
-			appId: id,
-			name: entry.name,
-			keywords: [id].concat(entry.exec ? [entry.exec] : []),
-			exec: entry.exec,
-			execLine: entry.execLine,
-			terminal: entry.terminal
-		});
-	});
-
-	return out;
-}
-
 function detectPrefix(query, marks) {
 	const text = String(query === undefined || query === null ? "" : query);
 	const modes = Object.keys(marks || {});
@@ -301,45 +276,10 @@ function bumpUsage(usage, id, now) {
 	return next;
 }
 
-function commandEntries(items) {
-	return (items || []).map(function (item) {
-		return {
-			id: "cmd:" + item.name,
-			kind: "command",
-			name: item.name,
-			keywords: item.keywords || [],
-			command: item.command
-		};
+function home(entries, pins) {
+	return (entries || []).filter(function (entry) {
+		return entry.kind !== "app" || (pins || []).indexOf(entry.id) >= 0;
 	});
-}
-
-function actionEntries(items) {
-	return (items || []).map(function (item) {
-		return {
-			id: "act:" + item.name,
-			kind: "action",
-			name: item.name,
-			keywords: ["power", "session"],
-			command: item.command,
-			glyph: item.glyph
-		};
-	});
-}
-
-function clipEntries(list) {
-	return (list || []).map(function (entry) {
-		return { id: "clip:" + entry.id, kind: "clip", name: entry.text, keywords: [], clipId: entry.id };
-	});
-}
-
-function fileEntries(paths) {
-	return (paths || []).map(function (path) {
-		return { id: "file:" + path, kind: "file", name: path, keywords: [], path: path };
-	});
-}
-
-function rememberable(entry) {
-	return Boolean(entry) && entry.kind !== "calc" && entry.kind !== "file" && entry.kind !== "clip" && entry.kind !== "window";
 }
 
 function results(mode, search, state) {
@@ -347,10 +287,15 @@ function results(mode, search, state) {
 		return state.files;
 	if (mode === "clipboard")
 		return state.clips;
+	if (mode === "calc")
+		return state.calc === null ? [] : [state.calc];
 	if (mode === "windows")
 		return search === "" ? state.windows : rankEntries(state.windows, search, [], {});
+	if (mode.indexOf("group:") === 0)
+		return rankEntries((state.groups || {})[mode.substring(6)] || [], search, state.pins, state.usage);
 
-	const ranked = rankEntries(state.entries, search, state.pins, state.usage);
+	const source = search === "" ? home(state.entries, state.pins) : state.entries;
+	const ranked = rankEntries(source, search, state.pins, state.usage);
 
 	return state.calc === null ? ranked : [state.calc].concat(ranked);
 }
