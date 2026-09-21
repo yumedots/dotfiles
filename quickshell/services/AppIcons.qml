@@ -8,7 +8,8 @@ import qs
 Item {
 	id: root
 
-	property var entries: ({})
+	property var entries: Helpers.desktopEntries(DesktopEntries.applications.values)
+	property var icons: ({})
 	property var resolved: ({})
 
 	function entryOf(appId) {
@@ -31,8 +32,7 @@ Item {
 			if (!candidates[i])
 				continue;
 
-			const named = String(candidates[i]);
-			const path = named.indexOf("/") >= 0 ? named : (Quickshell.hasThemeIcon(named) ? Quickshell.iconPath(named, true) : "");
+			const path = root.iconSource(String(candidates[i]));
 
 			if (path === "")
 				continue;
@@ -46,23 +46,29 @@ Item {
 		return "";
 	}
 
-	function reload() {
-		root.entries = ({});
-		root.resolved = ({});
-		desktopFiles.running = true;
+	function iconSource(name) {
+		if (name.indexOf("/") >= 0)
+			return "file://" + name;
+		if (Quickshell.hasThemeIcon(name))
+			return Quickshell.iconPath(name, true);
+
+		return root.icons[name] ? "file://" + root.icons[name] : "";
 	}
 
-	onEntriesChanged: root.resolved = ({})
+	onEntriesChanged: {
+		root.resolved = ({});
+		iconScan.running = true;
+	}
 
-	Component.onCompleted: root.reload()
+	Component.onCompleted: iconScan.running = true
 
 	Process {
-		id: desktopFiles
+		id: iconScan
 
-		command: ["sh", "-c", "for dir in \"$HOME/.local/share\" $(echo \"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\" | tr ':' ' '); do grep -H -E '^(Name|Icon|StartupWMClass|Exec|NoDisplay|Hidden|Terminal)=' \"$dir/applications\"/*.desktop 2>/dev/null; done"]
+		command: ["sh", "-c", "for dir in \"$HOME/.local/share\" $(echo \"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\" | tr ':' ' '); do find \"$dir/icons/hicolor\" \"$dir/pixmaps\" -mindepth 1 -maxdepth 3 \\( -type f -o -type l \\) \\( -name '*.png' -o -name '*.svg' -o -name '*.xpm' \\) 2>/dev/null; done"]
 
 		stdout: StdioCollector {
-			onStreamFinished: root.entries = Helpers.parseDesktopEntries(text)
+			onStreamFinished: root.icons = Helpers.iconFiles(text)
 		}
 	}
 }

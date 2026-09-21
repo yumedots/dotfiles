@@ -10,34 +10,22 @@ function assert(condition, message) {
 const Config = new Function(fs.readFileSync(__dirname + "/../config.js", "utf8").replace(".pragma library", "")
 	+ "\nreturn { weatherCodes: weatherCodes, weatherCoords: weatherCoords, weatherIcon: weatherIcon, weatherLoadingIcon: weatherLoadingIcon, weatherLocation: weatherLocation, weatherStationCount: weatherStationCount };")();
 
-const entries = parseDesktopEntries([
-	"/usr/share/applications/foot.desktop:Name=Foot",
-	"/usr/share/applications/foot.desktop:Exec=foot --server",
-	"/usr/share/applications/foot.desktop:Icon=foot",
-	"/usr/share/applications/code-insiders.desktop:Name=Visual Studio Code - Insiders",
-	"/usr/share/applications/code-insiders.desktop:Exec=code-insiders %F",
-	"/usr/share/applications/code-insiders.desktop:Icon=vscode-insiders",
-	"/usr/share/applications/code-insiders.desktop:StartupWMClass=Code - Insiders",
-	"/usr/share/applications/code-insiders.desktop:Name=New Empty Window",
-	"/usr/share/applications/code-insiders.desktop:Icon=wrong-icon",
-	"/usr/share/applications/firefox.desktop:Name=Firefox",
-	"/usr/share/applications/firefox.desktop:Exec=/usr/lib/firefox/firefox %u",
-	"/usr/share/applications/firefox.desktop:Icon=firefox",
-	"/usr/share/applications/foo.desktop:Name=Foo Bar",
-	"/usr/share/applications/foo.desktop:Icon=foo",
-	"/usr/share/applications/foo.desktop:Terminal=true",
-	"/usr/share/applications/hidden.desktop:Name=Hidden App",
-	"/usr/share/applications/hidden.desktop:Icon=hidden",
-	"/usr/share/applications/hidden.desktop:NoDisplay=true"
-].join("\n"));
+const entries = desktopEntries([
+	{ id: "foot", name: "Foot", execString: "foot --server", command: ["foot", "--server"], icon: "foot" },
+	{ id: "code-insiders", name: "Visual Studio Code - Insiders", execString: "code-insiders %F", command: ["code-insiders"], icon: "vscode-insiders", startupClass: "Code - Insiders" },
+	{ id: "firefox", name: "Firefox", execString: "/usr/lib/firefox/firefox %u", command: ["/usr/lib/firefox/firefox"], icon: "firefox" },
+	{ id: "foo", name: "Foo Bar", execString: "/opt/Foo Bar/foo", command: ["/opt/Foo Bar/foo"], icon: "foo", runInTerminal: true }
+]);
 
 assert(lookupApp(entries, "firefox").icon === "firefox", "id lookup");
 assert(lookupApp(entries, "firefox").exec === "firefox", "exec basename comes from the first token only");
 assert(lookupApp(entries, "Code - Insiders").id === "code-insiders", "wmclass lookup");
-assert(lookupApp(entries, "code-insiders").icon === "vscode-insiders", "action groups do not overwrite the main icon");
+assert(lookupApp(entries, "code-insiders").icon === "vscode-insiders", "the icon of the entry comes through");
 assert(lookupApp(entries, "foo bar").id === "foo", "display name lookup");
 assert(lookupApp(entries, "foo").terminal === true, "Terminal=true is parsed");
-assert(lookupApp(entries, "hidden") === null, "NoDisplay entries are skipped");
+assert(lookupApp(entries, "code-insiders").id === "code-insiders", "an id with a dash is found exactly");
+assert(lookupApp({ "org.vinegarhq.Sober": { id: "org.vinegarhq.Sober", name: "Sober", icon: "org.vinegarhq.Sober" } }, "org.vinegarhq.Sober").name === "Sober", "a mixed case id is found");
+assert(lookupApp({ "com.spotify.Client": { id: "com.spotify.Client", name: "Spotify", icon: "com.spotify.Client" } }, "com.spotify.client").name === "Spotify", "a mixed case id is found from a lowercase query too");
 assert(lookupApp(entries, "nope") === null, "unknown ids return null");
 assert(lookupApp(entries, "") === null, "empty names return null");
 assert(daysInMonth(2024, 1) === 29 && daysInMonth(2026, 1) === 28, "february length");
@@ -178,11 +166,18 @@ assert(terminalName('local otherterminal = "x"\n') === "", "a lookalike variable
 assert(launchCommand({ exec: "code-insiders" }, "code-insiders").join(" ") === "sh -c code-insiders", "a regular app runs through the shell");
 assert(launchCommand(null, "footclient").join(" ") === "sh -c footclient", "an entry-less app runs through the shell");
 assert(launchCommand({ execLine: "helium-browser --new-window" }, "helium-browser").join(" ") === "sh -c helium-browser --new-window", "the full exec line keeps the arguments");
+assert(iconFiles("/usr/share/icons/hicolor/48x48/apps/foo.png\n/usr/share/icons/hicolor/scalable/apps/foo.svg").foo === "/usr/share/icons/hicolor/scalable/apps/foo.svg", "the scalable icon wins");
+assert(iconFiles("/usr/share/icons/hicolor/48x48/apps/bar.png\n/usr/share/icons/hicolor/256x256/apps/bar.png").bar === "/usr/share/icons/hicolor/256x256/apps/bar.png", "the largest bitmap wins");
+assert(iconFiles("/usr/share/pixmaps/baz.xpm").baz === "/usr/share/pixmaps/baz.xpm", "a pixmap is kept");
+assert(iconFiles("/var/lib/flatpak/exports/share/icons/hicolor/scalable/apps/org.vinegarhq.Sober.svg")["org.vinegarhq.Sober"] !== undefined, "a dotted id keeps its dots");
+assert(Object.keys(iconFiles("")).length === 0, "an empty icon listing yields nothing");
 assert(cleanExec("code-insiders %F") === "code-insiders", "field codes are stripped");
 assert(cleanExec("env GDK_BACKEND=x11 firefox %u") === "env GDK_BACKEND=x11 firefox", "an env wrapper stays, only the field code goes");
 assert(cleanExec("app 100%%") === "app 100%", "an escaped percent survives");
 assert(cleanExec(null) === "", "a missing exec line is empty");
-assert(parseDesktopEntries("/a/x.desktop:Exec=/usr/bin/foo --bar %F").x.execLine === "/usr/bin/foo --bar", "the exec line is parsed with the field codes removed");
+assert(desktopEntries([{ id: "x", execString: "/usr/bin/foo --bar %F", command: ["/usr/bin/foo", "--bar"] }]).x.execLine === "/usr/bin/foo --bar", "the exec line keeps its arguments and loses the field codes");
+assert(desktopEntries([{ id: "x", execString: "\"/opt/My App/foo\" --flag", command: ["/opt/My App/foo", "--flag"] }]).x.exec === "foo", "a quoted path still yields the plain command name");
+assert(Object.keys(desktopEntries()).length === 0, "a missing entry list yields nothing");
 assert(togglePin([], "yazi")[0] === "yazi", "pin adds to an empty list");
 assert(togglePin(["a", "b"], "c").length === 3, "pin keeps the rest");
 assert(togglePin(["a", "b"], "b").length === 1, "pin removes what is pinned");
@@ -328,7 +323,6 @@ assert(windowAppCandidates({ lastIpcObject: { class: "foot", title: "btop" } }, 
 assert(windowAppCandidates({ lastIpcObject: { class: "helium", title: "x" } }, ["foot"]).word === "helium", "a non terminal window falls back to its class");
 assert(windowAppCandidates(null, ["foot"]).className === "", "a missing window has no class");
 assert(appEntries({ firefox: { name: "Firefox", exec: "firefox" }, broken: {} }).length === 1, "an entry without a name or exec is skipped");
-assert(appEntries({ hidden: { name: "Hidden", exec: "hidden", hidden: true } }).length === 0, "a hidden entry is skipped");
 assert(appEntries({ firefox: { name: "Firefox", exec: "firefox" } })[0].id === "app:firefox", "the entry id is namespaced");
 assert(appEntries({ avahi: { name: "Avahi", exec: "avahi" } }, ["avahi"]).length === 0, "an ignored app is skipped");
 assert(appEntries({ keep: { name: "Keep", exec: "keep" } }, ["avahi"]).length === 1, "only the ignored ids are skipped");

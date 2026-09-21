@@ -406,6 +406,35 @@ function terminalAppId(cls, title, terminals) {
 	return commandWord(title);
 }
 
+function iconRank(path) {
+	if (path.indexOf("/scalable/") >= 0)
+		return Infinity;
+
+	const match = /(\d+)x\d+/.exec(path);
+
+	return match ? Number(match[1]) : 0;
+}
+
+function iconFiles(text) {
+	const files = {};
+	const ranks = {};
+
+	String(text === undefined || text === null ? "" : text).split("\n").forEach(function (path) {
+		if (path === "")
+			return;
+
+		const name = path.substring(path.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
+		const rank = iconRank(path);
+
+		if (ranks[name] === undefined || rank > ranks[name]) {
+			ranks[name] = rank;
+			files[name] = path;
+		}
+	});
+
+	return files;
+}
+
 function cleanExec(value) {
 	return String(value === undefined || value === null ? "" : value)
 		.replace(/%[uUfFiIcCkK]/g, "")
@@ -447,39 +476,21 @@ function shellQuote(arg) {
 	return "'" + arg.replace(/'/g, "'\\''") + "'";
 }
 
-function parseDesktopEntries(text) {
+function desktopEntries(apps) {
 	const entries = {};
 
-	text.split("\n").forEach(function (line) {
-		const path = line.substring(0, line.indexOf(":"));
-		const equal = line.indexOf("=");
+	(apps || []).forEach(function (app) {
+		const command = app.command && app.command.length ? String(app.command[0]) : "";
 
-		if (!path || equal < 0)
-			return;
-
-		const key = line.substring(path.length + 1, equal);
-		const value = line.substring(equal + 1);
-		const id = path.substring(path.lastIndexOf("/") + 1).replace(/\.desktop$/, "");
-		const entry = entries[id] || { id: id };
-
-		entries[id] = entry;
-
-		if (key === "NoDisplay" || key === "Hidden")
-			entry.hidden = value === "true";
-		else if (key === "Name" && !entry.name)
-			entry.name = value;
-		else if (key === "Icon" && !entry.icon)
-			entry.icon = value;
-		else if (key === "StartupWMClass" && !entry.wmclass)
-			entry.wmclass = value;
-		else if (key === "Terminal")
-			entry.terminal = value === "true";
-		else if (key === "Exec" && !entry.exec) {
-			const command = value.split(/\s+/)[0].replace(/["']/g, "");
-
-			entry.exec = command.substring(command.lastIndexOf("/") + 1);
-			entry.execLine = cleanExec(value);
-		}
+		entries[app.id] = {
+			id: app.id,
+			name: app.name,
+			icon: app.icon,
+			wmclass: app.startupClass,
+			exec: command.substring(command.lastIndexOf("/") + 1),
+			execLine: cleanExec(app.execString),
+			terminal: app.runInTerminal
+		};
 	});
 
 	return entries;
@@ -499,7 +510,7 @@ function appEntries(entries, ignore) {
 	Object.keys(entries || {}).forEach(function (id) {
 		const entry = entries[id];
 
-		if (!entry || entry.hidden || !entry.name || !entry.exec || skip.indexOf(id) >= 0)
+		if (!entry || !entry.name || !entry.exec || skip.indexOf(id) >= 0)
 			return;
 
 		out.push({
@@ -1250,14 +1261,14 @@ function lookupApp(entries, name) {
 
 	const wanted = name.toLowerCase();
 	const usable = function (entry) {
-		return entry && !entry.hidden && entry.icon;
+		return entry && entry.icon;
 	};
 
-	if (usable(entries[wanted]))
-		return entries[wanted];
+	if (usable(entries[name]))
+		return entries[name];
 
 	const keys = Object.keys(entries);
-	const fields = ["wmclass", "exec", "name"];
+	const fields = ["id", "wmclass", "exec", "name"];
 
 	for (let i = 0; i < fields.length; i++) {
 		for (let j = 0; j < keys.length; j++) {
