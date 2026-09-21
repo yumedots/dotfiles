@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs
 
 Item {
@@ -27,18 +26,16 @@ Item {
 		return root.force || root.maxAge <= 0 || fetched <= 0 || (Date.now() - fetched) >= root.maxAge;
 	}
 
-	Process {
+	Request {
 		id: reader
 
 		command: Shell.readCommand(root.path)
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				const data = Shell.readJson(text, null);
-				const cached = data !== null && typeof data === "object" ? data : {};
+		onDone: function (text) {
+			const data = Shell.readJson(text, null);
+			const cached = data !== null && typeof data === "object" ? data : {};
 
-				root.loaded(cached, root.stale(cached));
-			}
+			root.loaded(cached, root.stale(cached));
 		}
 	}
 }

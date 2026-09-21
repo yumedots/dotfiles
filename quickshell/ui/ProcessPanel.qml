@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs
+import qs.services
 
 Item {
 	id: panel
@@ -75,7 +75,7 @@ Item {
 		}
 	}
 
-	Process {
+	Request {
 		id: topProcesses
 
 		command: ["ps", "-eo", panel.psField + "=,pid=,comm:16=,args=", "--sort=-" + panel.psField]
@@ -85,11 +85,9 @@ Item {
 				topProcesses.running = true;
 		}
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				panel.allProcs = System.parseTopProcesses(text);
-				panel.heldProcs = System.holdProcessOrder(panel.heldProcs, System.topProcesses(panel.allProcs, Config.psIgnore));
-			}
+		onDone: function (text) {
+			panel.allProcs = System.parseTopProcesses(text);
+			panel.heldProcs = System.holdProcessOrder(panel.heldProcs, System.topProcesses(panel.allProcs, Config.psIgnore));
 		}
 	}
 

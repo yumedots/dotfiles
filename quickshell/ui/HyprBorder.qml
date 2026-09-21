@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell.Hyprland
-import Quickshell.Io
 import qs
+import qs.services
 
 Item {
 	id: root
@@ -46,7 +46,7 @@ Item {
 		}
 	}
 
-	Process {
+	Request {
 		id: hyprOptions
 
 		command: ["sh", "-c", "hyprctl getoption -j general:col.active_border; hyprctl getoption -j general:border_size; hyprctl getoption -j general:gaps_in; hyprctl getoption -j general:gaps_out"]
@@ -56,11 +56,9 @@ Item {
 				hyprOptions.running = true;
 		}
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				root.hyprBorder = Color.parseHyprBorder(text);
-				root.hyprGaps = Color.parseHyprGaps(text);
-			}
+		onDone: function (text) {
+			root.hyprBorder = Color.parseHyprBorder(text);
+			root.hyprGaps = Color.parseHyprGaps(text);
 		}
 	}
 

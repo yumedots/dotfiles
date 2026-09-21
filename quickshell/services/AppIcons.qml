@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs
 
 Item {
@@ -62,13 +61,13 @@ Item {
 
 	Component.onCompleted: iconScan.running = true
 
-	Process {
+	Request {
 		id: iconScan
 
 		command: ["sh", "-c", "for dir in \"$HOME/.local/share\" $(echo \"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\" | tr ':' ' '); do find \"$dir/icons/hicolor\" \"$dir/pixmaps\" -mindepth 1 -maxdepth 3 \\( -type f -o -type l \\) \\( -name '*.png' -o -name '*.svg' -o -name '*.xpm' \\) 2>/dev/null; done"]
 
-		stdout: StdioCollector {
-			onStreamFinished: root.icons = Apps.iconFiles(text)
+		onDone: function (text) {
+			root.icons = Apps.iconFiles(text);
 		}
 	}
 }
