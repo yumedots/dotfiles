@@ -59,8 +59,6 @@ BarStat {
 		onTriggered: statFile.reload()
 	}
 
-	popupPinned: monitor.searching
-
 	popupContent: CpuMonitor {
 		id: monitor
 

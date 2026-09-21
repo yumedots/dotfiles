@@ -19,8 +19,8 @@ Item {
 	property bool sweep: false
 	property real sweepWidth: 0
 	property var bar: null
+	property var onActivate
 	property bool popupKeyboard: true
-	property bool popupPinned: false
 	property bool popupAlignRight: false
 	property real popupPadding: -1
 	property alias popupContent: popupWindow.content
@@ -32,11 +32,18 @@ Item {
 	}
 
 	function closePopup() {
-		popupWindow.hideNow();
+		popupWindow.close();
 	}
 
 	function isPopupOpen() {
 		return popupWindow.shown;
+	}
+
+	function clicked() {
+		if (root.onActivate)
+			root.onActivate();
+		else if (root.bar)
+			root.bar.activateWidget(root, root.popupKeyboard);
 	}
 
 	readonly property bool iconMode: root.mode === "icon"
@@ -60,7 +67,6 @@ Item {
 		anchorItem: root
 		contentPadding: root.popupPadding
 		wantsKeyboard: root.popupKeyboard
-		pinned: root.popupPinned
 		alignRight: root.popupAlignRight
 	}
 
@@ -83,6 +89,13 @@ Item {
 		font.family: Config.fontFamily
 		font.pixelSize: Config.fontSize
 		text: Config.valueSample
+	}
+
+	MouseArea {
+		anchors.fill: parent
+		anchors.margins: -Config.barHitPadding
+
+		onClicked: root.clicked()
 	}
 
 	Item {

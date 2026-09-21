@@ -113,6 +113,58 @@ PanelWindow {
 		bar.openExclusive(bar.widgets[id], keyboard);
 	}
 
+	readonly property point origin: Qt.point(bar.margins.left, bar.atBottom
+		? (bar.screen ? bar.screen.height : 0) - bar.margins.bottom - bar.implicitHeight
+		: bar.margins.top)
+
+	function widgetAt(x, y) {
+		const ids = Object.keys(bar.widgets);
+
+		for (let i = 0; i < ids.length; i++) {
+			const item = bar.widgets[ids[i]];
+			const at = item.mapToItem(bar.contentItem, 0, 0);
+
+			if (x - bar.origin.x >= at.x && x - bar.origin.x <= at.x + item.width && y - bar.origin.y >= at.y && y - bar.origin.y <= at.y + item.height)
+				return item;
+		}
+
+		return null;
+	}
+
+	function clickAt(x, y) {
+		const item = bar.widgetAt(x, y);
+
+		if (item && typeof item.clicked === "function") {
+			bar.closePopups(item);
+			item.clicked();
+			return;
+		}
+
+		bar.closePopups(null);
+	}
+
+	signal widgetActivated()
+
+	function activateWidget(widget, keyboard) {
+		const open = widget && typeof widget.isPopupOpen === "function" && widget.isPopupOpen();
+
+		if (widget && typeof widget.wantKeyboard === "function")
+			widget.wantKeyboard(keyboard === true);
+
+		bar.closePopups(widget);
+
+		if (!widget || typeof widget.openPopup !== "function")
+			return;
+
+		if (open) {
+			widget.closePopup();
+			return;
+		}
+
+		bar.widgetActivated();
+		widget.openPopup();
+	}
+
 	Component { id: workspacesComponent; Workspaces {} }
 	Component { id: clockComponent; Clock {} }
 	Component { id: notifyComponent; NotifyStat {} }

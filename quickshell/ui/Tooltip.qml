@@ -12,51 +12,64 @@ PanelWindow {
 	property var anchorWindow
 	property var borderColors: null
 	property real borderWidth: -1
-	property bool pinned: false
 	property bool wantsKeyboard: false
 	property bool alignRight: false
 	property real contentPadding: -1
 
 	property real anchorX: 0
 	property bool shown: false
-	property bool warmed: false
-	property bool revealed: false
 
+	readonly property bool shut: !root.shown
+	readonly property bool revealed: root.shown && root.width > 1 && root.height > 1
+
+	// ponytail: a popup that takes exclusive keyboard focus makes hyprland send it
+	// every click, so it has to cover the bar strip as well: a click there is
+	// handed to the widget under the pointer instead of being swallowed, which is
+	// what makes one widget swap for another with a single click. Popups that do
+	// not want the keyboard stay card sized and let the bar take its own clicks.
+	// Ceiling: the band under the bar swallows clicks aimed at apps underneath.
+	readonly property bool wide: root.wantsKeyboard && !root.shut
 	readonly property bool atBottom: root.anchorWindow !== null && root.anchorWindow.atBottom === true
+
 	readonly property real wantedX: root.anchorX + (root.anchorItem ? root.anchorItem.width : 0) / 2 - root.cardWidth / 2
 	readonly property real limitX: (root.anchorWindow ? root.anchorWindow.width : 0) - root.cardWidth
 	readonly property real hang: Math.round(border.gapsOut + Config.tooltipOffsetY)
+	readonly property real screenWidth: root.screen ? root.screen.width : root.cardWidth
+	readonly property real screenHeight: root.screen ? root.screen.height : root.cardHeight
+	readonly property real barReserve: border.gapsOut + (root.anchorWindow ? root.anchorWindow.implicitHeight : 0)
 
 	screen: root.anchorWindow ? root.anchorWindow.screen : null
 
-	readonly property bool modal: root.wantsKeyboard
 	readonly property real scale: border.scale
 	readonly property real cardWidth: Util.snap(border.contentWidth + 2 * border.inset, root.scale)
 	readonly property real cardHeight: Util.snap(border.contentHeight + 2 * border.inset, root.scale)
 	readonly property real cardX: Util.snap(root.alignRight
-		? (root.screen ? root.screen.width : root.cardWidth) - root.cardWidth - border.gapsOut
+		? root.screenWidth - root.cardWidth - border.gapsOut
 		: border.gapsOut + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
-	readonly property real cardY: Util.snap(root.atBottom
-		? (root.screen ? root.screen.height : root.cardHeight) - root.hang - root.cardHeight
-		: root.hang, root.scale)
+	readonly property real cardY: root.atBottom
+		? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
+		: Math.round(root.barReserve + root.hang)
+	readonly property real band: root.atBottom ? root.screenHeight - root.cardY : root.cardY + root.cardHeight
 
-	anchors {
-		top: root.modal || !root.atBottom
-		bottom: root.modal || root.atBottom
-		left: true
-		right: root.modal
-	}
+	// ponytail: the surface stays mapped at 1x1 while closed, the way the launcher
+	// does, so opening one does not create and destroy a surface (that churn leaks
+	// a sync_file fd per cycle). Ceiling: one dead pixel at the bottom-left corner.
+	// exclusiveZone -1 places it against the monitor, not the bar's reserved strip.
+	anchors.top: !root.atBottom
+	anchors.bottom: !root.shut && root.atBottom
+	anchors.left: true
+	anchors.right: root.wide
 
-	margins.top: root.modal || root.atBottom ? 0 : root.hang
-	margins.bottom: root.modal || !root.atBottom ? 0 : root.hang
-	margins.left: root.modal ? 0 : root.cardX
+	exclusiveZone: -1
 
-	implicitWidth: root.cardWidth
-	implicitHeight: root.cardHeight
+	margins.top: root.shut ? root.screenHeight : (root.atBottom || root.wide ? 0 : root.cardY)
+	margins.bottom: root.atBottom && !root.shut ? (root.wide ? 0 : root.screenHeight - root.cardY - root.cardHeight) : 0
+	margins.left: root.shut || root.wide ? 0 : root.cardX
 
-	exclusiveZone: 0
+	implicitWidth: root.shut ? 1 : (root.wide ? root.screenWidth : root.cardWidth)
+	implicitHeight: root.shut ? 1 : (root.wide ? root.band : root.cardHeight)
+
 	color: "transparent"
-	visible: false
 
 	WlrLayershell.layer: WlrLayer.Overlay
 	WlrLayershell.namespace: "tooltip"
@@ -72,48 +85,10 @@ PanelWindow {
 	function open() {
 		root.refreshAnchor();
 		root.shown = true;
-		root.visible = true;
-
-		if (root.warmed)
-			root.revealed = true;
-		else {
-			warmup.sampled = -1;
-			warmup.restart();
-		}
-	}
-
-	Timer {
-		id: warmup
-
-		interval: 30
-		repeat: true
-		property real sampled: -1
-
-		onTriggered: {
-			if (root.cardHeight !== warmup.sampled) {
-				warmup.sampled = root.cardHeight;
-				return;
-			}
-
-			warmup.stop();
-			warmup.sampled = -1;
-			root.warmed = true;
-
-			if (root.shown)
-				root.revealed = true;
-		}
 	}
 
 	function close() {
-		root.revealed = false;
 		root.shown = false;
-		root.visible = false;
-	}
-
-	function hideNow() {
-		root.revealed = false;
-		root.shown = false;
-		root.visible = false;
 	}
 
 	function toggle() {
@@ -123,30 +98,43 @@ PanelWindow {
 			root.open();
 	}
 
-	onVisibleChanged: {
-		if (!root.visible)
-			root.shown = false;
+	function insideCard(x, y) {
+		return x >= root.cardLeft && x <= root.cardLeft + root.cardWidth && y >= root.cardTop && y <= root.cardTop + root.cardHeight;
 	}
+
+	function forwarded(x, y) {
+		const bar = root.anchorWindow;
+		const screenY = y + (root.atBottom ? root.cardTop : 0);
+
+		if (bar && typeof bar.clickAt === "function")
+			bar.clickAt(x, screenY);
+		else
+			root.close();
+	}
+
+	readonly property real cardLeft: root.wide ? root.cardX : 0
+	readonly property real cardTop: root.wide && !root.atBottom ? root.cardY : 0
 
 	MouseArea {
 		id: backdrop
 
 		anchors.fill: parent
+		visible: root.wide
 		acceptedButtons: Qt.AllButtons
 
 		onPressed: function (mouse) {
-			if (root.modal && card.contains(card.mapFromItem(backdrop, mouse.x, mouse.y)))
+			if (root.insideCard(mouse.x, mouse.y))
 				return;
 
-			root.close();
+			root.forwarded(mouse.x, mouse.y);
 		}
 	}
 
 	Item {
 		id: card
 
-		x: root.modal ? root.cardX : 0
-		y: root.modal ? root.cardY : 0
+		x: root.cardLeft
+		y: root.cardTop
 		width: root.cardWidth
 		height: root.cardHeight
 
@@ -166,6 +154,29 @@ PanelWindow {
 
 				root.close();
 				event.accepted = true;
+			}
+		}
+
+		Text {
+			id: closeButton
+
+			anchors.right: parent.right
+			anchors.top: parent.top
+			anchors.margins: Config.tooltipCloseInset
+			visible: root.revealed
+			font.family: Config.fontFamily
+			font.pixelSize: Config.tooltipCloseSize
+			color: closeHit.containsMouse ? Config.foreground : Config.muted
+			text: Config.iconClose
+
+			MouseArea {
+				id: closeHit
+
+				anchors.fill: parent
+				anchors.margins: -Config.tooltipCloseSize / 3
+				hoverEnabled: true
+
+				onClicked: root.close()
 			}
 		}
 	}

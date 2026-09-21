@@ -104,7 +104,9 @@ ShellRoot {
 
 		model: Quickshell.screens
 
-		Bar {}
+		Bar {
+			onWidgetActivated: Handoff.run(shellRoot.closeLauncherUnderWidget)
+		}
 	}
 
 	Launcher {

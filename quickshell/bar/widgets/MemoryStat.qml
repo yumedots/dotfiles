@@ -47,8 +47,6 @@ BarStat {
 		onTriggered: memFile.reload()
 	}
 
-	popupPinned: monitor.searching
-
 	popupContent: MemoryMonitor {
 		id: monitor
 

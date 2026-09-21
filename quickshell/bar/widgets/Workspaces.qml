@@ -67,6 +67,8 @@ Row {
 			text: "" + ws.workspaceId
 			padding: Config.workspacePadding
 			color: root.focusedId === ws.workspaceId ? Config.workspaceActive : Config.workspaceInactive
+
+			onActivate: function () { root.focusWorkspace(ws.workspaceId); }
 		}
 	}
 }
