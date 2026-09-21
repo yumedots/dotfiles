@@ -30,13 +30,18 @@ PanelWindow {
 	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
 	readonly property var results: root.buildResults()
 	readonly property int listHeight: Config.launcherMaxRows * Config.launcherRowHeight
+	readonly property bool configured: root.screen !== null && root.width === root.screen.width
+
 	readonly property string modeGlyph: root.mode === "files" ? Config.launcherIconFiles : Config.launcherIconClipboard
 	readonly property string prompt: root.mode === "" || root.mode === "windows" ? Config.launcherPrompt : root.modeGlyph
 
 	anchors.top: true
-	anchors.bottom: true
 	anchors.left: true
-	anchors.right: true
+	anchors.bottom: root.mapped
+	anchors.right: root.mapped
+
+	implicitWidth: 1
+	implicitHeight: 1
 
 	WlrLayershell.layer: WlrLayer.Overlay
 	WlrLayershell.namespace: "launcher"
@@ -45,20 +50,23 @@ PanelWindow {
 
 	exclusiveZone: 0
 	color: "transparent"
-	visible: root.mapped
+
+	// ponytail: surface stays mapped at 1x1 while closed so opening never
+	// re-creates it (that handshake is what stretched a 500x500 buffer over the
+	// screen). Ceiling: a 1px dead spot at the top-left corner when closed; if
+	// that ever bites, move the closed window off-screen or use mask: Region.
 
 	function open() {
 		root.query = "";
-		list.currentIndex = 0;
-		root.mapped = true;
 		root.files = [];
 		root.clips = [];
 		Hyprland.refreshToplevels();
 		pinsFile.running = true;
 		usageFile.running = true;
 		terminalFile.running = true;
+		root.shown = true;
+		root.mapped = true;
 		Qt.callLater(function () {
-			root.shown = true;
 			list.currentIndex = 0;
 			root.winIndex = 0;
 
@@ -426,7 +434,7 @@ PanelWindow {
 		height: root.windows ? windowsGrid.height + card.inset * 2 : column.implicitHeight + card.inset * 2
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
-		visible: root.shown
+		visible: root.shown && root.configured
 		focus: true
 
 		Keys.onPressed: function (event) { root.handleKeys(event); }
