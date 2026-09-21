@@ -246,6 +246,17 @@ Item {
 					color: panel.rowColor(modelData.value)
 					text: panel.rowText(modelData.value)
 				}
+
+				MouseArea {
+					anchors.fill: parent
+
+					onClicked: {
+						if (row.active)
+							procList.killRequested(row.modelData);
+						else
+							procList.currentIndex = row.index;
+					}
+				}
 			}
 		}
 	}

@@ -155,6 +155,15 @@ function nodeVolume(node) {
 	return node && node.audio ? node.audio.volume : 0;
 }
 
+function setNodeVolume(node, fraction, max) {
+	const volume = Math.min(Math.max(fraction, 0), 1) * max;
+
+	if (node && node.audio)
+		node.audio.volume = volume;
+
+	return volume;
+}
+
 function cpuSample(fields) {
 	let total = 0;
 	let idle = 0;

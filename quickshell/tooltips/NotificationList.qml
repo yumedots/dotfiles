@@ -133,6 +133,16 @@ Item {
 		Input.notifications(event, root);
 	}
 
+	MouseArea {
+		anchors.fill: parent
+		acceptedButtons: Qt.NoButton
+
+		onWheel: function (wheel) {
+			list.contentY = Util.clamp(list.contentY + (wheel.angleDelta.y > 0 ? -Config.notifyRowHeight : Config.notifyRowHeight), 0, Math.max(0, list.contentHeight - list.height));
+			wheel.accepted = true;
+		}
+	}
+
 	ListView {
 		id: list
 
@@ -173,6 +183,26 @@ Item {
 				selected: slot.active && !root.opened
 				expanded: root.opened
 				expandable: !root.single
+			}
+
+			MouseArea {
+				anchors.fill: parent
+
+				onClicked: {
+					if (root.single) {
+						root.dismiss();
+						root.closeRequested();
+						return;
+					}
+
+					if (root.opened) {
+						root.back();
+						return;
+					}
+
+					root.selected = slot.index;
+					root.open();
+				}
 			}
 
 			Rectangle {

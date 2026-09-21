@@ -187,6 +187,13 @@ Item {
 							font.pixelSize: Config.calendarArrowSize
 							color: Config.calendarBase
 							text: Config.iconPrev
+
+							MouseArea {
+								anchors.fill: parent
+								anchors.margins: -Config.calendarArrowSize / 2
+
+								onClicked: root.stepMonths(-1)
+							}
 						}
 
 						Text {
@@ -194,6 +201,13 @@ Item {
 							font.pixelSize: Config.calendarArrowSize
 							color: Config.calendarBase
 							text: Config.iconNext
+
+							MouseArea {
+								anchors.fill: parent
+								anchors.margins: -Config.calendarArrowSize / 2
+
+								onClicked: root.stepMonths(1)
+							}
 						}
 					}
 				}

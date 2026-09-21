@@ -24,6 +24,8 @@ Item {
 
 	focus: true
 
+	onOnScreenChanged: if (!root.onScreen) root.keyboard = false
+
 	readonly property real channelsMaxWidth: Config.mixerVisibleChannels * Config.mixerChannelWidth + (Config.mixerVisibleChannels - 1) * Config.mixerChannelGap
 	readonly property real idleWidth: Config.mixerIdleChannels * Config.mixerChannelWidth + (Config.mixerIdleChannels - 1) * Config.mixerChannelGap
 	readonly property real contentWidth: Math.max(root.hasApps ? apps.implicitWidth : 0, root.idleWidth)
@@ -54,6 +56,8 @@ Item {
 		return list;
 	}
 
+	property bool keyboard: false
+
 	readonly property var selectedNode: root.targetNodes.length > 0
 		? root.targetNodes[Util.clamp(root.targetIndex, 0, root.targetNodes.length - 1)]
 		: null
@@ -67,6 +71,21 @@ Item {
 		root.targetIndex = Util.clamp(root.targetIndex + step, 0, last);
 	}
 
+	function focusNode(node) {
+		const nodes = root.targetNodes;
+
+		for (let i = 0; i < nodes.length; i++) {
+			if (System.sameNode(nodes[i], node))
+				root.targetIndex = i;
+		}
+	}
+
+	function setFader(node, fraction) {
+		root.keyboard = false;
+		root.focusNode(node);
+		System.setNodeVolume(node, fraction, Config.mixerMaxVolume);
+	}
+
 	function nudgeVolume(step) {
 		const node = root.selectedNode;
 
@@ -77,6 +96,8 @@ Item {
 	}
 
 	Keys.onPressed: function (event) {
+		root.keyboard = true;
+
 		if (root.picker === "")
 			Input.mixer(event, root);
 		else
@@ -109,6 +130,7 @@ Item {
 
 	function closePicker() {
 		root.picker = "";
+		root.keyboard = false;
 	}
 
 	function makeDefault(direction, node) {
@@ -182,6 +204,15 @@ Item {
 			active: channel.selected
 		}
 
+		MouseArea {
+			anchors.fill: parent
+
+			onClicked: {
+				root.keyboard = false;
+				root.focusNode(channel.node);
+			}
+		}
+
 		Column {
 			id: stack
 
@@ -202,6 +233,15 @@ Item {
 					vertical: true
 					level: channel.level
 					fill: channel.muted ? Config.muted : Config.foreground
+				}
+
+				MouseArea {
+					anchors.fill: parent
+					anchors.leftMargin: -Config.mixerHitPad
+					anchors.rightMargin: -Config.mixerHitPad
+
+					onPressed: (mouse) => root.setFader(channel.node, 1 - mouse.y / fader.height)
+					onPositionChanged: (mouse) => { if (mouse.pressed) root.setFader(channel.node, 1 - mouse.y / fader.height); }
 				}
 			}
 
@@ -248,6 +288,7 @@ Item {
 		property bool muted: false
 		property bool recording: false
 		property real volume: 0
+		property var onActivate
 
 		readonly property bool selected: System.sameNode(line.node, root.selectedNode)
 		readonly property real level: Util.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
@@ -259,7 +300,20 @@ Item {
 		Highlight {
 			id: hl
 
-			active: line.selected
+			active: line.selected && root.keyboard
+		}
+
+		MouseArea {
+			anchors.left: parent.left
+			anchors.top: parent.top
+			anchors.bottom: parent.bottom
+			width: Config.mixerDeviceIconSize
+			hoverEnabled: true
+
+			onClicked: {
+				if (line.onActivate)
+					line.onActivate();
+			}
 		}
 
 		TextMetrics {
@@ -329,6 +383,15 @@ Item {
 				height: Config.mixerFaderThickness
 				level: line.level
 				fill: line.muted ? Config.muted : Config.foreground
+			}
+
+			MouseArea {
+				anchors.fill: parent
+				anchors.topMargin: -Config.mixerHitPad
+				anchors.bottomMargin: -Config.mixerHitPad
+
+				onPressed: (mouse) => root.setFader(line.node, mouse.x / lineFader.width)
+				onPositionChanged: (mouse) => { if (mouse.pressed) root.setFader(line.node, mouse.x / lineFader.width); }
 			}
 		}
 	}
@@ -491,6 +554,11 @@ Item {
 
 				width: parent.width
 				node: root.sink
+
+				onActivate: function () {
+					root.keyboard = false;
+					root.openPicker("output");
+				}
 				glyph: Config.iconOutput
 				muted: System.nodeMuted(root.sink)
 				volume: System.nodeVolume(root.sink)
@@ -501,6 +569,11 @@ Item {
 
 				width: parent.width
 				node: root.source
+
+				onActivate: function () {
+					root.keyboard = false;
+					root.openPicker("input");
+				}
 				glyph: Config.iconInput
 				recording: root.recording
 				muted: System.nodeMuted(root.source)
