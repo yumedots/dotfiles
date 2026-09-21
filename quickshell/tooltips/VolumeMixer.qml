@@ -62,7 +62,7 @@ Item {
 	}
 
 	readonly property var selectedNode: root.targetNodes.length > 0
-		? root.targetNodes[Math.max(0, Math.min(root.targetIndex, root.targetNodes.length - 1))]
+		? root.targetNodes[Helpers.clamp(root.targetIndex, 0, root.targetNodes.length - 1)]
 		: null
 
 	function moveTarget(step) {
@@ -71,7 +71,7 @@ Item {
 		if (last < 0)
 			return;
 
-		root.targetIndex = Math.max(0, Math.min(last, root.targetIndex + step));
+		root.targetIndex = Helpers.clamp(root.targetIndex + step, 0, last);
 	}
 
 	function nudgeVolume(step) {
@@ -80,7 +80,7 @@ Item {
 		if (!node || !node.audio)
 			return;
 
-		node.audio.volume = Math.max(0, Math.min(node.audio.volume + step, Config.mixerMaxVolume));
+		node.audio.volume = Helpers.clamp(node.audio.volume + step, 0, Config.mixerMaxVolume);
 	}
 
 	Keys.onPressed: function (event) {
@@ -94,7 +94,7 @@ Item {
 		if (!node || !node.audio)
 			return;
 
-		node.audio.volume = Math.max(0, Math.min(value, Config.mixerMaxVolume));
+		node.audio.volume = Helpers.clamp(value, 0, Config.mixerMaxVolume);
 	}
 
 	function toggleMute(node) {
@@ -232,7 +232,7 @@ Item {
 		readonly property bool selected: root.sameNode(channel.node, root.selectedNode)
 		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 		readonly property int percent: Math.round(channel.volume * 100)
-		readonly property real level: Math.max(0, Math.min(channel.volume / Config.mixerMaxVolume, 1))
+		readonly property real level: Helpers.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
 
 		implicitWidth: Config.mixerChannelWidth
 		implicitHeight: stack.implicitHeight
@@ -322,7 +322,7 @@ Item {
 		signal opened()
 
 		readonly property bool selected: root.sameNode(line.node, root.selectedNode)
-		readonly property real level: Math.max(0, Math.min(line.volume / Config.mixerMaxVolume, 1))
+		readonly property real level: Helpers.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int percent: Math.round(line.volume * 100)
 
 		height: Math.max(Config.mixerDeviceIconSize, Config.fontSize)

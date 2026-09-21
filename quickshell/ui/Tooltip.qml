@@ -35,7 +35,7 @@ PanelWindow {
 	readonly property real cardHeight: Helpers.snap(border.contentHeight + 2 * border.inset, root.scale)
 	readonly property real cardX: Helpers.snap(root.alignRight
 		? (root.screen ? root.screen.width : root.cardWidth) - root.cardWidth - border.gapsOut
-		: border.gapsOut + Math.max(0, Math.min(root.wantedX + Config.tooltipOffsetX, root.limitX)), root.scale)
+		: border.gapsOut + Helpers.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
 	readonly property real cardY: Helpers.snap(root.atBottom
 		? (root.screen ? root.screen.height : root.cardHeight) - root.hang - root.cardHeight
 		: root.hang, root.scale)

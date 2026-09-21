@@ -95,7 +95,7 @@ QtObject {
 		return root.act(event, {
 			escape: () => target.closeRequested(),
 			up: () => target.pickerIndex = Math.max(0, target.pickerIndex - 1),
-			down: () => target.pickerIndex = Math.min(Math.max(0, target.devices.length - 1), target.pickerIndex + 1),
+			down: () => target.pickerIndex = Helpers.clamp(target.pickerIndex + 1, 0, target.devices.length - 1),
 			accept: () => target.makeDefault(target.picker, target.devices[target.pickerIndex])
 		});
 	}

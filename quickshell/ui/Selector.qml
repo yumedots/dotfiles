@@ -56,16 +56,8 @@ Item {
 
 		const step = root.rowHeight + root.rowSpacing;
 		const top = index * step;
-		const bottom = top + root.rowHeight;
-		const max = Math.max(0, list.contentHeight - list.height);
-		let next = list.contentY;
 
-		if (top < list.contentY)
-			next = top;
-		else if (bottom > list.contentY + list.height)
-			next = bottom - list.height;
-
-		list.contentY = Math.max(0, Math.min(max, next));
+		list.contentY = Helpers.scrollIntoView(list.contentY, list.height, list.contentHeight, top, top + root.rowHeight);
 	}
 
 	onCountChanged: {
@@ -105,15 +97,8 @@ Item {
 		}
 	}
 
-	Rectangle {
-		id: scroll
-
-		visible: list.contentHeight > list.height
-		width: root.scrollWidth
-		height: Math.max(12, list.height * list.height / Math.max(1, list.contentHeight))
-		x: root.width - width
-		y: list.contentY / Math.max(1, list.contentHeight - list.height) * (list.height - height)
-		radius: 0
-		color: Config.muted
+	Scrollbar {
+		view: list
+		offset: root.rowSpacing
 	}
 }

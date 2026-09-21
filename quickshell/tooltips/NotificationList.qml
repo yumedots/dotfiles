@@ -57,7 +57,7 @@ Item {
 		if (root.opened) {
 			const max = Math.max(0, list.contentHeight - list.height);
 
-			list.contentY = Math.max(0, Math.min(max, list.contentY + step * Config.notifyRowHeight));
+			list.contentY = Helpers.clamp(list.contentY + step * Config.notifyRowHeight, 0, max);
 			return;
 		}
 
@@ -66,7 +66,7 @@ Item {
 
 		const from = root.selected < 0 ? (step > 0 ? 0 : root.count - 1) : root.selected + step;
 
-		root.selected = Math.max(0, Math.min(root.count - 1, from));
+		root.selected = Helpers.clamp(from, 0, root.count - 1);
 	}
 
 	function reveal() {
@@ -80,13 +80,7 @@ Item {
 			return;
 		}
 
-		const bottom = block.y + block.height;
-		const max = Math.max(0, list.contentHeight - list.height);
-
-		if (block.y < list.contentY)
-			list.contentY = Math.max(0, block.y);
-		else if (bottom > list.contentY + list.height)
-			list.contentY = Math.min(max, bottom - list.height);
+		list.contentY = Helpers.scrollIntoView(list.contentY, list.height, list.contentHeight, block.y, block.y + block.height);
 	}
 
 	function open() {
@@ -244,13 +238,8 @@ Item {
 		}
 	}
 
-	Rectangle {
-		x: root.implicitWidth - width
-		y: list.contentY / Math.max(1, list.contentHeight - list.height) * (list.height - height)
-		width: Config.scrollbarWidth
-		height: Math.max(12, list.height * list.height / Math.max(1, list.contentHeight))
-		color: Config.muted
-		visible: list.contentHeight > list.height + 1
+	Scrollbar {
+		view: list
 	}
 
 	Text {
