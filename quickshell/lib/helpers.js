@@ -63,6 +63,17 @@ function snap(value, scale) {
 	return Math.round(value * unit) / unit;
 }
 
+function clamp(value, min, max) {
+	return Math.min(Math.max(value, min), max);
+}
+
+function scrollIntoView(contentY, height, contentHeight, top, bottom) {
+	const max = Math.max(0, contentHeight - height);
+	const next = top < contentY ? top : (bottom > contentY + height ? bottom - height : contentY);
+
+	return clamp(next, 0, max);
+}
+
 function mixColors(c1, c2, t) {
 	const a = colorChannels(c1);
 	const b = colorChannels(c2);
@@ -474,6 +485,29 @@ function pinnedFromText(text) {
 
 function shellQuote(arg) {
 	return "'" + arg.replace(/'/g, "'\\''") + "'";
+}
+
+function curl(url, seconds) {
+	return ["sh", "-c", "curl -s -m " + (seconds > 0 ? Math.round(seconds) : 15) + " " + shellQuote(url)];
+}
+
+function readCommand(path) {
+	return ["sh", "-c", "cat " + shellQuote(path) + " 2>/dev/null"];
+}
+
+function writeCommand(path, text) {
+	const dir = path.substring(0, path.lastIndexOf("/"));
+	const make = dir ? "mkdir -p " + shellQuote(dir) + " && " : "";
+
+	return ["sh", "-c", make + "printf '%s' " + shellQuote(text) + " > " + shellQuote(path)];
+}
+
+function readJson(text, fallback) {
+	try {
+		return JSON.parse(text);
+	} catch (error) {
+		return fallback;
+	}
 }
 
 function desktopEntries(apps) {

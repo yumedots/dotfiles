@@ -1,15 +1,26 @@
 const fs = require("fs");
 
-eval(fs.readFileSync(__dirname + "/helpers.js", "utf8").replace(".pragma library", ""));
+const filter = process.argv[2] || "";
+let ran = 0;
 
 function assert(condition, message) {
+	ran += 1;
+
 	if (!condition)
 		throw new Error(message);
 }
 
+function section(name, body) {
+	if (filter === "" || name.indexOf(filter) >= 0)
+		body();
+}
+
+eval(fs.readFileSync(__dirname + "/helpers.js", "utf8").replace(".pragma library", ""));
+
 const Config = new Function(fs.readFileSync(__dirname + "/../config.js", "utf8").replace(".pragma library", "")
 	+ "\nreturn { weatherCodes: weatherCodes, weatherCoords: weatherCoords, weatherIcon: weatherIcon, weatherLoadingIcon: weatherLoadingIcon, weatherLocation: weatherLocation, weatherStationCount: weatherStationCount };")();
 
+section("apps", function () {
 const entries = desktopEntries([
 	{ id: "foot", name: "Foot", execString: "foot --server", command: ["foot", "--server"], icon: "foot" },
 	{ id: "code-insiders", name: "Visual Studio Code - Insiders", execString: "code-insiders %F", command: ["code-insiders"], icon: "vscode-insiders", startupClass: "Code - Insiders" },
@@ -28,6 +39,9 @@ assert(lookupApp({ "org.vinegarhq.Sober": { id: "org.vinegarhq.Sober", name: "So
 assert(lookupApp({ "com.spotify.Client": { id: "com.spotify.Client", name: "Spotify", icon: "com.spotify.Client" } }, "com.spotify.client").name === "Spotify", "a mixed case id is found from a lowercase query too");
 assert(lookupApp(entries, "nope") === null, "unknown ids return null");
 assert(lookupApp(entries, "") === null, "empty names return null");
+});
+
+section("calendar", function () {
 assert(daysInMonth(2024, 1) === 29 && daysInMonth(2026, 1) === 28, "february length");
 assert(weekdayOffset(new Date(2024, 0, 1), 1) === 0, "2024-01-01 is a monday");
 assert(weekdayOffset(new Date(2026, 8, 1), 1) === 1, "2026-09-01 is a tuesday in a monday week");
@@ -84,6 +98,9 @@ for (let year = 2020; year <= 2030; year++) {
 assert(tallest === 6, "every month of the decade fits six weeks, so the grid never needs more");
 assert(filledCells(50, 15) === 8 && filledCells(200, 15) === 15, "filled cells clamp");
 
+});
+
+section("border", function () {
 const border = parseHyprBorder([
 	'{"option": "general:col.active_border", "gradient": "ee33ccff ee00ff99 45deg", "set": true }',
 	'{"option": "general:border_size", "int": 1, "set": true }'
@@ -143,6 +160,9 @@ assert(parseHyprGaps("hyprctl: command not found").outer === null, "unreadable o
 const namedColor = parseGradient("rgba(ff0000ff) 90deg");
 assert(namedColor.angle === 90 && namedColor.colors === null, "a token that is not a plain hex color is dropped");
 
+});
+
+section("titles", function () {
 assert(commandWord("btop") === "btop", "a bare command is the running program");
 assert(commandWord("nvim notes.md") === "nvim", "arguments are dropped");
 assert(commandWord("Zathura a.pdf") === "zathura", "the command is lowercased");
@@ -186,6 +206,9 @@ assert(pinnedFromText("yazi\nbtop\n\n")[0] === "yazi" && pinnedFromText("yazi\nb
 assert(pinnedFromText("").length === 0, "a missing pin file yields nothing");
 assert(shellQuote("a b") === "'a b'", "shell quoting wraps spaces");
 
+});
+
+section("streams", function () {
 assert(isOutputStream(true, "Stream/Output/Audio"), "a playback stream counts as a playing app");
 assert(!isOutputStream(true, "Stream/Input/Audio"), "a capture stream is not a playing app");
 assert(!isOutputStream(false, "Audio/Sink"), "a sink is not an app stream");
@@ -267,6 +290,9 @@ assert(fuzzyScore("fire", "fire") === 1000, "an exact match wins");
 assert(fuzzyScore("Firefox", "fire") > fuzzyScore("Firmware updater", "fire"), "a tight prefix beats a scattered one");
 assert(entryScore({ name: "Firefox", keywords: ["firefox"] }, "ffx") !== null, "keywords are searched too");
 
+});
+
+section("ranking", function () {
 const ranked = rankEntries([
 	{ id: "app:a", name: "Alpha" },
 	{ id: "app:b", name: "Bravo" },
@@ -292,6 +318,9 @@ assert(bumpUsage({ "app:a": { count: 3, last: 100 } }, "app:a", 200)["app:a"].co
 assert(bumpUsage({ "app:a": { count: 3, last: 100 } }, "app:a", 200)["app:a"].last === 200, "and the time");
 assert(bumpUsage({}, "app:b", 5)["app:b"].count === 1, "a first launch starts at one");
 
+});
+
+section("clipboard", function () {
 const listing = parseClipboardList("12\thello world\n9\tsecond entry\nnot a line\n");
 assert(listing.length === 2, "every cliphist line is one entry");
 assert(listing[0].id === "12" && listing[0].text === "hello world", "the cliphist id and preview are split");
@@ -328,6 +357,9 @@ assert(appEntries({ avahi: { name: "Avahi", exec: "avahi" } }, ["avahi"]).length
 assert(appEntries({ keep: { name: "Keep", exec: "keep" } }, ["avahi"]).length === 1, "only the ignored ids are skipped");
 assert(appEntries({ firefox: { name: "Firefox", exec: "firefox", execLine: "firefox --new-window" } })[0].execLine === "firefox --new-window", "the exec line reaches the launcher entry");
 
+});
+
+section("cpu", function () {
 const statBefore = [
 	"cpu  100 0 100 800 0 0 0 0 0 0",
 	"cpu0 60 0 40 900 0 0 0 0 0 0",
@@ -376,6 +408,9 @@ assert(cpuSpecLine(info) === "2 threads \u00b7 14 cores \u00b7 3.2 GHz \u00b7 35
 assert(cpuSpecLine(parseCpuInfo("")) === "", "an unreadable cpuinfo has no spec line");
 assert(parseCpuInfo("processor\t: 0").cores === 1, "without a cpu cores line the thread count stands in");
 
+});
+
+section("processes", function () {
 const processes = parseTopProcesses("90.6  4711 freebuff\n39.1  4712 freebuff\n 4.6  4713 helium\n\nnot a process\n");
 assert(processes.length === 3, "one entry per ps line, the noise is dropped");
 assert(processes[0].name === "freebuff" && processes[0].value === 90.6 && processes[0].pid === 4711, "the name, the pid and the value are split");
@@ -422,6 +457,9 @@ assert(killCommand(4711, "-9").join(" ") === "kill -9 4711", "force quit is a ki
 assert(killCommand(4711, "-15").join(" ") === "kill -15 4711", "the signal comes from the caller");
 assert(killCommand(0, "-9").length === 0, "a row without a pid is not killed");
 
+});
+
+section("memory", function () {
 const mem = parseMeminfo("MemTotal:       32763188 kB\nMemFree:        26602464 kB\nMemAvailable:   28637116 kB\nBuffers:          106552 kB\nCached:          2406664 kB\nSwapTotal:       8388604 kB\nSwapFree:        7340032 kB\n");
 assert(mem.total === 32763188 && mem.used === 32763188 - 28637116, "used is total minus available");
 assert(mem.available === 28637116 && mem.cached === 2406664 && mem.buffers === 106552, "available, cached and buffers are read back");
@@ -453,6 +491,9 @@ assert(sizeText(1024 * 1024) === "1.0 GB" && sizeText(1024 * 1024 * 3.5) === "3.
 assert(sizeText(1024 * 1024 - 1) === "1024.0 MB" && sizeText(620 * 1024) === "620.0 MB", "below a gigabyte it drops to MB");
 assert(sizeText(999) === "999 KB" && sizeText(0) === "0 KB", "below a megabyte it stays in KB");
 
+});
+
+section("layout", function () {
 const layout = parseBarLayout(JSON.stringify({ version: 1, bar: { position: "bottom", transparent: true, centerAnchor: "date", layout: { left: [{ id: "workspaces" }, { id: "spacer", size: 12 }], center: [{ id: "clock", format: "HH:mm" }], right: [{ id: "date" }] } } }));
 assert(layout.position === "bottom" && layout.transparent === true, "the bar position and the transparent flag are read");
 assert(layout.centerAnchor === "date", "centerAnchor names the item the center is pinned to");
@@ -472,6 +513,9 @@ assert(parseBarLayout('{"bar": {"position": "left"}}').position === "top", "a po
 assert(plainText("<b>hi</b> &amp; <i>there</i><br>line") === "hi & there line", "markup is stripped from a notification body");
 assert(plainText("") === "" && plainText(null) === "", "an empty body stays empty");
 
+});
+
+section("github", function () {
 const contributions = parseContributions([
 	'<td data-date="2026-09-11" data-level="1"></td><tool-tip>3 contributions on September 11th.</tool-tip>',
 	'<td data-date="2026-09-12" data-level="4"></td><tool-tip>No contributions on September 12th.</tool-tip>',
@@ -549,6 +593,9 @@ const scrambled = contribGrid([
 
 assert(scrambled[1 * 2 + 1].count === 2 && scrambled[0].count === 1, "a feed in any order still lands on its own weekday and week");
 
+});
+
+section("weather", function () {
 const degrees = splitTemp("86°F");
 
 assert(degrees.value === "86" && degrees.unit === "°F", "the temperature splits so the unit can be drawn smaller");
@@ -655,6 +702,9 @@ for (let i = 0; i < weatherIcons.length; i++) {
 	assert(glyph.length === 2 && point >= 0xf0000 && point <= 0xf1fff, "a weather glyph is one five digit code point and not a four digit escape plus a stray character: " + JSON.stringify(glyph));
 }
 
+});
+
+section("palette", function () {
 const accents = {
 	cpuBase: "#a78bfa",
 	cpuPeak: "#e05252",
@@ -683,4 +733,40 @@ for (let i = 0; i < accentNames.length; i++) {
 
 assert(palette.mono === true, "mono is on");
 
-console.log("check ok");
+});
+
+section("helpers", function () {
+assert(clamp(5, 0, 3) === 3 && clamp(-1, 0, 3) === 0 && clamp(2, 0, 3) === 2, "clamp keeps a value inside its bounds");
+assert(clamp(7, 0, -1) === -1, "an inverted clamp still returns the top bound, callers must floor it themselves");
+
+assert(scrollIntoView(100, 50, 500, 200, 260) === 210, "a row below the view scrolls just far enough to show its bottom edge");
+assert(scrollIntoView(100, 50, 500, 40, 100) === 40, "a row above the view scrolls up to its top");
+assert(scrollIntoView(100, 50, 500, 110, 140) === 100, "a row already in view does not move the list");
+assert(scrollIntoView(100, 50, 500, 110, 170) === 120, "a row that hangs past the bottom edge scrolls on until it fits");
+assert(scrollIntoView(0, 50, 40, 0, 100) === 0, "a list shorter than its view does not scroll");
+assert(scrollIntoView(450, 50, 500, 480, 540) === 450, "a row past the end clamps to the last screenful, never a blank list");
+assert(scrollIntoView(500, 50, 500, 400, 460) === 400, "scrolling up is clamped to the top of the list too");
+
+assert(curl("https://x/y?a=1", 20).join(" ") === "sh -c curl -s -m 20 'https://x/y?a=1'", "a fetch is one curl with its own timeout, got " + curl("https://x/y?a=1", 20).join(" "));
+assert(curl("https://x/y").join(" ").indexOf("-m 15") > 0, "a fetch with no timeout gets the default one");
+assert(curl("https://x/it's")[2].indexOf("'\\''") > 0, "a quote in a url cannot break out of the command");
+
+assert(readCommand("/tmp/a b/x.txt").join(" ") === "sh -c cat '/tmp/a b/x.txt' 2>/dev/null", "a read quotes the path, so a space in it cannot split the command");
+assert(readCommand("/tmp/x'p.txt")[2].indexOf("'\\''") > 0, "a quote in the path is escaped, not left to open a string");
+
+const write = writeCommand("/tmp/a b/x.json", '{"a": 1}');
+
+assert(write[2].indexOf("mkdir -p '/tmp/a b' && ") === 0, "a write makes the file's own directory first, got " + write[2]);
+assert(write[2].indexOf("printf '%s' '{\"a\": 1}' > '/tmp/a b/x.json'") > 0, "a write puts the payload in the file it was given");
+assert(writeCommand("x.json", "hi")[2] === "printf '%s' 'hi' > 'x.json'", "a path with no directory is written where it stands, no empty mkdir to short circuit on");
+assert(writeCommand("/x.json", "hi")[2].indexOf("mkdir -p '/' &&") < 0, "a file at the root does not try to make an empty directory name");
+
+assert(writeCommand("/home/g/cache/contrib.json", "X")[2]
+	=== "mkdir -p '/home/g/cache' && printf '%s' 'X' > '/home/g/cache/contrib.json'", "a cache write is the exact command the services used to build by hand");
+
+assert(readJson('{"days": [1]}', {}).days.length === 1, "a good cache file parses");
+assert(readJson("not json", null) === null && readJson("", "fb") === "fb", "a corrupt or empty cache file falls back instead of throwing");
+
+});
+
+console.log("check ok (" + ran + " assertions" + (filter === "" ? "" : ", filter " + filter) + ")");
