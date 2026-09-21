@@ -8,7 +8,6 @@ Item {
 	property alias delegate: list.delegate
 	property alias currentIndex: list.currentIndex
 	property int visibleRows: 5
-	property string killKey: Config.procKillKey
 	property string emptyText: Config.procNoMatch
 
 	readonly property var current: list.current
@@ -25,11 +24,8 @@ Item {
 	}
 
 	function handleKey(event) {
-		if (event.text === root.killKey) {
-			if (list.current)
-				root.killRequested(list.current);
+		if (Input.kill(event, root))
 			return true;
-		}
 
 		return list.handleKey(event);
 	}

@@ -161,7 +161,7 @@ PanelWindow {
 			visible: root.revealed
 
 			Keys.onPressed: function (event) {
-				if (event.key !== Qt.Key_Escape)
+				if (!Input.cancel(event))
 					return;
 
 				root.close();

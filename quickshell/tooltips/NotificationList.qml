@@ -131,34 +131,13 @@ Item {
 		root.closeRequested();
 	}
 
-	Keys.onPressed: function (event) {
-		if (event.key === Qt.Key_Escape) {
-			root.closeRequested();
+	function clearAll() {
+		Notifications.dismissAll();
+		root.selected = -1;
+	}
 
-			event.accepted = true;
-		} else if (event.text === "j") {
-			root.move(1);
-			event.accepted = true;
-		} else if (event.text === "k") {
-			root.move(-1);
-			event.accepted = true;
-		} else if (event.text === "l") {
-			root.open();
-			event.accepted = true;
-		} else if (event.text === "h" && root.opened) {
-			root.back();
-			event.accepted = true;
-		} else if (event.text === Config.notifyDismissKey) {
-			root.dismiss();
-			event.accepted = true;
-		} else if (event.text === Config.notifyClearKey) {
-			Notifications.dismissAll();
-			root.selected = -1;
-			event.accepted = true;
-		} else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-			root.accept();
-			event.accepted = true;
-		}
+	Keys.onPressed: function (event) {
+		Input.notifications(event, root);
 	}
 
 	ListView {

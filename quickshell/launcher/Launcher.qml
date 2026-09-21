@@ -18,6 +18,8 @@ PanelWindow {
 	property string terminal: ""
 	property var usage: ({})
 	property var files: []
+
+	readonly property int windowColumns: windowsGrid.columns
 	property var clips: []
 	property bool windows: false
 	property int winIndex: 0
@@ -195,10 +197,6 @@ PanelWindow {
 		return "Nothing matches";
 	}
 
-	function move(step) {
-		list.move(step);
-	}
-
 	function stepWindows(step) {
 		const count = root.results.length;
 
@@ -210,52 +208,25 @@ PanelWindow {
 		root.winIndex = ((root.winIndex + step) % count + count) % count;
 	}
 
-	function handleSwitcherKeys(event) {
-		if (event.key === Qt.Key_Escape) {
-			root.close();
-			event.accepted = true;
-			return;
-		}
-
-		if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-			root.activate(root.results[root.winIndex]);
-			event.accepted = true;
-			return;
-		}
-
-		if (event.text === "h")
-			root.stepWindows(-1);
-		else if (event.text === "l")
-			root.stepWindows(1);
-		else if (event.text === "k")
-			root.stepWindows(-windowsGrid.columns);
-		else if (event.text === "j")
-			root.stepWindows(windowsGrid.columns);
-		else
-			return;
-
-		event.accepted = true;
-	}
-
 	function handleKeys(event) {
 		if (root.windows) {
-			root.handleSwitcherKeys(event);
+			Input.switcher(event, root);
 			return;
 		}
 
-		if (event.text === Config.procHintKey) {
+		if (Input.hint(event)) {
 			field.startTyping();
 			event.accepted = true;
 			return;
 		}
 
-		if (event.key === Qt.Key_Escape) {
+		if (Input.cancel(event)) {
 			root.close();
 			event.accepted = true;
 			return;
 		}
 
-		if (!field.typing && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
+		if (!field.typing && Input.accept(event)) {
 			root.activate(root.results[list.currentIndex]);
 			event.accepted = true;
 			return;
@@ -270,11 +241,13 @@ PanelWindow {
 	}
 
 	function handleTypingKeys(event) {
-		if (event.key === Qt.Key_Escape)
+		if (Input.cancel(event))
 			return;
 
-		if (event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
-			list.move(event.key === Qt.Key_Up ? -1 : 1);
+		const step = Input.arrow(event, 1, 0);
+
+		if (step !== 0) {
+			list.move(step);
 			event.accepted = true;
 			return;
 		}
@@ -283,10 +256,11 @@ PanelWindow {
 	}
 
 	function pinKey(event) {
-		if (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier) {
-			root.pin(root.results[list.currentIndex]);
-			event.accepted = true;
-		}
+		if (!Input.pin(event))
+			return;
+
+		root.pin(root.results[list.currentIndex]);
+		event.accepted = true;
 	}
 
 	function writeFile(path, text) {

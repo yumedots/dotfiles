@@ -38,13 +38,7 @@ Item {
 	}
 
 	Keys.onPressed: function (event) {
-		if (event.key === Qt.Key_Escape) {
-			root.closeRequested();
-			event.accepted = true;
-		} else if (event.text === "r") {
-			root.refreshRequested();
-			event.accepted = true;
-		}
+		Input.github(event, root);
 	}
 
 	Column {

@@ -84,48 +84,10 @@ Item {
 	}
 
 	Keys.onPressed: function (event) {
-		if (event.key === Qt.Key_Escape) {
-			root.closeRequested();
-
-			event.accepted = true;
-			return;
-		}
-
-		if (root.picker !== "") {
-			if (event.text === "j")
-				root.pickerIndex = Math.min(Math.max(0, root.devices.length - 1), root.pickerIndex + 1);
-			else if (event.text === "k")
-				root.pickerIndex = Math.max(0, root.pickerIndex - 1);
-			else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
-				root.makeDefault(root.picker, root.devices[root.pickerIndex]);
-			else
-				return;
-
-			event.accepted = true;
-			return;
-		}
-
-		if (event.text === "h")
-			root.moveTarget(-1);
-		else if (event.text === "l")
-			root.moveTarget(1);
-		else if (event.text === "j")
-			root.nudgeVolume(-Config.mixerStep);
-		else if (event.text === "k")
-			root.nudgeVolume(Config.mixerStep);
-		else if (event.text === "m")
-			root.toggleMute(root.selectedNode);
-		else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-			if (root.sameNode(root.selectedNode, root.sink))
-				root.openPicker("output");
-			else if (root.sameNode(root.selectedNode, root.source))
-				root.openPicker("input");
-			else
-				return;
-		} else
-			return;
-
-		event.accepted = true;
+		if (root.picker === "")
+			Input.mixer(event, root);
+		else
+			Input.picker(event, root);
 	}
 
 	function setVolume(node, value) {

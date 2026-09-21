@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import qs.ui
 import qs.services
 import qs
 
@@ -84,33 +85,7 @@ Item {
 	}
 
 	Keys.onPressed: function (event) {
-		if (event.key === Qt.Key_Escape) {
-			root.closeRequested();
-		} else if (event.text === "h") {
-			root.step(-1);
-		} else if (event.text === "l") {
-			root.step(1);
-		} else if (event.text === "k") {
-			root.step(-7);
-		} else if (event.text === "j") {
-			root.step(7);
-		} else if (event.text === "s") {
-			root.stepMonths(-1);
-		} else if (event.text === "d") {
-			root.stepMonths(1);
-		} else if (event.text === "a") {
-			root.stepYears(-1);
-		} else if (event.text === "f") {
-			root.stepYears(1);
-		} else if (event.text === "w") {
-			root.weekStart = root.weekStart === 1 ? 0 : 1;
-		} else if (event.text === "r") {
-			root.cursor = new Date(root.today);
-		} else {
-			return;
-		}
-
-		event.accepted = true;
+		Input.calendar(event, root);
 	}
 
 	Column {

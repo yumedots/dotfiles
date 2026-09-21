@@ -40,17 +40,12 @@ Item {
 	}
 
 	function handleKey(event) {
-		if (event.text === "j")
-			root.move(1);
-		else if (event.text === "k")
-			root.move(-1);
-		else if (event.text === "l")
-			root.move(root.visibleRows);
-		else if (event.text === "h")
-			root.move(-root.visibleRows);
-		else
+		const step = Input.delta(event, 1, root.visibleRows);
+
+		if (step === 0)
 			return false;
 
+		root.move(step);
 		event.accepted = true;
 		return true;
 	}

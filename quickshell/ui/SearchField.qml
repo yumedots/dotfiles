@@ -99,13 +99,14 @@ Rectangle {
 		onAccepted: root.accepted()
 		onTextEdited: root.edited()
 
-		Keys.onEscapePressed: function (event) {
-			root.typing = false;
-			root.canceled();
-			event.accepted = true;
-		}
-
 		Keys.onPressed: function (event) {
+			if (Input.cancel(event)) {
+				root.typing = false;
+				root.canceled();
+				event.accepted = true;
+				return;
+			}
+
 			root.keyPressed(event);
 		}
 	}

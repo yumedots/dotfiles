@@ -57,10 +57,10 @@ Item {
 		if (root.searching)
 			return;
 
-		if (event.text === Config.procHintKey) {
+		if (Input.hint(event)) {
 			searchField.startTyping();
 			event.accepted = true;
-		} else if (event.key === Qt.Key_Escape) {
+		} else if (Input.cancel(event)) {
 			root.closeRequested();
 			event.accepted = true;
 		} else {
