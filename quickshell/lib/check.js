@@ -800,6 +800,13 @@ section("mixer", function () {
 	assert(nodeVolume(source) === 0.7 && nodeVolume(null) === 0 && nodeVolume(notReady) === 0, "volume is read off the node, a node without audio reads zero");
 	assert(sameNode(sink, { id: 1 }) && !sameNode(sink, source) && !sameNode(null, sink), "two nodes are the same node when their ids match");
 
+	assert(holdStream({}, 4, 5000)[4] === 5000, "holding a stream records when its hold runs out");
+	assert(Object.keys(holdStream({ 4: 5000 }, 4, 6000)).length === 1 && holdStream({ 4: 5000 }, 4, 6000)[4] === 6000, "holding the same stream again moves its hold, it does not pile up");
+	assert(Object.keys(holdStream({ 4: 5000 }, 5, 6000)).length === 2, "a second stream gets its own deadline");
+	assert(JSON.stringify(pruneHolds({ 4: 5000, 5: 6000 }, 5500)) === JSON.stringify({ 5: 6000 }), "a prune drops the holds that ran out and keeps the live ones");
+	assert(Object.keys(pruneHolds({ 4: 5000 }, 5000)).length === 0, "a hold is over on its own deadline, not a tick later");
+	assert(Object.keys(pruneHolds(undefined, 10)).length === 0, "pruning an empty hold list is safe");
+
 	const sorted = sortedDevices(nodes, true, other);
 
 	assert(sorted[0] === other && sorted.length === 2, "the active device moves to the front of the picker");

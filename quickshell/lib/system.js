@@ -107,6 +107,25 @@ function firstDevice(nodes, input) {
 	return found.length > 0 ? found[0] : null;
 }
 
+function holdStream(held, id, until) {
+	const next = Object.assign({}, held || {});
+
+	next[id] = until;
+
+	return next;
+}
+
+function pruneHolds(held, now) {
+	const next = {};
+
+	Object.keys(held || {}).forEach(function (id) {
+		if (held[id] > now)
+			next[id] = held[id];
+	});
+
+	return next;
+}
+
 function sameNode(a, b) {
 	return !!a && !!b && a.id === b.id;
 }

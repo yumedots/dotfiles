@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import Quickshell.Services.Pipewire
 import qs.ui
 import qs
@@ -136,16 +135,25 @@ Item {
 		onTriggered: if (!streamPoll.running) streamPoll.running = true
 	}
 
-	Process {
+	// ponytail: holds expire on the poll tick instead of their own timers, so one
+	// list replaces one timer per channel. Ceiling: a channel can linger up to
+	// mixerPollMs past its hold; give it its own timer again if that ever shows.
+	property var held: ({})
+
+	function hold(node, until) {
+		if (node)
+			root.held = System.holdStream(root.held, node.id, until);
+	}
+
+	Request {
 		id: streamPoll
 
 		command: ["pw-dump"]
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				root.runningOutput = System.parseRunningStreams(text, "output");
-				root.runningInput = System.parseRunningStreams(text, "input");
-			}
+		onDone: function (text) {
+			root.runningOutput = System.parseRunningStreams(text, "output");
+			root.runningInput = System.parseRunningStreams(text, "input");
+			root.held = System.pruneHolds(root.held, Date.now());
 		}
 	}
 
@@ -429,25 +437,19 @@ Item {
 
 									required property var modelData
 
-									property bool held: false
-
 									readonly property var node: holder.modelData
 									readonly property bool shown: System.shownStream(holder.node)
 									readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || System.streamPlaying(holder.node, root.runningOutput))
+									readonly property bool held: root.held[holder.node ? holder.node.id : -1] !== undefined
 
-									visible: holder.shown && holder.held
-									width: holder.shown && holder.held ? channel.implicitWidth : 0
+									visible: holder.shown && (holder.active || holder.held)
+									width: holder.visible ? channel.implicitWidth : 0
 									height: channel.implicitHeight
 									clip: true
 
-									Component.onCompleted: holder.held = holder.active
-
 									onActiveChanged: {
-										if (holder.active) {
-											releaseTimer.stop();
-											holder.held = true;
-										} else
-											releaseTimer.restart();
+										if (!holder.active)
+											root.hold(holder.node, Date.now() + Config.mixerHoldMs);
 									}
 
 									PwObjectTracker {
@@ -463,12 +465,6 @@ Item {
 										appIcon: holder.shown
 										muted: holder.shown && System.nodeMuted(holder.node)
 										volume: holder.shown ? System.nodeVolume(holder.node) : 0
-									}
-
-									Timer {
-										id: releaseTimer
-										interval: Config.mixerHoldMs
-										onTriggered: holder.held = false
 									}
 								}
 							}
