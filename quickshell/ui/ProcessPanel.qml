@@ -220,6 +220,12 @@ Item {
 				width: ListView.view.rowWidth
 				height: ListView.view.rowHeight
 
+				Highlight {
+					id: hl
+
+					active: row.active
+				}
+
 				Text {
 					id: process
 
@@ -228,7 +234,7 @@ Item {
 
 					font.family: Config.fontFamily
 					font.pixelSize: Config.fontSize
-					color: row.active ? Config.launcherHighlightText : Config.foreground
+					color: hl.ink
 					text: modelData.name
 				}
 

@@ -579,13 +579,13 @@ PanelWindow {
 
 			onCountChanged: root.winIndex = Math.min(root.winIndex, Math.max(0, count - 1))
 
-			Rectangle {
-				visible: windowsGrid.count > 0
+			Highlight {
+				fillParent: false
+				active: windowsGrid.count > 0
 				x: (windowsGrid.index % windowsGrid.columns) * windowsGrid.cell
 				y: Math.floor(windowsGrid.index / windowsGrid.columns) * windowsGrid.cell
 				width: windowsGrid.cell
 				height: windowsGrid.cell
-				color: Config.launcherHighlight
 			}
 
 			Repeater {

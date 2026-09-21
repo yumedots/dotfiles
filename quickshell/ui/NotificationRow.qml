@@ -13,7 +13,7 @@ Item {
 	readonly property real pad: Config.notifyRowPadding
 	readonly property real inset: Config.notifyPadding + root.pad
 	readonly property real cardHeight: Config.notifyVisibleRows * Config.notifyRowHeight
-	readonly property color ink: root.selected ? Config.launcherHighlightText : Config.foreground
+	readonly property color ink: hl.active ? Config.launcherHighlightText : Config.foreground
 	readonly property color aside: root.expanded ? Config.foreground : (root.selected ? Config.launcherHighlightText : Config.dim)
 	readonly property string picture: root.pictureOf()
 	readonly property bool urgent: !!root.entry && root.entry.urgent === true
@@ -46,9 +46,10 @@ Item {
 		return AppIcons.iconOf(root.entry.desktopEntry, []);
 	}
 
-	Rectangle {
-		anchors.fill: parent
-		color: root.selected ? Config.launcherHighlight : "transparent"
+	Highlight {
+		id: hl
+
+		active: root.selected
 	}
 
 	Rectangle {

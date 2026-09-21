@@ -91,9 +91,8 @@ Item {
 
 		onCurrentIndexChanged: root.ensureVisible(list.currentIndex)
 
-		highlight: Rectangle {
-			color: Config.launcherHighlight
-			radius: 0
+		highlight: Highlight {
+			fillParent: false
 		}
 	}
 

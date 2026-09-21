@@ -164,6 +164,12 @@ Item {
 		width: implicitWidth
 		height: implicitHeight
 
+		Highlight {
+			id: hl
+
+			active: channel.selected
+		}
+
 		Column {
 			id: stack
 
@@ -192,7 +198,7 @@ Item {
 				horizontalAlignment: Text.AlignHCenter
 				font.family: Config.fontFamily
 				font.pixelSize: Config.fontSize
-				color: channel.selected ? Config.launcherHighlightText : (channel.muted ? Config.muted : Config.foreground)
+				color: channel.muted && !hl.active ? Config.muted : hl.ink
 				text: channel.percent + "%"
 			}
 
@@ -237,6 +243,12 @@ Item {
 
 		height: Math.max(Config.mixerDeviceIconSize, Config.fontSize)
 		implicitHeight: height
+
+		Highlight {
+			id: hl
+
+			active: line.selected
+		}
 
 		TextMetrics {
 			id: sample
@@ -284,7 +296,7 @@ Item {
 			horizontalAlignment: Text.AlignRight
 			font.family: Config.fontFamily
 			font.pixelSize: Config.fontSize
-			color: line.selected ? Config.launcherHighlightText : (line.muted ? Config.muted : Config.foreground)
+			color: line.muted && !hl.active ? Config.muted : hl.ink
 			text: line.percent + "%"
 		}
 
@@ -529,6 +541,7 @@ Item {
 					id: option
 
 					required property var modelData
+					required property int index
 
 					readonly property var node: option.modelData
 					readonly property bool active: System.sameNode(option.node, root.picker === "input" ? root.source : root.sink)
@@ -536,6 +549,10 @@ Item {
 
 					width: options.width
 					height: Config.mixerListRowHeight
+
+					Highlight {
+						active: option.highlighted
+					}
 
 					Text {
 						id: optionGlyph
