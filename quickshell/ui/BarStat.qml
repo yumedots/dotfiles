@@ -18,6 +18,26 @@ Item {
 	property bool showBar: true
 	property bool sweep: false
 	property real sweepWidth: 0
+	property var bar: null
+	property bool popupKeyboard: true
+	property bool popupPinned: false
+	property bool popupAlignRight: false
+	property real popupPadding: -1
+	property alias popupContent: popupWindow.content
+
+	readonly property alias popupVisible: popupWindow.shown
+
+	function openPopup() {
+		popupWindow.open();
+	}
+
+	function closePopup() {
+		popupWindow.hideNow();
+	}
+
+	function isPopupOpen() {
+		return popupWindow.shown;
+	}
 
 	readonly property bool iconMode: root.mode === "icon"
 	readonly property color inkColor: root.dim ? root.dimColor : (root.mono ? Config.foreground : root.textColor)
@@ -33,6 +53,17 @@ Item {
 	implicitWidth: root.iconMode ? Math.ceil(iconMetrics.width + root.gap) : Config.lineLength + root.gap
 	readonly property real contentHeight: Math.round(root.inkAbove + root.inkBelow)
 	implicitHeight: root.contentHeight + (root.showBar ? Math.ceil(Config.barThickness) : 0)
+
+	Tooltip {
+		id: popupWindow
+
+		anchorWindow: root.bar
+		anchorItem: root
+		contentPadding: root.popupPadding
+		wantsKeyboard: root.popupKeyboard
+		pinned: root.popupPinned
+		alignRight: root.popupAlignRight
+	}
 
 	TextMetrics {
 		id: iconsMetrics

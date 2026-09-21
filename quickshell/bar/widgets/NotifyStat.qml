@@ -8,7 +8,6 @@ import "../../tooltips"
 BarStat {
 	id: root
 
-	property var bar: null
 	property bool keyboardPopup: false
 
 	icon: Config.iconBell
@@ -23,16 +22,8 @@ BarStat {
 		root.keyboardPopup = flag === true;
 	}
 
-	function openPopup() {
-		popup.open();
-	}
-
-	function closePopup() {
-		popup.hideNow();
-	}
-
 	function isPopupOpen() {
-		return popup.shown && root.keyboardPopup;
+		return root.popupVisible && root.keyboardPopup;
 	}
 
 	function toast(notification) {
@@ -41,13 +32,13 @@ BarStat {
 			return;
 		}
 
-		if (!popup.shown) {
+		if (!root.popupVisible) {
 			root.keyboardPopup = false;
 
 			if (root.bar)
 				root.bar.openExclusive(root);
 			else
-				popup.open();
+				root.openPopup();
 		}
 
 		if (notification && notification.urgency === NotificationUrgency.Critical) {
@@ -72,22 +63,16 @@ BarStat {
 
 		onTriggered: {
 			if (!root.keyboardPopup)
-				popup.close();
+				root.closePopup();
 		}
 	}
 
-	Tooltip {
-		id: popup
+	popupPadding: 0
+	popupKeyboard: root.keyboardPopup
+	popupAlignRight: root.keyboardPopup === false
 
-		anchorWindow: root.bar
-		anchorItem: root
-		contentPadding: 0
-		wantsKeyboard: root.keyboardPopup
-		alignRight: root.keyboardPopup === false
-
-		NotificationList {
-			single: root.keyboardPopup === false
-			onCloseRequested: popup.close()
-		}
+	popupContent: NotificationList {
+		single: root.keyboardPopup === false
+		onCloseRequested: root.closePopup()
 	}
 }

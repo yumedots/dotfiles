@@ -7,8 +7,6 @@ import "../../tooltips"
 BarStat {
 	id: root
 
-	property var bar: null
-
 	readonly property var sink: Pipewire.defaultAudioSink
 	readonly property real volume: root.sink && root.sink.audio ? root.sink.audio.volume : 0
 	readonly property bool isMuted: root.sink && root.sink.audio ? root.sink.audio.muted : false
@@ -23,31 +21,11 @@ BarStat {
 		: Config.iconVolumeLow
 	value: Math.round(root.pct) + "%"
 
-	function openPopup() {
-		popup.open();
-	}
-
-	function closePopup() {
-		popup.hideNow();
-	}
-
-	function isPopupOpen() {
-		return popup.shown;
-	}
-
 	PwObjectTracker {
 		objects: [Pipewire.defaultAudioSink]
 	}
 
-	Tooltip {
-		id: popup
-
-		anchorWindow: root.bar
-		anchorItem: root
-		wantsKeyboard: true
-
-		VolumeMixer {
-			onCloseRequested: popup.close()
-		}
+	popupContent: VolumeMixer {
+		onCloseRequested: root.closePopup()
 	}
 }

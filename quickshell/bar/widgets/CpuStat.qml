@@ -7,7 +7,6 @@ import "../../tooltips"
 BarStat {
 	id: root
 
-	property var bar: null
 	property var prev: null
 	property string lastRead: ""
 	property var cores: []
@@ -37,19 +36,6 @@ BarStat {
 		statFile.reload();
 	}
 
-	function openPopup() {
-		popup.open();
-	}
-
-	function closePopup() {
-		popup.hideNow();
-	}
-
-	function isPopupOpen() {
-		return popup.shown;
-	}
-
-
 	FileView {
 		id: statFile
 		path: "/proc/stat"
@@ -73,19 +59,12 @@ BarStat {
 		onTriggered: statFile.reload()
 	}
 
-	Tooltip {
-		id: popup
+	popupPinned: monitor.searching
 
-		anchorWindow: root.bar
-		anchorItem: root
-		wantsKeyboard: true
-		pinned: monitor.searching
+	popupContent: CpuMonitor {
+		id: monitor
 
-		CpuMonitor {
-			id: monitor
-
-			source: root
-			onCloseRequested: popup.close()
-		}
+		source: root
+		onCloseRequested: root.closePopup()
 	}
 }

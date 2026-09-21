@@ -7,7 +7,6 @@ import "../../tooltips"
 BarStat {
 	id: root
 
-	property var bar: null
 	property var memory: null
 
 	readonly property real usedGB: root.memory ? root.memory.used / 1024 / 1024 : 0
@@ -30,19 +29,6 @@ BarStat {
 		memFile.reload();
 	}
 
-	function openPopup() {
-		popup.open();
-	}
-
-	function closePopup() {
-		popup.hideNow();
-	}
-
-	function isPopupOpen() {
-		return popup.shown;
-	}
-
-
 	FileView {
 		id: memFile
 
@@ -61,19 +47,12 @@ BarStat {
 		onTriggered: memFile.reload()
 	}
 
-	Tooltip {
-		id: popup
+	popupPinned: monitor.searching
 
-		anchorWindow: root.bar
-		anchorItem: root
-		wantsKeyboard: true
-		pinned: monitor.searching
+	popupContent: MemoryMonitor {
+		id: monitor
 
-		MemoryMonitor {
-			id: monitor
-
-			source: root
-			onCloseRequested: popup.close()
-		}
+		source: root
+		onCloseRequested: root.closePopup()
 	}
 }

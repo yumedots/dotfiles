@@ -7,8 +7,6 @@ import "../../tooltips"
 BarStat {
 	id: root
 
-	property var bar: null
-
 	icon: Config.iconGithub
 	value: Github.login !== "" ? String(Github.todayCount) : ""
 	pct: Math.min(4, Github.todayLevel) * 100 / 4
@@ -16,28 +14,8 @@ BarStat {
 	textColor: Config.contribBase
 	dim: Github.login === ""
 
-	function openPopup() {
-		popup.open();
-	}
-
-	function closePopup() {
-		popup.hideNow();
-	}
-
-	function isPopupOpen() {
-		return popup.shown;
-	}
-
-	Tooltip {
-		id: popup
-
-		anchorWindow: root.bar
-		anchorItem: root
-		wantsKeyboard: true
-
-		GithubGrid {
-			onCloseRequested: popup.close()
-			onRefreshRequested: Github.refresh(true)
-		}
+	popupContent: GithubGrid {
+		onCloseRequested: root.closePopup()
+		onRefreshRequested: Github.refresh(true)
 	}
 }
