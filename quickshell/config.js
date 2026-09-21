@@ -1,6 +1,5 @@
 .pragma library
 
-const background = "#000000";
 const surface = "#101010";
 const surfaceAlpha = 1;
 const surfaceTranslucent = "#" + ("0" + Math.round(surfaceAlpha * 255).toString(16)).slice(-2) + surface.slice(1);
@@ -14,17 +13,10 @@ const monoLight = "#cfcfcf";
 const monoMid = "#9a9a9a";
 const monoSoft = "#6f6f6f";
 
-const workspaceActive = "#ffffff";
-const workspaceInactive = "#5c5c5c";
-
-const cpuBase = "#a78bfa";
-const cpuBaseMono = foreground;
-const cpuPeak = red;
-const cpuPeakMono = monoMid;
-const cpuIdle = "#2f2f2f";
-const memoryBase = "#7bd88f";
-const memoryBaseMono = foreground;
-const volumeBase = "#ffffff";
+const workspaceActive = foreground;
+const workspaceInactive = muted;
+const workspacePadding = 1;
+const workspaceSpacing = 6;
 
 const fontFamily = "Hack Nerd Font";
 const fontSize = 12;
@@ -33,8 +25,6 @@ const iconSize = 10;
 const trayIconSize = 11;
 const spacing = 12;
 const barStatSpacing = 10;
-const workspacePadding = 1;
-const workspaceSpacing = 6;
 
 const iconCpu = "\uf2db";
 const iconMemory = "\uefc5";
@@ -56,6 +46,9 @@ const barThickness = 1.5;
 const barSweepMs = 1400;
 const sweepFade = 0.45;
 const sweepSteps = 5;
+const barLayoutFile = "topbarlayout.json";
+const clockFormat = "ddd MMM d h:mm AP";
+const scrollbarWidth = 2;
 
 const tooltipOffsetX = 0;
 const tooltipOffsetY = -8;
@@ -65,8 +58,48 @@ const borderFallbackColor = "#ffffff";
 const gapsInFallback = 8;
 const gapsOutFallback = 15;
 
-const barLayoutFile = "topbarlayout.json";
-const clockFormat = "ddd MMM d h:mm AP";
+const cpuBase = "#a78bfa";
+const cpuBaseMono = foreground;
+const cpuPeak = red;
+const cpuPeakMono = monoMid;
+const cpuIdle = "#2f2f2f";
+const cpuPollMs = 1000;
+const cpuTopCount = 5;
+const cpuTooltipWidth = 240;
+const cpuTooltipPadding = 12;
+const cpuBlockGap = 4;
+const cpuBlockColumns = 16;
+const topProcessTitle = "Top processes";
+const procsGap = 6;
+const psIgnore = ["ps", "ps <defunct>"];
+const procSearchHint = "f to type";
+const procSearchPadding = 4;
+const procSearchMinWidth = 140;
+const procKillSignal = "-9";
+const procNoMatch = "Nothing matches";
+const procHintKey = "f";
+const procKillKey = "q";
+
+const memoryBase = "#7bd88f";
+const memoryBaseMono = foreground;
+const memoryCached = "#44774f";
+const memoryCachedMono = monoLight;
+const memoryBuffers = "#2f5136";
+const memoryBuffersMono = monoMid;
+const memoryFree = dim;
+const memorySwap = foreground;
+const memoryWarn = "#d8b04a";
+const memoryWarnMono = monoLight;
+const memoryDanger = red;
+const memoryDangerMono = monoSoft;
+const memorySeparator = 1;
+const memoryMinSegment = 2;
+const memoryVizHeight = 12;
+const memoryWarnAt = 60;
+const memoryDangerAt = 85;
+const memoryTooltipWidth = cpuTooltipWidth;
+const memoryTooltipPadding = cpuTooltipPadding;
+const memoryTopCount = 5;
 
 const mixerChannelWidth = 72;
 const mixerChannelGap = 6;
@@ -88,48 +121,12 @@ const mixerOnlyPlaying = true;
 const mixerPollMs = 1000;
 const mixerHoldMs = 2000;
 const mixerRecordDotSize = 5;
+const volumeBase = "#ffffff";
 const iconApp = "\uf001";
 const iconOutput = "\u{f0379}";
 const iconInput = "\u{f036c}";
 const iconPrev = "\u{f0141}";
 const iconNext = "\u{f0142}";
-
-const cpuTooltipWidth = 240;
-const cpuTooltipPadding = 12;
-const cpuBlockGap = 4;
-const cpuBlockColumns = 16;
-const cpuTopCount = 5;
-const memoryTooltipWidth = 240;
-const memoryTooltipPadding = 12;
-const memoryTopCount = 5;
-const memoryCached = "#44774f";
-const memoryCachedMono = monoLight;
-const memoryBuffers = "#2f5136";
-const memoryBuffersMono = monoMid;
-const memoryFree = "#3f3f3f";
-const memorySwap = foreground;
-const memoryWarn = "#d8b04a";
-const memoryWarnMono = monoLight;
-const memoryDanger = "#e05252";
-const memoryDangerMono = monoSoft;
-const memorySeparator = 1;
-const memoryMinSegment = 2;
-const memoryVizHeight = 12;
-const memoryWarnAt = 60;
-const memoryDangerAt = 85;
-const procsGap = 6;
-const topProcessTitle = "Top processes";
-const psIgnore = ["ps", "ps <defunct>"];
-const cpuPollMs = 1000;
-const scrollbarWidth = 2;
-
-const procSearchHint = "f to type";
-const procSearchPadding = 4;
-const procSearchMinWidth = 140;
-const procKillSignal = "-9";
-const procNoMatch = "Nothing matches";
-const procHintKey = "f";
-const procKillKey = "q";
 
 const launcherWidth = 270;
 const launcherPadding = 12;
@@ -142,10 +139,7 @@ const launcherIconSlot = 24;
 const launcherTextGap = 10;
 const launcherSearchBox = "#1f1f1f";
 const launcherHighlight = "#2f2f2f";
-const windowsGridCell = 100;
-const windowsRowMargin = 60;
-const windowsIconSize = 76;
-const launcherHighlightText = "#ffffff";
+const launcherHighlightText = foreground;
 const launcherUsageMax = 10;
 const launcherTerminalConfig = "~/.config/hypr/programs.lua";
 const launcherPrompt = "\uea6d";
@@ -164,13 +158,14 @@ const launcherIconClipboard = "\uf07f";
 const launcherIconWindow = "\u{f05b1}";
 const launcherIconFile = "\u{f0213}";
 const launcherIconPin = "\ueba0";
-
+const windowsGridCell = 100;
+const windowsRowMargin = 60;
+const windowsIconSize = 76;
 const launcherCommands = [
 	{ name: "Edit shell config", command: "code-insiders ~/.config/quickshell/config.js", keywords: ["quickshell"] },
 	{ name: "Edit hyprland config", command: "code-insiders ~/.config/hypr", keywords: ["hypr"] },
 	{ name: "Edit launcher shortcuts", command: "code-insiders ~/.config/quickshell/config.js", keywords: ["launcher"] }
 ];
-
 const launcherActions = [
 	{ name: "Suspend", command: "systemctl suspend", glyph: "\u{f04b2}" },
 	{ name: "Log out", command: "hyprctl dispatch 'hl.dsp.exit()'", glyph: "\uea6e" },
@@ -282,7 +277,7 @@ const contribGap = 3;
 const contribCacheMs = 21600000;
 const contribUser = "";
 const contribTooltipWidth = 244;
-const contribTooltipPadding = 12;
+const contribTooltipPadding = cpuTooltipPadding;
 const contribAvatar = 24;
 
 const fallbackIcon = "application-x-executable";
