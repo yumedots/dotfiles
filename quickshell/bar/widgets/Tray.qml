@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell.Services.SystemTray
 import Quickshell.Widgets
+import qs.ui
 import qs
 
 Row {
@@ -18,7 +19,7 @@ Row {
 			implicitWidth: Config.trayIconSize
 			implicitHeight: Config.trayIconSize
 
-			IconImage {
+			AppIcon {
 				anchors.fill: parent
 				source: modelData.icon
 				implicitSize: Config.trayIconSize

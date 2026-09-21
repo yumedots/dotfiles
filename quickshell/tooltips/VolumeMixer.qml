@@ -325,7 +325,7 @@ Item {
 				width: parent.width
 				height: Config.mixerIconSize
 
-				IconImage {
+				AppIcon {
 					anchors.centerIn: parent
 					implicitSize: Config.mixerIconSize
 					visible: channel.iconSource !== ""

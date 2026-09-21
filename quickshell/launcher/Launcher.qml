@@ -525,7 +525,7 @@ PanelWindow {
 						width: Config.launcherIconSlot
 						height: Config.launcherIconSlot
 
-						IconImage {
+						AppIcon {
 							anchors.centerIn: parent
 							implicitSize: Config.launcherIconSize
 							visible: row.modelData.appId !== undefined && row.modelData.appId !== ""
@@ -632,7 +632,7 @@ PanelWindow {
 					width: windowsGrid.cell
 					height: windowsGrid.cell
 
-					IconImage {
+					AppIcon {
 						anchors.centerIn: parent
 						implicitSize: Config.windowsIconSize
 						visible: iconCell.icon !== ""
