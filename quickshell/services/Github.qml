@@ -97,15 +97,12 @@ Item {
 	}
 
 	function save() {
-		const payload = JSON.stringify({
+		cache.save({
 			fetched: root.fetched,
 			login: root.login,
 			total: root.total,
 			days: root.days
 		});
-
-		Quickshell.execDetached(["sh", "-c", "mkdir -p " + Helpers.shellQuote(root.dir)
-			+ " && printf '%s' " + Helpers.shellQuote(payload) + " > " + Helpers.shellQuote(root.cacheFile)]);
 	}
 
 	function refresh(force) {
@@ -113,8 +110,7 @@ Item {
 			return;
 
 		root.loading = true;
-		cacheRead.force = force === true;
-		cacheRead.running = true;
+		cache.read(force);
 	}
 
 	Component.onCompleted: root.refresh(false)
@@ -127,82 +123,64 @@ Item {
 		onTriggered: root.dayStamp = root.dayKey(new Date())
 	}
 
-	Process {
-		id: cacheRead
+	CachedFile {
+		id: cache
 
-		property bool force: false
+		path: root.cacheFile
+		maxAge: Config.contribCacheMs
 
-		command: ["sh", "-c", "cat " + Helpers.shellQuote(root.cacheFile) + " 2>/dev/null"]
+		onLoaded: function (data, stale) {
+			root.adopt(data);
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				let cached = null;
-
-				try {
-					cached = JSON.parse(text);
-				} catch (error) {
-					cached = null;
-				}
-
-				root.adopt(cached || { days: [], total: 0, fetched: 0 });
-
-				const recent = root.fetched > 0 && (Date.now() - root.fetched) < Config.contribCacheMs;
-
-				if (!cacheRead.force && root.days.length > 0 && recent) {
-					root.loading = false;
-					root.status = "";
-					return;
-				}
-
-				identity.running = true;
+			if (!stale && root.days.length > 0) {
+				root.loading = false;
+				root.status = "";
+				return;
 			}
+
+			identity.running = true;
 		}
 	}
 
-	Process {
+	Request {
 		id: identity
 
 		command: ["sh", "-c", "printf 'email=%s\\n' \"$(git config --get user.email)\"; printf 'name=%s\\n' \"$(git config --global user.name)\"; printf 'remote=%s\\n' \"$(git -C \"$HOME/.config\" remote get-url origin 2>/dev/null)\""]
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				const login = root.loginFrom(text);
+		onDone: function (text) {
+			const login = root.loginFrom(text);
 
-				if (login === "") {
-					root.loading = false;
-					root.status = "no GitHub user";
-					return;
-				}
-
-				root.login = login;
-				cacheRead.force = false;
-				fetch.running = true;
+			if (login === "") {
+				root.loading = false;
+				root.status = "no GitHub user";
+				return;
 			}
+
+			root.login = login;
+			fetch.running = true;
 		}
 	}
 
-	Process {
+	Request {
 		id: fetch
 
-		command: ["sh", "-c", "curl -s -m 20 " + Helpers.shellQuote("https://github.com/users/" + root.login + "/contributions")]
+		command: Helpers.curl("https://github.com/users/" + root.login + "/contributions", 20)
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				const parsed = Helpers.parseContributions(text);
+		onDone: function (text) {
+			const parsed = Helpers.parseContributions(text);
 
-				root.loading = false;
+			root.loading = false;
 
-				if (parsed.days.length === 0) {
-					root.status = root.days.length > 0 ? "" : "no response";
-					return;
-				}
-
-				root.days = parsed.days;
-				root.total = parsed.total;
-				root.fetched = Date.now();
-				root.status = "";
-				root.save();
+			if (parsed.days.length === 0) {
+				root.status = root.days.length > 0 ? "" : "no response";
+				return;
 			}
+
+			root.days = parsed.days;
+			root.total = parsed.total;
+			root.fetched = Date.now();
+			root.status = "";
+			root.save();
 		}
 	}
 }

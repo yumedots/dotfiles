@@ -49,7 +49,7 @@ Item {
 	}
 
 	function save() {
-		const payload = JSON.stringify({
+		cache.save({
 			fetched: root.fetched,
 			description: root.description,
 			location: root.location,
@@ -64,9 +64,6 @@ Item {
 			stations: root.stations,
 			placeFailed: root.placeFailed
 		});
-
-		Quickshell.execDetached(["sh", "-c", "mkdir -p " + Helpers.shellQuote(root.dir)
-			+ " && printf '%s' " + Helpers.shellQuote(payload) + " > " + Helpers.shellQuote(root.cacheFile)]);
 	}
 
 	function refresh(force) {
@@ -74,8 +71,7 @@ Item {
 			return;
 
 		root.loading = true;
-		cacheRead.force = force === true;
-		cacheRead.running = true;
+		cache.read(force);
 	}
 
 	function locate() {
@@ -125,167 +121,142 @@ Item {
 		onTriggered: root.refresh(true)
 	}
 
-	Process {
+	Request {
 		id: placeRead
 
-		command: ["sh", "-c", "cat " + Helpers.shellQuote(root.placeFile) + " 2>/dev/null"]
+		command: Helpers.readCommand(root.placeFile)
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				root.tracked = text.trim();
-				root.refresh(false);
-			}
+		onDone: function (text) {
+			root.tracked = text.trim();
+			root.refresh(false);
 		}
 	}
 
-	Process {
-		id: cacheRead
+	CachedFile {
+		id: cache
 
-		property bool force: false
+		path: root.cacheFile
+		maxAge: Config.weatherCacheMs
 
-		command: ["sh", "-c", "cat " + Helpers.shellQuote(root.cacheFile) + " 2>/dev/null"]
+		onLoaded: function (data, stale) {
+			root.adopt(data);
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				let cached = null;
-
-				try {
-					cached = JSON.parse(text);
-				} catch (error) {
-					cached = null;
-				}
-
-				root.adopt(cached || {});
-
-				if (root.place !== root.wanted) {
-					root.stations = [];
-					root.placeFailed = false;
-				}
-
-				const recent = root.fetched > 0 && (Date.now() - root.fetched) < Config.weatherCacheMs && root.place === root.wanted;
-
-				if (!cacheRead.force && root.temp !== "" && recent) {
-					root.loading = false;
-					root.status = "";
-					return;
-				}
-
-				root.locate();
+			if (root.place !== root.wanted) {
+				root.stations = [];
+				root.placeFailed = false;
 			}
+
+			if (!stale && root.temp !== "" && root.place === root.wanted) {
+				root.loading = false;
+				root.status = "";
+				return;
+			}
+
+			root.locate();
 		}
 	}
 
-	Process {
+	Request {
 		id: geocode
 
-		command: ["sh", "-c", "curl -s -m 15 " + Helpers.shellQuote(Helpers.weatherGeoUrl(root.wanted))]
+		command: Helpers.curl(Helpers.weatherGeoUrl(root.wanted))
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				const found = Helpers.parseWeatherGeo(text, Helpers.weatherRegion(root.wanted));
+		onDone: function (text) {
+			const found = Helpers.parseWeatherGeo(text, Helpers.weatherRegion(root.wanted));
 
-				if (!found) {
-					root.loading = false;
-					root.status = root.temp !== "" ? "" : "no location";
-					return;
-				}
-
-				root.lat = found.lat;
-				root.lon = found.lon;
-				root.place = root.wanted;
-				root.location = found.place;
-				fetch.running = true;
+			if (!found) {
+				root.loading = false;
+				root.status = root.temp !== "" ? "" : "no location";
+				return;
 			}
+
+			root.lat = found.lat;
+			root.lon = found.lon;
+			root.place = root.wanted;
+			root.location = found.place;
+			fetch.running = true;
 		}
 	}
 
-	Process {
+	Request {
 		id: fetch
 
-		command: ["sh", "-c", "curl -s -m 15 " + Helpers.shellQuote(Helpers.weatherForecastUrl(root.lat, root.lon))]
+		command: Helpers.curl(Helpers.weatherForecastUrl(root.lat, root.lon))
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				const parsed = Helpers.parseWeatherCurrent(text);
+		onDone: function (text) {
+			const parsed = Helpers.parseWeatherCurrent(text);
 
-				root.loading = false;
+			root.loading = false;
 
-				if (parsed === null) {
-					root.status = root.temp !== "" ? "" : "no response";
-					return;
-				}
-
-				root.code = Helpers.weatherCodeFor(parsed.code, parsed.precip);
-				root.description = root.codeInfo.name;
-				root.temp = parsed.temp;
-				root.feels = parsed.feels;
-				root.wind = parsed.wind;
-				root.humidity = parsed.humidity;
-				root.fetched = Date.now();
-				root.status = "";
-				root.save();
-				root.observe();
+			if (parsed === null) {
+				root.status = root.temp !== "" ? "" : "no response";
+				return;
 			}
+
+			root.code = Helpers.weatherCodeFor(parsed.code, parsed.precip);
+			root.description = root.codeInfo.name;
+			root.temp = parsed.temp;
+			root.feels = parsed.feels;
+			root.wind = parsed.wind;
+			root.humidity = parsed.humidity;
+			root.fetched = Date.now();
+			root.status = "";
+			root.save();
+			root.observe();
 		}
 	}
 
-	Process {
+	Request {
 		id: points
 
 		command: ["sh", "-c", Helpers.weatherRequest(Helpers.shellQuote(Helpers.weatherPointsUrl(root.lat, root.lon)))]
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				const list = Helpers.parseWeatherPoints(text);
+		onDone: function (text) {
+			const list = Helpers.parseWeatherPoints(text);
 
-				if (list === null) {
-					if (text !== "")
-						root.placeFailed = true;
+			if (list === null) {
+				if (text !== "")
+					root.placeFailed = true;
 
-					return;
-				}
-
-				stations.command = ["sh", "-c", Helpers.weatherRequest(Helpers.shellQuote(list))];
-				stations.running = true;
+				return;
 			}
+
+			stations.command = ["sh", "-c", Helpers.weatherRequest(Helpers.shellQuote(list))];
+			stations.running = true;
 		}
 	}
 
-	Process {
+	Request {
 		id: stations
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				const ids = Helpers.parseWeatherStationIds(text, root.lat, root.lon, Config.weatherStationCount);
+		onDone: function (text) {
+			const ids = Helpers.parseWeatherStationIds(text, root.lat, root.lon, Config.weatherStationCount);
 
-				if (ids.length === 0) {
-					root.placeFailed = true;
-					return;
-				}
-
-				root.stations = ids;
-				observe.running = true;
+			if (ids.length === 0) {
+				root.placeFailed = true;
+				return;
 			}
+
+			root.stations = ids;
+			observe.running = true;
 		}
 	}
 
-	Process {
+	Request {
 		id: observe
 
 		command: ["sh", "-c", Helpers.weatherRequest(root.stations.map(function (id) { return Helpers.shellQuote(Helpers.weatherObservationUrl(id)); }).join(" "))]
 
-		stdout: StdioCollector {
-			onStreamFinished: {
-				const rows = Helpers.parseWeatherObservations(text);
-				const near = Helpers.weatherObservationCode(rows);
+		onDone: function (text) {
+			const rows = Helpers.parseWeatherObservations(text);
+			const near = Helpers.weatherObservationCode(rows);
 
-				if (near < 0)
-					return;
+			if (near < 0)
+				return;
 
-				root.code = near;
-				root.description = root.codeInfo.name;
-				root.save();
-			}
+			root.code = near;
+			root.description = root.codeInfo.name;
+			root.save();
 		}
 	}
 }

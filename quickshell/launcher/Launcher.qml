@@ -264,8 +264,7 @@ PanelWindow {
 	}
 
 	function writeFile(path, text) {
-		Quickshell.execDetached(["sh", "-c", "mkdir -p " + Helpers.shellQuote(root.stateDir)
-			+ " && printf '%s' " + Helpers.shellQuote(text) + " > " + Helpers.shellQuote(path)]);
+		Quickshell.execDetached(Helpers.writeCommand(path, text));
 	}
 
 	function remember(entry) {
@@ -338,43 +337,43 @@ PanelWindow {
 			clipsList.running = true;
 	}
 
-	Process {
+	Request {
 		id: pinsFile
 
-		command: ["sh", "-c", "cat " + Helpers.shellQuote(root.stateDir + "/pins.txt") + " 2>/dev/null"]
+		command: Helpers.readCommand(root.stateDir + "/pins.txt")
 
-		stdout: StdioCollector {
-			onStreamFinished: root.pins = Helpers.pinnedFromText(text)
+		onDone: function (text) {
+			root.pins = Helpers.pinnedFromText(text);
 		}
 	}
 
-	Process {
+	Request {
 		id: usageFile
 
-		command: ["sh", "-c", "cat " + Helpers.shellQuote(root.stateDir + "/usage.txt") + " 2>/dev/null"]
+		command: Helpers.readCommand(root.stateDir + "/usage.txt")
 
-		stdout: StdioCollector {
-			onStreamFinished: root.usage = Helpers.parseUsage(text)
+		onDone: function (text) {
+			root.usage = Helpers.parseUsage(text);
 		}
 	}
 
-	Process {
+	Request {
 		id: terminalFile
 
-		command: ["sh", "-c", "cat " + Helpers.shellQuote(root.terminalConfig) + " 2>/dev/null"]
+		command: Helpers.readCommand(root.terminalConfig)
 
-		stdout: StdioCollector {
-			onStreamFinished: root.terminal = Helpers.terminalName(text)
+		onDone: function (text) {
+			root.terminal = Helpers.terminalName(text);
 		}
 	}
 
-	Process {
+	Request {
 		id: clipsList
 
 		command: ["sh", "-c", "cliphist list 2>/dev/null | head -n " + Config.launcherMaxResults]
 
-		stdout: StdioCollector {
-			onStreamFinished: root.clips = Helpers.parseClipboardList(text).map(function (entry) {
+		onDone: function (text) {
+			root.clips = Helpers.parseClipboardList(text).map(function (entry) {
 				return {
 					id: "clip:" + entry.id,
 					kind: "clip",
@@ -382,19 +381,19 @@ PanelWindow {
 					keywords: [],
 					clipId: entry.id
 				};
-			})
+			});
 		}
 	}
 
-	Process {
+	Request {
 		id: findFiles
 
 		command: Helpers.fileSearchCommand(root.home, root.search, Config.launcherFileDepth, Config.launcherFileMax, Config.launcherFileSkip)
 
-		stdout: StdioCollector {
-			onStreamFinished: root.files = Helpers.pathLines(text).map(function (path) {
+		onDone: function (text) {
+			root.files = Helpers.pathLines(text).map(function (path) {
 				return { id: "file:" + path, kind: "file", name: path, keywords: [], path: path };
-			})
+			});
 		}
 	}
 
