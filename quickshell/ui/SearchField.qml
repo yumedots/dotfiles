@@ -17,7 +17,6 @@ Rectangle {
 	property real boxHeight: 0
 
 	signal accepted()
-	signal canceled()
 	signal edited()
 	signal keyPressed(var event)
 
@@ -102,7 +101,6 @@ Rectangle {
 		Keys.onPressed: function (event) {
 			if (Input.cancel(event)) {
 				root.typing = false;
-				root.canceled();
 				event.accepted = true;
 				return;
 			}

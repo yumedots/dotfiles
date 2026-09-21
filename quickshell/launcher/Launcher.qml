@@ -1,9 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
-import Quickshell.Io
 import Quickshell.Wayland
-import Quickshell.Widgets
 import qs.ui
 import qs
 import qs.services

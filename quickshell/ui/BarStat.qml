@@ -47,7 +47,6 @@ Item {
 	readonly property real valueBelow: valueMetrics.tightBoundingRect.y + valueMetrics.tightBoundingRect.height
 	readonly property real inkAbove: Math.max(-iconsMetrics.tightBoundingRect.y, -valueMetrics.tightBoundingRect.y)
 	readonly property real inkBelow: Math.max(iconsMetrics.tightBoundingRect.y + iconsMetrics.tightBoundingRect.height, root.valueBelow)
-	readonly property real textOffset: root.implicitHeight - root.inkAbove - root.valueBelow
 	readonly property real baselineLift: 0
 
 	implicitWidth: root.iconMode ? Math.ceil(iconMetrics.width + root.gap) : Config.lineLength + root.gap

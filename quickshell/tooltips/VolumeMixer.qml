@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Pipewire
-import Quickshell.Widgets
 import qs.ui
 import qs
 import qs.services

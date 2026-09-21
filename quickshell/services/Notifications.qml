@@ -9,7 +9,6 @@ QtObject {
 	id: root
 
 	signal arrived(var notification)
-	signal changed()
 
 	property var list: []
 	property int nextId: 0
@@ -30,14 +29,12 @@ QtObject {
 			});
 
 			root.list = root.list.concat([row]).slice(-Config.notifyHistory);
-			root.changed();
 			root.arrived(notification);
 		}
 	}
 
 	readonly property int count: root.list.length
 	readonly property bool empty: root.count === 0
-	readonly property var latest: root.count > 0 ? root.list[root.count - 1] : null
 
 	function rowOf(notification) {
 		root.nextId += 1;
@@ -75,14 +72,12 @@ QtObject {
 			return;
 
 		root.list = next;
-		root.changed();
 	}
 
 	function remove(row) {
 		root.list = root.list.filter(function (item) {
 			return item.id !== row.id;
 		});
-		root.changed();
 	}
 
 	function dismiss(row) {
