@@ -28,7 +28,15 @@ PanelWindow {
 	readonly property string home: Quickshell.env("HOME")
 	readonly property string terminalConfig: Config.launcherTerminalConfig.replace("~", root.home)
 	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
-	readonly property var results: root.buildResults()
+	readonly property var results: Apps.results(root.mode, root.search, {
+		files: root.files,
+		clips: root.clips,
+		windows: root.windowEntries(),
+		entries: root.allEntries(),
+		pins: root.pins,
+		usage: root.usage,
+		calc: Parse.calcEntry(root.search)
+	})
 	readonly property int listHeight: Config.launcherMaxRows * Config.launcherRowHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width
 
@@ -107,31 +115,6 @@ PanelWindow {
 			root.openWindows();
 	}
 
-	function commandEntries() {
-		return Config.launcherCommands.map(function (item) {
-			return {
-				id: "cmd:" + item.name,
-				kind: "command",
-				name: item.name,
-				keywords: item.keywords || [],
-				command: item.command
-			};
-		});
-	}
-
-	function actionEntries() {
-		return Config.launcherActions.map(function (item) {
-			return {
-				id: "act:" + item.name,
-				kind: "action",
-				name: item.name,
-				keywords: ["power", "session"],
-				command: item.command,
-				glyph: item.glyph
-			};
-		});
-	}
-
 	function windowEntries() {
 		const values = Hyprland.toplevels.values ? Hyprland.toplevels.values : [];
 
@@ -155,23 +138,9 @@ PanelWindow {
 	}
 
 	function allEntries() {
-		return root.actionEntries().concat(root.commandEntries()).concat(Apps.appEntries(AppIcons.entries, Config.launcherIgnoreApps));
-	}
-
-	function buildResults() {
-		if (root.mode === "files")
-			return root.files;
-
-		if (root.mode === "clipboard")
-			return root.clips;
-
-		if (root.mode === "windows")
-			return root.search === "" ? root.windowEntries() : Apps.rankEntries(root.windowEntries(), root.search, [], {});
-
-		const ranked = Apps.rankEntries(root.allEntries(), root.search, root.pins, root.usage);
-		const calc = Parse.calcEntry(root.search);
-
-		return calc === null ? ranked : [calc].concat(ranked);
+		return Apps.actionEntries(Config.launcherActions)
+			.concat(Apps.commandEntries(Config.launcherCommands))
+			.concat(Apps.appEntries(AppIcons.entries, Config.launcherIgnoreApps));
 	}
 
 	function rowGlyph(entry) {
@@ -204,14 +173,7 @@ PanelWindow {
 	}
 
 	function stepWindows(step) {
-		const count = root.results.length;
-
-		if (count === 0) {
-			root.winIndex = 0;
-			return;
-		}
-
-		root.winIndex = ((root.winIndex + step) % count + count) % count;
+		root.winIndex = Util.wrap(root.winIndex, step, root.results.length);
 	}
 
 	function handleKeys(event) {
@@ -274,7 +236,7 @@ PanelWindow {
 	}
 
 	function remember(entry) {
-		if (!entry || entry.kind === "calc" || entry.kind === "file" || entry.kind === "clip" || entry.kind === "window")
+		if (!Apps.rememberable(entry))
 			return;
 
 		root.usage = Apps.bumpUsage(root.usage, entry.id, Date.now());
@@ -282,7 +244,7 @@ PanelWindow {
 	}
 
 	function pin(entry) {
-		if (!entry || entry.kind === "calc" || entry.kind === "file" || entry.kind === "clip" || entry.kind === "window")
+		if (!Apps.rememberable(entry))
 			return;
 
 		root.pins = Apps.togglePin(root.pins, entry.id);
@@ -379,15 +341,7 @@ PanelWindow {
 		command: ["sh", "-c", "cliphist list 2>/dev/null | head -n " + Config.launcherMaxResults]
 
 		onDone: function (text) {
-			root.clips = Parse.parseClipboardList(text).map(function (entry) {
-				return {
-					id: "clip:" + entry.id,
-					kind: "clip",
-					name: entry.text,
-					keywords: [],
-					clipId: entry.id
-				};
-			});
+			root.clips = Apps.clipEntries(Parse.parseClipboardList(text));
 		}
 	}
 
@@ -397,9 +351,7 @@ PanelWindow {
 		command: Shell.fileSearchCommand(root.home, root.search, Config.launcherFileDepth, Config.launcherFileMax, Config.launcherFileSkip)
 
 		onDone: function (text) {
-			root.files = Parse.pathLines(text).map(function (path) {
-				return { id: "file:" + path, kind: "file", name: path, keywords: [], path: path };
-			});
+			root.files = Apps.fileEntries(Parse.pathLines(text));
 		}
 	}
 

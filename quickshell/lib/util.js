@@ -25,6 +25,13 @@ function scrollIntoView(contentY, height, contentHeight, top, bottom) {
 	return clamp(next, 0, max);
 }
 
+function wrap(index, delta, count) {
+	if (count <= 0)
+		return 0;
+
+	return ((index + delta) % count + count) % count;
+}
+
 function pageCount(contentWidth, viewWidth, step) {
 	if (viewWidth <= 0 || step <= 0 || contentWidth <= viewWidth)
 		return 1;

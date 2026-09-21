@@ -41,6 +41,34 @@ assert(lookupApp({ "org.vinegarhq.Sober": { id: "org.vinegarhq.Sober", name: "So
 assert(lookupApp({ "com.spotify.Client": { id: "com.spotify.Client", name: "Spotify", icon: "com.spotify.Client" } }, "com.spotify.client").name === "Spotify", "a mixed case id is found from a lowercase query too");
 assert(lookupApp(entries, "nope") === null, "unknown ids return null");
 assert(lookupApp(entries, "") === null, "empty names return null");
+
+assert(commandEntries([{ name: "lock", command: "hyprlock", keywords: ["l"] }])[0].id === "cmd:lock", "a command entry is keyed by its name");
+assert(commandEntries([{ name: "lock", command: "hyprlock" }])[0].keywords.length === 0, "a command with no keywords still gets a keyword list");
+assert(actionEntries([{ name: "shutdown", command: "systemctl poweroff", glyph: "G" }])[0].id === "act:shutdown", "an action entry is keyed by its name");
+assert(actionEntries([{ name: "shutdown", command: "x", glyph: "G" }])[0].keywords.join(",") === "power,session", "every action stays findable as power or session");
+assert(clipEntries([{ id: "42", text: "hello" }])[0].clipId === "42", "a clip entry keeps the id cliphist decodes by");
+assert(clipEntries([{ id: "42", text: "hello" }])[0].id === "clip:42", "and is keyed apart from apps and files");
+assert(fileEntries(["/tmp/a b.txt"])[0].path === "/tmp/a b.txt", "a file entry keeps its path, spaces and all");
+assert(rememberable({ kind: "app" }) && rememberable({ kind: "command" }) && rememberable({ kind: "action" }), "usage counts apps, commands and actions");
+assert(!rememberable(null) && !rememberable({ kind: "window" }) && !rememberable({ kind: "file" }) && !rememberable({ kind: "clip" }) && !rememberable({ kind: "calc" }), "and never counts windows, files, clips or the calculator row");
+
+const twoApps = [
+	{ id: "app:firefox", kind: "app", name: "Firefox", keywords: ["firefox"] },
+	{ id: "app:sober", kind: "app", name: "Sober", keywords: ["sober"] }
+];
+const calcRow = { id: "calc:1+1", kind: "calc", name: "1+1", value: "2" };
+const launchState = { files: [], clips: [], windows: twoApps, entries: twoApps, pins: [], usage: {}, calc: null };
+
+assert(results("files", "fire", { files: [{ kind: "file" }], clips: [], windows: [], entries: twoApps, pins: [], usage: {}, calc: null }).length === 1, "file mode shows the file list and nothing else");
+assert(results("clipboard", "", { files: [], clips: [{ kind: "clip" }], windows: [], entries: twoApps, pins: [], usage: {}, calc: calcRow })[0].kind === "clip", "clipboard mode shows the clips, and ignores the calculator");
+assert(results("windows", "", launchState).length === 2, "window mode with no query lists every window, unranked");
+assert(results("windows", "sober", launchState).length === 1, "window mode with a query ranks them");
+assert(results("", "sober", launchState).length === 1, "the default mode ranks the entries");
+assert(results("", "zzzz", launchState).length === 0, "nothing matches nothing");
+const calcState = { files: [], clips: [], windows: [], entries: twoApps, pins: [], usage: {}, calc: calcRow };
+
+assert(results("", "sober", calcState)[0].kind === "calc", "a calculator row sits above the ranked entries");
+assert(results("", "sober", calcState).length === 2 && results("", "sober", calcState)[1].kind === "app", "and takes exactly one row off the top");
 });
 
 section("calendar", function () {
@@ -778,6 +806,11 @@ assert(scrollIntoView(100, 50, 500, 110, 170) === 120, "a row that hangs past th
 assert(scrollIntoView(0, 50, 40, 0, 100) === 0, "a list shorter than its view does not scroll");
 assert(scrollIntoView(450, 50, 500, 480, 540) === 450, "a row past the end clamps to the last screenful, never a blank list");
 assert(scrollIntoView(500, 50, 500, 400, 460) === 400, "scrolling up is clamped to the top of the list too");
+
+assert(wrap(0, 1, 3) === 1 && wrap(2, 1, 3) === 0, "wrapping forward walks the list and comes back around");
+assert(wrap(0, -1, 3) === 2 && wrap(-4, 0, 3) === 2, "wrapping backwards wraps too, even from outside the list");
+assert(wrap(0, 5, 3) === 2 && wrap(2, -5, 3) === 0, "a step longer than the list still lands inside it");
+assert(wrap(3, 1, 0) === 0, "wrapping an empty list lands on zero, not nan");
 
 assert(curl("https://x/y?a=1", 20).join(" ") === "sh -c curl -s -m 20 'https://x/y?a=1'", "a fetch is one curl with its own timeout, got " + curl("https://x/y?a=1", 20).join(" "));
 assert(curl("https://x/y").join(" ").indexOf("-m 15") > 0, "a fetch with no timeout gets the default one");

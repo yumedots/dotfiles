@@ -300,3 +300,57 @@ function bumpUsage(usage, id, now) {
 
 	return next;
 }
+
+function commandEntries(items) {
+	return (items || []).map(function (item) {
+		return {
+			id: "cmd:" + item.name,
+			kind: "command",
+			name: item.name,
+			keywords: item.keywords || [],
+			command: item.command
+		};
+	});
+}
+
+function actionEntries(items) {
+	return (items || []).map(function (item) {
+		return {
+			id: "act:" + item.name,
+			kind: "action",
+			name: item.name,
+			keywords: ["power", "session"],
+			command: item.command,
+			glyph: item.glyph
+		};
+	});
+}
+
+function clipEntries(list) {
+	return (list || []).map(function (entry) {
+		return { id: "clip:" + entry.id, kind: "clip", name: entry.text, keywords: [], clipId: entry.id };
+	});
+}
+
+function fileEntries(paths) {
+	return (paths || []).map(function (path) {
+		return { id: "file:" + path, kind: "file", name: path, keywords: [], path: path };
+	});
+}
+
+function rememberable(entry) {
+	return Boolean(entry) && entry.kind !== "calc" && entry.kind !== "file" && entry.kind !== "clip" && entry.kind !== "window";
+}
+
+function results(mode, search, state) {
+	if (mode === "files")
+		return state.files;
+	if (mode === "clipboard")
+		return state.clips;
+	if (mode === "windows")
+		return search === "" ? state.windows : rankEntries(state.windows, search, [], {});
+
+	const ranked = rankEntries(state.entries, search, state.pins, state.usage);
+
+	return state.calc === null ? ranked : [state.calc].concat(ranked);
+}
