@@ -30,7 +30,7 @@ PanelWindow {
 	screen: root.anchorWindow ? root.anchorWindow.screen : null
 
 	readonly property bool modal: root.wantsKeyboard
-	readonly property real scale: root.screen && root.screen.devicePixelRatio > 0 ? root.screen.devicePixelRatio : 1
+	readonly property real scale: border.scale
 	readonly property real cardWidth: Helpers.snap(border.contentWidth + 2 * border.inset, root.scale)
 	readonly property real cardHeight: Helpers.snap(border.contentHeight + 2 * border.inset, root.scale)
 	readonly property real cardX: Helpers.snap(root.alignRight

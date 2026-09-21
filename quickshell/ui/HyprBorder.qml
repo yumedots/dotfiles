@@ -19,9 +19,11 @@ Item {
 	readonly property var themeColors: root.borderColors !== null
 		? root.borderColors
 		: (root.hyprBorder.colors !== null ? root.hyprBorder.colors : [Config.borderFallbackColor])
-	readonly property real themeWidth: root.borderWidth >= 0
+	readonly property real scale: Hyprland.focusedMonitor && Hyprland.focusedMonitor.scale > 0 ? Hyprland.focusedMonitor.scale : 1
+	readonly property real wantedWidth: root.borderWidth >= 0
 		? root.borderWidth
 		: (root.hyprBorder.width !== null ? root.hyprBorder.width : Config.borderFallbackWidth)
+	readonly property real themeWidth: Helpers.snap(root.wantedWidth, root.scale)
 	readonly property real themeAngle: root.hyprBorder.angle
 	readonly property var edges: Helpers.gradientEdges(root.themeColors, root.themeAngle, frame.width, frame.height, root.themeWidth)
 	readonly property real inset: root.themeWidth + root.padding
