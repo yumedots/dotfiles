@@ -75,6 +75,7 @@ QtObject {
 			nudgeVolume: (n) => seen = "volume" + n,
 			toggleMute: () => seen = "mute",
 			openPicker: (dir) => seen = "picker:" + dir,
+			closePicker: () => { seen = "pickerclose"; stub.picker = ""; },
 			makeDefault: () => seen = "default",
 			activate: () => seen = "activate",
 			stepWindows: (n) => seen = "window" + n,
@@ -122,7 +123,27 @@ QtObject {
 
 		seen = "";
 		Input.mixer(down, stub);
-		root.assert(seen === "volume" + -Config.mixerStep, "mixer down lowers the volume");
+		root.assert(seen === "target1", "mixer down walks to the next channel");
+
+		seen = "";
+		Input.mixer(up, stub);
+		root.assert(seen === "target-1", "mixer up walks back a channel");
+
+		seen = "";
+		Input.mixer(left, stub);
+		root.assert(seen === "volume" + -Config.mixerStep, "mixer left lowers the volume");
+
+		seen = "";
+		Input.mixer(right, stub);
+		root.assert(seen === "volume" + Config.mixerStep, "mixer right raises the volume");
+
+		seen = "";
+		Input.mixer(j, stub);
+		root.assert(seen === "volume" + -Config.mixerStep, "mixer j still lowers the volume");
+
+		seen = "";
+		Input.mixer(l, stub);
+		root.assert(seen === "target1", "mixer l still walks to the next channel");
 
 		seen = "";
 		Input.mixer(root.key("m", 0), stub);
@@ -135,6 +156,10 @@ QtObject {
 		seen = "";
 		Input.picker(down, stub);
 		root.assert(seen === "" && stub.pickerIndex === 1, "the picker moves its highlight");
+
+		seen = "";
+		Input.picker(escape, stub);
+		root.assert(seen === "pickerclose" && stub.picker === "", "escape backs out of the picker instead of the mixer");
 
 		seen = "";
 		Input.switcher(root.key("", Qt.Key_Space), stub);

@@ -108,6 +108,10 @@ Item {
 		root.picker = root.picker === direction ? "" : direction;
 	}
 
+	function closePicker() {
+		root.picker = "";
+	}
+
 	function makeDefault(direction, node) {
 		if (!node)
 			return;
@@ -530,7 +534,7 @@ Item {
 
 			anchors.left: parent.left
 			anchors.right: parent.right
-			anchors.top: parent.top
+			anchors.verticalCenter: parent.verticalCenter
 			anchors.margins: Config.mixerPadding
 			spacing: Config.mixerListGap
 

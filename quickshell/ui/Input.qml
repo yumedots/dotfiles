@@ -14,6 +14,12 @@ QtObject {
 		[Qt.Key_Enter]: "accept",
 		[Qt.Key_Space]: "space"
 	})
+	readonly property var mixerArrows: ({
+		[Qt.Key_Up]: "left",
+		[Qt.Key_Down]: "right",
+		[Qt.Key_Left]: "down",
+		[Qt.Key_Right]: "up"
+	})
 
 	readonly property var cancel: (event) => event.key === Qt.Key_Escape
 	readonly property var accept: (event) => event.key === Qt.Key_Return || event.key === Qt.Key_Enter
@@ -26,8 +32,8 @@ QtObject {
 	readonly property var delta: (event, step, page) => root.axis(root.direction(event), step, page)
 	readonly property var arrow: (event, step, page) => root.axis(root.arrows[event.key] || "", step, page)
 
-	function act(event, keys) {
-		const action = keys[root.name(event)];
+	function act(event, keys, name) {
+		const action = keys[name !== undefined ? name : root.name(event)];
 
 		if (action === undefined)
 			return false;
@@ -88,12 +94,12 @@ QtObject {
 			accept: () => System.sameNode(target.selectedNode, target.sink)
 				? target.openPicker("output")
 				: System.sameNode(target.selectedNode, target.source) ? target.openPicker("input") : null
-		});
+		}, root.mixerArrows[event.key]);
 	}
 
 	function picker(event, target) {
 		return root.act(event, {
-			escape: () => target.closeRequested(),
+			escape: () => target.closePicker(),
 			up: () => target.pickerIndex = Math.max(0, target.pickerIndex - 1),
 			down: () => target.pickerIndex = Util.clamp(target.pickerIndex + 1, 0, target.devices.length - 1),
 			accept: () => target.makeDefault(target.picker, target.devices[target.pickerIndex])
