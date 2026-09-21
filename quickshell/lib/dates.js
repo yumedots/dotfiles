@@ -116,6 +116,19 @@ function shiftMonths(date, months) {
 	return next;
 }
 
+function meters(today, birthYear, expectancy, icons) {
+	const out = [
+		{ icon: icons[0], label: "DAY", pct: progressPercent(dayProgress(today)) },
+		{ icon: icons[1], label: "MONTH", pct: progressPercent(monthProgress(today)) },
+		{ icon: icons[2], label: "YEAR", pct: progressPercent(yearProgress(today)) }
+	];
+
+	if (birthYear > 0)
+		out.push({ icon: icons[3], label: "LIFE", pct: progressPercent(lifeProgress(birthYear, expectancy, today.getFullYear())) });
+
+	return out;
+}
+
 function shiftYears(date, years) {
 	const next = new Date(date.getTime());
 	const day = next.getDate();

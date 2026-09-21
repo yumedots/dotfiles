@@ -19,7 +19,7 @@ Item {
 	readonly property string todayKey: Dates.dateKey(root.today)
 	readonly property var grid: Dates.monthGrid(root.cursor.getFullYear(), root.cursor.getMonth(), root.weekStart, root.todayKey, root.cursorKey, Config.calendarRows)
 	readonly property var weekdays: Dates.weekdayLabels(root.weekStart)
-	readonly property var meters: root.buildMeters()
+	readonly property var meters: Dates.meters(root.today, Config.calendarBirthYear, Config.calendarLifeExpectancy, [Config.calendarIconDay, Config.calendarIconMonth, Config.calendarIconYear, Config.calendarIconLife])
 	readonly property real gridWidth: Config.calendarCellWidth * 7
 	readonly property real gridLeft: Config.calendarMeterColumn + Config.calendarColumnGap * 2 + Config.calendarSeparator
 	readonly property string monthText: Qt.formatDate(new Date(root.cursor.getFullYear(), root.cursor.getMonth(), 1), "MMMM")
@@ -57,19 +57,6 @@ Item {
 		font.family: Config.fontFamily
 		font.pixelSize: Config.calendarWeekdaySize
 		text: root.weekdays.length > 0 ? root.weekdays[0] : ""
-	}
-
-	function buildMeters() {
-		const out = [
-			{ icon: Config.calendarIconDay, label: "DAY", pct: Dates.progressPercent(Dates.dayProgress(root.today)) },
-			{ icon: Config.calendarIconMonth, label: "MONTH", pct: Dates.progressPercent(Dates.monthProgress(root.today)) },
-			{ icon: Config.calendarIconYear, label: "YEAR", pct: Dates.progressPercent(Dates.yearProgress(root.today)) }
-		];
-
-		if (Config.calendarBirthYear > 0)
-			out.push({ icon: Config.calendarIconLife, label: "LIFE", pct: Dates.progressPercent(Dates.lifeProgress(Config.calendarBirthYear, Config.calendarLifeExpectancy, root.today.getFullYear())) });
-
-		return out;
 	}
 
 	function step(days) {

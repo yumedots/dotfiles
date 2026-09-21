@@ -126,6 +126,19 @@ for (let year = 2020; year <= 2030; year++) {
 }
 
 assert(tallest === 6, "every month of the decade fits six weeks, so the grid never needs more");
+
+const meterIcons = ["d", "m", "y", "l"];
+const meterToday = new Date(2026, 8, 21);
+const meterRows = meters(meterToday, 0, 80, meterIcons);
+
+assert(meterRows.length === 3, "a calendar with no birth year shows day, month and year");
+assert(meterRows[0].label === "DAY" && meterRows[1].label === "MONTH" && meterRows[2].label === "YEAR", "and labels them in that order");
+assert(meterRows[0].icon === "d" && meterRows[2].icon === "y", "each row carries the icon it was handed");
+assert(meterRows[0].pct === progressPercent(dayProgress(meterToday)), "the day row is the day's progress");
+assert(meterRows.every(function (row) { return row.pct >= 0 && row.pct <= 100; }), "percentages stay inside nought to a hundred");
+const lifeRows = meters(meterToday, 1990, 80, meterIcons);
+assert(lifeRows.length === 4 && lifeRows[3].label === "LIFE" && lifeRows[3].icon === "l", "a birth year adds the life row last");
+assert(meters(meterToday, 0, 80, ["a", "b", "c", "d"])[1].icon === "b", "the month row takes the second icon it was handed");
 assert(filledCells(50, 15) === 8 && filledCells(200, 15) === 15, "filled cells clamp");
 
 });
