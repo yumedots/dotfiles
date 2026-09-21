@@ -71,6 +71,98 @@ assert(results("", "sober", calcState)[0].kind === "calc", "a calculator row sit
 assert(results("", "sober", calcState).length === 2 && results("", "sober", calcState)[1].kind === "app", "and takes exactly one row off the top");
 });
 
+section("entries", function () {
+const modeConfig = {
+	launcherModes: [
+		{ mode: "calc", name: "Calculator", mark: "=", glyph: "C" },
+		{ mode: "clipboard", name: "Clipboard", mark: "$", glyph: "K", keywords: ["copy"] }
+	],
+	launcherGroups: [{ id: "apps", name: "All apps", glyph: "A" }],
+	launcherCommands: [{ name: "Edit shell config", command: "code-insiders ~/.config/quickshell/config.js" }],
+	launcherActions: [{ name: "Shut down", command: "systemctl poweroff", glyph: "P" }],
+	launcherIconCommand: "c",
+	launcherIconCalc: "=",
+	launcherIconWindow: "w",
+	launcherIconFile: "f",
+	launcherIconClipboard: "k"
+};
+
+assert(modeMarks(modeConfig.launcherModes)["clipboard"] === "$", "a mark comes back keyed by its mode");
+assert(modeMarks([])["calc"] === undefined, "no modes, no marks");
+assert(modeInfo("calc", modeConfig).name === "Calculator", "a mode resolves to its config");
+assert(modeInfo("group:apps", modeConfig).id === "apps", "a group mode resolves to the group, not to a mode");
+assert(modeInfo("nope", modeConfig) === null && modeInfo("group:nope", modeConfig) === null, "unknown modes and groups resolve to nothing");
+assert(markOf("clipboard", modeConfig) === "$", "the mark of a mode is what an entry types");
+assert(markOf("nope", modeConfig) === "" && markOf("group:apps", modeConfig) === "", "groups and unknown modes have no mark");
+
+const modeList = modeEntries(modeConfig.launcherModes);
+assert(modeList[0].id === "mode:calc" && modeList[0].kind === "mode" && modeList[0].mode === "calc", "a mode entry names the mode it opens");
+assert(modeList[1].keywords[0] === "copy" && modeList[0].keywords.length === 0, "keywords are optional");
+assert(groupEntries(modeConfig.launcherGroups)[0].id === "group:apps" && groupEntries(modeConfig.launcherGroups)[0].group === "apps", "a group entry names the group it opens");
+
+const footApps = {
+	footclient: { name: "Foot Client", exec: "footclient", execLine: "footclient" },
+	foot: { name: "Foot", exec: "foot", execLine: "foot" },
+	"foot-server": { name: "Foot Server", exec: "foot-server", execLine: "foot-server" },
+	btop: { name: "btop", exec: "btop", execLine: "btop" }
+};
+const folded = appEntries(footApps, [], { foot: ["foot", "footclient", "foot-server"] });
+
+assert(folded.length === 2, "the foot variants fold into one entry");
+assert(folded[0].kind === "app" && folded[0].name === "foot", "the survivor is named after the alias key");
+assert(folded.map(function (entry) { return entry.appId; }).indexOf("footclient") < 0, "the other variants are gone");
+assert(appEntries({ footclient: footApps.footclient }, [], { foot: ["foot", "footclient"] })[0].name === "foot", "a lone variant is renamed too");
+assert(appEntries(footApps, [], {}).length === 4, "without aliases every app stays");
+assert(appEntries(footApps, ["btop"], {}).length === 3, "ignored apps stay ignored");
+assert(appEntries({ broken: { name: "Broken" } }, [], {}).length === 0, "an entry without an exec is skipped");
+
+const saved = customEntries("htop\thtop -d 5\nnotes\n\nvt\tfootclient -e vt");
+assert(saved.length === 3, "blank lines are not saved entries");
+assert(saved[0].id === "saved:htop" && saved[0].kind === "saved" && saved[0].command === "htop -d 5", "a saved entry keeps its command");
+assert(saved[1].command === "notes", "a line with no command runs itself");
+assert(formatCustom(saved) === "htop\thtop -d 5\nnotes\tnotes\nvt\tfootclient -e vt", "and writes back in the same shape");
+assert(formatCustom(customEntries(formatCustom(saved))) === formatCustom(saved), "the cache round trips");
+assert(customEntries("\n  \n").length === 0, "a cache of blank lines is empty");
+assert(toggleCustom([], "  htop  ")[0].name === "htop", "saving trims the query");
+assert(toggleCustom(saved, "htop").length === 2, "saving the same query again unsaves it");
+assert(toggleCustom(saved, "").length === 3, "an empty query saves nothing");
+assert(toggleCustom(saved, "btop").length === 4 && toggleCustom(saved, "btop")[3].name === "btop", "a new entry is appended");
+
+assert(glyphOf({ kind: "action", glyph: "P" }, modeConfig) === "P", "an entry with a glyph keeps it");
+assert(glyphOf({ kind: "command" }, modeConfig) === "c", "a command falls back to the command glyph");
+assert(glyphOf({ kind: "saved" }, modeConfig) === "c", "so does a saved entry");
+assert(glyphOf({ kind: "file" }, modeConfig) === "f" && glyphOf({ kind: "clip" }, modeConfig) === "k", "files and clips have their own");
+assert(glyphOf({ kind: "mode" }, modeConfig) === "" && glyphOf(null, modeConfig) === "", "a mode carries its glyph from the config, nothing invents one");
+assert(rememberable({ kind: "saved" }) && rememberable({ kind: "app" }) && !rememberable({ kind: "mode" }) && !rememberable({ kind: "group" }), "usage counts what gets launched, not what navigates");
+
+const everything = all(modeConfig, appEntries(footApps, [], {}), saved);
+assert(everything.length === 2 + 1 + saved.length + 1 + 1 + 4, "every source contributes its entries once");
+assert(everything[0].kind === "mode" && everything[1].kind === "mode" && everything[2].kind === "group" && everything[5].kind === "saved" && everything[6].kind === "command" && everything[7].kind === "action" && everything[8].kind === "app", "and in the order modes, groups, saved, commands, actions, apps");
+
+const homeState = {
+	files: [],
+	clips: [],
+	windows: [],
+	entries: [{ id: "app:firefox", kind: "app", name: "Firefox" }, { id: "act:Shut down", kind: "action", name: "Shut down" }],
+	groups: { apps: [{ id: "app:firefox", kind: "app", name: "Firefox" }] },
+	pins: [],
+	usage: {},
+	calc: null
+};
+
+assert(results("", "", homeState).length === 1, "the home list keeps the actions and hides the apps");
+assert(results("", "", { files: [], clips: [], windows: [], entries: homeState.entries, groups: homeState.groups, pins: ["app:firefox"], usage: {}, calc: null }).length === 2, "a pinned app stays on the home list");
+assert(results("", "fire", homeState).length === 1, "typing still finds an app");
+assert(results("group:apps", "", homeState).length === 1, "a group mode lists its own contents instead");
+assert(results("group:apps", "s", homeState).length === 0 && results("group:apps", "fire", homeState).length === 1, "and ranks inside the group");
+assert(results("group:nope", "", homeState).length === 0, "an unknown group is empty, not a crash");
+
+const calcOnly = { files: [], clips: [], windows: [], entries: [], groups: {}, pins: [], usage: {}, calc: { id: "calc:1+1", kind: "calc", name: "1+1", value: "2" } };
+
+assert(results("calc", "1+1", calcOnly).length === 1 && results("calc", "1+1", calcOnly)[0].kind === "calc", "calc mode shows the calculator row and nothing else");
+assert(results("calc", "111", { files: [], clips: [], windows: [], entries: [], groups: {}, pins: [], usage: {}, calc: null }).length === 0, "and nothing when the query does not parse");
+});
+
 section("calendar", function () {
 assert(daysInMonth(2024, 1) === 29 && daysInMonth(2026, 1) === 28, "february length");
 assert(weekdayOffset(new Date(2024, 0, 1), 1) === 0, "2024-01-01 is a monday");
@@ -799,6 +891,14 @@ section("mixer", function () {
 	assert(nodeMuted(source) && !nodeMuted(sink) && nodeMuted(null) === false, "mute is read off the node, a missing node reads false");
 	assert(nodeVolume(source) === 0.7 && nodeVolume(null) === 0 && nodeVolume(notReady) === 0, "volume is read off the node, a node without audio reads zero");
 	assert(sameNode(sink, { id: 1 }) && !sameNode(sink, source) && !sameNode(null, sink), "two nodes are the same node when their ids match");
+
+	const fader = { id: 9, audio: { volume: 0.5, muted: false } };
+
+	assert(setNodeVolume(fader, 0.25, 1) === 0.25 && fader.audio.volume === 0.25, "a fader press sets the node's volume from where it was clicked");
+	assert(setNodeVolume(fader, 2, 1) === 1 && fader.audio.volume === 1, "a click past the top of the track clamps to full volume");
+	assert(setNodeVolume(fader, -1, 1) === 0 && fader.audio.volume === 0, "a click past the bottom of the track clamps to silence");
+	assert(setNodeVolume(fader, 0.5, 1.5) === 0.75 && fader.audio.volume === 0.75, "a click halfway up the track scales to half of the config's maximum volume");
+	assert(setNodeVolume({ id: 10 }, 0.5, 1) === 0.5, "a node without audio is left alone instead of thrown on");
 
 	assert(holdStream({}, 4, 5000)[4] === 5000, "holding a stream records when its hold runs out");
 	assert(Object.keys(holdStream({ 4: 5000 }, 4, 6000)).length === 1 && holdStream({ 4: 5000 }, 4, 6000)[4] === 6000, "holding the same stream again moves its hold, it does not pile up");

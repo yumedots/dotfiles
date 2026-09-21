@@ -23,6 +23,16 @@ const fontSize = 12;
 const valueSample = "0123456789.%G";
 const iconSize = 10;
 const trayIconSize = 11;
+const trayIconGap = 10;
+const trayGroupSize = 15;
+const trayMenuWidth = 120;
+const trayMenuPadding = 6;
+const trayMenuRowHeight = 18;
+const trayMenuSeparator = 1;
+const barHitPadding = 4;
+const tooltipCloseSize = 14;
+const tooltipCloseInset = 6;
+const iconClose = "\uf00d";
 const spacing = 12;
 const barStatSpacing = 10;
 
@@ -121,6 +131,7 @@ const mixerOnlyPlaying = true;
 const mixerPollMs = 1000;
 const mixerHoldMs = 2000;
 const mixerRecordDotSize = 5;
+const mixerHitPad = 6;
 const volumeBase = "#ffffff";
 const iconApp = "\uf001";
 const iconOutput = "\u{f0379}";
@@ -146,26 +157,24 @@ const launcherPrompt = "\uea6d";
 const launcherMaxRows = 12;
 const launcherMaxResults = 60;
 const launcherIgnoreApps = ["avahi-discover", "bssh", "bvnc"];
-const launcherFileDepth = 6;
-const launcherFileMax = 40;
-const launcherFileDebounce = 220;
-const launcherFileSkip = [".cache", ".git", "node_modules", ".local", ".cargo", ".rustup", ".npm"];
-const launcherMarks = { files: ".", clipboard: "$" };
+
 const launcherIconCommand = "\u{f018c}";
 const launcherIconCalc = "\u{f00ec}";
-const launcherIconFiles = "\u{f0967}";
 const launcherIconClipboard = "\uf07f";
 const launcherIconWindow = "\u{f05b1}";
 const launcherIconFile = "\u{f0213}";
 const launcherIconPin = "\ueba0";
+const launcherIconApps = "\u{f0c9}";
+const launcherModes = [
+	{ mode: "clipboard", name: "Clipboard", mark: "", glyph: launcherIconClipboard, keywords: ["copy", "paste"] }
+];
+const launcherGroups = [
+	{ id: "apps", name: "Apps", glyph: launcherIconApps, keywords: ["programs", "applications"] }
+];
+const launcherAppAliases = { foot: ["foot", "footclient", "foot-server"] };
 const windowsGridCell = 100;
 const windowsRowMargin = 60;
 const windowsIconSize = 76;
-const launcherCommands = [
-	{ name: "Edit shell config", command: "code-insiders ~/.config/quickshell/config.js", keywords: ["quickshell"] },
-	{ name: "Edit hyprland config", command: "code-insiders ~/.config/hypr", keywords: ["hypr"] },
-	{ name: "Edit launcher shortcuts", command: "code-insiders ~/.config/quickshell/config.js", keywords: ["launcher"] }
-];
 const launcherActions = [
 	{ name: "Suspend", command: "systemctl suspend", glyph: "\u{f04b2}" },
 	{ name: "Log out", command: "hyprctl dispatch 'hl.dsp.exit()'", glyph: "\uea6e" },

@@ -24,6 +24,7 @@ QtObject {
 	readonly property var cancel: (event) => event.key === Qt.Key_Escape
 	readonly property var accept: (event) => event.key === Qt.Key_Return || event.key === Qt.Key_Enter
 	readonly property var pin: (event) => event.key === Qt.Key_P && (event.modifiers & Qt.ControlModifier)
+	readonly property var save: (event) => event.key === Qt.Key_S && (event.modifiers & Qt.ControlModifier)
 	readonly property var hint: (event) => event.text === Config.procHintKey
 
 	readonly property var axis: (dir, step, page) => ({ down: step, up: -step, right: page, left: -page })[dir] || 0
