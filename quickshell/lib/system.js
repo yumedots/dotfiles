@@ -62,6 +62,80 @@ function parseRunningStreams(text, direction) {
 	return ids;
 }
 
+function inputStream(node) {
+	if (!node)
+		return false;
+
+	return isInputStream(node.isStream, node.properties ? node.properties["media.class"] : "");
+}
+
+function shownStream(node) {
+	return !!node && node.ready && node.isStream && !inputStream(node);
+}
+
+function streamPlaying(node, running) {
+	return node ? (running || []).indexOf(node.id) >= 0 : false;
+}
+
+function streamNodes(nodes, running, onlyPlaying) {
+	const list = [];
+
+	(nodes || []).forEach(function (node) {
+		if (shownStream(node) && (!onlyPlaying || streamPlaying(node, running)))
+			list.push(node);
+	});
+
+	return list;
+}
+
+function audioDevices(nodes, input) {
+	const found = [];
+
+	(nodes || []).forEach(function (node) {
+		if (!node || node.isStream || !node.audio || node.isSink === !!input)
+			return;
+
+		found.push(node);
+	});
+
+	return found;
+}
+
+function firstDevice(nodes, input) {
+	const found = audioDevices(nodes, input);
+
+	return found.length > 0 ? found[0] : null;
+}
+
+function sameNode(a, b) {
+	return !!a && !!b && a.id === b.id;
+}
+
+function sortedDevices(nodes, input, active) {
+	const found = audioDevices(nodes, input);
+	let at = -1;
+
+	for (let i = 0; i < found.length; i++) {
+		if (sameNode(found[i], active))
+			at = i;
+	}
+
+	if (at > 0) {
+		found.splice(at, 1);
+		found.unshift(active);
+	}
+
+	return found;
+}
+
+function nodeMuted(node) {
+	return !!(node && node.audio && node.audio.muted);
+}
+
+function nodeVolume(node) {
+	return node && node.audio ? node.audio.volume : 0;
+}
+
 function cpuSample(fields) {
 	let total = 0;
 	let idle = 0;

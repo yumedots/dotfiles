@@ -74,7 +74,6 @@ QtObject {
 			moveTarget: (n) => seen = "target" + n,
 			nudgeVolume: (n) => seen = "volume" + n,
 			toggleMute: () => seen = "mute",
-			sameNode: (a, b) => a === b,
 			openPicker: (dir) => seen = "picker:" + dir,
 			makeDefault: () => seen = "default",
 			activate: () => seen = "activate",

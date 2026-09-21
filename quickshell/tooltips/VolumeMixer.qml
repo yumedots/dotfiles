@@ -10,8 +10,9 @@ import qs.services
 Item {
 	id: root
 
-	readonly property var sink: Pipewire.defaultAudioSink ? Pipewire.defaultAudioSink : root.firstDevice(false)
-	readonly property var source: Pipewire.defaultAudioSource ? Pipewire.defaultAudioSource : root.firstDevice(true)
+	readonly property var nodes: Pipewire.nodes.values ? Pipewire.nodes.values : []
+	readonly property var sink: Pipewire.defaultAudioSink ? Pipewire.defaultAudioSink : System.firstDevice(root.nodes, false)
+	readonly property var source: Pipewire.defaultAudioSource ? Pipewire.defaultAudioSource : System.firstDevice(root.nodes, true)
 	readonly property bool onScreen: root.Window.window ? root.Window.window.visible : false
 
 	property var runningOutput: []
@@ -40,18 +41,12 @@ Item {
 	implicitHeight: body.implicitHeight + Config.mixerPadding * 2
 
 	onLastPageChanged: root.page = Math.min(root.page, root.lastPage)
-	onPickerChanged: root.pickerIndex = 0
+	onPickerChanged: {
+		root.pickerIndex = 0;
+	}
 
 	readonly property var targetNodes: {
-		const nodes = Pipewire.nodes.values ? Pipewire.nodes.values : [];
-		const list = [];
-
-		for (let i = 0; i < nodes.length; i++) {
-			const node = nodes[i];
-
-			if (root.shownStream(node) && (!Config.mixerOnlyPlaying || root.playing(node)))
-				list.push(node);
-		}
+		const list = System.streamNodes(root.nodes, root.runningOutput, Config.mixerOnlyPlaying);
 
 		if (root.sink)
 			list.push(root.sink);
@@ -90,13 +85,6 @@ Item {
 			Input.picker(event, root);
 	}
 
-	function setVolume(node, value) {
-		if (!node || !node.audio)
-			return;
-
-		node.audio.volume = Util.clamp(value, 0, Config.mixerMaxVolume);
-	}
-
 	function toggleMute(node) {
 		if (!node || !node.audio)
 			return;
@@ -104,67 +92,8 @@ Item {
 		node.audio.muted = !node.audio.muted;
 	}
 
-	function inputStream(node) {
-		if (!node)
-			return false;
-
-		return System.isInputStream(node.isStream, node.properties ? node.properties["media.class"] : "");
-	}
-
-	function shownStream(node) {
-		return !!node && node.ready && node.isStream && !root.inputStream(node);
-	}
-
-	function playing(node) {
-		return node ? root.runningOutput.indexOf(node.id) >= 0 : false;
-	}
-
-	function audioDevices(input) {
-		const nodes = Pipewire.nodes.values ? Pipewire.nodes.values : [];
-		const found = [];
-
-		for (let i = 0; i < nodes.length; i++) {
-			const node = nodes[i];
-
-			if (!node || node.isStream || !node.audio || node.isSink === !!input)
-				continue;
-
-			found.push(node);
-		}
-
-		return found;
-	}
-
-	function firstDevice(input) {
-		const found = root.audioDevices(input);
-
-		return found.length > 0 ? found[0] : null;
-	}
-
-	function sameNode(a, b) {
-		return !!a && !!b && a.id === b.id;
-	}
-
-	function switchable(input) {
-		return root.audioDevices(input).length > 1;
-	}
-
 	function sortedDevices(input) {
-		const found = root.audioDevices(input);
-		const active = input ? root.source : root.sink;
-		let at = -1;
-
-		for (let i = 0; i < found.length; i++) {
-			if (root.sameNode(found[i], active))
-				at = i;
-		}
-
-		if (at > 0) {
-			found.splice(at, 1);
-			found.unshift(active);
-		}
-
-		return found;
+		return System.sortedDevices(root.nodes, input, input ? root.source : root.sink);
 	}
 
 	function iconFor(node) {
@@ -226,10 +155,7 @@ Item {
 		property bool muted: false
 		property real volume: 0
 
-		signal moved(real value)
-		signal toggled()
-
-		readonly property bool selected: root.sameNode(channel.node, root.selectedNode)
+		readonly property bool selected: System.sameNode(channel.node, root.selectedNode)
 		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 		readonly property int percent: Math.round(channel.volume * 100)
 		readonly property real level: Util.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
@@ -251,24 +177,14 @@ Item {
 				width: parent.width
 				height: Config.mixerFaderHeight
 
-				Rectangle {
-					id: track
-
+				Meter {
 					anchors.horizontalCenter: parent.horizontalCenter
 					anchors.top: parent.top
 					anchors.bottom: parent.bottom
 					width: Config.mixerFaderThickness
-					radius: 0
-					color: Config.dim
-				}
-
-				Rectangle {
-					anchors.horizontalCenter: track.horizontalCenter
-					anchors.bottom: track.bottom
-					width: track.width
-					height: track.height * channel.level
-					radius: 0
-					color: channel.muted ? Config.muted : Config.foreground
+					vertical: true
+					level: channel.level
+					fill: channel.muted ? Config.muted : Config.foreground
 				}
 			}
 
@@ -314,24 +230,18 @@ Item {
 		property string glyph: ""
 		property bool muted: false
 		property bool recording: false
-		property bool switchable: false
 		property real volume: 0
 
-		signal moved(real value)
-		signal toggled()
-		signal opened()
-
-		readonly property bool selected: root.sameNode(line.node, root.selectedNode)
+		readonly property bool selected: System.sameNode(line.node, root.selectedNode)
 		readonly property real level: Util.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int percent: Math.round(line.volume * 100)
 
 		height: Math.max(Config.mixerDeviceIconSize, Config.fontSize)
 		implicitHeight: height
 
-		Text {
+		TextMetrics {
 			id: sample
 
-			visible: false
 			font.family: Config.fontFamily
 			font.pixelSize: Config.fontSize
 			text: "100%"
@@ -371,7 +281,7 @@ Item {
 
 			anchors.right: parent.right
 			anchors.verticalCenter: parent.verticalCenter
-			width: sample.implicitWidth
+			width: sample.width
 			horizontalAlignment: Text.AlignRight
 			font.family: Config.fontFamily
 			font.pixelSize: Config.fontSize
@@ -389,25 +299,60 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			height: parent.height
 
-			Rectangle {
-				id: lineTrack
-
+			Meter {
 				anchors.verticalCenter: parent.verticalCenter
 				anchors.left: parent.left
 				anchors.right: parent.right
 				height: Config.mixerFaderThickness
-				radius: 0
-				color: Config.dim
+				level: line.level
+				fill: line.muted ? Config.muted : Config.foreground
 			}
+		}
+	}
 
-			Rectangle {
-				anchors.verticalCenter: lineTrack.verticalCenter
-				anchors.left: lineTrack.left
-				width: lineTrack.width * line.level
-				height: lineTrack.height
-				radius: 0
-				color: line.muted ? Config.muted : Config.foreground
-			}
+	component Meter: Rectangle {
+		id: meter
+
+		property real level: 0
+		property bool vertical: false
+		property color fill: Config.foreground
+
+		radius: 0
+		color: Config.dim
+
+		Rectangle {
+			id: filled
+
+			radius: 0
+			color: meter.fill
+			width: meter.vertical ? meter.width : meter.width * meter.level
+			height: meter.vertical ? meter.height * meter.level : meter.height
+			anchors.bottom: meter.vertical ? meter.bottom : undefined
+			anchors.horizontalCenter: meter.vertical ? meter.horizontalCenter : undefined
+			anchors.left: meter.vertical ? undefined : meter.left
+			anchors.verticalCenter: meter.vertical ? undefined : meter.verticalCenter
+		}
+	}
+
+	component PagerArrow: Item {
+		id: arrow
+
+		property string glyph: ""
+		property bool lit: false
+		property real rows: 0
+
+		visible: root.pageable
+		width: arrow.visible ? Config.mixerArrowSize : 0
+		implicitWidth: width
+		height: arrow.rows
+
+		Text {
+			anchors.centerIn: parent
+			font.family: Config.fontFamily
+			font.pixelSize: Config.mixerArrowSize
+			color: Config.foreground
+			text: arrow.glyph
+			visible: arrow.lit
 		}
 	}
 
@@ -434,22 +379,10 @@ Item {
 				anchors.horizontalCenter: parent.horizontalCenter
 				spacing: Config.mixerArrowGap
 
-				Item {
-					id: prevStrip
-
-					visible: root.pageable
-					width: visible ? Config.mixerArrowSize : 0
-					implicitWidth: width
-					height: content.implicitHeight
-
-					Text {
-						anchors.centerIn: parent
-						font.family: Config.fontFamily
-						font.pixelSize: Config.mixerArrowSize
-						color: Config.foreground
-						text: Config.iconPrev
-						visible: root.page > 0
-					}
+				PagerArrow {
+					glyph: Config.iconPrev
+					lit: root.page > 0
+					rows: content.implicitHeight
 				}
 
 				Item {
@@ -484,8 +417,8 @@ Item {
 									property bool held: false
 
 									readonly property var node: holder.modelData
-									readonly property bool shown: root.shownStream(holder.node)
-									readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || root.playing(holder.node))
+									readonly property bool shown: System.shownStream(holder.node)
+									readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || System.streamPlaying(holder.node, root.runningOutput))
 
 									visible: holder.shown && holder.held
 									width: holder.shown && holder.held ? channel.implicitWidth : 0
@@ -513,10 +446,8 @@ Item {
 										node: holder.shown ? holder.node : null
 										glyph: Config.iconApp
 										appIcon: holder.shown
-										muted: holder.shown && holder.node.audio ? holder.node.audio.muted : false
-										volume: holder.shown && holder.node.audio ? holder.node.audio.volume : 0
-										onMoved: (value) => root.setVolume(holder.node, value)
-										onToggled: root.toggleMute(holder.node)
+										muted: holder.shown && System.nodeMuted(holder.node)
+										volume: holder.shown ? System.nodeVolume(holder.node) : 0
 									}
 
 									Timer {
@@ -530,22 +461,10 @@ Item {
 					}
 				}
 
-				Item {
-					id: nextStrip
-
-					visible: root.pageable
-					width: visible ? Config.mixerArrowSize : 0
-					implicitWidth: width
-					height: content.implicitHeight
-
-					Text {
-						anchors.centerIn: parent
-						font.family: Config.fontFamily
-						font.pixelSize: Config.mixerArrowSize
-						color: Config.foreground
-						text: Config.iconNext
-						visible: root.page < root.lastPage
-					}
+				PagerArrow {
+					glyph: Config.iconNext
+					lit: root.page < root.lastPage
+					rows: content.implicitHeight
 				}
 			}
 		}
@@ -562,12 +481,8 @@ Item {
 				width: parent.width
 				node: root.sink
 				glyph: Config.iconOutput
-				switchable: root.switchable(false)
-				muted: root.sink && root.sink.audio ? root.sink.audio.muted : false
-				volume: root.sink && root.sink.audio ? root.sink.audio.volume : 0
-				onMoved: (value) => root.setVolume(root.sink, value)
-				onToggled: root.toggleMute(root.sink)
-				onOpened: root.openPicker("output")
+				muted: System.nodeMuted(root.sink)
+				volume: System.nodeVolume(root.sink)
 			}
 
 			DeviceLine {
@@ -577,12 +492,8 @@ Item {
 				node: root.source
 				glyph: Config.iconInput
 				recording: root.recording
-				switchable: root.switchable(true)
-				muted: root.source && root.source.audio ? root.source.audio.muted : false
-				volume: root.source && root.source.audio ? root.source.audio.volume : 0
-				onMoved: (value) => root.setVolume(root.source, value)
-				onToggled: root.toggleMute(root.source)
-				onOpened: root.openPicker("input")
+				muted: System.nodeMuted(root.source)
+				volume: System.nodeVolume(root.source)
 			}
 		}
 	}
@@ -621,7 +532,7 @@ Item {
 					required property var modelData
 
 					readonly property var node: option.modelData
-					readonly property bool active: root.sameNode(option.node, root.picker === "input" ? root.source : root.sink)
+					readonly property bool active: System.sameNode(option.node, root.picker === "input" ? root.source : root.sink)
 					readonly property bool highlighted: option.index === root.pickerIndex
 
 					width: options.width

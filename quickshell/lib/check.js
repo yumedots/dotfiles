@@ -737,6 +737,36 @@ assert(palette.mono === true, "mono is on");
 
 });
 
+section("mixer", function () {
+	const sink = { id: 1, isSink: true, audio: { volume: 0.5, muted: false } };
+	const source = { id: 2, isSink: false, audio: { volume: 0.7, muted: true } };
+	const other = { id: 3, isSink: false, audio: { volume: 1, muted: false } };
+	const playback = { id: 4, isStream: true, ready: true, properties: { "media.class": "Stream/Output/Audio" }, audio: { volume: 0.2, muted: false } };
+	const capture = { id: 5, isStream: true, ready: true, properties: { "media.class": "Stream/Input/Audio" }, audio: {} };
+	const notReady = { id: 6, isStream: true, ready: false, properties: { "media.class": "Stream/Output/Audio" } };
+	const nodes = [sink, source, other, playback, capture, notReady];
+
+	assert(audioDevices(nodes, false).length === 1 && audioDevices(nodes, false)[0] === sink, "output devices are the sinks that have audio");
+	assert(audioDevices(nodes, true).length === 2, "input devices are every source that has audio");
+	assert(audioDevices(null, false).length === 0, "no nodes, no devices");
+	assert(firstDevice(nodes, true) === source, "the first source is the fallback device");
+	assert(shownStream(playback) && !shownStream(capture) && !shownStream(notReady) && !shownStream(sink), "only a ready playback stream belongs in the mixer");
+	assert(inputStream(capture) && !inputStream(playback) && !inputStream(null), "a capture stream is an input stream");
+	assert(streamPlaying(playback, [4]) && !streamPlaying(playback, [9]) && !streamPlaying(null, [4]), "a stream is playing when the poll saw its id");
+	assert(streamNodes(nodes, [4], true).length === 1 && streamNodes(nodes, [4], true)[0] === playback, "with the playing filter on only the playing streams stay");
+	assert(streamNodes(nodes, [], false).length === 1, "with the filter off every shown stream stays");
+	assert(nodeMuted(source) && !nodeMuted(sink) && nodeMuted(null) === false, "mute is read off the node, a missing node reads false");
+	assert(nodeVolume(source) === 0.7 && nodeVolume(null) === 0 && nodeVolume(notReady) === 0, "volume is read off the node, a node without audio reads zero");
+	assert(sameNode(sink, { id: 1 }) && !sameNode(sink, source) && !sameNode(null, sink), "two nodes are the same node when their ids match");
+
+	const sorted = sortedDevices(nodes, true, other);
+
+	assert(sorted[0] === other && sorted.length === 2, "the active device moves to the front of the picker");
+	assert(sorted[1] === source, "the rest of the picker keeps its order");
+	assert(sortedDevices(nodes, true, source)[0] === source, "a device that is already first is left where it is");
+	assert(sortedDevices(nodes, false, null)[0] === sink, "with nothing active the list is left alone");
+});
+
 section("helpers", function () {
 assert(clamp(5, 0, 3) === 3 && clamp(-1, 0, 3) === 0 && clamp(2, 0, 3) === 2, "clamp keeps a value inside its bounds");
 assert(clamp(7, 0, -1) === -1, "an inverted clamp still returns the top bound, callers must floor it themselves");
