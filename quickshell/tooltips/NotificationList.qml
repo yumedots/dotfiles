@@ -57,7 +57,7 @@ Item {
 		if (root.opened) {
 			const max = Math.max(0, list.contentHeight - list.height);
 
-			list.contentY = Helpers.clamp(list.contentY + step * Config.notifyRowHeight, 0, max);
+			list.contentY = Util.clamp(list.contentY + step * Config.notifyRowHeight, 0, max);
 			return;
 		}
 
@@ -66,7 +66,7 @@ Item {
 
 		const from = root.selected < 0 ? (step > 0 ? 0 : root.count - 1) : root.selected + step;
 
-		root.selected = Helpers.clamp(from, 0, root.count - 1);
+		root.selected = Util.clamp(from, 0, root.count - 1);
 	}
 
 	function reveal() {
@@ -80,7 +80,7 @@ Item {
 			return;
 		}
 
-		list.contentY = Helpers.scrollIntoView(list.contentY, list.height, list.contentHeight, block.y, block.y + block.height);
+		list.contentY = Util.scrollIntoView(list.contentY, list.height, list.contentHeight, block.y, block.y + block.height);
 	}
 
 	function open() {

@@ -57,7 +57,7 @@ Item {
 		const step = root.rowHeight + root.rowSpacing;
 		const top = index * step;
 
-		list.contentY = Helpers.scrollIntoView(list.contentY, list.height, list.contentHeight, top, top + root.rowHeight);
+		list.contentY = Util.scrollIntoView(list.contentY, list.height, list.contentHeight, top, top + root.rowHeight);
 	}
 
 	onCountChanged: {

@@ -23,9 +23,9 @@ Item {
 	readonly property real wantedWidth: root.borderWidth >= 0
 		? root.borderWidth
 		: (root.hyprBorder.width !== null ? root.hyprBorder.width : Config.borderFallbackWidth)
-	readonly property real themeWidth: Helpers.snap(root.wantedWidth, root.scale)
+	readonly property real themeWidth: Util.snap(root.wantedWidth, root.scale)
 	readonly property real themeAngle: root.hyprBorder.angle
-	readonly property var edges: Helpers.gradientEdges(root.themeColors, root.themeAngle, frame.width, frame.height, root.themeWidth)
+	readonly property var edges: Color.gradientEdges(root.themeColors, root.themeAngle, frame.width, frame.height, root.themeWidth)
 	readonly property real inset: root.themeWidth + root.padding
 	readonly property real gapsIn: root.hyprGaps.inner !== null ? root.hyprGaps.inner : Config.gapsInFallback
 	readonly property real gapsOut: root.hyprGaps.outer !== null ? root.hyprGaps.outer : Config.gapsOutFallback
@@ -58,8 +58,8 @@ Item {
 
 		stdout: StdioCollector {
 			onStreamFinished: {
-				root.hyprBorder = Helpers.parseHyprBorder(text);
-				root.hyprGaps = Helpers.parseHyprGaps(text);
+				root.hyprBorder = Color.parseHyprBorder(text);
+				root.hyprGaps = Color.parseHyprGaps(text);
 			}
 		}
 	}

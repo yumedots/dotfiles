@@ -19,7 +19,7 @@ Item {
 	readonly property string dir: Quickshell.shellDir + "/cache/github"
 	readonly property string cacheFile: root.dir + "/contrib.json"
 	readonly property string suffix: "@users.noreply.github.com"
-	readonly property var grid: Helpers.contribGrid(root.days, Config.contribWeeks, root.dayStamp)
+	readonly property var grid: Contrib.contribGrid(root.days, Config.contribWeeks, root.dayStamp)
 	readonly property var today: root.dayOn(new Date())
 	readonly property int todayCount: root.today ? root.today.count : 0
 	readonly property int todayLevel: root.today ? root.today.level : 0
@@ -164,10 +164,10 @@ Item {
 	Request {
 		id: fetch
 
-		command: Helpers.curl("https://github.com/users/" + root.login + "/contributions", 20)
+		command: Shell.curl("https://github.com/users/" + root.login + "/contributions", 20)
 
 		onDone: function (text) {
-			const parsed = Helpers.parseContributions(text);
+			const parsed = Contrib.parseContributions(text);
 
 			root.loading = false;
 

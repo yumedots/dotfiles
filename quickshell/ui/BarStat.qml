@@ -41,7 +41,7 @@ Item {
 
 	readonly property bool iconMode: root.mode === "icon"
 	readonly property color inkColor: root.dim ? root.dimColor : (root.mono ? Config.foreground : root.textColor)
-	readonly property int filled: Helpers.filledCells(root.pct, Config.barCells)
+	readonly property int filled: Util.filledCells(root.pct, Config.barCells)
 	readonly property real valueAscent: -valueMetrics.boundingRect.y
 	readonly property real iconAscent: -iconMetrics.boundingRect.y
 	readonly property real valueBelow: valueMetrics.tightBoundingRect.y + valueMetrics.tightBoundingRect.height

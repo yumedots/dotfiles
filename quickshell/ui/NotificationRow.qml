@@ -17,7 +17,7 @@ Item {
 	readonly property color aside: root.expanded ? Config.foreground : (root.selected ? Config.launcherHighlightText : Config.dim)
 	readonly property string picture: root.pictureOf()
 	readonly property bool urgent: !!root.entry && root.entry.urgent === true
-	readonly property string detail: root.entry ? Helpers.plainText(root.entry.body) : ""
+	readonly property string detail: root.entry ? Parse.plainText(root.entry.body) : ""
 	readonly property string headline: root.entry ? (root.entry.summary !== "" ? root.entry.summary : root.entry.appName) : ""
 	readonly property string message: root.entry ? (root.detail !== "" ? root.detail : root.entry.appName) : ""
 

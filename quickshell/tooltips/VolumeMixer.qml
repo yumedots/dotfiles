@@ -30,9 +30,9 @@ Item {
 	readonly property real contentWidth: Math.max(root.hasApps ? apps.implicitWidth : 0, root.idleWidth)
 	readonly property real pageStep: Config.mixerVisibleChannels * (Config.mixerChannelWidth + Config.mixerChannelGap)
 	readonly property bool pageable: content.implicitWidth > root.channelsMaxWidth
-	readonly property int lastPage: Helpers.pageCount(content.implicitWidth, root.channelsMaxWidth, root.pageStep) - 1
+	readonly property int lastPage: Util.pageCount(content.implicitWidth, root.channelsMaxWidth, root.pageStep) - 1
 	readonly property var devices: root.picker === "" ? [] : root.sortedDevices(root.picker === "input")
-	readonly property real offset: Helpers.pageOffset(root.page, content.implicitWidth, root.channelsMaxWidth, root.pageStep)
+	readonly property real offset: Util.pageOffset(root.page, content.implicitWidth, root.channelsMaxWidth, root.pageStep)
 	readonly property bool hasApps: outputs.implicitWidth > 0
 	readonly property bool recording: root.runningInput.length > 0
 
@@ -62,7 +62,7 @@ Item {
 	}
 
 	readonly property var selectedNode: root.targetNodes.length > 0
-		? root.targetNodes[Helpers.clamp(root.targetIndex, 0, root.targetNodes.length - 1)]
+		? root.targetNodes[Util.clamp(root.targetIndex, 0, root.targetNodes.length - 1)]
 		: null
 
 	function moveTarget(step) {
@@ -71,7 +71,7 @@ Item {
 		if (last < 0)
 			return;
 
-		root.targetIndex = Helpers.clamp(root.targetIndex + step, 0, last);
+		root.targetIndex = Util.clamp(root.targetIndex + step, 0, last);
 	}
 
 	function nudgeVolume(step) {
@@ -80,7 +80,7 @@ Item {
 		if (!node || !node.audio)
 			return;
 
-		node.audio.volume = Helpers.clamp(node.audio.volume + step, 0, Config.mixerMaxVolume);
+		node.audio.volume = Util.clamp(node.audio.volume + step, 0, Config.mixerMaxVolume);
 	}
 
 	Keys.onPressed: function (event) {
@@ -94,7 +94,7 @@ Item {
 		if (!node || !node.audio)
 			return;
 
-		node.audio.volume = Helpers.clamp(value, 0, Config.mixerMaxVolume);
+		node.audio.volume = Util.clamp(value, 0, Config.mixerMaxVolume);
 	}
 
 	function toggleMute(node) {
@@ -108,7 +108,7 @@ Item {
 		if (!node)
 			return false;
 
-		return Helpers.isInputStream(node.isStream, node.properties ? node.properties["media.class"] : "");
+		return System.isInputStream(node.isStream, node.properties ? node.properties["media.class"] : "");
 	}
 
 	function shownStream(node) {
@@ -171,7 +171,7 @@ Item {
 		if (!node)
 			return "";
 
-		const app = Helpers.streamApp(node.properties);
+		const app = System.streamApp(node.properties);
 
 		return AppIcons.iconOf(app.name, app.icons);
 	}
@@ -211,8 +211,8 @@ Item {
 
 		stdout: StdioCollector {
 			onStreamFinished: {
-				root.runningOutput = Helpers.parseRunningStreams(text, "output");
-				root.runningInput = Helpers.parseRunningStreams(text, "input");
+				root.runningOutput = System.parseRunningStreams(text, "output");
+				root.runningInput = System.parseRunningStreams(text, "input");
 			}
 		}
 	}
@@ -232,7 +232,7 @@ Item {
 		readonly property bool selected: root.sameNode(channel.node, root.selectedNode)
 		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 		readonly property int percent: Math.round(channel.volume * 100)
-		readonly property real level: Helpers.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
+		readonly property real level: Util.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
 
 		implicitWidth: Config.mixerChannelWidth
 		implicitHeight: stack.implicitHeight
@@ -322,7 +322,7 @@ Item {
 		signal opened()
 
 		readonly property bool selected: root.sameNode(line.node, root.selectedNode)
-		readonly property real level: Helpers.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
+		readonly property real level: Util.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int percent: Math.round(line.volume * 100)
 
 		height: Math.max(Config.mixerDeviceIconSize, Config.fontSize)

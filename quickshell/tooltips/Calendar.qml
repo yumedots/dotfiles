@@ -15,10 +15,10 @@ Item {
 	property date today: clock.date
 	property int weekStart: Config.calendarWeekStart
 
-	readonly property string cursorKey: Helpers.dateKey(root.cursor)
-	readonly property string todayKey: Helpers.dateKey(root.today)
-	readonly property var grid: Helpers.monthGrid(root.cursor.getFullYear(), root.cursor.getMonth(), root.weekStart, root.todayKey, root.cursorKey, Config.calendarRows)
-	readonly property var weekdays: Helpers.weekdayLabels(root.weekStart)
+	readonly property string cursorKey: Dates.dateKey(root.cursor)
+	readonly property string todayKey: Dates.dateKey(root.today)
+	readonly property var grid: Dates.monthGrid(root.cursor.getFullYear(), root.cursor.getMonth(), root.weekStart, root.todayKey, root.cursorKey, Config.calendarRows)
+	readonly property var weekdays: Dates.weekdayLabels(root.weekStart)
 	readonly property var meters: root.buildMeters()
 	readonly property real gridWidth: Config.calendarCellWidth * 7
 	readonly property real gridLeft: Config.calendarMeterColumn + Config.calendarColumnGap * 2 + Config.calendarSeparator
@@ -27,7 +27,7 @@ Item {
 	readonly property bool hasWeather: Weather.temp !== ""
 	readonly property string weatherName: Weather.description
 	readonly property string weatherPlace: Weather.location === "" ? Weather.description : Weather.location
-	readonly property var weatherTemp: Helpers.splitTemp(Weather.temp)
+	readonly property var weatherTemp: Forecast.splitTemp(Weather.temp)
 	readonly property real mondayInk: (Config.calendarCellWidth - weekdayMetrics.width) / 2 + weekdayMetrics.tightBoundingRect.x
 	readonly property real titleX: root.gridLeft + root.mondayInk - monthMetrics.tightBoundingRect.x
 	readonly property real gridTop: Config.calendarCellHeight + calendar.spacing
@@ -61,27 +61,27 @@ Item {
 
 	function buildMeters() {
 		const out = [
-			{ icon: Config.calendarIconDay, label: "DAY", pct: Helpers.progressPercent(Helpers.dayProgress(root.today)) },
-			{ icon: Config.calendarIconMonth, label: "MONTH", pct: Helpers.progressPercent(Helpers.monthProgress(root.today)) },
-			{ icon: Config.calendarIconYear, label: "YEAR", pct: Helpers.progressPercent(Helpers.yearProgress(root.today)) }
+			{ icon: Config.calendarIconDay, label: "DAY", pct: Dates.progressPercent(Dates.dayProgress(root.today)) },
+			{ icon: Config.calendarIconMonth, label: "MONTH", pct: Dates.progressPercent(Dates.monthProgress(root.today)) },
+			{ icon: Config.calendarIconYear, label: "YEAR", pct: Dates.progressPercent(Dates.yearProgress(root.today)) }
 		];
 
 		if (Config.calendarBirthYear > 0)
-			out.push({ icon: Config.calendarIconLife, label: "LIFE", pct: Helpers.progressPercent(Helpers.lifeProgress(Config.calendarBirthYear, Config.calendarLifeExpectancy, root.today.getFullYear())) });
+			out.push({ icon: Config.calendarIconLife, label: "LIFE", pct: Dates.progressPercent(Dates.lifeProgress(Config.calendarBirthYear, Config.calendarLifeExpectancy, root.today.getFullYear())) });
 
 		return out;
 	}
 
 	function step(days) {
-		root.cursor = Helpers.shiftDays(root.cursor, days);
+		root.cursor = Dates.shiftDays(root.cursor, days);
 	}
 
 	function stepMonths(months) {
-		root.cursor = Helpers.shiftMonths(root.cursor, months);
+		root.cursor = Dates.shiftMonths(root.cursor, months);
 	}
 
 	function stepYears(years) {
-		root.cursor = Helpers.shiftYears(root.cursor, years);
+		root.cursor = Dates.shiftYears(root.cursor, years);
 	}
 
 	Keys.onPressed: function (event) {

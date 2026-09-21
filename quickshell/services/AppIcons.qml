@@ -8,12 +8,12 @@ import qs
 Item {
 	id: root
 
-	property var entries: Helpers.desktopEntries(DesktopEntries.applications.values)
+	property var entries: Apps.desktopEntries(DesktopEntries.applications.values)
 	property var icons: ({})
 	property var resolved: ({})
 
 	function entryOf(appId) {
-		return Helpers.lookupApp(root.entries, appId);
+		return Apps.lookupApp(root.entries, appId);
 	}
 
 	function iconOf(appId, extra) {
@@ -68,7 +68,7 @@ Item {
 		command: ["sh", "-c", "for dir in \"$HOME/.local/share\" $(echo \"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\" | tr ':' ' '); do find \"$dir/icons/hicolor\" \"$dir/pixmaps\" -mindepth 1 -maxdepth 3 \\( -type f -o -type l \\) \\( -name '*.png' -o -name '*.svg' -o -name '*.xpm' \\) 2>/dev/null; done"]
 
 		stdout: StdioCollector {
-			onStreamFinished: root.icons = Helpers.iconFiles(text)
+			onStreamFinished: root.icons = Apps.iconFiles(text)
 		}
 	}
 }

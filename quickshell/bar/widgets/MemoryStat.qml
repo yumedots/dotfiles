@@ -11,12 +11,12 @@ BarStat {
 
 	readonly property real usedGB: root.memory ? root.memory.used / 1024 / 1024 : 0
 
-	barColor: Helpers.dangerColor(Config.memoryBase, Config.memoryWarn, Config.memoryDanger, Config.memoryWarnAt, Config.memoryDangerAt, root.pct)
+	barColor: Color.dangerColor(Config.memoryBase, Config.memoryWarn, Config.memoryDanger, Config.memoryWarnAt, Config.memoryDangerAt, root.pct)
 	icon: Config.iconMemory
 	value: root.usedGB.toFixed(1) + "G"
 
 	function handleMeminfo(text) {
-		const mem = Helpers.parseMeminfo(text);
+		const mem = System.parseMeminfo(text);
 
 		if (mem.total <= 0)
 			return;

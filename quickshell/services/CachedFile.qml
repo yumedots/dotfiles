@@ -18,7 +18,7 @@ Item {
 	}
 
 	function save(payload) {
-		Quickshell.execDetached(Helpers.writeCommand(root.path, JSON.stringify(payload)));
+		Quickshell.execDetached(Shell.writeCommand(root.path, JSON.stringify(payload)));
 	}
 
 	function stale(data) {
@@ -30,11 +30,11 @@ Item {
 	Process {
 		id: reader
 
-		command: Helpers.readCommand(root.path)
+		command: Shell.readCommand(root.path)
 
 		stdout: StdioCollector {
 			onStreamFinished: {
-				const data = Helpers.readJson(text, null);
+				const data = Shell.readJson(text, null);
 				const cached = data !== null && typeof data === "object" ? data : {};
 
 				root.loaded(cached, root.stale(cached));

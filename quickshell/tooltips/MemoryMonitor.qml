@@ -7,14 +7,14 @@ ProcessPanel {
 
 	property var mem: root.source ? root.source.memory : null
 
-	readonly property color accentInk: Helpers.pick(Config.mono, Config.memoryBase, Config.memoryBaseMono)
-	readonly property color cachedInk: Helpers.pick(Config.mono, Config.memoryCached, Config.memoryCachedMono)
-	readonly property color buffersInk: Helpers.pick(Config.mono, Config.memoryBuffers, Config.memoryBuffersMono)
-	readonly property color warnInk: Helpers.pick(Config.mono, Config.memoryWarn, Config.memoryWarnMono)
-	readonly property color dangerInk: Helpers.pick(Config.mono, Config.memoryDanger, Config.memoryDangerMono)
+	readonly property color accentInk: Util.pick(Config.mono, Config.memoryBase, Config.memoryBaseMono)
+	readonly property color cachedInk: Util.pick(Config.mono, Config.memoryCached, Config.memoryCachedMono)
+	readonly property color buffersInk: Util.pick(Config.mono, Config.memoryBuffers, Config.memoryBuffersMono)
+	readonly property color warnInk: Util.pick(Config.mono, Config.memoryWarn, Config.memoryWarnMono)
+	readonly property color dangerInk: Util.pick(Config.mono, Config.memoryDanger, Config.memoryDangerMono)
 
 	title: "Memory"
-	detail: root.mem ? Helpers.sizeText(root.mem.committed) + " of " + Helpers.sizeText(root.mem.pool) : ""
+	detail: root.mem ? System.sizeText(root.mem.committed) + " of " + System.sizeText(root.mem.pool) : ""
 	detailColor: root.accentInk
 	listInk: root.accentInk
 	totalInk: root.dangerColorFor(root.pct)
@@ -22,11 +22,11 @@ ProcessPanel {
 	panelPadding: Config.memoryTooltipPadding
 	topCount: Config.memoryTopCount
 	psField: "rss"
-	rowText: (value) => Helpers.sizeText(value)
+	rowText: (value) => System.sizeText(value)
 	rowColor: (value) => root.dangerColorFor(root.shareOf(value))
 
 	function dangerColorFor(load) {
-		return Helpers.dangerColor(root.accentInk, root.warnInk, root.dangerInk, Config.memoryWarnAt, Config.memoryDangerAt, load);
+		return Color.dangerColor(root.accentInk, root.warnInk, root.dangerInk, Config.memoryWarnAt, Config.memoryDangerAt, load);
 	}
 
 	function usage() {
@@ -36,15 +36,15 @@ ProcessPanel {
 			return [];
 
 		const rows = [
-			{ label: "used", text: Helpers.sizeText(m.used), color: root.dangerColorFor(root.pct) },
-			{ label: "cached", text: Helpers.sizeText(m.cached), color: root.cachedInk },
-			{ label: "buffers", text: Helpers.sizeText(m.buffers), color: root.buffersInk }
+			{ label: "used", text: System.sizeText(m.used), color: root.dangerColorFor(root.pct) },
+			{ label: "cached", text: System.sizeText(m.cached), color: root.cachedInk },
+			{ label: "buffers", text: System.sizeText(m.buffers), color: root.buffersInk }
 		];
 
 		if (m.swapTotal > 0)
-			rows.push({ label: "swap", text: Helpers.sizeText(m.swapUsed) + " of " + Helpers.sizeText(m.swapTotal), color: Config.memorySwap });
+			rows.push({ label: "swap", text: System.sizeText(m.swapUsed) + " of " + System.sizeText(m.swapTotal), color: Config.memorySwap });
 
-		rows.push({ label: "free", text: Helpers.sizeText(m.free), color: Config.foreground });
+		rows.push({ label: "free", text: System.sizeText(m.free), color: Config.foreground });
 
 		return rows;
 	}
@@ -89,7 +89,7 @@ ProcessPanel {
 		if (!root.mem || root.mem.pool <= 0)
 			return 0;
 
-		return Helpers.clamp(100 * kb / root.mem.pool, 0, 100);
+		return Util.clamp(100 * kb / root.mem.pool, 0, 100);
 	}
 
 	viz: [

@@ -29,7 +29,7 @@ Item {
 	readonly property string placeFile: root.dir + "/place"
 	readonly property string wanted: root.tracked !== "" ? root.tracked : Config.weatherLocation
 	readonly property string cacheFile: root.dir + "/current.json"
-	readonly property var codeInfo: Helpers.weatherCodeInfo(root.code, Config.weatherCodes, Config.weatherIcon)
+	readonly property var codeInfo: Forecast.weatherCodeInfo(root.code, Config.weatherCodes, Config.weatherIcon)
 	readonly property string icon: root.codeInfo.glyph
 
 	function adopt(cached) {
@@ -75,7 +75,7 @@ Item {
 	}
 
 	function locate() {
-		const fixed = Helpers.parseCoords(Config.weatherCoords);
+		const fixed = Forecast.parseCoords(Config.weatherCoords);
 
 		if (fixed) {
 			root.lat = fixed.lat;
@@ -124,7 +124,7 @@ Item {
 	Request {
 		id: placeRead
 
-		command: Helpers.readCommand(root.placeFile)
+		command: Shell.readCommand(root.placeFile)
 
 		onDone: function (text) {
 			root.tracked = text.trim();
@@ -159,10 +159,10 @@ Item {
 	Request {
 		id: geocode
 
-		command: Helpers.curl(Helpers.weatherGeoUrl(root.wanted))
+		command: Shell.curl(Forecast.weatherGeoUrl(root.wanted))
 
 		onDone: function (text) {
-			const found = Helpers.parseWeatherGeo(text, Helpers.weatherRegion(root.wanted));
+			const found = Forecast.parseWeatherGeo(text, Forecast.weatherRegion(root.wanted));
 
 			if (!found) {
 				root.loading = false;
@@ -181,10 +181,10 @@ Item {
 	Request {
 		id: fetch
 
-		command: Helpers.curl(Helpers.weatherForecastUrl(root.lat, root.lon))
+		command: Shell.curl(Forecast.weatherForecastUrl(root.lat, root.lon))
 
 		onDone: function (text) {
-			const parsed = Helpers.parseWeatherCurrent(text);
+			const parsed = Forecast.parseWeatherCurrent(text);
 
 			root.loading = false;
 
@@ -193,7 +193,7 @@ Item {
 				return;
 			}
 
-			root.code = Helpers.weatherCodeFor(parsed.code, parsed.precip);
+			root.code = Forecast.weatherCodeFor(parsed.code, parsed.precip);
 			root.description = root.codeInfo.name;
 			root.temp = parsed.temp;
 			root.feels = parsed.feels;
@@ -209,10 +209,10 @@ Item {
 	Request {
 		id: points
 
-		command: ["sh", "-c", Helpers.weatherRequest(Helpers.shellQuote(Helpers.weatherPointsUrl(root.lat, root.lon)))]
+		command: ["sh", "-c", Forecast.weatherRequest(Shell.shellQuote(Forecast.weatherPointsUrl(root.lat, root.lon)))]
 
 		onDone: function (text) {
-			const list = Helpers.parseWeatherPoints(text);
+			const list = Forecast.parseWeatherPoints(text);
 
 			if (list === null) {
 				if (text !== "")
@@ -221,7 +221,7 @@ Item {
 				return;
 			}
 
-			stations.command = ["sh", "-c", Helpers.weatherRequest(Helpers.shellQuote(list))];
+			stations.command = ["sh", "-c", Forecast.weatherRequest(Shell.shellQuote(list))];
 			stations.running = true;
 		}
 	}
@@ -230,7 +230,7 @@ Item {
 		id: stations
 
 		onDone: function (text) {
-			const ids = Helpers.parseWeatherStationIds(text, root.lat, root.lon, Config.weatherStationCount);
+			const ids = Forecast.parseWeatherStationIds(text, root.lat, root.lon, Config.weatherStationCount);
 
 			if (ids.length === 0) {
 				root.placeFailed = true;
@@ -245,11 +245,11 @@ Item {
 	Request {
 		id: observe
 
-		command: ["sh", "-c", Helpers.weatherRequest(root.stations.map(function (id) { return Helpers.shellQuote(Helpers.weatherObservationUrl(id)); }).join(" "))]
+		command: ["sh", "-c", Forecast.weatherRequest(root.stations.map(function (id) { return Shell.shellQuote(Forecast.weatherObservationUrl(id)); }).join(" "))]
 
 		onDone: function (text) {
-			const rows = Helpers.parseWeatherObservations(text);
-			const near = Helpers.weatherObservationCode(rows);
+			const rows = Forecast.parseWeatherObservations(text);
+			const near = Forecast.weatherObservationCode(rows);
 
 			if (near < 0)
 				return;

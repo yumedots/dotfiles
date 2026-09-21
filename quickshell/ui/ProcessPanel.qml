@@ -26,7 +26,7 @@ Item {
 
 	readonly property bool searching: searchField.typing
 	readonly property bool filtering: panel.searching || panel.filter !== ""
-	readonly property var procs: panel.filtering ? Helpers.filterProcesses(panel.allProcs, Config.psIgnore, panel.filter) : (panel.heldProcs.length > 0 ? panel.heldProcs : Helpers.topProcesses(panel.allProcs, Config.psIgnore))
+	readonly property var procs: panel.filtering ? System.filterProcesses(panel.allProcs, Config.psIgnore, panel.filter) : (panel.heldProcs.length > 0 ? panel.heldProcs : System.topProcesses(panel.allProcs, Config.psIgnore))
 	readonly property bool showList: panel.procs.length > 0 || panel.filtering
 	readonly property real pct: panel.source ? panel.source.pct : 0
 	readonly property bool onScreen: panel.Window.window ? panel.Window.window.visible : false
@@ -46,7 +46,7 @@ Item {
 			return;
 		}
 
-		panel.heldProcs = Helpers.topProcesses(panel.allProcs, Config.psIgnore);
+		panel.heldProcs = System.topProcesses(panel.allProcs, Config.psIgnore);
 		procList.currentIndex = -1;
 
 		if (panel.source && panel.source.refresh)
@@ -87,8 +87,8 @@ Item {
 
 		stdout: StdioCollector {
 			onStreamFinished: {
-				panel.allProcs = Helpers.parseTopProcesses(text);
-				panel.heldProcs = Helpers.holdProcessOrder(panel.heldProcs, Helpers.topProcesses(panel.allProcs, Config.psIgnore));
+				panel.allProcs = System.parseTopProcesses(text);
+				panel.heldProcs = System.holdProcessOrder(panel.heldProcs, System.topProcesses(panel.allProcs, Config.psIgnore));
 			}
 		}
 	}
@@ -206,7 +206,7 @@ Item {
 			model: panel.procs
 
 			onKillRequested: function (proc) {
-				Quickshell.execDetached(Helpers.killCommand(proc.pid, Config.procKillSignal));
+				Quickshell.execDetached(System.killCommand(proc.pid, Config.procKillSignal));
 			}
 
 			delegate: Item {

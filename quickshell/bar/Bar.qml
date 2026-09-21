@@ -11,7 +11,7 @@ PanelWindow {
 	required property var modelData
 	screen: modelData
 
-	property var layout: Helpers.parseBarLayout(layoutFile.text())
+	property var layout: BarLayout.parseBarLayout(layoutFile.text())
 	property var widgets: ({})
 
 	readonly property bool atBottom: bar.layout.position === "bottom"

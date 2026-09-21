@@ -13,7 +13,7 @@ Item {
 
 	readonly property var cells: Github.grid
 	readonly property int weeks: Config.contribWeeks
-	readonly property color accentInk: Helpers.pick(Config.mono, Config.contribBase, Config.contribBaseMono)
+	readonly property color accentInk: Util.pick(Config.mono, Config.contribBase, Config.contribBaseMono)
 
 	implicitWidth: Config.contribTooltipWidth + Config.contribTooltipPadding * 2
 	implicitHeight: column.implicitHeight + Config.contribTooltipPadding * 2
@@ -27,7 +27,7 @@ Item {
 		if (!value || !value.level)
 			return Config.contribEmpty;
 
-		return Helpers.mixColors(Config.contribEmpty, root.accentInk, Math.min(4, value.level) / 4);
+		return Color.mixColors(Config.contribEmpty, root.accentInk, Math.min(4, value.level) / 4);
 	}
 
 	function statusLine() {

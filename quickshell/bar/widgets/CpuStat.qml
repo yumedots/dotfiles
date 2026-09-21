@@ -11,7 +11,7 @@ BarStat {
 	property string lastRead: ""
 	property var cores: []
 
-	barColor: Helpers.mixColor(Config.cpuBase, Config.red, root.pct / 100)
+	barColor: Color.mixColor(Config.cpuBase, Config.red, root.pct / 100)
 	icon: Config.iconCpu
 	value: Math.round(root.pct) + "%"
 
@@ -21,8 +21,8 @@ BarStat {
 		root.lastRead = text;
 
 		const first = root.prev === null;
-		const now = Helpers.parseCpuStat(text);
-		const load = Helpers.cpuPercents(root.prev, now);
+		const now = System.parseCpuStat(text);
+		const load = System.cpuPercents(root.prev, now);
 
 		root.prev = now;
 		root.cores = load.cores;

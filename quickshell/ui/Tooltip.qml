@@ -31,12 +31,12 @@ PanelWindow {
 
 	readonly property bool modal: root.wantsKeyboard
 	readonly property real scale: border.scale
-	readonly property real cardWidth: Helpers.snap(border.contentWidth + 2 * border.inset, root.scale)
-	readonly property real cardHeight: Helpers.snap(border.contentHeight + 2 * border.inset, root.scale)
-	readonly property real cardX: Helpers.snap(root.alignRight
+	readonly property real cardWidth: Util.snap(border.contentWidth + 2 * border.inset, root.scale)
+	readonly property real cardHeight: Util.snap(border.contentHeight + 2 * border.inset, root.scale)
+	readonly property real cardX: Util.snap(root.alignRight
 		? (root.screen ? root.screen.width : root.cardWidth) - root.cardWidth - border.gapsOut
-		: border.gapsOut + Helpers.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
-	readonly property real cardY: Helpers.snap(root.atBottom
+		: border.gapsOut + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
+	readonly property real cardY: Util.snap(root.atBottom
 		? (root.screen ? root.screen.height : root.cardHeight) - root.hang - root.cardHeight
 		: root.hang, root.scale)
 

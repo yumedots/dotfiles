@@ -15,7 +15,9 @@ function section(name, body) {
 		body();
 }
 
-eval(fs.readFileSync(__dirname + "/helpers.js", "utf8").replace(".pragma library", ""));
+eval(fs.readdirSync(__dirname).filter(function (name) { return name.endsWith(".js") && name !== "check.js"; }).sort().map(function (name) {
+	return fs.readFileSync(__dirname + "/" + name, "utf8").replace(".pragma library", "");
+}).join("\n"));
 
 const Config = new Function(fs.readFileSync(__dirname + "/../config.js", "utf8").replace(".pragma library", "")
 	+ "\nreturn { weatherCodes: weatherCodes, weatherCoords: weatherCoords, weatherIcon: weatherIcon, weatherLoadingIcon: weatherLoadingIcon, weatherLocation: weatherLocation, weatherStationCount: weatherStationCount };")();

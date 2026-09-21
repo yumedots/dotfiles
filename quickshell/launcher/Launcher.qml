@@ -24,7 +24,7 @@ PanelWindow {
 	property bool windows: false
 	property int winIndex: 0
 
-	readonly property var prefix: Helpers.detectPrefix(root.query, Config.launcherMarks)
+	readonly property var prefix: Apps.detectPrefix(root.query, Config.launcherMarks)
 	readonly property string search: root.windows ? root.query : root.prefix.text
 	readonly property string mode: root.windows ? "windows" : root.prefix.mode
 	readonly property string home: Quickshell.env("HOME")
@@ -131,7 +131,7 @@ PanelWindow {
 
 		return values.map(function (toplevel) {
 			const info = toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
-			const candidates = Helpers.windowAppCandidates(toplevel, Config.terminalClasses);
+			const candidates = Apps.windowAppCandidates(toplevel, Config.terminalClasses);
 			const appId = candidates.word && AppIcons.iconOf(candidates.word) ? candidates.word : candidates.className;
 
 			return {
@@ -149,7 +149,7 @@ PanelWindow {
 	}
 
 	function allEntries() {
-		return root.actionEntries().concat(root.commandEntries()).concat(Helpers.appEntries(AppIcons.entries, Config.launcherIgnoreApps));
+		return root.actionEntries().concat(root.commandEntries()).concat(Apps.appEntries(AppIcons.entries, Config.launcherIgnoreApps));
 	}
 
 	function buildResults() {
@@ -160,10 +160,10 @@ PanelWindow {
 			return root.clips;
 
 		if (root.mode === "windows")
-			return root.search === "" ? root.windowEntries() : Helpers.rankEntries(root.windowEntries(), root.search, [], {});
+			return root.search === "" ? root.windowEntries() : Apps.rankEntries(root.windowEntries(), root.search, [], {});
 
-		const ranked = Helpers.rankEntries(root.allEntries(), root.search, root.pins, root.usage);
-		const calc = Helpers.calcEntry(root.search);
+		const ranked = Apps.rankEntries(root.allEntries(), root.search, root.pins, root.usage);
+		const calc = Parse.calcEntry(root.search);
 
 		return calc === null ? ranked : [calc].concat(ranked);
 	}
@@ -264,27 +264,27 @@ PanelWindow {
 	}
 
 	function writeFile(path, text) {
-		Quickshell.execDetached(Helpers.writeCommand(path, text));
+		Quickshell.execDetached(Shell.writeCommand(path, text));
 	}
 
 	function remember(entry) {
 		if (!entry || entry.kind === "calc" || entry.kind === "file" || entry.kind === "clip" || entry.kind === "window")
 			return;
 
-		root.usage = Helpers.bumpUsage(root.usage, entry.id, Date.now());
-		root.writeFile(root.stateDir + "/usage.txt", Helpers.formatUsage(root.usage, Config.launcherUsageMax));
+		root.usage = Apps.bumpUsage(root.usage, entry.id, Date.now());
+		root.writeFile(root.stateDir + "/usage.txt", Apps.formatUsage(root.usage, Config.launcherUsageMax));
 	}
 
 	function pin(entry) {
 		if (!entry || entry.kind === "calc" || entry.kind === "file" || entry.kind === "clip" || entry.kind === "window")
 			return;
 
-		root.pins = Helpers.togglePin(root.pins, entry.id);
+		root.pins = Apps.togglePin(root.pins, entry.id);
 		root.writeFile(root.stateDir + "/pins.txt", root.pins.join("\n"));
 	}
 
 	function copy(text) {
-		Quickshell.execDetached(["sh", "-c", "printf '%s' " + Helpers.shellQuote(text) + " | wl-copy"]);
+		Quickshell.execDetached(["sh", "-c", "printf '%s' " + Shell.shellQuote(text) + " | wl-copy"]);
 	}
 
 	function focusWindow(address) {
@@ -300,7 +300,7 @@ PanelWindow {
 			return;
 
 		if (entry.kind === "app")
-			Quickshell.execDetached(Helpers.launchCommand(entry, entry.appId, root.terminal));
+			Quickshell.execDetached(Apps.launchCommand(entry, entry.appId, root.terminal));
 		else if (entry.kind === "window")
 			root.focusWindow(entry.address);
 		else if (entry.kind === "command" || entry.kind === "action")
@@ -308,7 +308,7 @@ PanelWindow {
 		else if (entry.kind === "calc")
 			root.copy(entry.value);
 		else if (entry.kind === "clip")
-			Quickshell.execDetached(["sh", "-c", "cliphist decode " + Helpers.shellQuote(entry.clipId) + " | wl-copy"]);
+			Quickshell.execDetached(["sh", "-c", "cliphist decode " + Shell.shellQuote(entry.clipId) + " | wl-copy"]);
 		else if (entry.kind === "file")
 			Quickshell.execDetached(["xdg-open", entry.path]);
 
@@ -340,30 +340,30 @@ PanelWindow {
 	Request {
 		id: pinsFile
 
-		command: Helpers.readCommand(root.stateDir + "/pins.txt")
+		command: Shell.readCommand(root.stateDir + "/pins.txt")
 
 		onDone: function (text) {
-			root.pins = Helpers.pinnedFromText(text);
+			root.pins = Apps.pinnedFromText(text);
 		}
 	}
 
 	Request {
 		id: usageFile
 
-		command: Helpers.readCommand(root.stateDir + "/usage.txt")
+		command: Shell.readCommand(root.stateDir + "/usage.txt")
 
 		onDone: function (text) {
-			root.usage = Helpers.parseUsage(text);
+			root.usage = Apps.parseUsage(text);
 		}
 	}
 
 	Request {
 		id: terminalFile
 
-		command: Helpers.readCommand(root.terminalConfig)
+		command: Shell.readCommand(root.terminalConfig)
 
 		onDone: function (text) {
-			root.terminal = Helpers.terminalName(text);
+			root.terminal = Apps.terminalName(text);
 		}
 	}
 
@@ -373,7 +373,7 @@ PanelWindow {
 		command: ["sh", "-c", "cliphist list 2>/dev/null | head -n " + Config.launcherMaxResults]
 
 		onDone: function (text) {
-			root.clips = Helpers.parseClipboardList(text).map(function (entry) {
+			root.clips = Parse.parseClipboardList(text).map(function (entry) {
 				return {
 					id: "clip:" + entry.id,
 					kind: "clip",
@@ -388,10 +388,10 @@ PanelWindow {
 	Request {
 		id: findFiles
 
-		command: Helpers.fileSearchCommand(root.home, root.search, Config.launcherFileDepth, Config.launcherFileMax, Config.launcherFileSkip)
+		command: Shell.fileSearchCommand(root.home, root.search, Config.launcherFileDepth, Config.launcherFileMax, Config.launcherFileSkip)
 
 		onDone: function (text) {
-			root.files = Helpers.pathLines(text).map(function (path) {
+			root.files = Parse.pathLines(text).map(function (path) {
 				return { id: "file:" + path, kind: "file", name: path, keywords: [], path: path };
 			});
 		}

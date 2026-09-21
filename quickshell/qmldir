@@ -1,2 +1,11 @@
 Config 1.0 config.js
-Helpers 1.0 lib/helpers.js
+Util 1.0 lib/util.js
+Color 1.0 lib/color.js
+Shell 1.0 lib/shell.js
+Parse 1.0 lib/parse.js
+Apps 1.0 lib/apps.js
+Dates 1.0 lib/dates.js
+System 1.0 lib/system.js
+Forecast 1.0 lib/forecast.js
+Contrib 1.0 lib/contrib.js
+BarLayout 1.0 lib/bar-layout.js
