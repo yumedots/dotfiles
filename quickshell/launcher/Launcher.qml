@@ -435,6 +435,17 @@ PanelWindow {
 		}
 	}
 
+	MouseArea {
+		id: backdrop
+
+		anchors.fill: parent
+
+		onClicked: function (mouse) {
+			if (!card.contains(card.mapFromItem(backdrop, mouse.x, mouse.y)))
+				root.close();
+		}
+	}
+
 	HyprBorder {
 		id: card
 
