@@ -48,10 +48,10 @@ PanelWindow {
 
 	anchors.top: true
 	anchors.left: true
-	anchors.bottom: root.mapped
+	anchors.bottom: true
 	anchors.right: root.mapped
 
-	implicitWidth: 1
+	implicitWidth: root.screen ? root.screen.width : 1
 	implicitHeight: 1
 
 	WlrLayershell.layer: WlrLayer.Overlay
@@ -62,10 +62,12 @@ PanelWindow {
 	exclusiveZone: 0
 	color: "transparent"
 
-	// ponytail: surface stays mapped at 1x1 while closed so opening never
-	// re-creates it (that handshake is what stretched a 500x500 buffer over the
-	// screen). Ceiling: a 1px dead spot at the top-left corner when closed; if
-	// that ever bites, move the closed window off-screen or use mask: Region.
+	margins.left: root.mapped ? 0 : (root.screen ? root.screen.width : 0)
+
+	// ponytail: the surface keeps the screen's size and slides off it while closed
+	// instead of being resized on open. A resize is what let hyprland hold a stale
+	// frame over the screen, and a click on that frame landed on the wrong row.
+	// Ceiling: a full screen surface stays mapped off screen.
 
 	function open() {
 		root.query = "";
@@ -516,7 +518,10 @@ PanelWindow {
 					MouseArea {
 						anchors.fill: parent
 
-						onClicked: root.activate(row.modelData)
+						onClicked: {
+							list.currentIndex = row.index;
+							root.activate(row.modelData);
+						}
 					}
 				}
 			}

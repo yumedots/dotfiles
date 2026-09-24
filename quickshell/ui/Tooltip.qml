@@ -20,7 +20,7 @@ PanelWindow {
 	property bool shown: false
 
 	readonly property bool shut: !root.shown
-	readonly property bool revealed: root.shown && root.width > 1 && root.height > 1
+	readonly property bool revealed: root.shown
 
 	// ponytail: a popup that takes exclusive keyboard focus makes hyprland send it
 	// every click, so it has to cover the bar strip as well: a click there is
@@ -49,25 +49,26 @@ PanelWindow {
 	readonly property real cardY: root.atBottom
 		? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
 		: Math.round(root.barReserve + root.hang)
-	readonly property real band: root.atBottom ? root.screenHeight - root.cardY : root.cardY + root.cardHeight
 
-	// ponytail: the surface stays mapped at 1x1 while closed, the way the launcher
-	// does, so opening one does not create and destroy a surface (that churn leaks
-	// a sync_file fd per cycle). Ceiling: one dead pixel at the bottom-left corner.
+	// ponytail: the surface is the whole screen and never changes size, so opening
+	// one can neither re-create it (that churn leaks a sync_file fd per cycle) nor
+	// resize it. A card sized surface grew with its content every time the popup
+	// filled in, and hyprland shows the frame it already has stretched over the new
+	// size, which is what smeared on screen. While closed it parks under the screen
+	// with nothing drawn in it. Ceiling: a screen sized buffer stays mapped per popup.
 	// exclusiveZone -1 places it against the monitor, not the bar's reserved strip.
 	anchors.top: !root.atBottom
-	anchors.bottom: !root.shut && root.atBottom
+	anchors.bottom: root.atBottom
 	anchors.left: true
-	anchors.right: root.wide
 
 	exclusiveZone: -1
 
-	margins.top: root.shut ? root.screenHeight : (root.atBottom || root.wide ? 0 : root.cardY)
-	margins.bottom: root.atBottom && !root.shut ? (root.wide ? 0 : root.screenHeight - root.cardY - root.cardHeight) : 0
-	margins.left: root.shut || root.wide ? 0 : root.cardX
+	margins.top: root.shut && !root.atBottom ? root.screenHeight : 0
+	margins.bottom: root.shut && root.atBottom ? root.screenHeight : 0
+	margins.left: 0
 
-	implicitWidth: root.shut ? 1 : (root.wide ? root.screenWidth : root.cardWidth)
-	implicitHeight: root.shut ? 1 : (root.wide ? root.band : root.cardHeight)
+	implicitWidth: root.screenWidth
+	implicitHeight: root.screenHeight
 
 	color: "transparent"
 
@@ -104,16 +105,15 @@ PanelWindow {
 
 	function forwarded(x, y) {
 		const bar = root.anchorWindow;
-		const screenY = y + (root.atBottom ? root.cardTop : 0);
 
 		if (bar && typeof bar.clickAt === "function")
-			bar.clickAt(x, screenY);
+			bar.clickAt(x, y);
 		else
 			root.close();
 	}
 
-	readonly property real cardLeft: root.wide ? root.cardX : 0
-	readonly property real cardTop: root.wide && !root.atBottom ? root.cardY : 0
+	readonly property real cardLeft: root.cardX
+	readonly property real cardTop: root.cardY
 
 	MouseArea {
 		id: backdrop
