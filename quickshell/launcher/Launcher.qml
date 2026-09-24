@@ -80,7 +80,7 @@ PanelWindow {
 		root.shown = true;
 		root.mapped = true;
 		Qt.callLater(function () {
-			list.currentIndex = 0;
+			list.currentIndex = -1;
 			root.winIndex = 0;
 			card.forceActiveFocus();
 		});
@@ -223,20 +223,6 @@ PanelWindow {
 	}
 
 	function navigate(dir) {
-		if (dir === "right") {
-			root.activate(root.results[list.currentIndex]);
-			return true;
-		}
-
-		if (dir === "left") {
-			if (root.group !== "" || root.forced !== "")
-				root.leaveGroup();
-			else
-				root.close();
-
-			return true;
-		}
-
 		if (dir === "down" || dir === "up") {
 			list.move(dir === "down" ? 1 : -1);
 			return true;
@@ -258,7 +244,7 @@ PanelWindow {
 		root.forced = "";
 		root.query = "";
 		field.clear();
-		list.currentIndex = 0;
+		list.currentIndex = -1;
 	}
 
 	function saveQuery() {
@@ -310,7 +296,7 @@ PanelWindow {
 			root.forced = entry.mode;
 			root.query = "";
 			field.clear();
-			list.currentIndex = 0;
+			list.currentIndex = -1;
 			return;
 		}
 
@@ -318,7 +304,7 @@ PanelWindow {
 			root.group = entry.group;
 			root.query = "";
 			field.clear();
-			list.currentIndex = 0;
+			list.currentIndex = -1;
 			return;
 		}
 

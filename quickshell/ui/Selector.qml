@@ -24,6 +24,8 @@ Item {
 	function applyIndex() {
 		if (list.currentIndex !== root.currentIndex)
 			list.currentIndex = root.currentIndex;
+
+		root.ensureVisible(root.currentIndex);
 	}
 
 	function scroll(step) {
