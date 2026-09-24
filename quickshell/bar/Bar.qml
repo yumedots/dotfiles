@@ -15,6 +15,7 @@ PanelWindow {
 	property var widgets: ({})
 
 	readonly property bool atBottom: bar.layout.position === "bottom"
+	readonly property real outerMargin: Config.barFloating ? border.gapsOut : 0
 	readonly property var centerItem: bar.widgets[bar.layout.centerAnchor]
 
 	anchors {
@@ -25,10 +26,10 @@ PanelWindow {
 	}
 
 	margins {
-		top: bar.atBottom ? 0 : border.gapsOut
-		bottom: bar.atBottom ? border.gapsOut : 0
-		left: border.gapsOut
-		right: border.gapsOut
+		top: bar.atBottom ? 0 : bar.outerMargin
+		bottom: bar.atBottom ? bar.outerMargin : 0
+		left: bar.outerMargin
+		right: bar.outerMargin
 	}
 
 	readonly property real contentHeight: Math.max(leftRow.implicitHeight, centerRow.implicitHeight, rightRow.implicitHeight)
@@ -218,6 +219,7 @@ PanelWindow {
 
 		anchors.fill: parent
 		padding: border.gapsIn
+		borderWidth: Config.barBorderWidth
 		backgroundColor: bar.layout.transparent ? "transparent" : Config.surfaceTranslucent
 	}
 

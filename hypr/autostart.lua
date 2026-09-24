@@ -1,7 +1,7 @@
 local vars = require("programs")
 
 hl.on("hyprland.start", function ()
-  hl.exec_cmd("awww-daemon & foot --server & sh -c 'ulimit -Sn 65536; exec quickshell' &")
+  hl.exec_cmd("awww-daemon & foot --server & sh -c 'ulimit -Sn 65536; export __NV_DISABLE_EXPLICIT_SYNC=1; exec quickshell' &")
   hl.exec_cmd("pgrep -x wl-paste >/dev/null || wl-paste --watch cliphist store &")
 end)
 

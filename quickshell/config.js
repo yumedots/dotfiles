@@ -49,6 +49,8 @@ const iconVolumeHigh = "\uf028";
 
 const barCells = 15;
 const barPadding = 8;
+const barFloating = false;
+const barBorderWidth = barFloating ? -1 : 0;
 const barStatMode = "icon";
 const barStatMono = true;
 const lineLength = 45;
