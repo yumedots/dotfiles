@@ -174,9 +174,12 @@ const launcherGroups = [
 	{ id: "apps", name: "Apps", glyph: launcherIconApps, keywords: ["programs", "applications"] }
 ];
 const launcherAppAliases = { foot: ["foot", "footclient", "foot-server"] };
-const windowsGridCell = 100;
+const windowsGridCell = 92;
 const windowsRowMargin = 60;
+const windowsHighlightSize = 84;
+const windowsLabelGap = 2;
 const windowsIconSize = 76;
+const windowsTitleSize = 11;
 const launcherActions = [
 	{ name: "Suspend", command: "systemctl suspend", glyph: "\u{f04b2}" },
 	{ name: "Log out", command: "hyprctl dispatch 'hl.dsp.exit()'", glyph: "\uea6e" },

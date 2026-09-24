@@ -21,6 +21,7 @@ PanelWindow {
 
 	readonly property int windowColumns: windowsGrid.columns
 	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
+	readonly property string winName: root.windows && root.results.length > 0 ? root.results[root.winCurrent].name : ""
 	property var clips: []
 	property bool windows: false
 	property int winIndex: 0
@@ -410,7 +411,7 @@ PanelWindow {
 		anchors.centerIn: parent
 
 		width: root.windows ? windowsGrid.width + card.inset * 2 : Config.launcherWidth
-		height: root.windows ? windowsGrid.height + card.inset * 2 : column.implicitHeight + card.inset * 2
+		height: root.windows ? windowsGrid.height + windowName.height + Config.windowsLabelGap + card.inset * 2 : column.implicitHeight + card.inset * 2
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
 		visible: root.shown && root.configured
@@ -584,10 +585,10 @@ PanelWindow {
 			Highlight {
 				fillParent: false
 				active: windowsGrid.count > 0
-				x: (windowsGrid.index % windowsGrid.columns) * windowsGrid.cell
-				y: Math.floor(windowsGrid.index / windowsGrid.columns) * windowsGrid.cell
-				width: windowsGrid.cell
-				height: windowsGrid.cell
+				x: (windowsGrid.index % windowsGrid.columns) * windowsGrid.cell + (windowsGrid.cell - Config.windowsHighlightSize) / 2
+				y: Math.floor(windowsGrid.index / windowsGrid.columns) * windowsGrid.cell + (windowsGrid.cell - Config.windowsHighlightSize) / 2
+				width: Config.windowsHighlightSize
+				height: Config.windowsHighlightSize
 			}
 
 			Repeater {
@@ -633,6 +634,22 @@ PanelWindow {
 				color: Config.muted
 				text: root.emptyText()
 			}
+		}
+
+		Text {
+			id: windowName
+
+			visible: root.windows
+			width: Math.min(implicitWidth, windowsGrid.width)
+			x: Util.clamp(windowsGrid.index * windowsGrid.cell + (windowsGrid.cell - width) / 2, 0, windowsGrid.width - width)
+			anchors.top: windowsGrid.bottom
+			anchors.topMargin: Config.windowsLabelGap
+			horizontalAlignment: Text.AlignHCenter
+			elide: Text.ElideRight
+			font.family: Config.fontFamily
+			font.pixelSize: Config.windowsTitleSize
+			color: Config.foreground
+			text: root.winName
 		}
 	}
 }
