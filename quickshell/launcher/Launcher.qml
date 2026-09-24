@@ -82,7 +82,7 @@ PanelWindow {
 		root.shown = true;
 		root.mapped = true;
 		Qt.callLater(function () {
-			list.currentIndex = -1;
+			list.currentIndex = 0;
 			root.winIndex = 0;
 			card.forceActiveFocus();
 		});
@@ -246,7 +246,7 @@ PanelWindow {
 		root.forced = "";
 		root.query = "";
 		field.clear();
-		list.currentIndex = -1;
+		list.currentIndex = 0;
 	}
 
 	function saveQuery() {
@@ -298,7 +298,7 @@ PanelWindow {
 			root.forced = entry.mode;
 			root.query = "";
 			field.clear();
-			list.currentIndex = -1;
+			list.currentIndex = 0;
 			return;
 		}
 
@@ -306,7 +306,7 @@ PanelWindow {
 			root.group = entry.group;
 			root.query = "";
 			field.clear();
-			list.currentIndex = -1;
+			list.currentIndex = 0;
 			return;
 		}
 
@@ -515,14 +515,21 @@ PanelWindow {
 						text: Config.launcherIconPin
 					}
 
-					MouseArea {
-						anchors.fill: parent
-
-						onClicked: {
-							list.currentIndex = row.index;
-							root.activate(row.modelData);
+						HoverHandler {
+							onHoveredChanged: {
+								if (hovered)
+									list.currentIndex = row.index;
+							}
 						}
-					}
+
+						MouseArea {
+							anchors.fill: parent
+
+							onClicked: {
+								list.currentIndex = row.index;
+								root.activate(row.modelData);
+							}
+						}
 				}
 			}
 
