@@ -26,6 +26,13 @@ BarStat {
 		return root.popupVisible && root.keyboardPopup;
 	}
 
+	function clicked() {
+		if (root.bar)
+			root.bar.activateWidget(root, true);
+		else
+			root.openPopup();
+	}
+
 	function toast(notification) {
 		if (root.isPopupOpen()) {
 			toastTimer.stop();
