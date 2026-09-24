@@ -20,6 +20,7 @@ PanelWindow {
 	property string forced: ""
 
 	readonly property int windowColumns: windowsGrid.columns
+	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
 	property var clips: []
 	property bool windows: false
 	property int winIndex: 0
@@ -81,9 +82,9 @@ PanelWindow {
 		savedFile.running = true;
 		root.shown = true;
 		root.mapped = true;
+		root.winIndex = root.windows ? 1 : 0;
 		Qt.callLater(function () {
 			list.currentIndex = 0;
-			root.winIndex = 0;
 			card.forceActiveFocus();
 		});
 	}
@@ -160,6 +161,16 @@ PanelWindow {
 
 	function stepWindows(step) {
 		root.winIndex = Util.wrap(root.winIndex, step, root.results.length);
+	}
+
+	function handleRelease(event) {
+		if (!root.windows)
+			return;
+
+		if (event.key === Qt.Key_Super_L || event.key === Qt.Key_Super_R || event.key === Qt.Key_Meta) {
+			root.activate(root.results[root.winCurrent]);
+			event.accepted = true;
+		}
 	}
 
 	function handleKeys(event) {
@@ -406,6 +417,7 @@ PanelWindow {
 		focus: true
 
 		Keys.onPressed: function (event) { root.handleKeys(event); }
+		Keys.onReleased: function (event) { root.handleRelease(event); }
 
 		Column {
 			id: column
@@ -561,15 +573,13 @@ PanelWindow {
 			readonly property int count: root.results.length
 			readonly property real freeWidth: (root.screen ? root.screen.width : root.width) - Config.windowsRowMargin
 			readonly property int columns: Math.max(1, Math.min(count, Math.floor(freeWidth / cell)))
-			readonly property int index: Math.min(root.winIndex, Math.max(0, count - 1))
+			readonly property int index: root.winCurrent
 			readonly property real emptyWidth: count === 0 ? emptyText.implicitWidth : 0
 
 			visible: root.windows
 			width: Math.max(columns * cell, emptyWidth)
 			height: Math.ceil(Math.max(count, 1) / columns) * cell
 			clip: true
-
-			onCountChanged: root.winIndex = Math.min(root.winIndex, Math.max(0, count - 1))
 
 			Highlight {
 				fillParent: false

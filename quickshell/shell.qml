@@ -54,9 +54,14 @@ ShellRoot {
 		}
 
 		function windows() {
+			if (launcherWindow.shown && launcherWindow.windows) {
+				launcherWindow.stepWindows(1);
+				return;
+			}
+
 			const wasOpen = launcherWindow.shown;
 
-			launcherWindow.toggleWindows();
+			launcherWindow.openWindows();
 
 			if (!wasOpen)
 				Handoff.run(shellRoot.closeWidgetsUnderLauncher);

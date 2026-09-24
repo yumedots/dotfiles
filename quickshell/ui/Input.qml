@@ -12,7 +12,8 @@ QtObject {
 		[Qt.Key_Escape]: "escape",
 		[Qt.Key_Return]: "accept",
 		[Qt.Key_Enter]: "accept",
-		[Qt.Key_Space]: "space"
+		[Qt.Key_Space]: "space",
+		[Qt.Key_Tab]: "tab"
 	})
 	readonly property var mixerArrows: ({
 		[Qt.Key_Up]: "left",
@@ -110,8 +111,9 @@ QtObject {
 	function switcher(event, target) {
 		return root.act(event, {
 			escape: () => target.close(),
-			accept: () => target.activate(target.results[target.winIndex]),
-			space: () => target.activate(target.results[target.winIndex]),
+			accept: () => target.activate(target.results[target.winCurrent]),
+			space: () => target.activate(target.results[target.winCurrent]),
+			tab: () => target.stepWindows(1),
 			left: () => target.stepWindows(-1),
 			right: () => target.stepWindows(1),
 			up: () => target.stepWindows(-target.windowColumns),
