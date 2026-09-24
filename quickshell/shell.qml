@@ -67,6 +67,10 @@ ShellRoot {
 				Handoff.run(shellRoot.closeWidgetsUnderLauncher);
 		}
 
+		function windowsStep(direction: string) {
+			launcherWindow.stepWindows({ left: -1, right: 1, up: -launcherWindow.windowColumns, down: launcherWindow.windowColumns }[direction] || 0);
+		}
+
 		function cpu() {
 			shellRoot.openWidget("cpu", false);
 		}

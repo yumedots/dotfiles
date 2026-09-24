@@ -2,6 +2,25 @@ local programs = require("programs")
 local actions = require("actions")
 local mainMod = "SUPER"
 
+local function switcherOpen()
+    for _, layer in ipairs(hl.get_layers({ namespace = "launcher" })) do
+        if layer.interactivity == 1 then return true end
+    end
+
+    return false
+end
+
+local function focusOrSwitch(direction)
+    return function()
+        if switcherOpen() then
+            hl.exec_cmd("qs ipc call shell windowsStep " .. direction)
+            return
+        end
+
+        hl.dispatch(hl.dsp.focus({ direction = direction }))
+    end
+end
+
 for i = 1, 10 do
     local key = i % 10
     hl.bind(mainMod .. " + " .. key,         hl.dsp.focus({ workspace = i }))
@@ -24,10 +43,10 @@ hl.bind(mainMod .. " + A", hl.dsp.exec_cmd(programs.calendar))
 hl.bind(mainMod .. " + S", hl.dsp.exec_cmd(programs.notifications))
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd(programs.contributions))
 
-hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
-hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
-hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
-hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
+hl.bind(mainMod .. " + left",  focusOrSwitch("left"))
+hl.bind(mainMod .. " + right", focusOrSwitch("right"))
+hl.bind(mainMod .. " + up",    focusOrSwitch("up"))
+hl.bind(mainMod .. " + down",  focusOrSwitch("down"))
 
 hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.move({ direction = "left" }))
 hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.move({ direction = "right" }))
