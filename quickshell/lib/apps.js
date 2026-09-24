@@ -208,10 +208,13 @@ function rankEntries(entries, query, pins, usage) {
 
 		const used = (usage || {})[entry.id] || { count: 0, last: 0 };
 
-		kept.push({ entry: entry, score: score, pin: (pins || []).indexOf(entry.id), count: used.count, last: used.last });
+		kept.push({ entry: entry, score: score, pin: (pins || []).indexOf(entry.id), count: used.count, last: used.last, power: entry.kind === "action" ? 1 : 0 });
 	});
 
 	kept.sort(function (a, b) {
+		if (a.power !== b.power)
+			return a.power - b.power;
+
 		const pinnedA = a.pin < 0 ? 1 : 0;
 		const pinnedB = b.pin < 0 ? 1 : 0;
 

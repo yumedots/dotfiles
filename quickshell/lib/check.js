@@ -439,6 +439,11 @@ assert(ranked[2].id === "app:a", "the rest stay in name order");
 assert(rankEntries([{ id: "app:a", name: "Alpha" }], "zzz", [], {}).length === 0, "nothing matches, nothing listed");
 assert(rankEntries([{ id: "app:a", name: "Alpha" }], "", [], {})[0].id === "app:a", "an empty query keeps everything");
 
+const powerRows = [{ id: "app:x", kind: "app", name: "X" }, { id: "act:Shut down", kind: "action", name: "Shut down" }];
+assert(rankEntries(powerRows, "", [], { "act:Shut down": { count: 18, last: 99 } })[0].id === "app:x", "a power action never outranks a plain entry, however often it was used");
+assert(rankEntries(powerRows, "", [], {})[0].id === "app:x", "and not with nothing used at all");
+assert(rankEntries(powerRows, "shut", [], {})[0].id === "act:Shut down", "a power action is still the match when it is what you type");
+
 const usage = parseUsage("app:a\t3\t100\napp:b\t1\nbroken\n");
 assert(usage["app:a"].count === 3 && usage["app:a"].last === 100, "usage counts and times parse");
 assert(usage["app:b"].last === 0, "a missing timestamp is zero");
