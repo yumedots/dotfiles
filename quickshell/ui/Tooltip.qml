@@ -32,8 +32,8 @@ PanelWindow {
 	readonly property bool atBottom: root.anchorWindow !== null && root.anchorWindow.atBottom === true
 	readonly property real outerMargin: root.anchorWindow !== null ? root.anchorWindow.outerMargin : border.gapsOut
 	readonly property real wantedX: root.anchorX + (root.anchorItem ? root.anchorItem.width : 0) / 2 - root.cardWidth / 2
-	readonly property real limitX: (root.anchorWindow ? root.anchorWindow.width : 0) - root.cardWidth
-	readonly property real hang: Math.round(border.gapsOut + Config.tooltipOffsetY)
+	readonly property real limitX: (root.anchorWindow ? root.anchorWindow.width : 0) - root.cardWidth - Config.tooltipGap * 2
+	readonly property real hang: Config.tooltipGap
 	readonly property real screenWidth: root.screen ? root.screen.width : root.cardWidth
 	readonly property real screenHeight: root.screen ? root.screen.height : root.cardHeight
 	readonly property real barReserve: root.outerMargin + (root.anchorWindow ? root.anchorWindow.implicitHeight : 0)
@@ -44,8 +44,8 @@ PanelWindow {
 	readonly property real cardWidth: Util.snap(border.contentWidth + 2 * border.inset, root.scale)
 	readonly property real cardHeight: Util.snap(border.contentHeight + 2 * border.inset, root.scale)
 	readonly property real cardX: Util.snap(root.alignRight
-		? root.screenWidth - root.cardWidth - root.outerMargin
-		: root.outerMargin + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
+		? root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGap
+		: root.outerMargin + Config.tooltipGap + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
 	readonly property real cardY: root.atBottom
 		? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
 		: Math.round(root.barReserve + root.hang)

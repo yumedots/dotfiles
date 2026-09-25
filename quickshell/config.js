@@ -63,7 +63,7 @@ const clockFormat = "ddd MMM d h:mm AP";
 const scrollbarWidth = 2;
 
 const tooltipOffsetX = 0;
-const tooltipOffsetY = -8;
+const tooltipGap = 7;
 const popupCloseDelay = 60;
 const borderFallbackWidth = 1;
 const borderFallbackColor = "#ffffff";
