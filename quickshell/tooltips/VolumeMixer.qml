@@ -24,7 +24,9 @@ Item {
 
 	focus: true
 
-	onOnScreenChanged: if (!root.onScreen) root.keyboard = false
+	property bool shown: false
+
+	onShownChanged: if (!root.shown) root.keyboard = false
 
 	readonly property real channelsMaxWidth: Config.mixerVisibleChannels * Config.mixerChannelWidth + (Config.mixerVisibleChannels - 1) * Config.mixerChannelGap
 	readonly property real idleWidth: Config.mixerIdleChannels * Config.mixerChannelWidth + (Config.mixerIdleChannels - 1) * Config.mixerChannelGap
@@ -96,7 +98,8 @@ Item {
 	}
 
 	Keys.onPressed: function (event) {
-		root.keyboard = true;
+		if (Input.direction(event) !== "")
+			root.keyboard = true;
 
 		if (root.picker === "")
 			Input.mixer(event, root);

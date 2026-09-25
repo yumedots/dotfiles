@@ -26,6 +26,7 @@ BarStat {
 	}
 
 	popupContent: VolumeMixer {
+		shown: root.popupVisible
 		onCloseRequested: root.closePopup()
 	}
 }
