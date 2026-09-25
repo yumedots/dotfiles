@@ -201,7 +201,7 @@ Item {
 		Highlight {
 			id: hl
 
-			active: channel.selected
+			active: channel.selected && root.keyboard
 		}
 
 		MouseArea {
@@ -239,9 +239,10 @@ Item {
 					anchors.fill: parent
 					anchors.leftMargin: -Config.mixerHitPad
 					anchors.rightMargin: -Config.mixerHitPad
+					preventStealing: true
 
 					onPressed: (mouse) => root.setFader(channel.node, 1 - mouse.y / fader.height)
-					onPositionChanged: (mouse) => { if (mouse.pressed) root.setFader(channel.node, 1 - mouse.y / fader.height); }
+					onPositionChanged: (mouse) => root.setFader(channel.node, 1 - mouse.y / fader.height)
 				}
 			}
 
@@ -389,9 +390,10 @@ Item {
 				anchors.fill: parent
 				anchors.topMargin: -Config.mixerHitPad
 				anchors.bottomMargin: -Config.mixerHitPad
+				preventStealing: true
 
 				onPressed: (mouse) => root.setFader(line.node, mouse.x / lineFader.width)
-				onPositionChanged: (mouse) => { if (mouse.pressed) root.setFader(line.node, mouse.x / lineFader.width); }
+				onPositionChanged: (mouse) => root.setFader(line.node, mouse.x / lineFader.width)
 			}
 		}
 	}
