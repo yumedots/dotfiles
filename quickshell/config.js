@@ -18,7 +18,7 @@ const workspaceInactive = muted;
 const workspacePadding = 1;
 const workspaceSpacing = 6;
 
-const fontFamily = "Hack Nerd Font";
+const fontFamily = "GoogleSansCode Nerd Font";
 const fontSize = 12;
 const valueSample = "0123456789.%G";
 const iconSize = 10;
