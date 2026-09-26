@@ -36,7 +36,7 @@ Item {
 	readonly property int lastPage: Util.pageCount(content.implicitWidth, root.channelsMaxWidth, root.pageStep) - 1
 	readonly property var devices: root.picker === "" ? [] : root.sortedDevices(root.picker === "input")
 	readonly property real offset: Util.pageOffset(root.page, content.implicitWidth, root.channelsMaxWidth, root.pageStep)
-	readonly property bool hasApps: outputs.implicitWidth > 0
+	readonly property bool hasApps: System.anyStreamVisible(root.nodes, root.runningOutput, Config.mixerOnlyPlaying, root.held)
 	readonly property bool recording: root.runningInput.length > 0
 
 	implicitWidth: root.contentWidth + Config.mixerPadding * 2
@@ -494,7 +494,6 @@ Item {
 						Row {
 							id: outputs
 
-							visible: implicitWidth > 0
 							spacing: Config.mixerChannelGap
 
 							Repeater {
@@ -508,9 +507,7 @@ Item {
 									readonly property var node: holder.modelData
 									readonly property bool shown: System.shownStream(holder.node)
 									readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || System.streamPlaying(holder.node, root.runningOutput))
-									readonly property bool held: root.held[holder.node ? holder.node.id : -1] !== undefined
-
-									visible: holder.shown && (holder.active || holder.held)
+									visible: System.streamVisible(holder.node, root.runningOutput, Config.mixerOnlyPlaying, root.held)
 									width: holder.visible ? channel.implicitWidth : 0
 									height: channel.implicitHeight
 									clip: true

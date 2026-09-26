@@ -882,6 +882,11 @@ section("mixer", function () {
 	assert(streamPlaying(playback, [4]) && !streamPlaying(playback, [9]) && !streamPlaying(null, [4]), "a stream is playing when the poll saw its id");
 	assert(streamNodes(nodes, [4], true).length === 1 && streamNodes(nodes, [4], true)[0] === playback, "with the playing filter on only the playing streams stay");
 	assert(streamNodes(nodes, [], false).length === 1, "with the filter off every shown stream stays");
+	assert(streamVisible(playback, [4], true, {}) && !streamVisible(playback, [9], true, {}), "a stream is on screen while the poll sees it playing");
+	assert(streamVisible(playback, [], true, { 4: 5000 }), "a held stream stays on screen while its hold is alive");
+	assert(!streamVisible(notReady, [6], false, {}) && !streamVisible(sink, [1], false, {}), "an unbound node and a device never reach the app row");
+	assert(anyStreamVisible(nodes, [4], true, {}) && anyStreamVisible(nodes, [], true, { 4: 5000 }), "the app row is drawn from the nodes, not from a width it laid out itself");
+	assert(!anyStreamVisible(nodes, [], true, {}) && !anyStreamVisible(null, [4], false, {}), "with nothing playing and nothing held the app row stays away");
 	assert(nodeMuted(source) && !nodeMuted(sink) && nodeMuted(null) === false, "mute is read off the node, a missing node reads false");
 	assert(nodeVolume(source) === 0.7 && nodeVolume(null) === 0 && nodeVolume(notReady) === 0, "volume is read off the node, a node without audio reads zero");
 	assert(sameNode(sink, { id: 1 }) && !sameNode(sink, source) && !sameNode(null, sink), "two nodes are the same node when their ids match");

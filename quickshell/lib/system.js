@@ -88,6 +88,20 @@ function streamNodes(nodes, running, onlyPlaying) {
 	return list;
 }
 
+function streamHeld(node, held) {
+	return !!node && !!held && held[node.id] !== undefined;
+}
+
+function streamVisible(node, running, onlyPlaying, held) {
+	return shownStream(node) && (streamHeld(node, held) || !onlyPlaying || streamPlaying(node, running));
+}
+
+function anyStreamVisible(nodes, running, onlyPlaying, held) {
+	return (nodes || []).some(function (node) {
+		return streamVisible(node, running, onlyPlaying, held);
+	});
+}
+
 function audioDevices(nodes, input) {
 	const found = [];
 
