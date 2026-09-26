@@ -281,17 +281,6 @@ assert(ring[2].x === 0 && ring[2].y === 2 && ring[2].width === 2 && ring[2].heig
 assert(ring[3].x === 98 && ring[3].width === 2, "the right edge sits on the right");
 assert(gradientEdges(["#ffffff"], 0, 10, 10, 0)[0].height === 0, "a zero width border draws nothing");
 
-const gaps = parseHyprGaps([
-	'{"option": "general:col.active_border", "gradient": "ee33ccff ee00ff99 45deg", "set": true }',
-	'{"option": "general:border_size", "int": 1, "set": true }',
-	'{"option": "general:gaps_in", "css": "8 8 8 8", "set": true }',
-	'{"option": "general:gaps_out", "css": "15 15 15 15", "set": true }'
-].join("\n"));
-
-assert(gaps.inner === 8 && gaps.outer === 15, "gaps come from hyprland's css shorthand, first value");
-assert(parseHyprGaps('{"option": "general:gaps_workspaces", "int": 2, "set": true }').inner === null, "gaps_workspaces is not mistaken for gaps_in");
-assert(parseHyprGaps("hyprctl: command not found").outer === null, "unreadable output leaves the gaps on their fallback");
-
 const namedColor = parseGradient("rgba(ff0000ff) 90deg");
 assert(namedColor.angle === 90 && namedColor.colors === null, "a token that is not a plain hex color is dropped");
 

@@ -68,8 +68,8 @@ const tooltipGap = 7;
 const popupCloseDelay = 60;
 const borderFallbackWidth = 1;
 const borderFallbackColor = "#ffffff";
-const gapsInFallback = 8;
-const gapsOutFallback = 15;
+const gapsIn = 4;
+const gapsOut = 8;
 
 const cpuBase = "#a78bfa";
 const cpuBaseMono = foreground;

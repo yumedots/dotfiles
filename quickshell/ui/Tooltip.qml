@@ -30,7 +30,7 @@ PanelWindow {
 	// Ceiling: the band under the bar swallows clicks aimed at apps underneath.
 	readonly property bool wide: root.wantsKeyboard && !root.shut
 	readonly property bool atBottom: root.anchorWindow !== null && root.anchorWindow.atBottom === true
-	readonly property real outerMargin: root.anchorWindow !== null ? root.anchorWindow.outerMargin : border.gapsOut
+	readonly property real outerMargin: root.anchorWindow !== null ? root.anchorWindow.outerMargin : Config.gapsOut
 	readonly property real wantedX: root.anchorX + (root.anchorItem ? root.anchorItem.width : 0) / 2 - root.cardWidth / 2
 	readonly property real limitX: (root.anchorWindow ? root.anchorWindow.width : 0) - root.cardWidth - Config.tooltipGap * 2
 	readonly property real hang: Config.tooltipGap
@@ -142,7 +142,7 @@ PanelWindow {
 			id: border
 
 			anchors.fill: parent
-			padding: root.contentPadding >= 0 ? root.contentPadding : border.gapsIn
+			padding: root.contentPadding >= 0 ? root.contentPadding : Config.gapsIn
 			borderColors: root.borderColors
 			borderWidth: root.borderWidth
 			borderOpacity: 1

@@ -14,7 +14,6 @@ Item {
 	property real padding: 0
 	property real borderOpacity: 1
 	property var hyprBorder: ({ colors: null, angle: 0, width: null })
-	property var hyprGaps: ({ inner: null, outer: null })
 
 	readonly property var themeColors: root.borderColors !== null
 		? root.borderColors
@@ -27,8 +26,6 @@ Item {
 	readonly property real themeAngle: root.hyprBorder.angle
 	readonly property var edges: Color.gradientEdges(root.themeColors, root.themeAngle, frame.width, frame.height, root.themeWidth)
 	readonly property real inset: root.themeWidth + root.padding
-	readonly property real gapsIn: root.hyprGaps.inner !== null ? root.hyprGaps.inner : Config.gapsInFallback
-	readonly property real gapsOut: root.hyprGaps.outer !== null ? root.hyprGaps.outer : Config.gapsOutFallback
 
 	readonly property alias contentWidth: body.childrenRect.width
 	readonly property alias contentHeight: body.childrenRect.height
@@ -49,7 +46,7 @@ Item {
 	Request {
 		id: hyprOptions
 
-		command: ["sh", "-c", "hyprctl getoption -j general:col.active_border; hyprctl getoption -j general:border_size; hyprctl getoption -j general:gaps_in; hyprctl getoption -j general:gaps_out"]
+		command: ["sh", "-c", "hyprctl getoption -j general:col.active_border; hyprctl getoption -j general:border_size"]
 
 		function reload() {
 			if (!hyprOptions.running)
@@ -58,7 +55,6 @@ Item {
 
 		onDone: function (text) {
 			root.hyprBorder = Color.parseHyprBorder(text);
-			root.hyprGaps = Color.parseHyprGaps(text);
 		}
 	}
 

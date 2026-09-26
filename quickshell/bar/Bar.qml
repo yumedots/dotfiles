@@ -15,7 +15,7 @@ PanelWindow {
 	property var widgets: ({})
 
 	readonly property bool atBottom: bar.layout.position === "bottom"
-	readonly property real outerMargin: Config.barFloating ? border.gapsOut : 0
+	readonly property real outerMargin: Config.barFloating ? Config.gapsOut : 0
 	readonly property var centerItem: bar.widgets[bar.layout.centerAnchor]
 
 	anchors {
