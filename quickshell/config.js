@@ -48,6 +48,7 @@ const iconVolumeMid = "\uf027";
 const iconVolumeHigh = "\uf028";
 
 const barCells = 15;
+const barInset = 4;
 const barPadding = 8;
 const barFloating = false;
 const barBorderWidth = barFloating ? -1 : 0;

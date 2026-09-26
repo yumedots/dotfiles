@@ -218,7 +218,7 @@ PanelWindow {
 		id: border
 
 		anchors.fill: parent
-		padding: border.gapsIn
+		padding: Config.barInset
 		borderWidth: Config.barBorderWidth
 		backgroundColor: bar.layout.transparent ? "transparent" : Config.surfaceTranslucent
 	}
