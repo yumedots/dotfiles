@@ -50,7 +50,7 @@ const iconPlay = "\uf04b";
 const iconPause = "\uf04c";
 
 const barCells = 15;
-const barInset = 4;
+const barInset = 8;
 const barPadding = 8;
 const barFloating = false;
 const barBorderWidth = barFloating ? -1 : 0;
