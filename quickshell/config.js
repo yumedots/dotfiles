@@ -68,6 +68,7 @@ const tooltipGap = 7;
 const tooltipGapRight = 3;
 const tooltipHang = 3;
 const popupCloseDelay = 60;
+const popupFadeMs = 140;
 const borderFallbackWidth = 1;
 const borderFallbackColor = "#ffffff";
 const gapsIn = 4;

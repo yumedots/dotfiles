@@ -19,8 +19,7 @@ PanelWindow {
 	property real anchorX: 0
 	property bool shown: false
 
-	readonly property bool shut: !root.shown
-	readonly property bool revealed: root.shown
+	readonly property bool shut: !root.shown && card.opacity === 0
 
 	// ponytail: a popup that takes exclusive keyboard focus makes hyprland send it
 	// every click, so it has to cover the bar strip as well: a click there is
@@ -137,6 +136,11 @@ PanelWindow {
 		y: root.cardTop
 		width: root.cardWidth
 		height: root.cardHeight
+		opacity: root.shown ? 1 : 0
+
+		Behavior on opacity {
+			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.OutCubic }
+		}
 
 		HyprBorder {
 			id: border
@@ -146,7 +150,6 @@ PanelWindow {
 			borderColors: root.borderColors
 			borderWidth: root.borderWidth
 			borderOpacity: 1
-			visible: root.revealed
 
 			Keys.onPressed: function (event) {
 				if (!Input.cancel(event))
@@ -163,7 +166,6 @@ PanelWindow {
 			anchors.right: parent.right
 			anchors.top: parent.top
 			anchors.margins: Config.tooltipCloseInset
-			visible: root.revealed
 			font.family: Config.fontFamily
 			font.pixelSize: Config.tooltipCloseSize
 			color: closeHit.containsMouse ? Config.foreground : Config.muted
