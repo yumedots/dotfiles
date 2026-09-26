@@ -187,13 +187,24 @@ const launcherIconWindow = "\u{f05b1}";
 const launcherIconFile = "\u{f0213}";
 const launcherIconPin = "\ueba0";
 const launcherIconApps = "\u{f0c9}";
+const launcherIconWallpaper = "\u{f0e09}";
 const launcherModes = [
-	{ mode: "clipboard", name: "Clipboard", mark: "", glyph: launcherIconClipboard, keywords: ["copy", "paste"] }
+	{ mode: "clipboard", name: "Clipboard", mark: "", glyph: launcherIconClipboard, keywords: ["copy", "paste"] },
+	{ mode: "wallpaper", name: "Wallpaper", mark: "~", glyph: launcherIconWallpaper, keywords: ["wallpaper", "background", "desktop"] }
 ];
 const launcherGroups = [
 	{ id: "apps", name: "Apps", glyph: launcherIconApps, keywords: ["programs", "applications"] }
 ];
 const launcherAppAliases = { foot: ["foot", "footclient", "foot-server"] };
+
+const wallpaperDir = "~/Documents/Wallpaper";
+const wallpaperDepth = 2;
+const wallpaperTransition = "fade";
+const wallpaperTransitionMs = 400;
+const wallpaperTransitionFps = 60;
+const wallpaperPreviewHeight = 120;
+const wallpaperEmpty = "No wallpapers found";
+
 const windowsGridCell = 92;
 const windowsRowMargin = 60;
 const windowsHighlightSize = 84;

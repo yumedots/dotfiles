@@ -201,14 +201,15 @@ function glyphOf(entry, config) {
 		window: config.launcherIconWindow,
 		file: config.launcherIconFile,
 		clip: config.launcherIconClipboard,
-		calc: config.launcherIconCalc
+		calc: config.launcherIconCalc,
+		wallpaper: config.launcherIconWallpaper
 	};
 
 	return kinds[entry.kind] || "";
 }
 
 function rememberable(entry) {
-	const kinds = ["app", "command", "action", "saved"];
+	const kinds = ["app", "command", "action", "saved", "wallpaper"];
 
 	return Boolean(entry) && kinds.indexOf(entry.kind) >= 0;
 }

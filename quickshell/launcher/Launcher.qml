@@ -19,6 +19,8 @@ PanelWindow {
 	property string group: ""
 	property string forced: ""
 	property var pending: null
+	property var wallpapers: []
+	property string wallpaperDir: ""
 
 	readonly property int windowColumns: windowsGrid.columns
 	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
@@ -33,6 +35,9 @@ PanelWindow {
 	readonly property string home: Quickshell.env("HOME")
 	readonly property string terminalConfig: Config.launcherTerminalConfig.replace("~", root.home)
 	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
+	readonly property string settingsPath: Quickshell.shellDir + "/cache/settings.lua"
+	readonly property var held: root.mode === "wallpaper" ? root.results[list.currentIndex] : null
+	readonly property string shotPath: root.held && root.held.kind === "wallpaper" ? root.held.path : ""
 	readonly property var appEntries: Entries.appEntries(AppIcons.entries, Config.launcherIgnoreApps, Config.launcherAppAliases)
 	readonly property var results: Apps.results(root.mode, root.search, {
 		clips: root.clips,
@@ -41,7 +46,8 @@ PanelWindow {
 		groups: ({ apps: root.appEntries }),
 		pins: root.pins,
 		usage: root.usage,
-		calc: Parse.calcEntry(root.search)
+		calc: Parse.calcEntry(root.search),
+		wallpapers: root.wallpapers
 	})
 	readonly property int listHeight: Config.launcherMaxRows * Config.launcherRowHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width
@@ -82,6 +88,7 @@ PanelWindow {
 		usageFile.running = true;
 		terminalFile.running = true;
 		savedFile.running = true;
+		settingsFile.running = true;
 		root.shown = true;
 		root.mapped = true;
 		root.winIndex = root.windows ? 1 : 0;
@@ -158,6 +165,8 @@ PanelWindow {
 	function emptyText() {
 		if (root.mode === "clipboard")
 			return "Nothing copied yet";
+		if (root.mode === "wallpaper")
+			return Config.wallpaperEmpty;
 		if (root.mode === "windows")
 			return "No windows open";
 		if (root.mode === "calc")
@@ -281,6 +290,22 @@ PanelWindow {
 		Quickshell.execDetached(Shell.writeCommand(path, text));
 	}
 
+	function listWallpapers(dir) {
+		const path = String(dir || "").replace(/^~/, root.home);
+		const prune = ["node_modules", ".git"].map(function (name) { return "-name " + Shell.shellQuote(name); }).join(" -o ");
+		const images = Shell.shellQuote("\\.(jpg|jpeg|png|webp|gif|bmp|avif)$");
+
+		return ["sh", "-c", "find " + Shell.shellQuote(path) + " -maxdepth " + Config.wallpaperDepth
+			+ " \\( " + prune + " \\) -prune -o -type f -print 2>/dev/null | grep -iE " + images + " | sort"];
+	}
+
+	function saveWallpaper(image) {
+		if (root.wallpaperDir === "")
+			return;
+
+		root.writeFile(root.settingsPath, Wallpaper.settingsText(image, root.wallpaperDir));
+	}
+
 	function remember(entry) {
 		if (!Entries.rememberable(entry))
 			return;
@@ -351,6 +376,10 @@ PanelWindow {
 			root.copyClip(entry.clipId);
 		else if (entry.kind === "file")
 			Quickshell.execDetached(["xdg-open", entry.path]);
+		else if (entry.kind === "wallpaper") {
+			Quickshell.execDetached(Wallpaper.applyCommand(entry.path, Config));
+			root.saveWallpaper(entry.path);
+		}
 
 		root.pending = entry;
 		root.close();
@@ -398,6 +427,28 @@ PanelWindow {
 
 		onDone: function (text) {
 			root.terminal = Apps.terminalName(text);
+		}
+	}
+
+	Request {
+		id: settingsFile
+
+		command: ["sh", "-c", "cat " + Shell.shellQuote(root.settingsPath) + " 2>/dev/null"]
+
+		onDone: function (text) {
+			root.wallpaperDir = Wallpaper.dirFromText(text) || Config.wallpaperDir;
+			wallpapersFile.command = root.listWallpapers(root.wallpaperDir);
+			wallpapersFile.running = true;
+		}
+	}
+
+	Request {
+		id: wallpapersFile
+
+		command: ["sh", "-c", "true"]
+
+		onDone: function (text) {
+			root.wallpapers = Wallpaper.entries(text);
 		}
 	}
 
@@ -482,6 +533,20 @@ PanelWindow {
 				}
 			}
 
+			Image {
+				id: shot
+
+				width: parent.width
+				height: visible ? Config.wallpaperPreviewHeight : 0
+				visible: root.shotPath !== ""
+				fillMode: Image.PreserveAspectCrop
+				cache: true
+				asynchronous: true
+				retainWhileLoading: true
+				sourceSize.width: 384
+				source: root.shotPath === "" ? "" : "file://" + root.shotPath
+			}
+
 			Selector {
 				id: list
 
@@ -558,21 +623,31 @@ PanelWindow {
 						text: Config.launcherIconPin
 					}
 
-						HoverHandler {
-							onHoveredChanged: {
-								if (hovered)
-									list.currentIndex = row.index;
-							}
-						}
+					HoverHandler {
+						property point origin: Qt.point(0, 0)
 
-						MouseArea {
-							anchors.fill: parent
+						onPointChanged: {
+							if (!hovered)
+								return;
 
-							onClicked: {
-								list.currentIndex = row.index;
-								root.activate(row.modelData);
-							}
+							const at = point.scenePosition;
+
+							if (at.x === origin.x && at.y === origin.y)
+								return;
+
+							origin = Qt.point(at.x, at.y);
+							list.currentIndex = row.index;
 						}
+					}
+
+					MouseArea {
+						anchors.fill: parent
+
+						onClicked: {
+							list.currentIndex = row.index;
+							root.activate(row.modelData);
+						}
+					}
 				}
 			}
 
