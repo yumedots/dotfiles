@@ -58,7 +58,7 @@ PanelWindow {
 
 	WlrLayershell.layer: WlrLayer.Overlay
 	WlrLayershell.namespace: "launcher"
-	WlrLayershell.keyboardFocus: root.mapped ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+	WlrLayershell.keyboardFocus: root.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 	WlrLayershell.focusable: true
 
 	exclusiveZone: 0
@@ -97,7 +97,6 @@ PanelWindow {
 
 	function close() {
 		root.shown = false;
-		root.mapped = false;
 		root.query = "";
 		root.group = "";
 		root.forced = "";
@@ -423,8 +422,15 @@ PanelWindow {
 		height: root.windows ? windowsGrid.height + windowName.height + Config.windowsLabelGap + card.inset * 2 : column.implicitHeight + card.inset * 2
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
-		visible: root.shown && root.configured
+		opacity: root.shown ? 1 : 0
+		visible: root.configured && (root.shown || opacity > 0)
 		focus: true
+
+		Behavior on opacity {
+			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.OutCubic }
+		}
+
+		onOpacityChanged: if (opacity === 0) root.mapped = false
 
 		Keys.onPressed: function (event) { root.handleKeys(event); }
 		Keys.onReleased: function (event) { root.handleRelease(event); }
