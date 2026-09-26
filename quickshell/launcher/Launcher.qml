@@ -293,6 +293,12 @@ PanelWindow {
 		Quickshell.execDetached(["sh", "-c", "printf '%s' " + Shell.shellQuote(text) + " | wl-copy"]);
 	}
 
+	function copyClip(id) {
+		const command = "out=$(mktemp) && cliphist decode " + Shell.shellQuote(id) + " > \"$out\" && [ -s \"$out\" ] && wl-copy < \"$out\"; rm -f \"$out\"";
+
+		Quickshell.execDetached(["sh", "-c", command]);
+	}
+
 	function focusWindow(address) {
 		const target = address.indexOf("0x") === 0 ? address : "0x" + address;
 
@@ -322,6 +328,9 @@ PanelWindow {
 			return;
 		}
 
+		if (!root.shown)
+			return;
+
 		if (entry.kind === "app")
 			Quickshell.execDetached(Apps.launchCommand(entry, entry.appId, root.terminal));
 		else if (entry.kind === "window")
@@ -331,7 +340,7 @@ PanelWindow {
 		else if (entry.kind === "calc")
 			root.copy(entry.value);
 		else if (entry.kind === "clip")
-			Quickshell.execDetached(["sh", "-c", "cliphist decode " + Shell.shellQuote(entry.clipId) + " | wl-copy"]);
+			root.copyClip(entry.clipId);
 		else if (entry.kind === "file")
 			Quickshell.execDetached(["xdg-open", entry.path]);
 
