@@ -65,6 +65,8 @@ const scrollbarWidth = 2;
 
 const tooltipOffsetX = 0;
 const tooltipGap = 7;
+const tooltipGapRight = 3;
+const tooltipHang = 3;
 const popupCloseDelay = 60;
 const borderFallbackWidth = 1;
 const borderFallbackColor = "#ffffff";
