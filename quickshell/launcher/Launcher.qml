@@ -18,6 +18,7 @@ PanelWindow {
 	property var saved: []
 	property string group: ""
 	property string forced: ""
+	property var pending: null
 
 	readonly property int windowColumns: windowsGrid.columns
 	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
@@ -97,11 +98,19 @@ PanelWindow {
 
 	function close() {
 		root.shown = false;
+	}
+
+	function settle() {
 		root.query = "";
 		root.group = "";
 		root.forced = "";
 		field.clear();
 		field.typing = false;
+
+		if (root.pending !== null) {
+			root.remember(root.pending);
+			root.pending = null;
+		}
 	}
 
 	function toggle() {
@@ -343,7 +352,7 @@ PanelWindow {
 		else if (entry.kind === "file")
 			Quickshell.execDetached(["xdg-open", entry.path]);
 
-		root.remember(entry);
+		root.pending = entry;
 		root.close();
 	}
 
@@ -430,7 +439,13 @@ PanelWindow {
 			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.OutCubic }
 		}
 
-		onOpacityChanged: if (opacity === 0) root.mapped = false
+		onOpacityChanged: {
+			if (opacity !== 0)
+				return;
+
+			root.mapped = false;
+			root.settle();
+		}
 
 		Keys.onPressed: function (event) { root.handleKeys(event); }
 		Keys.onReleased: function (event) { root.handleRelease(event); }
