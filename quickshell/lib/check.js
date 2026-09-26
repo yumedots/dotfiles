@@ -949,6 +949,34 @@ section("media", function () {
 	assert(clock({ length: 0 }, 10).percent === 0, "a track with no length does not divide by zero");
 });
 
+section("wallpaper", function () {
+const settings = '    wallpaper = "/home/g/pic.jpg",\n    wallpaperDir = "/home/g/Walls",\n';
+
+assert(dirFromText(settings) === "/home/g/Walls", "the wallpaper folder comes out of the settings lua");
+assert(dirFromText('return {\n    wallpaper = "/home/g/pic.jpg",\n}\n') === null, "a settings lua with no folder leaves it unset");
+assert(dirFromText('wallpaperDir = "/first"\nwallpaperDir = "/second"') === "/second", "the later file wins when both name a folder");
+assert(dirFromText('    wallpaper = "/home/g/pic.jpg",\n') === null, "the picture key is not mistaken for the folder key");
+assert(dirFromText("") === null && dirFromText(null) === null, "an unreadable settings file has no folder");
+
+assert(nameOf("/home/g/Walls/My-Wall_01.jpg") === "My Wall 01", "the file name is cleaned up for the list");
+assert(nameOf("/a/one.jpg") === "one", "a plain file name loses its extension");
+
+const listed = entries("/a/one.jpg\n/a/two.PNG\n/a/notes.txt\n\n  /a/three.webp  ");
+
+assert(listed.length === 3, "only images make it into the list, got " + listed.length);
+assert(listed[0].id === "wall:/a/one.jpg" && listed[0].kind === "wallpaper" && listed[0].path === "/a/one.jpg", "an image becomes a wallpaper entry with its path");
+assert(entries("").length === 0 && entries(null).length === 0, "no listing means no wallpapers");
+
+const switching = applyCommand("/a/one.jpg", { wallpaperTransition: "fade", wallpaperTransitionMs: 400, wallpaperTransitionFps: 60 });
+
+assert(switching.join(" ") === "awww img --transition-type fade --transition-duration 0.4 --transition-fps 60 /a/one.jpg", "the switch animates through awww, got " + switching.join(" "));
+
+const saved = settingsText("/a/one.jpg", "/home/g/Walls");
+
+assert(saved.indexOf('wallpaper = "/a/one.jpg"') >= 0 && saved.indexOf('wallpaperDir = "/home/g/Walls"') >= 0, "the picked picture and folder are written back to the settings lua");
+assert(dirFromText(saved) === "/home/g/Walls", "what is written back is what is read again");
+});
+
 section("helpers", function () {
 assert(clamp(5, 0, 3) === 3 && clamp(-1, 0, 3) === 0 && clamp(2, 0, 3) === 2, "clamp keeps a value inside its bounds");
 assert(clamp(7, 0, -1) === -1, "an inverted clamp still returns the top bound, callers must floor it themselves");
