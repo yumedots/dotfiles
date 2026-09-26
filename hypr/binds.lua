@@ -36,6 +36,7 @@ hl.bind("ALT + SPACE", hl.dsp.global("quickshell:launcher"))
 hl.bind(mainMod .. " + TAB", hl.dsp.global("quickshell:windows"))
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
 
+hl.bind(mainMod .. " + F", hl.dsp.global("quickshell:media"))
 hl.bind(mainMod .. " + Z", hl.dsp.global("quickshell:cpu"))
 hl.bind(mainMod .. " + X", hl.dsp.global("quickshell:memory"))
 hl.bind(mainMod .. " + C", hl.dsp.global("quickshell:volume"))

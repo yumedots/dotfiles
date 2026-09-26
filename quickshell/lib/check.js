@@ -632,7 +632,7 @@ assert(layout.right.length === 1 && layout.right[0].id === "date", "the right sl
 
 const defaultLayout = parseBarLayout("");
 assert(defaultLayout.position === "top" && defaultLayout.left[0].id === "workspaces", "a missing file falls back to the default layout");
-assert(defaultLayout.right.map(function (entry) { return entry.id; }).join(",") === "tray,notify,cpu,memory,volume,github", "the default right slot is the layout this bar has always had");
+assert(defaultLayout.right.map(function (entry) { return entry.id; }).join(",") === "tray,media,notify,cpu,memory,volume,github", "the default right slot is the layout this bar has always had");
 assert(parseBarLayout("{ broken").center[0].id === "clock", "a broken file falls back to the default layout");
 assert(parseBarLayout('{"bar": {"layout": {"left": "nope"}}}').left[0].id === "workspaces", "a slot that is not a list falls back to the default");
 assert(parseBarLayout('{"bar": {"layout": {"left": []}}}').left.length === 0, "an empty slot is left empty, not filled with the default");
@@ -915,12 +915,17 @@ section("mixer", function () {
 });
 
 section("media", function () {
-	const paused = { identity: "Helium", isPlaying: false, dbusName: "org.mpris.MediaPlayer2.chromium.instance1" };
+	const paused = { identity: "Helium", isPlaying: false, trackTitle: "", dbusName: "org.mpris.MediaPlayer2.chromium.instance1" };
 	const playing = { identity: "mpv", isPlaying: true, dbusName: "org.mpris.MediaPlayer2.mpv" };
 
 	assert(pickPlayer([paused, playing]) === playing, "the keys drive the player that is playing");
 	assert(pickPlayer([paused, { identity: "vlc", isPlaying: false, dbusName: "org.mpris.MediaPlayer2.vlc" }]) === paused, "with nothing playing the first player is driven");
 	assert(pickPlayer([]) === null && pickPlayer(null) === null, "no players means nothing to drive");
+
+	assert(hasContent(null) === false, "no player has nothing to show");
+	assert(hasContent(paused) === false, "a player with no track and no playback shows nothing");
+	assert(hasContent(playing) === true, "a playing player is worth showing");
+	assert(hasContent({ identity: "paused with title", isPlaying: false, trackTitle: "Midnight City" }) === true, "a paused track keeps its place in the bar");
 
 	assert(command([paused, playing], "playPause").join(" ") === "busctl --user call org.mpris.MediaPlayer2.mpv /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player PlayPause", "the keys call the playing player's dbus name");
 	assert(command([paused], "next").pop() === "Next", "the next key asks for Next");
@@ -928,6 +933,20 @@ section("media", function () {
 	assert(command([{ identity: "x", isPlaying: true }], "playPause").length === 0, "a player with no dbus name is left alone");
 	assert(command([], "playPause").length === 0 && command(null, "playPause").length === 0, "with no players there is nothing to call");
 	assert(command([playing], "volume").length === 0, "an action that is not a media key asks for nothing");
+
+	assert(timeText(0) === "0:00" && timeText(83) === "1:23" && timeText(245) === "4:05", "a track time reads as minutes and seconds");
+	assert(timeText(600) === "10:00" && timeText(3599) === "59:59", "a time under an hour keeps two digits");
+	assert(timeText(3723) === "1:02:03" && timeText(3600) === "1:00:00", "a time past an hour reads as hours too");
+	assert(timeText(-5) === "0:00" && timeText(null) === "0:00" && timeText(undefined) === "0:00", "a broken time reads as zero");
+
+	const running = { length: 245 };
+
+	assert(clock(running, 83).elapsed === "1:23" && clock(running, 83).total === "4:05", "the clock reads the player's length and the position it was asked about");
+	assert(Math.abs(clock(running, 83).percent - 33.878) < 0.01, "the progress is the share of the track that has played");
+	assert(clock(running, 400).percent === 100 && clock(running, 400).elapsed === "4:05", "a position past the end is pinned to the end");
+	assert(clock(running, -3).percent === 0 && clock(running, null).elapsed === "0:00", "a position that never arrived is the start");
+	assert(!clock({ length: 0 }, 10).known && !clock(null, 10).known, "a stream with no length has no progress to show");
+	assert(clock({ length: 0 }, 10).percent === 0, "a track with no length does not divide by zero");
 });
 
 section("helpers", function () {

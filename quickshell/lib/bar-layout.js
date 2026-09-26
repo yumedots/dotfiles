@@ -7,7 +7,7 @@ function barLayoutDefault() {
 		centerAnchor: "clock",
 		left: [{ id: "workspaces" }],
 		center: [{ id: "clock" }],
-		right: [{ id: "tray" }, { id: "notify" }, { id: "cpu" }, { id: "memory" }, { id: "volume" }, { id: "github" }]
+		right: [{ id: "tray" }, { id: "media" }, { id: "notify" }, { id: "cpu" }, { id: "memory" }, { id: "volume" }, { id: "github" }]
 	};
 }
 

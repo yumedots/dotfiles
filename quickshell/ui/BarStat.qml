@@ -20,6 +20,7 @@ Item {
 	property real sweepWidth: 0
 	property var bar: null
 	property var onActivate
+	property bool popupWanted: true
 	property bool popupKeyboard: true
 	property bool popupAlignRight: false
 	property real popupPadding: -1
@@ -28,6 +29,9 @@ Item {
 	readonly property alias popupVisible: popupWindow.shown
 
 	function openPopup() {
+		if (!root.popupWanted)
+			return;
+
 		popupWindow.open();
 	}
 

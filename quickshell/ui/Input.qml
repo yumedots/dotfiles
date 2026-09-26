@@ -85,6 +85,16 @@ QtObject {
 		});
 	}
 
+	function media(event, target) {
+		return root.act(event, {
+			escape: () => target.closeRequested(),
+			left: () => target.previous(),
+			right: () => target.next(),
+			space: () => target.togglePlay(),
+			accept: () => target.togglePlay()
+		});
+	}
+
 	function mixer(event, target) {
 		return root.act(event, {
 			escape: () => target.closeRequested(),

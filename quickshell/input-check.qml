@@ -81,7 +81,10 @@ QtObject {
 			stepWindows: (n) => seen = "window" + n,
 			refreshRequested: () => seen = "refresh",
 			current: "process",
-			killRequested: () => seen = "kill"
+			killRequested: () => seen = "kill",
+			togglePlay: () => seen = "play",
+			previous: () => seen = "previous",
+			next: () => seen = "next"
 		};
 
 		seen = "";
@@ -172,6 +175,30 @@ QtObject {
 		seen = "";
 		Input.github(root.key("r", 0), stub);
 		root.assert(seen === "refresh", "r refreshes the github grid");
+
+		seen = "";
+		Input.media(root.key("", Qt.Key_Space), stub);
+		root.assert(seen === "play", "space plays and pauses the track");
+
+		seen = "";
+		Input.media(root.key("", Qt.Key_Return), stub);
+		root.assert(seen === "play", "return plays and pauses the track");
+
+		seen = "";
+		Input.media(left, stub);
+		root.assert(seen === "previous", "the media card goes back a track on left");
+
+		seen = "";
+		Input.media(right, stub);
+		root.assert(seen === "next", "the media card skips a track on right");
+
+		seen = "";
+		Input.media(down, stub);
+		root.assert(seen === "", "a key the media card does not use is left alone");
+
+		seen = "";
+		Input.media(escape, stub);
+		root.assert(seen === "close", "the media card closes on escape");
 
 		seen = "";
 		Input.kill(root.key(Config.procKillKey, 0), stub);

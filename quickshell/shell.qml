@@ -121,6 +121,12 @@ ShellRoot {
 	}
 
 	GlobalShortcut {
+		name: "media"
+
+		onPressed: shellRoot.openWidget("media", true)
+	}
+
+	GlobalShortcut {
 		name: "mediaPlayPause"
 
 		onPressed: shellRoot.media("playPause")
@@ -175,6 +181,10 @@ ShellRoot {
 
 		function github() {
 			shellRoot.openWidget("github", true);
+		}
+
+		function media() {
+			shellRoot.openWidget("media", true);
 		}
 	}
 

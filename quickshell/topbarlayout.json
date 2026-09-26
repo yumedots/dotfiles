@@ -13,11 +13,11 @@
 			],
 			"right": [
 				{ "id": "tray" },
+				{ "id": "media" },
 				{ "id": "notify" },
 				{ "id": "cpu" },
 				{ "id": "memory" },
-				{ "id": "volume" },
-				{ "id": "github" }
+				{ "id": "volume" }
 			]
 		}
 	}

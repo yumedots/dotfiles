@@ -46,6 +46,7 @@ PanelWindow {
 		if (id === "tray") return trayComponent;
 		if (id === "cpu") return cpuComponent;
 		if (id === "memory") return memoryComponent;
+		if (id === "media") return mediaComponent;
 		if (id === "volume") return volumeComponent;
 		if (id === "spacer") return spacerComponent;
 
@@ -123,6 +124,10 @@ PanelWindow {
 
 		for (let i = 0; i < ids.length; i++) {
 			const item = bar.widgets[ids[i]];
+
+			if (!item.visible)
+				continue;
+
 			const at = item.mapToItem(bar.contentItem, 0, 0);
 
 			if (x - bar.origin.x >= at.x && x - bar.origin.x <= at.x + item.width && y - bar.origin.y >= at.y && y - bar.origin.y <= at.y + item.height)
@@ -173,6 +178,7 @@ PanelWindow {
 	Component { id: trayComponent; Tray {} }
 	Component { id: cpuComponent; CpuStat {} }
 	Component { id: memoryComponent; MemoryStat {} }
+	Component { id: mediaComponent; MediaStat {} }
 	Component { id: volumeComponent; VolumeStat {} }
 	Component { id: spacerComponent; Spacer {} }
 
@@ -186,6 +192,7 @@ PanelWindow {
 			required property int index
 
 			sourceComponent: bar.componentFor(modelData.id)
+			visible: !item || item.wanted === undefined ? true : item.wanted
 			anchors.bottom: parent.bottom
 			anchors.bottomMargin: item ? item.baselineLift : 0
 
