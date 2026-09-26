@@ -601,7 +601,7 @@ PanelWindow {
 			}
 
 			Repeater {
-				model: root.results
+				model: root.windows ? root.results : []
 
 				delegate: Item {
 					id: iconCell
