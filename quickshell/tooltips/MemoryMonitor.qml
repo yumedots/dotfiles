@@ -64,7 +64,7 @@ ProcessPanel {
 		];
 
 		if (divider > 0) {
-			parts.push({ value: 0, color: Config.surfaceTranslucent, divider: divider });
+			parts.push({ value: 0, color: Config.memorySeparatorColor, divider: divider });
 			parts.push({ value: m.swapUsed, color: Config.memorySwap });
 			parts.push({ value: m.swapFree, color: Config.memoryFree });
 		}
@@ -76,7 +76,7 @@ ProcessPanel {
 			const share = part.divider ? part.divider : width * part.value / m.pool;
 			const out = {
 				x: x,
-				width: part.divider || part.value <= 0 ? share : Math.max(Config.memoryMinSegment, share),
+				width: share,
 				color: part.color
 			};
 
