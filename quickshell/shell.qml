@@ -10,6 +10,29 @@ import "launcher"
 ShellRoot {
 	id: shellRoot
 
+	function launcher() {
+		const wasOpen = launcherWindow.shown;
+
+		launcherWindow.toggle();
+
+		if (!wasOpen)
+			Handoff.run(shellRoot.closeWidgetsUnderLauncher);
+	}
+
+	function windowSwitcher() {
+		if (launcherWindow.shown && launcherWindow.windows) {
+			launcherWindow.stepWindows(1);
+			return;
+		}
+
+		const wasOpen = launcherWindow.shown;
+
+		launcherWindow.openWindows();
+
+		if (!wasOpen)
+			Handoff.run(shellRoot.closeWidgetsUnderLauncher);
+	}
+
 	function closeWidgets() {
 		if (bars.instances.length > 0)
 			bars.instances[0].closePopups(null);
@@ -41,30 +64,63 @@ ShellRoot {
 			Handoff.run(shellRoot.closeLauncherUnderWidget);
 	}
 
+	GlobalShortcut {
+		name: "launcher"
+
+		onPressed: shellRoot.launcher()
+	}
+
+	GlobalShortcut {
+		name: "windows"
+
+		onPressed: shellRoot.windowSwitcher()
+	}
+
+	GlobalShortcut {
+		name: "cpu"
+
+		onPressed: shellRoot.openWidget("cpu", false)
+	}
+
+	GlobalShortcut {
+		name: "memory"
+
+		onPressed: shellRoot.openWidget("memory", false)
+	}
+
+	GlobalShortcut {
+		name: "volume"
+
+		onPressed: shellRoot.openWidget("volume", false)
+	}
+
+	GlobalShortcut {
+		name: "calendar"
+
+		onPressed: shellRoot.openWidget("clock", true)
+	}
+
+	GlobalShortcut {
+		name: "notifications"
+
+		onPressed: shellRoot.openWidget("notify", true)
+	}
+
+	GlobalShortcut {
+		name: "contributions"
+
+		onPressed: shellRoot.openWidget("github", true)
+	}
+
 	IpcHandler {
 		target: "shell"
 
 		function launcher() {
-			const wasOpen = launcherWindow.shown;
-
-			launcherWindow.toggle();
-
-			if (!wasOpen)
-				Handoff.run(shellRoot.closeWidgetsUnderLauncher);
+			shellRoot.launcher();
 		}
 
 		function windows() {
-			if (launcherWindow.shown && launcherWindow.windows) {
-				launcherWindow.stepWindows(1);
-				return;
-			}
-
-			const wasOpen = launcherWindow.shown;
-
-			launcherWindow.openWindows();
-
-			if (!wasOpen)
-				Handoff.run(shellRoot.closeWidgetsUnderLauncher);
+			shellRoot.windowSwitcher();
 		}
 
 		function windowsStep(direction: string) {
