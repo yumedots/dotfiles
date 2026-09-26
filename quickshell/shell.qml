@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import Quickshell.Services.Mpris
 import qs
 import qs.ui
 import "bar"
@@ -64,6 +65,13 @@ ShellRoot {
 			Handoff.run(shellRoot.closeLauncherUnderWidget);
 	}
 
+	function media(action) {
+		const command = Media.command(Mpris.players.values ? Mpris.players.values : [], action);
+
+		if (command.length > 0)
+			Quickshell.execDetached(command);
+	}
+
 	GlobalShortcut {
 		name: "launcher"
 
@@ -110,6 +118,24 @@ ShellRoot {
 		name: "contributions"
 
 		onPressed: shellRoot.openWidget("github", true)
+	}
+
+	GlobalShortcut {
+		name: "mediaPlayPause"
+
+		onPressed: shellRoot.media("playPause")
+	}
+
+	GlobalShortcut {
+		name: "mediaNext"
+
+		onPressed: shellRoot.media("next")
+	}
+
+	GlobalShortcut {
+		name: "mediaPrevious"
+
+		onPressed: shellRoot.media("previous")
 	}
 
 	IpcHandler {

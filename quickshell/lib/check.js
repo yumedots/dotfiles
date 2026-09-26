@@ -914,6 +914,22 @@ section("mixer", function () {
 	assert(sortedDevices(nodes, false, null)[0] === sink, "with nothing active the list is left alone");
 });
 
+section("media", function () {
+	const paused = { identity: "Helium", isPlaying: false, dbusName: "org.mpris.MediaPlayer2.chromium.instance1" };
+	const playing = { identity: "mpv", isPlaying: true, dbusName: "org.mpris.MediaPlayer2.mpv" };
+
+	assert(pickPlayer([paused, playing]) === playing, "the keys drive the player that is playing");
+	assert(pickPlayer([paused, { identity: "vlc", isPlaying: false, dbusName: "org.mpris.MediaPlayer2.vlc" }]) === paused, "with nothing playing the first player is driven");
+	assert(pickPlayer([]) === null && pickPlayer(null) === null, "no players means nothing to drive");
+
+	assert(command([paused, playing], "playPause").join(" ") === "busctl --user call org.mpris.MediaPlayer2.mpv /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player PlayPause", "the keys call the playing player's dbus name");
+	assert(command([paused], "next").pop() === "Next", "the next key asks for Next");
+	assert(command([paused], "previous").pop() === "Previous", "the back key asks for Previous");
+	assert(command([{ identity: "x", isPlaying: true }], "playPause").length === 0, "a player with no dbus name is left alone");
+	assert(command([], "playPause").length === 0 && command(null, "playPause").length === 0, "with no players there is nothing to call");
+	assert(command([playing], "volume").length === 0, "an action that is not a media key asks for nothing");
+});
+
 section("helpers", function () {
 assert(clamp(5, 0, 3) === 3 && clamp(-1, 0, 3) === 0 && clamp(2, 0, 3) === 2, "clamp keeps a value inside its bounds");
 assert(clamp(7, 0, -1) === -1, "an inverted clamp still returns the top bound, callers must floor it themselves");
