@@ -21,6 +21,10 @@ PanelWindow {
 	property var pending: null
 	property var wallpapers: []
 	property string wallpaperDir: ""
+	property string listing: ""
+	property var warm: []
+	property string warmPath: ""
+	property string activeWallpaper: ""
 
 	readonly property int windowColumns: windowsGrid.columns
 	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
@@ -36,8 +40,9 @@ PanelWindow {
 	readonly property string terminalConfig: Config.launcherTerminalConfig.replace("~", root.home)
 	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
 	readonly property string settingsPath: Quickshell.shellDir + "/cache/settings.lua"
+	readonly property string thumbDir: Quickshell.shellDir + "/cache/wallpapers"
 	readonly property var held: root.mode === "wallpaper" ? root.results[list.currentIndex] : null
-	readonly property string shotPath: root.held && root.held.kind === "wallpaper" ? root.held.path : ""
+	readonly property string shotPath: root.held && root.held.kind === "wallpaper" ? root.held.preview : ""
 	readonly property var appEntries: Entries.appEntries(AppIcons.entries, Config.launcherIgnoreApps, Config.launcherAppAliases)
 	readonly property var results: Apps.results(root.mode, root.search, {
 		clips: root.clips,
@@ -306,6 +311,59 @@ PanelWindow {
 		root.writeFile(root.settingsPath, Wallpaper.settingsText(image, root.wallpaperDir));
 	}
 
+	function rememberThumb() {
+		const entry = root.held;
+
+		if (!entry || entry.kind !== "wallpaper" || entry.preview !== entry.path)
+			return;
+
+		grabThumb(shot, entry.path, false);
+	}
+
+	function grabThumb(item, path, next) {
+		const ratio = root.screen ? root.screen.devicePixelRatio : 1;
+
+		if (item.width < 1 || item.height < 1) {
+			if (next) {
+				root.warmPath = "";
+				root.warmNext();
+			}
+
+			return;
+		}
+
+		item.grabToImage(function (grab) {
+			grab.saveToFile(Wallpaper.thumbPath(path, root.thumbDir));
+
+			if (!next)
+				return;
+
+			root.warmPath = "";
+			root.warmNext();
+		}, Qt.size(item.width * ratio, item.height * ratio));
+	}
+
+	function warmNext() {
+		if (root.warmPath !== "")
+			return;
+
+		while (root.warm.length > 0) {
+			const path = root.warm[0];
+
+			root.warm = root.warm.slice(1);
+
+			if (root.held !== null && root.held.path === path)
+				continue;
+
+			root.warmPath = path;
+			warmer.source = "file://" + path;
+			return;
+		}
+
+		root.warmPath = "";
+		warmer.source = "";
+	}
+
 	function remember(entry) {
 		if (!Entries.rememberable(entry))
 			return;
@@ -388,6 +446,8 @@ PanelWindow {
 	onModeChanged: {
 		if (root.mode === "clipboard")
 			clipsList.running = true;
+		else if (root.mode === "wallpaper")
+			root.warmNext();
 	}
 
 	Request {
@@ -437,6 +497,7 @@ PanelWindow {
 
 		onDone: function (text) {
 			root.wallpaperDir = Wallpaper.dirFromText(text) || Config.wallpaperDir;
+			root.activeWallpaper = Wallpaper.wallpaperFromText(text) || "";
 			wallpapersFile.command = root.listWallpapers(root.wallpaperDir);
 			wallpapersFile.running = true;
 		}
@@ -448,7 +509,22 @@ PanelWindow {
 		command: ["sh", "-c", "true"]
 
 		onDone: function (text) {
+			root.listing = text;
 			root.wallpapers = Wallpaper.entries(text);
+			thumbsFile.command = ["sh", "-c", "mkdir -p " + Shell.shellQuote(root.thumbDir) + " && ls " + Shell.shellQuote(root.thumbDir)];
+			thumbsFile.running = true;
+		}
+	}
+
+	Request {
+		id: thumbsFile
+
+		command: ["sh", "-c", "true"]
+
+		onDone: function (text) {
+			root.wallpapers = Wallpaper.entries(root.listing, root.thumbDir, Wallpaper.thumbsFromText(text));
+			root.warm = root.wallpapers.filter(function (entry) { return entry.preview === entry.path; }).map(function (entry) { return entry.path; });
+			root.warmNext();
 		}
 	}
 
@@ -501,12 +577,12 @@ PanelWindow {
 		Keys.onPressed: function (event) { root.handleKeys(event); }
 		Keys.onReleased: function (event) { root.handleRelease(event); }
 
-		Column {
-			id: column
+			Column {
+				id: column
 
-			visible: !root.windows
-			width: parent.width
-			spacing: Config.launcherGap
+				visible: !root.windows
+				width: parent.width
+				spacing: Config.launcherGap
 
 			SearchField {
 				id: field
@@ -533,18 +609,55 @@ PanelWindow {
 				}
 			}
 
-			Image {
-				id: shot
+			Item {
+				id: preview
 
 				width: parent.width
 				height: visible ? Config.wallpaperPreviewHeight : 0
 				visible: root.shotPath !== ""
-				fillMode: Image.PreserveAspectCrop
-				cache: true
-				asynchronous: true
-				retainWhileLoading: true
-				sourceSize.width: 384
-				source: root.shotPath === "" ? "" : "file://" + root.shotPath
+				clip: true
+
+				// ponytail: a 6000px picture takes a couple hundred ms to decode, so the
+				// first look at one is kept next to the settings as a small jpg that every
+				// later look loads at once. Qt writes it, nothing else is involved, and a
+				// near invisible twin of the preview walks the list ahead of the reader so
+				// a picture is usually cached before it is ever highlighted.
+				// Ceiling: the scale is not part of the name, a picture that changes in place
+				// keeps its old thumbnail, and a picture the warm pass has not reached yet is
+				// still a full decode. The twin only loads while the preview is on screen.
+
+				Image {
+					id: warmer
+
+					width: parent.width
+					height: Config.wallpaperPreviewHeight
+					opacity: 0.001
+					fillMode: Image.PreserveAspectCrop
+					cache: true
+					asynchronous: true
+					retainWhileLoading: true
+					sourceSize.width: Config.wallpaperPreviewWidth
+					onStatusChanged: {
+						if (status === Image.Ready && root.warmPath !== "")
+							root.grabThumb(warmer, root.warmPath, true);
+					}
+				}
+
+				Image {
+					id: shot
+
+					anchors.fill: parent
+					fillMode: Image.PreserveAspectCrop
+					cache: true
+					asynchronous: true
+					retainWhileLoading: true
+					sourceSize.width: Config.wallpaperPreviewWidth
+					source: root.shotPath === "" ? "" : "file://" + root.shotPath
+				onStatusChanged: {
+					if (status === Image.Ready)
+						root.rememberThumb();
+				}
+				}
 			}
 
 			Selector {
@@ -571,6 +684,7 @@ PanelWindow {
 
 					readonly property bool active: row.index === list.currentIndex
 					readonly property bool pinned: root.pins.indexOf(row.modelData.id) >= 0 || row.modelData.kind === "saved"
+					readonly property bool current: row.modelData.kind === "wallpaper" && row.modelData.path === root.activeWallpaper
 
 					Item {
 						id: rowIcon
@@ -598,10 +712,24 @@ PanelWindow {
 					}
 
 					Text {
+						id: rowMark
+
+						anchors.right: rowPin.left
+						anchors.rightMargin: row.current ? Config.launcherTextGap : 0
+							anchors.verticalCenter: parent.verticalCenter
+							width: row.current ? implicitWidth : 0
+							visible: row.current
+							font.family: Config.fontFamily
+							font.pixelSize: Config.launcherIconSize
+							color: row.active ? Config.launcherHighlightText : Config.muted
+							text: Config.launcherIconActive
+						}
+
+						Text {
 						anchors.left: rowIcon.right
 						anchors.leftMargin: Config.launcherTextGap
-						anchors.right: rowPin.left
-						anchors.rightMargin: Config.launcherTextGap
+						anchors.right: rowMark.left
+						anchors.rightMargin: row.current ? 0 : Config.launcherTextGap
 						anchors.verticalCenter: parent.verticalCenter
 						elide: Text.ElideRight
 						font.family: Config.fontFamily

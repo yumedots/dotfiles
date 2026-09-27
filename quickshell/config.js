@@ -186,6 +186,7 @@ const launcherIconClipboard = "\uf07f";
 const launcherIconWindow = "\u{f05b1}";
 const launcherIconFile = "\u{f0213}";
 const launcherIconPin = "\ueba0";
+const launcherIconActive = "\u{f00c}";
 const launcherIconApps = "\u{f0c9}";
 const launcherIconWallpaper = "\u{f0e09}";
 const launcherModes = [
@@ -203,6 +204,7 @@ const wallpaperTransition = "fade";
 const wallpaperTransitionMs = 400;
 const wallpaperTransitionFps = 60;
 const wallpaperPreviewHeight = 120;
+const wallpaperPreviewWidth = 384;
 const wallpaperEmpty = "No wallpapers found";
 
 const windowsGridCell = 92;
