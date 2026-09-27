@@ -8,8 +8,9 @@ Row {
 	spacing: Config.workspaceSpacing
 
 	readonly property real baselineLift: Math.ceil(Config.barThickness)
-	readonly property int pool: 10
 	readonly property var persistentIds: [1, 2, 3, 4]
+	readonly property int highest: root.ids.length > 0 ? root.ids[root.ids.length - 1] : 0
+	readonly property int pool: Math.max(root.persistentIds.length, root.highest)
 	property var ids: []
 	property int focusedId: -1
 
@@ -36,9 +37,17 @@ Row {
 		root.focusWorkspace(root.ids[(index + step + count) % count]);
 	}
 
+	function same(next) {
+		return root.ids.length === next.length && next.every(function (id, index) { return root.ids[index] === id; });
+	}
+
 	function settle() {
 		const ids = root.persistentIds.concat(Hyprland.workspaces.values.filter(function (w) { return w.id > 0; }).map(function (w) { return w.id; }));
-		root.ids = Array.from(new Set(ids));
+		const next = Array.from(new Set(ids)).sort(function (left, right) { return left - right; });
+
+		if (!root.same(next))
+			root.ids = next;
+
 		root.focusedId = Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1;
 	}
 
