@@ -2,6 +2,8 @@ local programs = require("programs")
 local actions = require("actions")
 local mainMod = "SUPER"
 
+hl.config({ binds = { scroll_event_delay = 0 } })
+
 local function switcherOpen()
     for _, layer in ipairs(hl.get_layers({ namespace = "launcher" })) do
         if layer.interactivity == 1 then return true end
@@ -65,8 +67,8 @@ hl.bind(mainMod .. " + ALT + down",  hl.dsp.window.move({ direction = "down" }))
 hl.bind(mainMod .. " + G",         hl.dsp.workspace.toggle_special("magic"))
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.window.move({ workspace = "special:magic" }))
 
-hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
-hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
+hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "+1" }))
+hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "-1" }))
 
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
