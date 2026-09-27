@@ -1103,11 +1103,6 @@ assert(roundStep(0.53, 10) === 0.5, "a volume snaps to the nearest tenth, got " 
 assert(roundStep(0.99, 10) === 1 && roundStep(1.4, 10) === 1 && roundStep(-0.2, 10) === 0, "a snap past either end stops at the end");
 assert(roundStep(0.5, 0) === 1, "no steps still means a whole turn, got " + roundStep(0.5, 0));
 
-assert(offStep(0.53, 10) === true, "a volume dragged off a tenth draws as one solid bar");
-assert(offStep(0.5, 10) === false && offStep(0.3, 10) === false && offStep(1, 10) === false && offStep(0, 10) === false, "a volume sitting on a tenth keeps the cut bar");
-assert(offStep(0.1, 10) === false && offStep(0.7, 10) === false, "the float noise of a tenth is not mistaken for an off step");
-assert(offStep(1.2, 10) === false, "a volume past the top is still on a step");
-
 assert(scrollIntoView(100, 50, 500, 200, 260) === 210, "a row below the view scrolls just far enough to show its bottom edge");
 assert(scrollIntoView(100, 50, 500, 40, 100) === 40, "a row above the view scrolls up to its top");
 assert(scrollIntoView(100, 50, 500, 110, 140) === 100, "a row already in view does not move the list");

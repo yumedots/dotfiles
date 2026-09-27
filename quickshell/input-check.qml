@@ -141,6 +141,10 @@ QtObject {
 		root.assert(seen === "volume" + Config.mixerStep, "mixer right raises the volume");
 
 		seen = "";
+		Input.mixer({ text: "", key: Qt.Key_Left, modifiers: Qt.ShiftModifier }, stub);
+		root.assert(seen === "volume" + -Config.mixerShiftStep, "shift steps the mixer volume by five percent");
+
+		seen = "";
 		Input.mixer(j, stub);
 		root.assert(seen === "volume" + -Config.mixerStep, "mixer j still lowers the volume");
 

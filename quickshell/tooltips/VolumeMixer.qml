@@ -26,7 +26,10 @@ Item {
 
 	property bool shown: false
 
-	onShownChanged: if (!root.shown) root.keyboard = false
+	onShownChanged: if (!root.shown) {
+		root.keyboard = false;
+		root.shift = false;
+	}
 
 	readonly property real channelsMaxWidth: Config.mixerVisibleChannels * Config.mixerChannelWidth + (Config.mixerVisibleChannels - 1) * Config.mixerChannelGap
 	readonly property real idleWidth: Config.mixerIdleChannels * Config.mixerChannelWidth + (Config.mixerIdleChannels - 1) * Config.mixerChannelGap
@@ -60,6 +63,7 @@ Item {
 	}
 
 	property bool keyboard: false
+	property bool shift: false
 
 	readonly property var selectedNode: root.targetNodes.length > 0
 		? root.targetNodes[Util.clamp(root.targetIndex, 0, root.targetNodes.length - 1)]
@@ -94,8 +98,10 @@ Item {
 	// steps draws as one solid bar instead of the cut one, see StepBar.level.
 	function dragFader(node, position, size, vertical, modifiers) {
 		const fraction = vertical ? 1 - position / size : position / size;
+		const shift = (modifiers & Qt.ShiftModifier) !== 0;
 
-		root.setFader(node, modifiers & Qt.ShiftModifier ? fraction : Util.roundStep(fraction, Config.mixerStepCount));
+		root.shift = shift;
+		root.setFader(node, shift ? fraction : Util.roundStep(fraction, Config.mixerStepCount));
 	}
 
 	function nudgeVolume(step) {
@@ -108,6 +114,9 @@ Item {
 	}
 
 	Keys.onPressed: function (event) {
+		if (event.key === Qt.Key_Shift)
+			root.shift = true;
+
 		if (Input.direction(event) !== "")
 			root.keyboard = true;
 
@@ -115,6 +124,11 @@ Item {
 			Input.mixer(event, root);
 		else
 			Input.picker(event, root);
+	}
+
+	Keys.onReleased: function (event) {
+		if (event.key === Qt.Key_Shift)
+			root.shift = false;
 	}
 
 	function toggleMute(node) {
@@ -206,7 +220,6 @@ Item {
 		readonly property int percent: Math.round(channel.volume * 100)
 		readonly property real level: Util.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(channel.level * Config.mixerStepCount) - 1
-		readonly property real free: Util.offStep(channel.level, Config.mixerStepCount) ? channel.level : -1
 
 		implicitWidth: Config.mixerChannelWidth
 		implicitHeight: stack.implicitHeight
@@ -248,7 +261,7 @@ Item {
 					vertical: true
 					model: root.steps
 					selected: channel.step
-					level: channel.free
+					level: root.shift ? channel.level : -1
 					ink: channel.muted ? Config.muted : Config.foreground
 				}
 
@@ -312,7 +325,6 @@ Item {
 		readonly property real level: Util.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int percent: Math.round(line.volume * 100)
 		readonly property int step: Math.round(line.level * Config.mixerStepCount) - 1
-		readonly property real free: Util.offStep(line.level, Config.mixerStepCount) ? line.level : -1
 
 		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
 		implicitHeight: height
@@ -403,7 +415,7 @@ Item {
 				height: Config.mixerFaderThickness
 				model: root.steps
 				selected: line.step
-				level: line.free
+				level: root.shift ? line.level : -1
 				ink: line.muted ? Config.muted : Config.foreground
 			}
 

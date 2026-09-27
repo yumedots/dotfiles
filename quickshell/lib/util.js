@@ -16,10 +16,6 @@ function snap(value, scale) {
 	return Math.round(value * unit) / unit;
 }
 
-function offStep(value, steps) {
-	return Math.abs(value - snap(value, steps)) > 0.000001;
-}
-
 function pick(mono, color, monoColor) {
 	return mono ? monoColor : color;
 }

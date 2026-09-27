@@ -108,12 +108,14 @@ QtObject {
 	}
 
 	function mixer(event, target) {
+		const step = event.modifiers & Qt.ShiftModifier ? Config.mixerShiftStep : Config.mixerStep;
+
 		return root.act(event, {
 			escape: () => target.closeRequested(),
 			left: () => target.moveTarget(-1),
 			right: () => target.moveTarget(1),
-			up: () => target.nudgeVolume(Config.mixerStep),
-			down: () => target.nudgeVolume(-Config.mixerStep),
+			up: () => target.nudgeVolume(step),
+			down: () => target.nudgeVolume(-step),
 			m: () => target.toggleMute(target.selectedNode),
 			accept: () => System.sameNode(target.selectedNode, target.sink)
 				? target.openPicker("output")

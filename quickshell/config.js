@@ -136,6 +136,7 @@ const mixerListGap = 8;
 const mixerMaxVolume = 1;
 const mixerStepCount = 10;
 const mixerStep = 1 / mixerStepCount;
+const mixerShiftStep = 0.05;
 const mixerOnlyPlaying = true;
 const mixerPollMs = 1000;
 const mixerHoldMs = 2000;
