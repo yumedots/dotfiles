@@ -26,6 +26,20 @@ local function floatToggle()
     end
 end
 
+-- ponytail: a window opening while the last focused one floats floats too, so a
+-- round of floating windows stays floating.
+-- hl.dsp.window.float toggles in this build -- the action field it takes is
+-- ignored -- so the guard on win.floating is what makes the call a set.
+-- Ceiling: only the last focused window is looked at, one toggle per open.
+local function followFloat(win)
+    local last = hl.get_last_window()
+    if not last or last.address == win.address or not last.floating or win.floating then return end
+
+    hl.dispatch(hl.dsp.window.float({ window = "address:" .. win.address }))
+end
+
+hl.on("window.open", followFloat)
+
 return {
     floatToggle = floatToggle,
 }
