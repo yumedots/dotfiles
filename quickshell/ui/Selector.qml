@@ -30,6 +30,10 @@ Item {
 		list.contentY = Util.clamp(list.contentY + step, 0, Math.max(0, list.contentHeight - list.height));
 	}
 
+	function reset() {
+		list.contentY = 0;
+	}
+
 	function move(step) {
 		if (list.count === 0) {
 			root.currentIndex = -1;

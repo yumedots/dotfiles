@@ -26,17 +26,23 @@ Item {
 	readonly property var refreshes: Display.refreshesFor(root.monitor, root.active).slice().sort(function (left, right) { return left.refresh - right.refresh; })
 	readonly property var scaleValues: Display.scaleSteps(root.monitor, Config.displayScaleMin, Config.displayScaleMax)
 	readonly property var fontValues: Config.displayFonts
-	readonly property var scaleIndex: root.indexOfScale()
-	readonly property var refreshIndex: root.indexOfRefresh()
-	readonly property var resolutionIndex: root.indexOfResolution()
-	readonly property var fontIndex: root.indexOfFont()
+	readonly property var scaleIndex: root.indexOf(root.scaleValues, function (value) { return Display.sameScale(value, root.activeScale); })
+	readonly property var refreshIndex: root.indexOf(root.refreshes, function (mode) { return Display.sameMode(mode, root.active); })
+	readonly property var resolutionIndex: root.indexOf(root.resolutions, function (size) { return root.active !== null && size.width === root.active.width && size.height === root.active.height; })
+	readonly property var fontIndex: root.indexOf(root.fontValues, function (size) { return size === Settings.fontSize; })
+	readonly property var groups: [
+		{ label: Config.displayScaleTitle, kind: "scale", model: root.scaleValues, form: Display.scaleLabel, selected: root.scaleIndex, shown: root.scaleText, visible: root.ready && root.scaleValues.length > 0, pick: root.setScale },
+		{ label: Config.displayRefreshTitle, kind: "refresh", model: root.refreshes, form: function (mode) { return Math.round(mode.refresh) + " Hz"; }, selected: root.refreshIndex, shown: root.refreshText, visible: root.ready && root.refreshes.length > 0, pick: root.setMode },
+		{ label: Config.displayFontTitle, kind: "font", model: root.fontValues, form: String, selected: root.fontIndex, shown: root.fontText, visible: root.ready, pick: root.setFont }
+	]
+	readonly property var values: ({ scale: root.scaleValues, refresh: root.refreshes, font: root.fontValues, resolution: root.resolutions })
+	readonly property var indexes: ({ scale: root.scaleIndex, refresh: root.refreshIndex, font: root.fontIndex, resolution: root.resolutionIndex })
 	readonly property string scaleText: root.scaleIndex >= 0 ? Display.scaleLabel(root.scaleValues[root.scaleIndex]) : Display.scaleLabel(root.activeScale)
-	readonly property string refreshText: root.active !== null && root.active.refresh > 0 ? Math.round(root.active.refresh) + " Hz" : ""
+	readonly property string refreshText: Display.refreshLabel(root.active)
 	readonly property string fontText: String(Settings.fontSize)
 	readonly property var rows: Display.rowNames()
 	readonly property string currentRow: root.rows.length > 0 ? root.rows[Util.clamp(root.row, 0, root.rows.length - 1)] : ""
 	readonly property int resolutionRows: Math.min(root.resolutions.length, Config.displayResolutionLimit)
-	readonly property real resolutionHeight: root.resolutionRows > 0 ? root.resolutionRows * (Config.displayRowHeight + Config.displayRowGap) - Config.displayRowGap : 0
 	readonly property int resolutionCursor: root.focused("resolution")
 
 	property int row: 0
@@ -56,43 +62,13 @@ Item {
 
 		root.row = 0;
 		root.step = 0;
-		resView.contentY = 0;
+		resList.reset();
 	}
-	onResolutionCursorChanged: root.scrollResolution()
+	onResolutionCursorChanged: resList.ensureVisible(root.resolutionCursor)
 
-	function indexOfScale() {
-		for (let i = 0; i < root.scaleValues.length; i++) {
-			if (Display.sameScale(root.scaleValues[i], root.activeScale))
-				return i;
-		}
-
-		return -1;
-	}
-
-	function indexOfRefresh() {
-		for (let i = 0; i < root.refreshes.length; i++) {
-			if (Display.sameMode(root.refreshes[i], root.active))
-				return i;
-		}
-
-		return -1;
-	}
-
-	function indexOfResolution() {
-		if (root.active === null)
-			return -1;
-
-		for (let i = 0; i < root.resolutions.length; i++) {
-			if (root.resolutions[i].width === root.active.width && root.resolutions[i].height === root.active.height)
-				return i;
-		}
-
-		return -1;
-	}
-
-	function indexOfFont() {
-		for (let i = 0; i < root.fontValues.length; i++) {
-			if (root.fontValues[i] === Settings.fontSize)
+	function indexOf(list, match) {
+		for (let i = 0; i < list.length; i++) {
+			if (match(list[i]))
 				return i;
 		}
 
@@ -100,29 +76,11 @@ Item {
 	}
 
 	function countOf(kind) {
-		if (kind === "scale")
-			return root.scaleValues.length;
-		if (kind === "refresh")
-			return root.refreshes.length;
-		if (kind === "font")
-			return root.fontValues.length;
-		if (kind === "resolution")
-			return root.resolutions.length;
-
-		return 1;
+		return (root.values[kind] || []).length;
 	}
 
 	function currentIndexOf(kind) {
-		if (kind === "scale")
-			return Math.max(0, root.scaleIndex);
-		if (kind === "refresh")
-			return Math.max(0, root.refreshIndex);
-		if (kind === "font")
-			return Math.max(0, root.fontIndex);
-		if (kind === "resolution")
-			return Math.max(0, root.resolutionIndex);
-
-		return 0;
+		return Math.max(0, root.indexes[kind]);
 	}
 
 	function focused(kind) {
@@ -130,20 +88,6 @@ Item {
 			return -1;
 
 		return Util.clamp(root.step, 0, Math.max(0, root.countOf(kind) - 1));
-	}
-
-	function scrollResolution() {
-		if (root.resolutionCursor < 0)
-			return;
-
-		const step = Config.displayRowHeight + Config.displayRowGap;
-		const top = root.resolutionCursor * step;
-
-		resView.contentY = Util.scrollIntoView(resView.contentY, resView.height, resView.contentHeight, top, top + Config.displayRowHeight);
-	}
-
-	function wrap(value, count) {
-		return ((value % count) + count) % count;
 	}
 
 	function moveRow(delta) {
@@ -161,7 +105,7 @@ Item {
 			return;
 
 		if (root.keyboard)
-			root.step = root.wrap(root.step + delta, count);
+			root.step = Util.wrap(root.step, delta, count);
 
 		root.keyboard = true;
 	}
@@ -177,31 +121,23 @@ Item {
 		if (at < 0)
 			at = 0;
 
-		at = ((at + delta) % names.length + names.length) % names.length;
+		at = Util.wrap(at, delta, names.length);
 		root.step = at;
 		root.output = names[at];
 	}
 
 	function activate() {
 		const kind = root.currentRow;
+		const value = root.values[kind][root.step];
 
-		if (kind === "resolution") {
-			root.setResolution(root.resolutions[root.step]);
-			return;
-		}
-
-		if (kind === "refresh") {
-			root.setMode(root.refreshes[root.step]);
-			return;
-		}
-
-		if (kind === "scale") {
-			root.setScale(root.scaleValues[root.step]);
-			return;
-		}
-
-		if (kind === "font")
-			root.setFont(root.fontValues[root.step]);
+		if (kind === "resolution")
+			root.setResolution(value);
+		else if (kind === "refresh")
+			root.setMode(value);
+		else if (kind === "scale")
+			root.setScale(value);
+		else if (kind === "font")
+			root.setFont(value);
 	}
 
 	function save(next, reload) {
@@ -286,6 +222,7 @@ Item {
 		property string label: ""
 		property string kind: ""
 		property var model: []
+		property var form
 		property int selected: -1
 		property string shown: ""
 		property var onPick
@@ -302,7 +239,7 @@ Item {
 			id: steps
 
 			width: Config.displayPanelWidth
-			model: group.model
+			model: group.model.map(function (value) { return { value: value, label: group.form(value) }; })
 			selected: group.selected
 			cursor: root.focused(group.kind)
 			ink: root.ink
@@ -443,39 +380,26 @@ Item {
 			}
 		}
 
-		StepGroup {
-			label: Config.displayScaleTitle.toUpperCase()
-			kind: "scale"
-			model: root.scaleValues.map(function (value) { return { value: value, label: Display.scaleLabel(value) }; })
-			selected: root.scaleIndex
-			shown: root.scaleText
-			visible: root.ready && root.scaleValues.length > 0
-			onPick: function (value) { root.setScale(value); }
-		}
+		Repeater {
+			model: root.groups
 
-		StepGroup {
-			label: Config.displayRefreshTitle.toUpperCase()
-			kind: "refresh"
-			model: root.refreshes.map(function (mode) { return { value: mode, label: Math.round(mode.refresh) + " Hz" }; })
-			selected: root.refreshIndex
-			shown: root.refreshText
-			visible: root.ready && root.refreshes.length > 0
-			onPick: function (value) { root.setMode(value); }
-		}
+			delegate: StepGroup {
+				required property var modelData
 
-		StepGroup {
-			label: Config.displayFontTitle.toUpperCase()
-			kind: "font"
-			model: root.fontValues.map(function (value) { return { value: value, label: String(value) }; })
-			selected: root.fontIndex
-			shown: root.fontText
-			visible: root.ready
-			onPick: function (value) { root.setFont(value); }
+				label: modelData.label.toUpperCase()
+				kind: modelData.kind
+				model: modelData.model
+				form: modelData.form
+				selected: modelData.selected
+				shown: modelData.shown
+				visible: modelData.visible
+				onPick: modelData.pick
+			}
 		}
 
 		Item {
 			width: Config.displayPanelWidth
-			height: resHead.implicitHeight + Config.displayRowGap + root.resolutionHeight
+			height: resHead.implicitHeight + Config.displayRowGap + resList.height
 			visible: root.ready
 
 			Column {
@@ -496,64 +420,28 @@ Item {
 				}
 			}
 
-			Flickable {
-				id: resView
+			Selector {
+				id: resList
 
 				anchors.top: resHead.bottom
 				anchors.topMargin: Config.displayRowGap
-				width: Config.displayPanelWidth - Config.scrollbarWidth - Config.displayRowGap
-				height: root.resolutionHeight
-				contentHeight: resolved.implicitHeight
-				clip: true
-				interactive: false
-				boundsBehavior: Flickable.StopAtBounds
+				width: Config.displayPanelWidth
+				visibleRows: root.resolutionRows
+				rowHeight: Config.displayRowHeight
+				rowSpacing: Config.displayRowGap
+				model: root.resolutions
 
-				Column {
-					id: resolved
+				delegate: Line {
+					required property var modelData
+					required property int index
 
-					width: resView.width
-					spacing: Config.displayRowGap
+					readonly property var modes: root.monitor === null ? [] : Display.refreshesFor(root.monitor, modelData)
 
-					Repeater {
-						model: root.resolutions
-
-						delegate: Line {
-							required property var modelData
-							required property int index
-
-							readonly property var modes: root.monitor === null ? [] : Display.refreshesFor(root.monitor, modelData)
-
-							lineWidth: resView.width
-							label: modelData.label
-							hint: modes.length > 0 ? Math.round(modes[0].refresh) + " Hz" : ""
-							lit: root.focused("resolution") === index
-							onPick: function () { root.setResolution(modelData); }
-						}
-					}
-				}
-			}
-
-			Item {
-				anchors.left: resView.left
-				anchors.top: resView.top
-				width: resView.width
-				height: resView.height
-
-				MouseArea {
-					anchors.fill: parent
-					acceptedButtons: Qt.NoButton
-
-					onWheel: function (wheel) {
-						const step = Config.displayRowHeight + Config.displayRowGap;
-
-						resView.contentY = Util.clamp(resView.contentY + (wheel.angleDelta.y > 0 ? -step : step), 0, Math.max(0, resView.contentHeight - resView.height));
-						wheel.accepted = true;
-					}
-				}
-
-				Scrollbar {
-					view: resView
-					offset: Config.displayRowGap
+					lineWidth: ListView.view.rowWidth
+					label: modelData.label
+					hint: modes.length > 0 ? Math.round(modes[0].refresh) + " Hz" : ""
+					lit: root.focused("resolution") === index
+					onPick: function () { root.setResolution(modelData); }
 				}
 			}
 		}
