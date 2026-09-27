@@ -27,10 +27,10 @@ for i = 1, 10 do
     hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i, follow = false }))
 end
 
-hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(programs.terminal), { repeating = true })
+hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(programs.terminal))
 hl.bind(mainMod .. " + W", hl.dsp.window.close(), { repeating = true })
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd(programs.session))
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(programs.fileManager), { repeating = true })
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(programs.fileManager))
 hl.bind(mainMod .. " + SPACE", actions.floatToggle)
 hl.bind("ALT + SPACE", hl.dsp.global("quickshell:launcher"))
 hl.bind(mainMod .. " + TAB", hl.dsp.global("quickshell:windows"))
