@@ -38,17 +38,10 @@ hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
 
 local resizeStep = 40
 
-hl.bind(mainMod .. " + ALT + Z", hl.dsp.submap("resize"))
-
-hl.define_submap("resize", function()
-    hl.bind(mainMod .. " + ALT + right", hl.dsp.window.resize({ x = resizeStep, y = 0, relative = true }), { repeating = true })
-    hl.bind(mainMod .. " + ALT + left", hl.dsp.window.resize({ x = -resizeStep, y = 0, relative = true }), { repeating = true })
-    hl.bind(mainMod .. " + ALT + up", hl.dsp.window.resize({ x = 0, y = resizeStep, relative = true }), { repeating = true })
-    hl.bind(mainMod .. " + ALT + down", hl.dsp.window.resize({ x = 0, y = -resizeStep, relative = true }), { repeating = true })
-
-    hl.bind("escape", hl.dsp.submap("reset"))
-    hl.bind(mainMod .. " + ALT + Z", hl.dsp.submap("reset"))
-end)
+hl.bind(mainMod .. " + CTRL + ALT + right", hl.dsp.window.resize({ x = resizeStep, y = 0, relative = true }),  { repeating = true })
+hl.bind(mainMod .. " + CTRL + ALT + left",  hl.dsp.window.resize({ x = -resizeStep, y = 0, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + CTRL + ALT + up",    hl.dsp.window.resize({ x = 0, y = resizeStep, relative = true }),  { repeating = true })
+hl.bind(mainMod .. " + CTRL + ALT + down",  hl.dsp.window.resize({ x = 0, y = -resizeStep, relative = true }), { repeating = true })
 
 hl.bind(mainMod .. " + F", hl.dsp.global("quickshell:media"))
 hl.bind(mainMod .. " + Z", hl.dsp.global("quickshell:cpu"))
