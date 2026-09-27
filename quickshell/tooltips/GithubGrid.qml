@@ -91,7 +91,7 @@ Item {
 				width: Math.max(0, person.width - slot.width - year.width - Config.notifySlotGap * 2)
 				elide: Text.ElideRight
 				font.family: Config.fontFamily
-				font.pixelSize: Config.fontSize
+				font.pixelSize: Settings.fontSize
 				color: root.accentInk
 				text: root.statusLine()
 			}
@@ -102,7 +102,7 @@ Item {
 				anchors.right: parent.right
 				anchors.verticalCenter: parent.verticalCenter
 				font.family: Config.fontFamily
-				font.pixelSize: Config.fontSize
+				font.pixelSize: Settings.fontSize
 				color: root.accentInk
 				text: Github.total > 0 ? Github.total + " this year" : ""
 			}

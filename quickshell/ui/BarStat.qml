@@ -77,21 +77,21 @@ Item {
 	TextMetrics {
 		id: iconsMetrics
 		font.family: Config.fontFamily
-		font.pixelSize: Config.iconSize
+		font.pixelSize: Settings.iconSize
 		text: Config.iconCpu + Config.iconMemory + Config.iconVolumeLow + Config.iconVolumeMid + Config.iconVolumeHigh
 	}
 
 	TextMetrics {
 		id: iconMetrics
 		font.family: Config.fontFamily
-		font.pixelSize: Config.iconSize
+		font.pixelSize: Settings.iconSize
 		text: root.icon
 	}
 
 	TextMetrics {
 		id: valueMetrics
 		font.family: Config.fontFamily
-		font.pixelSize: Config.fontSize
+		font.pixelSize: Settings.fontSize
 		text: Config.valueSample
 	}
 
@@ -116,7 +116,7 @@ Item {
 			x: 0
 			y: root.inkAbove - root.iconAscent
 			font.family: Config.fontFamily
-			font.pixelSize: Config.iconSize
+			font.pixelSize: Settings.iconSize
 			color: root.inkColor
 			text: root.icon
 		}
@@ -130,7 +130,7 @@ Item {
 			width: Math.max(labelValue.implicitWidth, content.width - labelIcon.width)
 			horizontalAlignment: Text.AlignHCenter
 			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
+			font.pixelSize: Settings.fontSize
 			color: root.inkColor
 			text: root.value
 		}

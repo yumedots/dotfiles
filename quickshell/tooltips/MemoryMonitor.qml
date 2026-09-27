@@ -125,7 +125,7 @@ ProcessPanel {
 					id: segmentLabel
 
 					font.family: Config.fontFamily
-					font.pixelSize: Config.fontSize
+					font.pixelSize: Settings.fontSize
 					color: modelData.color
 					text: modelData.label
 				}
@@ -136,7 +136,7 @@ ProcessPanel {
 					anchors.right: parent.right
 
 					font.family: Config.fontFamily
-					font.pixelSize: Config.fontSize
+					font.pixelSize: Settings.fontSize
 					color: modelData.color
 					text: modelData.text
 				}

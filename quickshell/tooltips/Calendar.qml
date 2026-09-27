@@ -242,7 +242,7 @@ Item {
 							anchors.verticalCenter: parent.verticalCenter
 							width: Config.calendarMeterLabelWidth
 							font.family: Config.fontFamily
-							font.pixelSize: Config.fontSize
+							font.pixelSize: Settings.fontSize
 							color: Config.foreground
 							text: modelData.icon + " " + modelData.label
 						}
@@ -255,7 +255,7 @@ Item {
 							width: Config.calendarMeterValueWidth
 							horizontalAlignment: Text.AlignRight
 							font.family: Config.fontFamily
-							font.pixelSize: Config.fontSize
+							font.pixelSize: Settings.fontSize
 							color: Config.foreground
 							text: modelData.pct + "%"
 						}
@@ -369,7 +369,7 @@ Item {
 							Text {
 								anchors.centerIn: parent
 								font.family: Config.fontFamily
-								font.pixelSize: Config.fontSize
+								font.pixelSize: Settings.fontSize
 								color: cell.day.inMonth || cell.day.today || cell.day.cursor ? Config.foreground : Config.calendarOutside
 								text: cell.day.day
 							}

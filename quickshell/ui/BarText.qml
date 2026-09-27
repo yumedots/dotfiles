@@ -6,7 +6,7 @@ Item {
 
 	property string text: ""
 	property color color: Config.foreground
-	property int pixelSize: Config.fontSize
+	property int pixelSize: Settings.fontSize
 	property real padding: 0
 	property var bar: null
 	property var onActivate

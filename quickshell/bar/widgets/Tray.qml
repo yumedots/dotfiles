@@ -57,7 +57,7 @@ Row {
 		id: ink
 
 		font.family: Config.fontFamily
-		font.pixelSize: Config.fontSize
+		font.pixelSize: Settings.fontSize
 		text: Config.valueSample
 	}
 
@@ -180,7 +180,7 @@ Row {
 						visible: !option.separator
 						elide: Text.ElideRight
 						font.family: Config.fontFamily
-						font.pixelSize: Config.fontSize
+						font.pixelSize: Settings.fontSize
 						color: option.enabled ? Config.foreground : Config.muted
 						text: option.modelData.text
 					}

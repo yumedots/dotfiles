@@ -118,7 +118,7 @@ Item {
 				elide: Text.ElideRight
 
 				font.family: Config.fontFamily
-				font.pixelSize: Config.fontSize
+				font.pixelSize: Settings.fontSize
 				color: Config.foreground
 				text: panel.title
 			}
@@ -129,7 +129,7 @@ Item {
 				anchors.right: parent.right
 
 				font.family: Config.fontFamily
-				font.pixelSize: Config.fontSize
+				font.pixelSize: Settings.fontSize
 				color: panel.totalInk
 				text: Math.round(panel.pct) + "%"
 			}
@@ -141,7 +141,7 @@ Item {
 			visible: text !== ""
 
 			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
+			font.pixelSize: Settings.fontSize
 			color: panel.detailColor
 			text: panel.detail
 		}
@@ -176,7 +176,7 @@ Item {
 				anchors.verticalCenter: parent.verticalCenter
 
 				font.family: Config.fontFamily
-				font.pixelSize: Config.fontSize
+				font.pixelSize: Settings.fontSize
 				color: panel.listInk
 				text: Config.topProcessTitle
 			}
@@ -187,7 +187,7 @@ Item {
 				anchors.right: parent.right
 				anchors.verticalCenter: parent.verticalCenter
 				boxColor: "transparent"
-				size: Config.fontSize
+				size: Settings.fontSize
 				hintKey: Config.procSearchHint
 				width: searchField.implicitWidth
 
@@ -231,7 +231,7 @@ Item {
 					elide: Text.ElideRight
 
 					font.family: Config.fontFamily
-					font.pixelSize: Config.fontSize
+					font.pixelSize: Settings.fontSize
 					color: hl.ink
 					text: modelData.name
 				}
@@ -242,7 +242,7 @@ Item {
 					anchors.right: parent.right
 
 					font.family: Config.fontFamily
-					font.pixelSize: Config.fontSize
+					font.pixelSize: Settings.fontSize
 					color: panel.rowColor(modelData.value)
 					text: panel.rowText(modelData.value)
 				}

@@ -107,7 +107,7 @@ Item {
 			width: lines.width
 			elide: Text.ElideRight
 			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
+			font.pixelSize: Settings.fontSize
 			color: root.ink
 			text: root.headline
 		}
@@ -134,7 +134,7 @@ Item {
 		anchors.verticalCenter: parent.verticalCenter
 		visible: root.more
 		font.family: Config.fontFamily
-		font.pixelSize: Config.fontSize
+		font.pixelSize: Settings.fontSize
 		color: root.ink
 		text: Config.iconRight
 	}
@@ -144,7 +144,7 @@ Item {
 
 		visible: false
 		font.family: Config.fontFamily
-		font.pixelSize: Config.fontSize
+		font.pixelSize: Settings.fontSize
 		text: "0"
 	}
 

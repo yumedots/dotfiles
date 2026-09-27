@@ -157,7 +157,7 @@ Item {
 					visible: root.artist !== ""
 					elide: Text.ElideRight
 					font.family: Config.fontFamily
-					font.pixelSize: Config.fontSize
+					font.pixelSize: Settings.fontSize
 					color: Config.foreground
 					text: root.artist
 				}
@@ -167,7 +167,7 @@ Item {
 					visible: root.album !== ""
 					elide: Text.ElideRight
 					font.family: Config.fontFamily
-					font.pixelSize: Config.fontSize
+					font.pixelSize: Settings.fontSize
 					color: Config.foreground
 					text: root.album
 				}

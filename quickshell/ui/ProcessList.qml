@@ -37,7 +37,7 @@ Item {
 
 		visible: false
 		font.family: Config.fontFamily
-		font.pixelSize: Config.fontSize
+		font.pixelSize: Settings.fontSize
 		text: "0.0%"
 	}
 
@@ -58,7 +58,7 @@ Item {
 		verticalAlignment: Text.AlignVCenter
 
 		font.family: Config.fontFamily
-		font.pixelSize: Config.fontSize
+		font.pixelSize: Settings.fontSize
 		color: Config.muted
 		text: root.emptyText
 	}

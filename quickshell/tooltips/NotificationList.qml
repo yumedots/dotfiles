@@ -238,7 +238,7 @@ Item {
 
 					anchors.centerIn: parent
 					font.family: Config.fontFamily
-					font.pixelSize: Config.fontSize
+					font.pixelSize: Settings.fontSize
 					color: Config.foreground
 					text: Config.iconUp
 				}
@@ -259,7 +259,7 @@ Item {
 
 					anchors.centerIn: parent
 					font.family: Config.fontFamily
-					font.pixelSize: Config.fontSize
+					font.pixelSize: Settings.fontSize
 					color: Config.foreground
 					text: Config.iconDown
 				}
@@ -275,7 +275,7 @@ Item {
 		anchors.centerIn: parent
 		visible: root.empty
 		font.family: Config.fontFamily
-		font.pixelSize: Config.fontSize
+		font.pixelSize: Settings.fontSize
 		color: Config.muted
 		text: Config.notifyEmpty
 	}
