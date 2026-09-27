@@ -11,8 +11,11 @@ PanelWindow {
 	required property var modelData
 	screen: modelData
 
-	property var layout: BarLayout.parseBarLayout(layoutFile.text())
+	property var layout: BarLayout.barLayoutEmpty()
+	readonly property var parsed: BarLayout.parseBarLayout(layoutFile.text())
 	property var widgets: ({})
+
+	onParsedChanged: if (bar.parsed !== null) bar.layout = bar.parsed
 
 	readonly property bool atBottom: bar.layout.position === "bottom"
 	readonly property real outerMargin: Config.barFloating ? Config.gapsOut : 0
@@ -220,7 +223,7 @@ PanelWindow {
 		watchChanges: true
 
 		onFileChanged: layoutFile.reload()
-		onLoadFailed: console.warn("topbarlayout: " + layoutFile.path + " is unreadable, keeping the default layout")
+		onLoadFailed: console.warn("topbarlayout: " + layoutFile.path + " is unreadable, keeping the layout the bar has")
 	}
 
 	HyprBorder {

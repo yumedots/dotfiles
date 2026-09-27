@@ -630,12 +630,11 @@ assert(layout.left.length === 2 && layout.left[1].size === 12, "the slots keep t
 assert(layout.center[0].format === "HH:mm", "an entry can carry a format");
 assert(layout.right.length === 1 && layout.right[0].id === "date", "the right slot is read on its own");
 
-const defaultLayout = parseBarLayout("");
-assert(defaultLayout.position === "top" && defaultLayout.left[0].id === "workspaces", "a missing file falls back to the default layout");
-assert(defaultLayout.right.map(function (entry) { return entry.id; }).join(",") === "tray,media,notify,cpu,memory,volume,github", "the default right slot is the layout this bar has always had");
-assert(parseBarLayout("{ broken").center[0].id === "clock", "a broken file falls back to the default layout");
-assert(parseBarLayout('{"bar": {"layout": {"left": "nope"}}}').left[0].id === "workspaces", "a slot that is not a list falls back to the default");
-assert(parseBarLayout('{"bar": {"layout": {"left": []}}}').left.length === 0, "an empty slot is left empty, not filled with the default");
+assert(parseBarLayout("") === null && parseBarLayout("{ broken") === null, "a file that is missing or broken is no layout, so the bar keeps the one it has");
+assert(parseBarLayout('{"bar": {"layout": {"left": "nope"}}}').left.length === 0, "a slot that is not a list is empty, the file decides");
+assert(parseBarLayout('{"bar": {"layout": {"left": []}}}').left.length === 0, "an empty slot stays empty");
+assert(barLayoutEmpty().right.length === 0 && barLayoutEmpty().position === "top", "the empty layout starts the bar with no widgets");
+assert(parseBarLayout("{}").centerAnchor === "", "a layout without a center anchor pins the center to nothing");
 assert(parseBarLayout('{"bar": {"layout": {"left": [{"name": "x"}, 3, {"id": "tray"}]}}}').left.length === 1, "entries without an id are dropped");
 assert(parseBarLayout('{"bar": {"position": "left"}}').position === "top", "a position that is neither top nor bottom is top");
 
