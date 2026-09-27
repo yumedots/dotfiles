@@ -38,6 +38,7 @@ Item {
 	readonly property real offset: Util.pageOffset(root.page, content.implicitWidth, root.channelsMaxWidth, root.pageStep)
 	readonly property bool hasApps: System.anyStreamVisible(root.nodes, root.runningOutput, Config.mixerOnlyPlaying, root.held)
 	readonly property bool recording: root.runningInput.length > 0
+	readonly property var steps: Array(Config.mixerStepCount).fill(1)
 
 	implicitWidth: root.contentWidth + Config.mixerPadding * 2
 	implicitHeight: body.implicitHeight + Config.mixerPadding * 2
@@ -86,6 +87,15 @@ Item {
 		root.keyboard = false;
 		root.focusNode(node);
 		System.setNodeVolume(node, fraction, Config.mixerMaxVolume);
+	}
+
+	// ponytail: the bar moves in whole tenths, and holding shift drops back to the
+	// free fader for a percent that is not on a tenth. A value landing between
+	// steps draws as one solid bar instead of the cut one, see StepBar.level.
+	function dragFader(node, position, size, vertical, modifiers) {
+		const fraction = vertical ? 1 - position / size : position / size;
+
+		root.setFader(node, modifiers & Qt.ShiftModifier ? fraction : Util.roundStep(fraction, Config.mixerStepCount));
 	}
 
 	function nudgeVolume(step) {
@@ -195,6 +205,8 @@ Item {
 		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 		readonly property int percent: Math.round(channel.volume * 100)
 		readonly property real level: Util.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
+		readonly property int step: Math.round(channel.level * Config.mixerStepCount) - 1
+		readonly property real free: Util.offStep(channel.level, Config.mixerStepCount) ? channel.level : -1
 
 		implicitWidth: Config.mixerChannelWidth
 		implicitHeight: stack.implicitHeight
@@ -228,14 +240,16 @@ Item {
 				width: parent.width
 				height: Config.mixerFaderHeight
 
-				Meter {
+				StepBar {
 					anchors.horizontalCenter: parent.horizontalCenter
 					anchors.top: parent.top
 					anchors.bottom: parent.bottom
 					width: Config.mixerFaderThickness
 					vertical: true
-					level: channel.level
-					fill: channel.muted ? Config.muted : Config.foreground
+					model: root.steps
+					selected: channel.step
+					level: channel.free
+					ink: channel.muted ? Config.muted : Config.foreground
 				}
 
 				MouseArea {
@@ -244,8 +258,8 @@ Item {
 					anchors.rightMargin: -Config.mixerHitPad
 					preventStealing: true
 
-					onPressed: (mouse) => root.setFader(channel.node, 1 - mouse.y / fader.height)
-					onPositionChanged: (mouse) => root.setFader(channel.node, 1 - mouse.y / fader.height)
+					onPressed: (mouse) => root.dragFader(channel.node, mouse.y, fader.height, true, mouse.modifiers)
+					onPositionChanged: (mouse) => root.dragFader(channel.node, mouse.y, fader.height, true, mouse.modifiers)
 				}
 			}
 
@@ -253,7 +267,7 @@ Item {
 				width: parent.width
 				horizontalAlignment: Text.AlignHCenter
 				font.family: Config.fontFamily
-				font.pixelSize: Config.fontSize
+				font.pixelSize: Settings.fontSize
 				color: channel.muted && !hl.active ? Config.muted : hl.ink
 				text: channel.percent + "%"
 			}
@@ -297,8 +311,10 @@ Item {
 		readonly property bool selected: System.sameNode(line.node, root.selectedNode)
 		readonly property real level: Util.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int percent: Math.round(line.volume * 100)
+		readonly property int step: Math.round(line.level * Config.mixerStepCount) - 1
+		readonly property real free: Util.offStep(line.level, Config.mixerStepCount) ? line.level : -1
 
-		height: Math.max(Config.mixerDeviceIconSize, Config.fontSize)
+		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
 		implicitHeight: height
 
 		Highlight {
@@ -324,7 +340,7 @@ Item {
 			id: sample
 
 			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
+			font.pixelSize: Settings.fontSize
 			text: "100%"
 		}
 
@@ -365,7 +381,7 @@ Item {
 			width: sample.width
 			horizontalAlignment: Text.AlignRight
 			font.family: Config.fontFamily
-			font.pixelSize: Config.fontSize
+			font.pixelSize: Settings.fontSize
 			color: line.muted && !hl.active ? Config.muted : hl.ink
 			text: line.percent + "%"
 		}
@@ -380,13 +396,15 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			height: parent.height
 
-			Meter {
+			StepBar {
 				anchors.verticalCenter: parent.verticalCenter
 				anchors.left: parent.left
 				anchors.right: parent.right
 				height: Config.mixerFaderThickness
-				level: line.level
-				fill: line.muted ? Config.muted : Config.foreground
+				model: root.steps
+				selected: line.step
+				level: line.free
+				ink: line.muted ? Config.muted : Config.foreground
 			}
 
 			MouseArea {
@@ -395,33 +413,9 @@ Item {
 				anchors.bottomMargin: -Config.mixerHitPad
 				preventStealing: true
 
-				onPressed: (mouse) => root.setFader(line.node, mouse.x / lineFader.width)
-				onPositionChanged: (mouse) => root.setFader(line.node, mouse.x / lineFader.width)
+				onPressed: (mouse) => root.dragFader(line.node, mouse.x, lineFader.width, false, mouse.modifiers)
+				onPositionChanged: (mouse) => root.dragFader(line.node, mouse.x, lineFader.width, false, mouse.modifiers)
 			}
-		}
-	}
-
-	component Meter: Rectangle {
-		id: meter
-
-		property real level: 0
-		property bool vertical: false
-		property color fill: Config.foreground
-
-		radius: 0
-		color: Config.dim
-
-		Rectangle {
-			id: filled
-
-			radius: 0
-			color: meter.fill
-			width: meter.vertical ? meter.width : meter.width * meter.level
-			height: meter.vertical ? meter.height * meter.level : meter.height
-			anchors.bottom: meter.vertical ? meter.bottom : undefined
-			anchors.horizontalCenter: meter.vertical ? meter.horizontalCenter : undefined
-			anchors.left: meter.vertical ? undefined : meter.left
-			anchors.verticalCenter: meter.vertical ? undefined : meter.verticalCenter
 		}
 	}
 
@@ -647,7 +641,7 @@ Item {
 						anchors.verticalCenter: parent.verticalCenter
 						elide: Text.ElideRight
 						font.family: Config.fontFamily
-						font.pixelSize: Config.fontSize
+						font.pixelSize: Settings.fontSize
 						color: option.active || option.highlighted ? Config.launcherHighlightText : Config.muted
 						text: option.node ? option.node.description : ""
 					}
