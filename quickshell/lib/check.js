@@ -911,6 +911,22 @@ section("mixer", function () {
 	assert(sorted[1] === source, "the rest of the picker keeps its order");
 	assert(sortedDevices(nodes, true, source)[0] === source, "a device that is already first is left where it is");
 	assert(sortedDevices(nodes, false, null)[0] === sink, "with nothing active the list is left alone");
+
+	const cardDump = function (params) {
+		return JSON.stringify([
+			{ type: "PipeWire:Interface:Device", id: 46, info: params },
+			{ type: "PipeWire:Interface:Node", id: 55, info: { props: { "media.class": "Audio/Source", "device.id": 46 } } }
+		]);
+	};
+
+	assert(hasMicrophone(cardDump({ params: { EnumRoute: [{ direction: "Input", available: "no" }] } })) === false, "a card whose input jack is empty has no microphone");
+	assert(hasMicrophone(cardDump({ params: { EnumRoute: [{ direction: "Input", available: "yes" }] } })) === true, "an available input jack is a microphone");
+	assert(hasMicrophone(cardDump({ params: { EnumRoute: [{ direction: "Output", available: "yes" }] } })) === false, "an output jack is not a microphone");
+	assert(hasMicrophone(cardDump({ params: { EnumRoute: [{ direction: "Input", available: "no" }, { direction: "Input", available: "yes" }, { direction: "Output", available: "no" }] } })) === true, "one live jack among the dead ones is a microphone");
+	assert(hasMicrophone(cardDump({ params: { EnumRoute: [{ direction: "Input", available: "unknown" }] } })) === true, "a card without jack detection keeps its microphone");
+	assert(hasMicrophone(cardDump({})) === true, "a card that reports no routes is assumed to have a real microphone");
+	assert(hasMicrophone(JSON.stringify([{ type: "PipeWire:Interface:Node", id: 1, info: { props: { "media.class": "Audio/Sink" } } }])) === false, "no source at all means no microphone");
+	assert(hasMicrophone("") === true, "an unreadable dump keeps the microphone");
 });
 
 section("media", function () {

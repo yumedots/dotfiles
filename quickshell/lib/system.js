@@ -121,6 +121,47 @@ function firstDevice(nodes, input) {
 	return found.length > 0 ? found[0] : null;
 }
 
+function routeAvailable(route) {
+	return !!route && route.direction === "Input" && route.available !== "no";
+}
+
+function hasMicrophone(text) {
+	let dump;
+
+	try {
+		dump = JSON.parse(text);
+	} catch (error) {
+		return true;
+	}
+
+	const routes = {};
+	const sources = [];
+
+	(dump || []).forEach(function (object) {
+		if (!object || !object.type)
+			return;
+
+		const info = object.info || {};
+
+		if (object.type === "PipeWire:Interface:Device") {
+			const params = info.params || {};
+
+			routes[object.id] = params.EnumRoute || null;
+		} else if (object.type === "PipeWire:Interface:Node") {
+			const props = info.props || {};
+
+			if (String(props["media.class"] || "").indexOf("Audio/Source") >= 0)
+				sources.push(props["device.id"]);
+		}
+	});
+
+	return sources.some(function (id) {
+		const found = routes[id];
+
+		return found === null || found === undefined ? true : found.some(routeAvailable);
+	});
+}
+
 function holdStream(held, id, until) {
 	const next = Object.assign({}, held || {});
 

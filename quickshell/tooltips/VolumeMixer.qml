@@ -15,6 +15,7 @@ Item {
 
 	property var runningOutput: []
 	property var runningInput: []
+	property bool hasInput: false
 	property string picker: ""
 	property int page: 0
 	property int targetIndex: 0
@@ -56,7 +57,7 @@ Item {
 
 		if (root.sink)
 			list.push(root.sink);
-		if (root.source)
+		if (root.hasInput && root.source)
 			list.push(root.source);
 
 		return list;
@@ -202,6 +203,7 @@ Item {
 		onDone: function (text) {
 			root.runningOutput = System.parseRunningStreams(text, "output");
 			root.runningInput = System.parseRunningStreams(text, "input");
+			root.hasInput = System.hasMicrophone(text);
 			root.held = System.pruneHolds(root.held, Date.now());
 		}
 	}
@@ -576,6 +578,7 @@ Item {
 				id: sourceLine
 
 				width: parent.width
+				visible: root.hasInput
 				node: root.source
 
 				onActivate: function () {
