@@ -957,6 +957,9 @@ assert(dirFromText('return {\n    wallpaper = "/home/g/pic.jpg",\n}\n') === null
 assert(dirFromText('wallpaperDir = "/first"\nwallpaperDir = "/second"') === "/second", "the later file wins when both name a folder");
 assert(dirFromText('    wallpaper = "/home/g/pic.jpg",\n') === null, "the picture key is not mistaken for the folder key");
 assert(dirFromText("") === null && dirFromText(null) === null, "an unreadable settings file has no folder");
+assert(wallpaperFromText(settings) === "/home/g/pic.jpg", "the picture in use comes out of the settings lua");
+assert(wallpaperFromText('wallpaperDir = "/home/g/Walls",\nwallpaper = "/a/two.jpg",') === "/a/two.jpg", "the picture key is read after the folder key");
+assert(wallpaperFromText('    wallpaperDir = "/home/g/Walls",\n') === null, "the folder key is not mistaken for the picture key");
 
 assert(nameOf("/home/g/Walls/My-Wall_01.jpg") === "My Wall 01", "the file name is cleaned up for the list");
 assert(nameOf("/a/one.jpg") === "one", "a plain file name loses its extension");
@@ -966,6 +969,18 @@ const listed = entries("/a/one.jpg\n/a/two.PNG\n/a/notes.txt\n\n  /a/three.webp 
 assert(listed.length === 3, "only images make it into the list, got " + listed.length);
 assert(listed[0].id === "wall:/a/one.jpg" && listed[0].kind === "wallpaper" && listed[0].path === "/a/one.jpg", "an image becomes a wallpaper entry with its path");
 assert(entries("").length === 0 && entries(null).length === 0, "no listing means no wallpapers");
+
+const thumbs = thumbsFromText("abc-one.jpg\n\n  def-two.jpg  \n");
+const cached = entries("/a/one.jpg", "/cache", thumbs);
+
+assert(cached[0].preview === "/a/one.jpg", "a picture with no thumbnail of its own is previewed as itself");
+assert(thumbPath("/a/b one.jpg", "/cache") === "/cache/" + thumbName("/a/b one.jpg"), "a thumbnail sits in the cache under its own name");
+assert(/^[0-9a-f]+-[\w-]+\.jpg$/.test(thumbName("/a/b one.jpg")), "a thumbnail name is a hash, the base name and jpg, got " + thumbName("/a/b one.jpg"));
+assert(thumbName("/a/one.jpg") !== thumbName("/b/one.jpg"), "two folders can hold the same file name without sharing a thumbnail");
+
+const listedThumbs = thumbsFromText(thumbName("/a/one.jpg") + "\n" + thumbName("/a/two.PNG"));
+
+assert(entries("/a/one.jpg\n/a/two.PNG", "/cache", listedThumbs).every(function (entry) { return entry.preview !== entry.path; }), "a listed thumbnail is previewed instead of the picture");
 
 const switching = applyCommand("/a/one.jpg", { wallpaperTransition: "fade", wallpaperTransitionMs: 400, wallpaperTransitionFps: 60 });
 

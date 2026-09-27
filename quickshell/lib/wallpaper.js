@@ -17,6 +17,10 @@ function dirFromText(source) {
 	return lastValue(String(source === undefined || source === null ? "" : source), "wallpaperDir");
 }
 
+function wallpaperFromText(source) {
+	return lastValue(String(source === undefined || source === null ? "" : source), "wallpaper");
+}
+
 function nameOf(path) {
 	const text = String(path === undefined || path === null ? "" : path);
 	const base = text.substring(text.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
@@ -30,13 +34,41 @@ function supported(path) {
 	return extensions.indexOf(text.substring(text.lastIndexOf("."))) >= 0;
 }
 
-function entries(text) {
+function thumbName(path) {
+	const text = String(path);
+	const base = text.substring(text.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_");
+	let hash = 5381;
+
+	for (let i = 0; i < text.length; i++)
+		hash = (hash * 33 + text.charCodeAt(i)) >>> 0;
+
+	return hash.toString(16) + "-" + base + ".jpg";
+}
+
+function thumbPath(path, dir) {
+	return String(dir) + "/" + thumbName(path);
+}
+
+function thumbsFromText(text) {
+	const names = {};
+
+	String(text === undefined || text === null ? "" : text).split("\n").forEach(function (line) {
+		if (line.trim() !== "")
+			names[line.trim()] = true;
+	});
+
+	return names;
+}
+
+function entries(text, dir, thumbs) {
 	return String(text === undefined || text === null ? "" : text)
 		.split("\n")
 		.map(function (line) { return line.trim(); })
 		.filter(function (line) { return line !== "" && supported(line); })
 		.map(function (path) {
-			return { id: "wall:" + path, kind: "wallpaper", name: nameOf(path), keywords: [], path: path };
+			const thumb = dir && thumbs && thumbs[thumbName(path)] ? thumbPath(path, dir) : path;
+
+			return { id: "wall:" + path, kind: "wallpaper", name: nameOf(path), keywords: [], path: path, preview: thumb };
 		});
 }
 
