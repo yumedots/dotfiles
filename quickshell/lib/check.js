@@ -1019,10 +1019,8 @@ assert(sameMode(mode, parseMode("2560x1440@144")) === false, "and does not match
 assert(sameMode(mode, null) === false && sameMode(null, null) === false, "a missing mode matches nothing");
 assert(modeText(parseMode("1920x1080")) === "1920x1080", "a refreshless mode prints without an at sign");
 assert(modeText(null) === "", "no mode prints as nothing");
-assert(modeLabel(mode) === "2560x1440  240 Hz", "the label rounds the refresh for the row, got " + modeLabel(mode));
 assert(modeRank(mode) > modeRank(parseMode("1920x1080@200")), "a bigger panel outranks a faster small one");
 assert(scaleLabel(1.6) === "1.6x" && scaleLabel(1) === "1x" && scaleLabel(1.25) === "1.25x", "a scale reads back the way it was set");
-assert(fontLabel(12) === "12 px", "a font size reads in pixels");
 
 const raw = JSON.stringify([
 	{ name: "DP-1", width: 2560, height: 1440, refreshRate: 239.97, scale: 1.6, focused: true, availableModes: ["2560x1440@239.97Hz", "2560x1440@144.00Hz", "1920x1080@60.00Hz", "2560x1440@239.97Hz"] },
@@ -1041,7 +1039,7 @@ assert(findMonitor(list, "HDMI-A-1").name === "HDMI-A-1", "a named monitor is fo
 assert(findMonitor(list, "").name === "DP-1" && findMonitor(list, null).name === "DP-1", "with no name the focused monitor is picked");
 assert(findMonitor(list, "nope").name === "DP-1", "an unknown name falls back to the focused monitor");
 assert(findMonitor([], "") === null && findMonitor(null, "") === null, "no monitors is null, not a throw");
-assert(resolutionLabel(list[0]) === "2560x1440" && refreshLabel(list[0]) === "240 Hz", "the header reads the resolution and its refresh");
+assert(refreshLabel(list[0]) === "240 Hz", "the header reads the refresh");
 assert(resolutionsOf(list[0]).length === 2, "resolutions are the modes without the refresh");
 assert(refreshesFor(list[0], { width: 2560, height: 1440 }).length === 2, "one resolution keeps only its own refreshes");
 assert(refreshesFor(list[0], null).length === 0, "no resolution has no refreshes");
@@ -1087,7 +1085,6 @@ assert(Object.keys(scaled.outputs).length === 2, "a change does not add a monito
 const fresh = setOutput(state, "eDP-1", { mode: "1280x720@60" });
 
 assert(fresh.outputs["eDP-1"].mode === "1280x720@60" && fresh.outputs["eDP-1"].scale === 1, "a monitor not yet in the record starts from its own defaults");
-assert(entryFor(state, "eDP-1") === null && entryFor(state, "DP-1").scale === 1.6, "an entry is only found when it is there");
 
 const bigger = setFontSize(state, 18);
 

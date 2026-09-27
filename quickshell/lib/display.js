@@ -1,12 +1,7 @@
 .pragma library
 
 function trimNumber(value) {
-	const number = Number(value);
-
-	if (!isFinite(number))
-		return "1";
-
-	return String(Math.round(number * 100) / 100);
+	return numberText(value, 2);
 }
 
 function parseMode(mode) {
@@ -38,13 +33,6 @@ function sameMode(left, right) {
 		return false;
 
 	return left.width === right.width && left.height === right.height && Math.round(left.refresh) === Math.round(right.refresh);
-}
-
-function modeLabel(mode) {
-	if (mode === null || mode === undefined)
-		return "";
-
-	return mode.width + "x" + mode.height + (mode.refresh > 0 ? "  " + Math.round(mode.refresh) + " Hz" : "");
 }
 
 function modeRank(mode) {
@@ -204,20 +192,12 @@ function refreshesFor(monitor, size) {
 	});
 }
 
-function resolutionLabel(monitor) {
-	return monitor === null || monitor === undefined ? "" : monitor.width + "x" + monitor.height;
-}
-
 function refreshLabel(monitor) {
 	return monitor === null || monitor === undefined || !(monitor.refresh > 0) ? "" : Math.round(monitor.refresh) + " Hz";
 }
 
 function scaleLabel(scale) {
 	return trimNumber(scale > 0 ? scale : 1) + "x";
-}
-
-function fontLabel(size) {
-	return Math.round(size) + " px";
 }
 
 function stateFromText(text) {
@@ -255,13 +235,14 @@ function stateFromText(text) {
 	return state;
 }
 
-function numberText(value) {
+function numberText(value, digits) {
 	const number = Number(value);
+	const unit = Math.pow(10, digits === undefined ? 6 : digits);
 
 	if (!isFinite(number))
 		return "1";
 
-	return String(Math.round(number * 1000000) / 1000000);
+	return String(Math.round(number * unit) / unit);
 }
 
 function renderLua(state) {
@@ -284,13 +265,6 @@ function renderLua(state) {
 	lines.push("\t},", "}");
 
 	return lines.join("\n") + "\n";
-}
-
-function entryFor(state, name) {
-	if (state.outputs === undefined || state.outputs === null || state.outputs[name] === undefined)
-		return null;
-
-	return state.outputs[name];
 }
 
 function setOutput(state, name, patch) {
