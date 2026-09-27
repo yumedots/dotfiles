@@ -17,8 +17,8 @@
 				{ "id": "notify" },
 				{ "id": "cpu" },
 				{ "id": "memory" },
-				{ "id": "volume" },
-				{ "id": "display" }
+				{ "id": "display" },
+				{ "id": "volume" }
 			]
 		}
 	}
