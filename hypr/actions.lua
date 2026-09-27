@@ -26,16 +26,41 @@ local function floatToggle()
     end
 end
 
+local CASCADE_STEP = 40
+
+-- windows and monitors are measured in logical pixels, the monitor only reports
+-- its physical size, so the screen edge is divided back by the scale
+local function cascadeTo(win, last)
+    local monitor = win.monitor
+    local size = type(win.size) == "table" and win.size or nil
+    local at = type(last.at) == "table" and last.at or nil
+    if not monitor or not size then return end
+
+    local right = monitor.x + monitor.width / monitor.scale
+    local bottom = monitor.y + monitor.height / monitor.scale
+    local x = (at and at.x or monitor.x) + CASCADE_STEP
+    local y = (at and at.y or monitor.y) + CASCADE_STEP
+
+    if x + (size.x or 0) > right or y + (size.y or 0) > bottom then
+        x, y = monitor.x + CASCADE_STEP, monitor.y + CASCADE_STEP
+    end
+
+    hl.dispatch(hl.dsp.window.move({ x = math.floor(x), y = math.floor(y) }))
+end
+
 -- ponytail: a window opening while the last focused one floats floats too, so a
--- round of floating windows stays floating.
+-- round of floating windows stays floating, and each one lands a step down and
+-- right of that last one until the screen runs out and the stair starts over.
 -- hl.dsp.window.float toggles in this build -- the action field it takes is
 -- ignored -- so the guard on win.floating is what makes the call a set.
--- Ceiling: only the last focused window is looked at, one toggle per open.
+-- Ceiling: only the last focused window is looked at, one toggle per open, and
+-- the bar's reserved strip is not counted when the stair wraps.
 local function followFloat(win)
     local last = hl.get_last_window()
     if not last or last.address == win.address or not last.floating or win.floating then return end
 
     hl.dispatch(hl.dsp.window.float({ window = "address:" .. win.address }))
+    cascadeTo(hl.get_window("address:" .. win.address) or win, last)
 end
 
 hl.on("window.open", followFloat)
