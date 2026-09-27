@@ -48,6 +48,7 @@ PanelWindow {
 		if (id === "memory") return memoryComponent;
 		if (id === "media") return mediaComponent;
 		if (id === "volume") return volumeComponent;
+		if (id === "display") return displayComponent;
 		if (id === "spacer") return spacerComponent;
 
 		return null;
@@ -180,6 +181,7 @@ PanelWindow {
 	Component { id: memoryComponent; MemoryStat {} }
 	Component { id: mediaComponent; MediaStat {} }
 	Component { id: volumeComponent; VolumeStat {} }
+	Component { id: displayComponent; DisplayStat {} }
 	Component { id: spacerComponent; Spacer {} }
 
 	Component {

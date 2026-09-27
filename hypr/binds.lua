@@ -50,6 +50,7 @@ hl.bind(mainMod .. " + C", hl.dsp.global("quickshell:volume"))
 hl.bind(mainMod .. " + A", hl.dsp.global("quickshell:calendar"))
 hl.bind(mainMod .. " + S", hl.dsp.global("quickshell:notifications"))
 hl.bind(mainMod .. " + D", hl.dsp.global("quickshell:contributions"))
+hl.bind(mainMod .. " + P", hl.dsp.global("quickshell:display"))
 
 hl.bind(mainMod .. " + left",  focusOrSwitch("left"))
 hl.bind(mainMod .. " + right", focusOrSwitch("right"))

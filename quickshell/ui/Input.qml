@@ -85,6 +85,18 @@ QtObject {
 		});
 	}
 
+	function display(event, target) {
+		return root.act(event, {
+			escape: () => target.closeRequested(),
+			accept: () => target.activate(),
+			up: () => target.moveRow(-1),
+			down: () => target.moveRow(1),
+			left: () => target.moveStep(-1),
+			right: () => target.moveStep(1),
+			r: () => target.detect()
+		});
+	}
+
 	function media(event, target) {
 		return root.act(event, {
 			escape: () => target.closeRequested(),
