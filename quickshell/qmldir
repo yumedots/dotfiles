@@ -12,3 +12,5 @@ Contrib 1.0 lib/contrib.js
 BarLayout 1.0 lib/bar-layout.js
 Media 1.0 lib/media.js
 Wallpaper 1.0 lib/wallpaper.js
+Display 1.0 lib/display.js
+singleton Settings 1.0 Settings.qml

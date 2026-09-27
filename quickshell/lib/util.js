@@ -4,10 +4,20 @@ function clamp(value, min, max) {
 	return Math.min(Math.max(value, min), max);
 }
 
+function roundStep(value, steps) {
+	const count = steps > 0 ? steps : 1;
+
+	return Math.round(clamp(value, 0, 1) * count) / count;
+}
+
 function snap(value, scale) {
 	const unit = scale > 0 ? scale : 1;
 
 	return Math.round(value * unit) / unit;
+}
+
+function offStep(value, steps) {
+	return Math.abs(value - snap(value, steps)) > 0.000001;
 }
 
 function pick(mono, color, monoColor) {

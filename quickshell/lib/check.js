@@ -992,9 +992,122 @@ assert(saved.indexOf('wallpaper = "/a/one.jpg"') >= 0 && saved.indexOf('wallpape
 assert(dirFromText(saved) === "/home/g/Walls", "what is written back is what is read again");
 });
 
+section("display", function () {
+const mode = parseMode("2560x1440@239.97Hz");
+
+assert(mode.width === 2560 && mode.height === 1440 && mode.refresh === 239.97, "a mode string splits into width, height and refresh");
+assert(parseMode("1920x1080").refresh === 0, "a mode with no refresh keeps a zero refresh");
+assert(parseMode("nonsense") === null && parseMode("") === null && parseMode(null) === null, "a mode that is not a mode is null");
+assert(modeText(mode) === "2560x1440@240", "a mode is written in whole hertz, because hyprland falls back to a safe mode otherwise, got " + modeText(mode));
+assert(sameMode(mode, parseMode("2560x1440@240")) === true, "a mode matches the whole hertz the record was written in");
+assert(sameMode(mode, parseMode("2560x1440@144")) === false, "and does not match a different refresh");
+assert(sameMode(mode, null) === false && sameMode(null, null) === false, "a missing mode matches nothing");
+assert(modeText(parseMode("1920x1080")) === "1920x1080", "a refreshless mode prints without an at sign");
+assert(modeText(null) === "", "no mode prints as nothing");
+assert(modeLabel(mode) === "2560x1440  240 Hz", "the label rounds the refresh for the row, got " + modeLabel(mode));
+assert(modeRank(mode) > modeRank(parseMode("1920x1080@200")), "a bigger panel outranks a faster small one");
+assert(scaleLabel(1.6) === "1.6x" && scaleLabel(1) === "1x" && scaleLabel(1.25) === "1.25x", "a scale reads back the way it was set");
+assert(fontLabel(12) === "12 px", "a font size reads in pixels");
+
+const raw = JSON.stringify([
+	{ name: "DP-1", width: 2560, height: 1440, refreshRate: 239.97, scale: 1.6, focused: true, availableModes: ["2560x1440@239.97Hz", "2560x1440@144.00Hz", "1920x1080@60.00Hz", "2560x1440@239.97Hz"] },
+	{ name: "HDMI-A-1", width: 1920, height: 1080, refreshRate: 60, scale: 1, focused: false, availableModes: [] }
+]);
+const list = monitorsFromText(raw);
+
+assert(list.length === 2 && list[0].name === "DP-1", "every monitor in the list is kept");
+assert(list[0].focused === true && list[1].focused === false, "which monitor holds focus comes through");
+assert(list[0].modes.length === 3, "a mode the driver lists twice is offered once");
+assert(modeText(list[0].modes[0]) === "2560x1440@240", "the biggest mode leads the list");
+assert(list[0].modes[2].width === 1920, "smaller modes follow it");
+assert(list[1].modes.length === 1, "the mode a monitor is running is offered even when the driver lists nothing");
+assert(monitorsFromText("not json").length === 0 && monitorsFromText("").length === 0, "garbage monitor output is an empty list, not a throw");
+assert(findMonitor(list, "HDMI-A-1").name === "HDMI-A-1", "a named monitor is found");
+assert(findMonitor(list, "").name === "DP-1" && findMonitor(list, null).name === "DP-1", "with no name the focused monitor is picked");
+assert(findMonitor(list, "nope").name === "DP-1", "an unknown name falls back to the focused monitor");
+assert(findMonitor([], "") === null && findMonitor(null, "") === null, "no monitors is null, not a throw");
+assert(resolutionLabel(list[0]) === "2560x1440" && refreshLabel(list[0]) === "240 Hz", "the header reads the resolution and its refresh");
+assert(resolutionsOf(list[0]).length === 2, "resolutions are the modes without the refresh");
+assert(refreshesFor(list[0], { width: 2560, height: 1440 }).length === 2, "one resolution keeps only its own refreshes");
+assert(refreshesFor(list[0], null).length === 0, "no resolution has no refreshes");
+
+const state = detect(raw, 12, 10);
+
+assert(state.outputs["DP-1"].mode === "2560x1440@240", "detection takes the best mode of each monitor");
+assert(state.outputs["HDMI-A-1"].scale === 1, "detection keeps the scale a monitor is running");
+assert(state.fallback.mode === "2560x1440@240", "the fallback is the first monitor's best mode");
+assert(detect("", 12, 10).fallback.scale === 1, "detecting nothing still leaves a usable fallback");
+
+const text = renderLua(state);
+const back = stateFromText(text);
+
+assert(back.fontSize === 12 && back.iconSize === 10, "the record keeps the font sizes");
+assert(back.outputs["DP-1"].mode === "2560x1440@240" && back.outputs["DP-1"].scale === 1.6, "a rendered record parses back to what went in");
+assert(back.fallback.mode === state.fallback.mode && back.fallback.scale === state.fallback.scale, "the fallback rides along too");
+assert(renderLua(back) === text, "and renders byte for byte the same record again");
+assert(Object.keys(stateFromText("").outputs).length === 0, "a missing record is empty, not a throw");
+assert(stateFromText("return {\n\tfontSize = 14,\n}").fontSize === 14, "a record written by hand still reads");
+
+const cleanScales = scaleSteps(list[0], 1, 2);
+
+assert(cleanScales.length === 7, "2560x1440 has seven clean scales between one and two, got " + cleanScales.length);
+assert(cleanScales.indexOf(1.6) >= 0 && cleanScales.indexOf(1.25) >= 0 && cleanScales.indexOf(2) >= 0, "the scales the panel offers are the ones hyprland keeps");
+assert(cleanScales.indexOf(1.5) < 0 && cleanScales.indexOf(1.75) < 0, "1.5 and 1.75 do not divide 2560x1440, so they are never offered");
+assert(cleanScale(list[0], 1.75) === 200 / 120, "asking for 1.75 lands on the nearest clean scale, 1.6667, got " + cleanScale(list[0], 1.75));
+assert(cleanScale(list[0], 1.52) === 1.6, "a scale between two clean ones rounds to the nearer, got " + cleanScale(list[0], 1.52));
+assert(cleanScale(list[0], 1.6) === 1.6, "a scale that is already clean stays put");
+assert(scaleSteps(list[1], 1, 2).indexOf(1.5) >= 0, "1.5 is clean on 1920x1080, the rule follows the resolution");
+assert(scaleSteps(null, 1, 2).length === 0 && cleanScale(null, 2) === 2, "a monitor that is not there offers nothing and changes nothing");
+assert(sameScale(1.6666666, 200 / 120) === true, "a scale hyprland rounded in its own output still matches the clean one");
+assert(sameScale(1.6, 1.75) === false, "and two different scales do not match");
+assert(numberText(1.6666666) === "1.666667" && trimNumber(1.6666666) === "1.67", "the record keeps more digits than the label so a clean scale survives being written back");
+
+const scaled = setOutput(state, "DP-1", { scale: 1.5 });
+
+assert(scaled.outputs["DP-1"].scale === 1.5, "a scale change lands on the named monitor");
+assert(state.outputs["DP-1"].scale === 1.6, "and leaves the state it came from alone");
+assert(scaled.outputs["DP-1"].mode === "2560x1440@240" && scaled.outputs["HDMI-A-1"].mode === "1920x1080@60", "the modes of the other monitors ride along");
+assert(Object.keys(scaled.outputs).length === 2, "a change does not add a monitor");
+
+const fresh = setOutput(state, "eDP-1", { mode: "1280x720@60" });
+
+assert(fresh.outputs["eDP-1"].mode === "1280x720@60" && fresh.outputs["eDP-1"].scale === 1, "a monitor not yet in the record starts from its own defaults");
+assert(entryFor(state, "eDP-1") === null && entryFor(state, "DP-1").scale === 1.6, "an entry is only found when it is there");
+
+const bigger = setFontSize(state, 18);
+
+assert(bigger.fontSize === 18 && bigger.iconSize === 15, "the icon grows with the font at the ratio already set, got " + bigger.iconSize);
+assert(setFontSize(state, 8).iconSize === 7, "a smaller font shrinks the icon by the same ratio");
+assert(setFontSize({ fontSize: 0, iconSize: 0, outputs: {} }, 12).iconSize === 10, "a record with no ratio falls back to the design one");
+assert(state.fontSize === 12, "resizing leaves the state it came from alone");
+
+const rows = rowNames();
+
+assert(rows.join() === "scale,refresh,font,resolution", "the panel walks the bars and then the resolution list");
+assert(moveCursor(rows, 6, 0, 3, 1).row === 1, "down from the first bar reaches the second");
+assert(moveCursor(rows, 6, 2, 3, 1).row === 3 && moveCursor(rows, 6, 2, 3, 1).step === 0, "down from the last bar lands on the first resolution");
+assert(moveCursor(rows, 6, 3, 0, 1).step === 1 && moveCursor(rows, 6, 3, 1, 1).step === 2, "down keeps walking the resolutions instead of jumping away");
+assert(moveCursor(rows, 6, 3, 5, 1).row === 0, "down past the last resolution starts the panel over at the first bar");
+assert(moveCursor(rows, 6, 3, 0, -1).row === 2 && moveCursor(rows, 6, 3, 0, -1).step === -1, "up from the first resolution returns to the bar it came from");
+assert(moveCursor(rows, 6, 0, 0, -1).row === 3 && moveCursor(rows, 6, 0, 0, -1).step === 5, "up from the first bar wraps to the last resolution");
+assert(moveCursor(rows, 0, 2, 3, 1).row === 0, "a monitor with no resolutions walks the bars only");
+assert(moveCursor(rows, 0, 0, 0, -1).row === 2, "and wraps between them when it has nothing between");
+assert(moveCursor(rows, -1, 1, 0, 1).row === 2, "a broken count does not walk off the end");
+assert(moveCursor([], 4, 0, 0, 1).row === 0, "a panel with no rows stays put");
+});
+
 section("helpers", function () {
 assert(clamp(5, 0, 3) === 3 && clamp(-1, 0, 3) === 0 && clamp(2, 0, 3) === 2, "clamp keeps a value inside its bounds");
 assert(clamp(7, 0, -1) === -1, "an inverted clamp still returns the top bound, callers must floor it themselves");
+
+assert(roundStep(0.53, 10) === 0.5, "a volume snaps to the nearest tenth, got " + roundStep(0.53, 10));
+assert(roundStep(0.99, 10) === 1 && roundStep(1.4, 10) === 1 && roundStep(-0.2, 10) === 0, "a snap past either end stops at the end");
+assert(roundStep(0.5, 0) === 1, "no steps still means a whole turn, got " + roundStep(0.5, 0));
+
+assert(offStep(0.53, 10) === true, "a volume dragged off a tenth draws as one solid bar");
+assert(offStep(0.5, 10) === false && offStep(0.3, 10) === false && offStep(1, 10) === false && offStep(0, 10) === false, "a volume sitting on a tenth keeps the cut bar");
+assert(offStep(0.1, 10) === false && offStep(0.7, 10) === false, "the float noise of a tenth is not mistaken for an off step");
+assert(offStep(1.2, 10) === false, "a volume past the top is still on a step");
 
 assert(scrollIntoView(100, 50, 500, 200, 260) === 210, "a row below the view scrolls just far enough to show its bottom edge");
 assert(scrollIntoView(100, 50, 500, 40, 100) === 40, "a row above the view scrolls up to its top");
