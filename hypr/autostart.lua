@@ -9,7 +9,8 @@ end
 
 local autostart = {
   { "awww-daemon", "awww-daemon" },
-  { "foot", "foot --server" },
+  -- { "foot", "foot --server" },
+  { "alacritty", "alacritty --daemon --socket $XDG_RUNTIME_DIR/alacritty.sock" },
   { "quickshell", "sh -c 'ulimit -Sn 65536; export __NV_DISABLE_EXPLICIT_SYNC=1; exec quickshell'" },
   { "wl-paste", "wl-paste --watch cliphist store" },
   { "polkit-gnome-au", "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1" },
