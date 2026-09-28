@@ -1,0 +1,40 @@
+[terminal.shell]
+program = "/usr/sbin/zsh"
+
+[font]
+size = 10
+
+[font.normal]
+family = "GoogleSansCode Nerd Font"
+
+[cursor]
+style = "Beam"
+
+[selection]
+save_to_clipboard = true
+
+[window]
+opacity = 0.92
+
+[colors.primary]
+background = "#000000"
+
+[colors.normal]
+black = "#000000"
+red = "#ff3333"
+green = "#33ff33"
+yellow = "#ffcc33"
+blue = "#3366ff"
+magenta = "#ff33ff"
+cyan = "#33ffff"
+white = "#cdcdcd"
+
+[colors.bright]
+black = "#666666"
+red = "#ff6666"
+green = "#66ff66"
+yellow = "#ffff66"
+blue = "#6666ff"
+magenta = "#ff66ff"
+cyan = "#66ffff"
+white = "#ffffff"
