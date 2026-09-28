@@ -73,9 +73,12 @@ ZSH_CUSTOM="$ZDOTDIR/custom"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git)
+plugins=(git sudo zoxide fzf history-substring-search zsh-autosuggestions zsh-syntax-highlighting)
 
 MNML_LAST_ERR=0
+FZF_CTRL_T_COMMAND=
+FZF_CTRL_R_COMMAND=
+FZF_ALT_C_COMMAND=
 source $ZSH/oh-my-zsh.sh
 
 # User configuration
