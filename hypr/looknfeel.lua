@@ -31,6 +31,8 @@ hl.config({
         blur = {
             enabled   = false,
         },
+
+        dim_special = 0.5,
     },
 
     animations = {
