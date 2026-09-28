@@ -37,13 +37,15 @@ Item {
 		const image = root.entry.image || "";
 		const icon = root.entry.icon || "";
 
-		if (image.indexOf("/") === 0 || image.indexOf("https://") === 0 || image.indexOf("image://") === 0)
+		if (image.indexOf("/") === 0 || image.indexOf("file://") === 0 || image.indexOf("https://") === 0 || image.indexOf("image://") === 0)
 			return image;
 
-		if (icon.indexOf("/") === 0)
-			return icon;
+		const file = icon.indexOf("file://") === 0 ? icon.slice(7) : icon;
 
-		return AppIcons.iconOf(root.entry.desktopEntry, []);
+		if (file.indexOf("/") === 0)
+			return file;
+
+		return AppIcons.iconOf(root.entry.desktopEntry, [file, root.entry.appName]);
 	}
 
 	Highlight {
