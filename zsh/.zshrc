@@ -75,6 +75,7 @@ ZSH_CUSTOM="$ZDOTDIR/custom"
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(git)
 
+MNML_LAST_ERR=0
 source $ZSH/oh-my-zsh.sh
 
 # User configuration
