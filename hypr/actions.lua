@@ -63,8 +63,31 @@ local function followFloat(win)
     cascadeTo(hl.get_window("address:" .. win.address) or win, last)
 end
 
+local function scratchpadSwap()
+    local win = hl.get_active_window()
+    if not win then return end
+
+    if not (win.workspace and win.workspace.special) then
+        hl.dispatch(hl.dsp.window.move({ window = win, workspace = "special:magic", follow = false }))
+        return
+    end
+
+    local special = hl.get_workspace("special:magic")
+    local target
+    for _, m in ipairs(hl.get_monitors()) do
+        if m.focused then target = m.active_workspace end
+    end
+    if not target or target.special then return end
+
+    if special and special.windows == 1 and special.visible then
+        hl.dispatch(hl.dsp.workspace.toggle_special("magic"))
+    end
+    hl.dispatch(hl.dsp.window.move({ window = win, workspace = target }))
+end
+
 hl.on("window.open", followFloat)
 
 return {
     floatToggle = floatToggle,
+    scratchpadSwap = scratchpadSwap,
 }
