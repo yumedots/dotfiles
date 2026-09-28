@@ -5,6 +5,7 @@ import Quickshell.DBusMenu
 import Quickshell.Services.SystemTray
 import qs.ui
 import qs
+import qs.services
 
 Row {
 	id: root
@@ -93,6 +94,20 @@ Row {
 
 			required property var modelData
 
+			// ponytail: an item that names its icon with a theme path can still miss
+			// every theme lookup, and quickshell then paints its black and purple
+			// missing-icon pixmap, so the name is checked before the url is trusted
+			// and the app's own icon takes over when it does not resolve.
+			readonly property string iconSource: {
+				const url = String(slot.modelData.icon || "");
+				const name = url.replace("image://icon/", "").split("?")[0];
+
+				if (url.indexOf("image://icon/") === 0 && Quickshell.hasThemeIcon(name))
+					return url;
+
+				return AppIcons.iconOf(slot.modelData.id, [slot.modelData.title]) || url;
+			}
+
 			implicitWidth: Config.trayIconSize
 			implicitHeight: root.lineHeight
 
@@ -100,7 +115,7 @@ Row {
 				id: icon
 
 				anchors.centerIn: parent
-				source: slot.modelData.icon
+				source: slot.iconSource
 				implicitSize: Config.trayIconSize
 				visible: false
 			}
