@@ -87,19 +87,19 @@ ShellRoot {
 	GlobalShortcut {
 		name: "cpu"
 
-		onPressed: shellRoot.openWidget("cpu", false)
+		onPressed: shellRoot.openWidget("cpu", true)
 	}
 
 	GlobalShortcut {
 		name: "memory"
 
-		onPressed: shellRoot.openWidget("memory", false)
+		onPressed: shellRoot.openWidget("memory", true)
 	}
 
 	GlobalShortcut {
 		name: "volume"
 
-		onPressed: shellRoot.openWidget("volume", false)
+		onPressed: shellRoot.openWidget("volume", true)
 	}
 
 	GlobalShortcut {
@@ -166,15 +166,15 @@ ShellRoot {
 		}
 
 		function cpu() {
-			shellRoot.openWidget("cpu", false);
+			shellRoot.openWidget("cpu", true);
 		}
 
 		function memory() {
-			shellRoot.openWidget("memory", false);
+			shellRoot.openWidget("memory", true);
 		}
 
 		function volume() {
-			shellRoot.openWidget("volume", false);
+			shellRoot.openWidget("volume", true);
 		}
 
 		function calendar() {

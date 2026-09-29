@@ -75,6 +75,12 @@ PanelWindow {
 	function open() {
 		root.refreshAnchor();
 		root.shown = true;
+		Qt.callLater(function () {
+			const first = border.content.length > 0 ? border.content[0] : null;
+			const target = first && first.item ? first.item : (first || border);
+
+			target.forceActiveFocus();
+		});
 	}
 
 	function close() {
@@ -135,6 +141,7 @@ PanelWindow {
 		HyprBorder {
 			id: border
 
+			focus: true
 			anchors.fill: parent
 			padding: root.contentPadding >= 0 ? root.contentPadding : Config.gapsIn
 			borderColors: root.borderColors
