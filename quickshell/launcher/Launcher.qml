@@ -87,13 +87,28 @@ PanelWindow {
 		const address = root.pendingFocus;
 
 		root.pendingFocus = "";
-		Handoff.run(function () {
-			root.focusWindow(address);
-		});
+		root.focusWindow(address);
+	}
+
+	Timer {
+		id: pendingFocusTimer
+
+		interval: 30
+		repeat: true
+
+		onTriggered: {
+			if (root.pendingFocus === "") {
+				pendingFocusTimer.stop();
+				return;
+			}
+
+			root.focusWindow(root.pendingFocus);
+		}
 	}
 
 	function open() {
 		root.query = "";
+		root.pendingFocus = "";
 		root.clips = [];
 		root.group = "";
 		root.forced = "";
@@ -118,6 +133,9 @@ PanelWindow {
 
 	function close() {
 		root.shown = false;
+
+		if (root.pendingFocus !== "")
+			pendingFocusTimer.restart();
 	}
 
 	function settle() {
