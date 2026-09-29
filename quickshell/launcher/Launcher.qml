@@ -80,15 +80,6 @@ PanelWindow {
 
 	visible: root.shown || card.opacity > 0
 
-	// ponytail: the surface keeps the screen's size and slides off it while closed
-	// instead of being resized on open. A resize is what let hyprland hold a stale
-	// frame over the screen, and a click on that frame landed on the wrong row.
-	// Once the fade ends it is unmapped: a full screen surface parked off screen
-	// still costs a screen sized buffer.
-	// Ceiling: re-creating the surface every open is the churn that used to leak a
-	// sync_file fd per cycle; fds stayed flat over 50 cycles here, so sliding it off
-	// screen again is the fallback if that leak comes back.
-
 	function open() {
 		root.query = "";
 		root.clips = [];
@@ -622,15 +613,6 @@ PanelWindow {
 				height: visible ? Config.wallpaperPreviewHeight : 0
 				visible: root.shotPath !== ""
 				clip: true
-
-				// ponytail: a 6000px picture takes a couple hundred ms to decode, so the
-				// first look at one is kept next to the settings as a small jpg that every
-				// later look loads at once. Qt writes it, nothing else is involved, and a
-				// near invisible twin of the preview walks the list ahead of the reader so
-				// a picture is usually cached before it is ever highlighted.
-				// Ceiling: the scale is not part of the name, a picture that changes in place
-				// keeps its old thumbnail, and a picture the warm pass has not reached yet is
-				// still a full decode. The twin only loads while the preview is on screen.
 
 				Image {
 					id: warmer

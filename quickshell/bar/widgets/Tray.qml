@@ -17,10 +17,6 @@ Row {
 	readonly property var items: SystemTray.items.values ? SystemTray.items.values : []
 	readonly property real baselineLift: Math.ceil(Config.barThickness)
 
-	// ponytail: the row is one text line tall (the same box BarText draws in), so
-	// icons and glyphs centre on the bar's baseline instead of floating above it.
-	// Ceiling: content taller than a line overflows symmetrically, which is fine
-	// here because nothing clips the row.
 	readonly property real lineHeight: ink.tightBoundingRect.height
 
 	visible: root.items.length > 0
@@ -94,10 +90,6 @@ Row {
 
 			required property var modelData
 
-			// ponytail: an item that names its icon with a theme path can still miss
-			// every theme lookup, and quickshell then paints its black and purple
-			// missing-icon pixmap, so the name is checked before the url is trusted
-			// and the app's own icon takes over when it does not resolve.
 			readonly property string iconSource: {
 				const url = String(slot.modelData.icon || "");
 				const name = url.replace("image://icon/", "").split("?")[0];
@@ -146,8 +138,6 @@ Row {
 		}
 	}
 
-	// ponytail: top level entries only, no nested submenus (an entry with children
-	// triggers nothing here). Add a nested opener per entry if one is ever missed.
 	Tooltip {
 		id: menuPopup
 

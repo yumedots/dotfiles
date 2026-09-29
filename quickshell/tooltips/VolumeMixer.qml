@@ -94,9 +94,6 @@ Item {
 		System.setNodeVolume(node, fraction, Config.mixerMaxVolume);
 	}
 
-	// ponytail: the bar moves in whole tenths, and holding shift drops back to the
-	// free fader for a percent that is not on a tenth. A value landing between
-	// steps draws as one solid bar instead of the cut one, see StepBar.level.
 	function dragFader(node, position, size, vertical, modifiers) {
 		const fraction = vertical ? 1 - position / size : position / size;
 		const shift = (modifiers & Qt.ShiftModifier) !== 0;
@@ -185,9 +182,6 @@ Item {
 		onTriggered: if (!streamPoll.running) streamPoll.running = true
 	}
 
-	// ponytail: holds expire on the poll tick instead of their own timers, so one
-	// list replaces one timer per channel. Ceiling: a channel can linger up to
-	// mixerPollMs past its hold; give it its own timer again if that ever shows.
 	property var held: ({})
 
 	function hold(node, until) {

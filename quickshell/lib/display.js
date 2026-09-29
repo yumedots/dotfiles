@@ -18,9 +18,6 @@ function parseMode(mode) {
 	};
 }
 
-// ponytail: hyprland falls back to a safe mode when the refresh carries
-// decimals, so a mode is written in whole hertz and compared on whole hertz.
-// Ceiling: two modes in the same hertz bucket are offered as one.
 function modeText(mode) {
 	if (mode === null || mode === undefined)
 		return "";
@@ -43,12 +40,6 @@ function integral(value) {
 	return Math.abs(value - Math.round(value)) < 0.000001;
 }
 
-// ponytail: hyprland rounds every scale onto a 1/120 grid and then refuses it
-// unless the scale also turns the resolution into whole logical pixels -- the
-// monitor's own "clean divisor" -- replacing anything else with its own pick.
-// Walking that grid finds the real scales instead of guessing at them, so the
-// panel can offer values hyprland will keep. Ceiling: a coarser grid only drops
-// an option, and a finer one still accepts every value offered here.
 const scaleGrid = 120;
 
 function onScaleGrid(width, height, step) {

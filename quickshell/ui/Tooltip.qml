@@ -21,12 +21,6 @@ PanelWindow {
 
 	readonly property bool shut: !root.shown && card.opacity === 0
 
-	// ponytail: a popup that takes exclusive keyboard focus makes hyprland send it
-	// every click, so it has to cover the bar strip as well: a click there is
-	// handed to the widget under the pointer instead of being swallowed, which is
-	// what makes one widget swap for another with a single click. Popups that do
-	// not want the keyboard stay card sized and let the bar take its own clicks.
-	// Ceiling: the band under the bar swallows clicks aimed at apps underneath.
 	readonly property bool wide: root.wantsKeyboard && !root.shut
 	readonly property bool atBottom: root.anchorWindow !== null && root.anchorWindow.atBottom === true
 	readonly property real outerMargin: root.anchorWindow !== null ? root.anchorWindow.outerMargin : Config.gapsOut
@@ -49,16 +43,6 @@ PanelWindow {
 		? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
 		: Math.round(root.barReserve + root.hang)
 
-	// ponytail: the surface is the whole screen and never changes size, so opening
-	// one never resizes it: a card sized surface grew with its content every time
-	// the popup filled in, and hyprland shows the frame it already has stretched
-	// over the new size, which is what smeared on screen. While shut it is unmapped
-	// instead of left parked, because a parked screen sized buffer costs ~15 MB per
-	// popup, and twelve of them was the bulk of the shell's rss.
-	// Ceiling: re-creating the surface every open is the churn that used to leak a
-	// sync_file fd per cycle; fds stayed flat over 50 cycles here, so parking it
-	// under the screen again is the fallback if that leak comes back.
-	// exclusiveZone -1 places it against the monitor, not the bar's reserved strip.
 	visible: root.shown || card.opacity > 0
 
 	anchors.top: !root.atBottom
