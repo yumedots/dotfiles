@@ -50,12 +50,17 @@ PanelWindow {
 		: Math.round(root.barReserve + root.hang)
 
 	// ponytail: the surface is the whole screen and never changes size, so opening
-	// one can neither re-create it (that churn leaks a sync_file fd per cycle) nor
-	// resize it. A card sized surface grew with its content every time the popup
-	// filled in, and hyprland shows the frame it already has stretched over the new
-	// size, which is what smeared on screen. While closed it parks under the screen
-	// with nothing drawn in it. Ceiling: a screen sized buffer stays mapped per popup.
+	// one never resizes it: a card sized surface grew with its content every time
+	// the popup filled in, and hyprland shows the frame it already has stretched
+	// over the new size, which is what smeared on screen. While shut it is unmapped
+	// instead of left parked, because a parked screen sized buffer costs ~15 MB per
+	// popup, and twelve of them was the bulk of the shell's rss.
+	// Ceiling: re-creating the surface every open is the churn that used to leak a
+	// sync_file fd per cycle; fds stayed flat over 50 cycles here, so parking it
+	// under the screen again is the fallback if that leak comes back.
 	// exclusiveZone -1 places it against the monitor, not the bar's reserved strip.
+	visible: root.shown || card.opacity > 0
+
 	anchors.top: !root.atBottom
 	anchors.bottom: root.atBottom
 	anchors.left: true

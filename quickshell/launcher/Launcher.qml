@@ -78,10 +78,16 @@ PanelWindow {
 
 	margins.left: root.mapped ? 0 : (root.screen ? root.screen.width : 0)
 
+	visible: root.shown || card.opacity > 0
+
 	// ponytail: the surface keeps the screen's size and slides off it while closed
 	// instead of being resized on open. A resize is what let hyprland hold a stale
 	// frame over the screen, and a click on that frame landed on the wrong row.
-	// Ceiling: a full screen surface stays mapped off screen.
+	// Once the fade ends it is unmapped: a full screen surface parked off screen
+	// still costs a screen sized buffer.
+	// Ceiling: re-creating the surface every open is the churn that used to leak a
+	// sync_file fd per cycle; fds stayed flat over 50 cycles here, so sliding it off
+	// screen again is the fallback if that leak comes back.
 
 	function open() {
 		root.query = "";
