@@ -9,7 +9,6 @@ import qs.services
 PanelWindow {
 	id: root
 
-	property bool mapped: false
 	property bool shown: false
 	property string query: ""
 	property var pins: []
@@ -63,7 +62,7 @@ PanelWindow {
 	anchors.top: true
 	anchors.left: true
 	anchors.bottom: true
-	anchors.right: root.mapped
+	anchors.right: true
 
 	implicitWidth: root.screen ? root.screen.width : 1
 	implicitHeight: 1
@@ -76,7 +75,7 @@ PanelWindow {
 	exclusiveZone: 0
 	color: "transparent"
 
-	margins.left: root.mapped ? 0 : (root.screen ? root.screen.width : 0)
+	margins.left: 0
 
 	visible: root.shown || card.opacity > 0
 
@@ -92,7 +91,6 @@ PanelWindow {
 		savedFile.running = true;
 		settingsFile.running = true;
 		root.shown = true;
-		root.mapped = true;
 		root.winIndex = root.windows ? 1 : 0;
 		Qt.callLater(function () {
 			list.currentIndex = 0;
@@ -567,7 +565,6 @@ PanelWindow {
 			if (opacity !== 0)
 				return;
 
-			root.mapped = false;
 			root.settle();
 		}
 
