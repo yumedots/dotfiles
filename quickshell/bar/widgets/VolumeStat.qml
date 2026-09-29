@@ -25,8 +25,10 @@ BarStat {
 		objects: [Pipewire.defaultAudioSink]
 	}
 
-	popupContent: VolumeMixer {
-		shown: root.popupVisible
-		onCloseRequested: root.closePopup()
+	popupContent: Component {
+		VolumeMixer {
+			shown: root.popupVisible
+			onCloseRequested: root.closePopup()
+		}
 	}
 }

@@ -16,9 +16,11 @@ BarStat {
 
 	onPlayerChanged: if (!root.visible) root.closePopup()
 
-	popupContent: MediaControl {
-		player: root.player
+	popupContent: Component {
+		MediaControl {
+			player: root.player
 
-		onCloseRequested: root.closePopup()
+			onCloseRequested: root.closePopup()
+		}
 	}
 }

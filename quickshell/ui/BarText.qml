@@ -13,7 +13,7 @@ Item {
 	property bool popupKeyboard: true
 	property bool popupAlignRight: false
 	property real popupPadding: -1
-	property alias popupContent: popupWindow.content
+	property alias popupContent: popupWindow.contentSource
 
 	readonly property real baselineLift: Math.ceil(Config.barThickness)
 	readonly property alias popupVisible: popupWindow.shown

@@ -47,10 +47,12 @@ BarStat {
 		onTriggered: memFile.reload()
 	}
 
-	popupContent: MemoryMonitor {
-		id: monitor
+	popupContent: Component {
+		MemoryMonitor {
+			id: monitor
 
-		source: root
-		onCloseRequested: root.closePopup()
+			source: root
+			onCloseRequested: root.closePopup()
+		}
 	}
 }

@@ -24,7 +24,7 @@ Item {
 	property bool popupKeyboard: true
 	property bool popupAlignRight: false
 	property real popupPadding: -1
-	property alias popupContent: popupWindow.content
+	property alias popupContent: popupWindow.contentSource
 
 	readonly property alias popupVisible: popupWindow.shown
 
@@ -214,6 +214,7 @@ Item {
 					to: Math.round(line.width * sweepLine.dpr)
 					duration: Config.barSweepMs
 					loops: Animation.Infinite
+					running: sweepLine.visible
 				}
 			}
 		}

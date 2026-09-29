@@ -15,6 +15,7 @@ PanelWindow {
 	property bool wantsKeyboard: false
 	property bool alignRight: false
 	property real contentPadding: -1
+	property Component contentSource: null
 
 	property real anchorX: 0
 	property bool shown: false
@@ -146,6 +147,11 @@ PanelWindow {
 
 				root.close();
 				event.accepted = true;
+			}
+
+			Loader {
+				sourceComponent: root.contentSource
+				active: root.contentSource !== null && (root.shown || card.opacity > 0)
 			}
 		}
 

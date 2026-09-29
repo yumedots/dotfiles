@@ -14,8 +14,10 @@ BarStat {
 	textColor: Config.contribBase
 	dim: Github.login === ""
 
-	popupContent: GithubGrid {
-		onCloseRequested: root.closePopup()
-		onRefreshRequested: Github.refresh(true)
+	popupContent: Component {
+		GithubGrid {
+			onCloseRequested: root.closePopup()
+			onRefreshRequested: Github.refresh(true)
+		}
 	}
 }

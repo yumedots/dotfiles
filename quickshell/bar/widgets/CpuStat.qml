@@ -59,10 +59,12 @@ BarStat {
 		onTriggered: statFile.reload()
 	}
 
-	popupContent: CpuMonitor {
-		id: monitor
+	popupContent: Component {
+		CpuMonitor {
+			id: monitor
 
-		source: root
-		onCloseRequested: root.closePopup()
+			source: root
+			onCloseRequested: root.closePopup()
+		}
 	}
 }

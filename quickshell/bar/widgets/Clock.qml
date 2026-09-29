@@ -18,7 +18,9 @@ BarText {
 		precision: SystemClock.Seconds
 	}
 
-	popupContent: Calendar {
-		onCloseRequested: root.closePopup()
+	popupContent: Component {
+		Calendar {
+			onCloseRequested: root.closePopup()
+		}
 	}
 }

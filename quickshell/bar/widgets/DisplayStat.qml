@@ -41,11 +41,13 @@ BarStat {
 		onTriggered: root.refresh()
 	}
 
-	popupContent: DisplayPanel {
-		shown: root.popupVisible
-		raw: root.raw
-		monitors: root.listed
-		onCloseRequested: root.closePopup()
-		onChanged: delayed.restart()
+	popupContent: Component {
+		DisplayPanel {
+			shown: root.popupVisible
+			raw: root.raw
+			monitors: root.listed
+			onCloseRequested: root.closePopup()
+			onChanged: delayed.restart()
+		}
 	}
 }
