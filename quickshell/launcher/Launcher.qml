@@ -31,6 +31,7 @@ PanelWindow {
 	property var clips: []
 	property bool windows: false
 	property int winIndex: 0
+	property string pendingFocus: ""
 
 	readonly property var prefix: Apps.detectPrefix(root.query, Entries.modeMarks(Config.launcherModes))
 	readonly property string search: root.windows || root.group !== "" || root.forced !== "" ? root.query : root.prefix.text
@@ -78,6 +79,18 @@ PanelWindow {
 	margins.left: 0
 
 	visible: root.shown || card.opacity > 0
+
+	onVisibleChanged: {
+		if (root.visible || root.pendingFocus === "")
+			return;
+
+		const address = root.pendingFocus;
+
+		root.pendingFocus = "";
+		Handoff.run(function () {
+			root.focusWindow(address);
+		});
+	}
 
 	function open() {
 		root.query = "";
@@ -420,7 +433,7 @@ PanelWindow {
 		if (entry.kind === "app")
 			Quickshell.execDetached(Apps.launchCommand(entry, entry.appId, root.terminal));
 		else if (entry.kind === "window")
-			root.focusWindow(entry.address);
+			root.pendingFocus = entry.address;
 		else if (entry.kind === "command" || entry.kind === "action" || entry.kind === "saved")
 			Quickshell.execDetached(["sh", "-c", entry.command]);
 		else if (entry.kind === "calc")
