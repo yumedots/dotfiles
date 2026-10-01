@@ -189,7 +189,6 @@ Item {
 
 		property string label: ""
 		property string value: ""
-		property real pad: 0
 
 		width: Config.displayPanelWidth
 		height: headerLabel.implicitHeight
@@ -197,7 +196,6 @@ Item {
 		Text {
 			id: headerLabel
 
-			x: header.pad
 			anchors.verticalCenter: parent.verticalCenter
 			font.family: Config.fontFamily
 			font.pixelSize: Config.displayLabelSize
@@ -410,7 +408,6 @@ Item {
 
 				Header {
 					label: Config.displayResolutionTitle.toUpperCase()
-					pad: Config.displayRowPad
 				}
 
 				Rectangle {
