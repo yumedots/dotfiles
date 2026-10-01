@@ -270,7 +270,6 @@ Item {
 		Text {
 			id: lineLabel
 
-			x: Config.displayRowPad
 			anchors.verticalCenter: parent.verticalCenter
 			font.family: Config.fontFamily
 			font.pixelSize: Settings.fontSize
@@ -280,7 +279,6 @@ Item {
 
 		Text {
 			anchors.right: parent.right
-			anchors.rightMargin: Config.displayRowPad
 			anchors.verticalCenter: parent.verticalCenter
 			font.family: Config.fontFamily
 			font.pixelSize: Settings.fontSize

@@ -339,7 +339,6 @@ const displayRowHeight = 18;
 const displayRowGap = 3;
 const displayGroupGap = 10;
 const displayLabelSize = 10;
-const displayRowPad = 8;
 const displayDetailSize = 10;
 const displayDetailGap = 3;
 const displayValueGap = 6;
