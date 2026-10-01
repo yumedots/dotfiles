@@ -129,6 +129,7 @@ Item {
 
 					anchors.fill: parent
 					cache: false
+					sourceSize.width: Config.mediaArtSize * 2
 					fillMode: Image.PreserveAspectCrop
 					source: root.art
 				}

@@ -89,6 +89,7 @@ Item {
 
 			anchors.fill: parent
 			source: root.picture
+			sourceSize.width: Config.notifySlot * 2
 			fillMode: Image.PreserveAspectCrop
 			visible: status === Image.Ready
 		}

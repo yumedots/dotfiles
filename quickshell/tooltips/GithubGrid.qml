@@ -77,6 +77,7 @@ Item {
 
 					anchors.fill: parent
 					source: Github.login !== "" ? "https://github.com/" + Github.login + ".png" : ""
+					sourceSize.width: Config.contribAvatar * 2
 					fillMode: Image.PreserveAspectCrop
 					visible: status === Image.Ready
 				}
