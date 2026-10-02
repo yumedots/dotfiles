@@ -27,7 +27,7 @@ BarStat {
 	popupKeyboard: !root.osd
 	popupPersistent: root.osd
 	popupPreload: true
-	popupCentered: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
+	popupFullscreen: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
 
 	Connections {
 		target: Hyprland

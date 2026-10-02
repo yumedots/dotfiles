@@ -25,7 +25,7 @@ Item {
 	property bool popupPersistent: false
 	property bool popupPreload: false
 	property bool popupAlignRight: false
-	property bool popupCentered: false
+	property bool popupFullscreen: false
 	property real popupPadding: -1
 	property alias popupContent: popupWindow.contentSource
 
@@ -76,7 +76,7 @@ Item {
 		wantsKeyboard: root.popupKeyboard
 		preload: root.popupPreload
 		alignRight: root.popupAlignRight
-		centered: root.popupCentered
+		fullscreen: root.popupFullscreen
 	}
 
 	TextMetrics {

@@ -15,7 +15,7 @@ PanelWindow {
 	property bool wantsKeyboard: false
 	property bool preload: false
 	property bool alignRight: false
-	property bool centered: false
+	property bool fullscreen: false
 	property real contentPadding: -1
 	property Component contentSource: null
 
@@ -39,12 +39,12 @@ PanelWindow {
 	readonly property real scale: border.scale
 	readonly property real cardWidth: Util.snap(border.contentWidth + 2 * border.inset, root.scale)
 	readonly property real cardHeight: Util.snap(border.contentHeight + 2 * border.inset, root.scale)
-	readonly property real cardX: root.centered
+	readonly property real cardX: root.fullscreen
 		? Util.snap((root.screenWidth - root.cardWidth) / 2, root.scale)
 		: Util.snap(root.alignRight
 			? root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight
 			: root.outerMargin + Config.tooltipGap + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
-	readonly property real cardY: root.centered
+	readonly property real cardY: root.fullscreen
 		? Config.gapsOut
 		: root.atBottom
 			? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
@@ -135,13 +135,13 @@ PanelWindow {
 		id: card
 
 		x: root.cardLeft
-		y: root.centered && !root.shown ? -root.cardHeight : root.cardTop
+		y: root.fullscreen && !root.shown ? -root.cardHeight : root.cardTop
 		width: root.cardWidth
 		height: root.cardHeight
 		opacity: root.shown ? 1 : 0
 
 		Behavior on y {
-			enabled: root.centered
+			enabled: root.fullscreen
 
 			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.InOutCubic }
 		}
