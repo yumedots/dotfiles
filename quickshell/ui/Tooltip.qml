@@ -192,7 +192,8 @@ PanelWindow {
 		Text {
 			id: closeButton
 
-				anchors.right: parent.right
+			visible: !root.fullscreen
+			anchors.right: parent.right
 			anchors.top: parent.top
 			anchors.margins: Config.tooltipCloseInset
 			font.family: Config.fontFamily
