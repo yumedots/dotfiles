@@ -39,13 +39,28 @@ PanelWindow {
 	readonly property real scale: border.scale
 	readonly property real cardWidth: Util.snap(border.contentWidth + 2 * border.inset, root.scale)
 	readonly property real cardHeight: Util.snap(border.contentHeight + 2 * border.inset, root.scale)
+	readonly property real restX: root.screenWidth - root.cardWidth
+	readonly property real restY: root.screenHeight - root.cardHeight
+	readonly property bool posLeft: Config.popupPos.indexOf("left") >= 0
+	readonly property bool posRight: Config.popupPos.indexOf("right") >= 0
+	readonly property bool posBottom: Config.popupPos.indexOf("bottom") >= 0
+	readonly property bool slideBelow: Config.popupY >= 0 ? Config.popupY > root.restY / 2 : root.posBottom
+	readonly property real floatX: Config.popupX >= 0
+		? Util.clamp(Config.popupX, 0, root.restX)
+		: root.posRight ? root.restX - Config.gapsOut
+			: root.posLeft ? Config.gapsOut
+				: root.restX / 2
+	readonly property real floatY: Config.popupY >= 0
+		? Util.clamp(Config.popupY, 0, root.restY)
+		: root.posBottom ? root.restY - Config.gapsOut
+			: Config.gapsOut
 	readonly property real cardX: root.fullscreen
-		? Util.snap((root.screenWidth - root.cardWidth) / 2, root.scale)
+		? Util.snap(root.floatX, root.scale)
 		: Util.snap(root.alignRight
 			? root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight
 			: root.outerMargin + Config.tooltipGap + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
 	readonly property real cardY: root.fullscreen
-		? Config.gapsOut
+		? Math.round(root.floatY)
 		: root.atBottom
 			? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
 			: Math.round(root.barReserve + root.hang)
@@ -135,7 +150,7 @@ PanelWindow {
 		id: card
 
 		x: root.cardLeft
-		y: root.fullscreen && !root.shown ? -root.cardHeight : root.cardTop
+		y: root.fullscreen && !root.shown ? (root.slideBelow ? root.screenHeight : -root.cardHeight) : root.cardTop
 		width: root.cardWidth
 		height: root.cardHeight
 		opacity: root.shown ? 1 : 0
@@ -177,7 +192,7 @@ PanelWindow {
 		Text {
 			id: closeButton
 
-			anchors.right: parent.right
+				anchors.right: parent.right
 			anchors.top: parent.top
 			anchors.margins: Config.tooltipCloseInset
 			font.family: Config.fontFamily
