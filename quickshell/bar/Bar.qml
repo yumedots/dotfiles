@@ -78,7 +78,7 @@ PanelWindow {
 		Object.keys(bar.widgets).forEach(function (id) {
 			const item = bar.widgets[id];
 
-			if (item && item !== except && typeof item.closePopup === "function")
+			if (item && item !== except && item.popupPersistent !== true && typeof item.closePopup === "function")
 				item.closePopup();
 		});
 	}

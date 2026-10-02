@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
 import qs.ui
 import qs
@@ -22,7 +23,20 @@ BarStat {
 	value: Math.round(root.pct) + "%"
 
 	property bool osd: false
+	property bool mixerCompact: false
 	popupKeyboard: !root.osd
+	popupPersistent: root.osd
+	popupPreload: true
+	popupCentered: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
+
+	Connections {
+		target: Hyprland
+
+		function onRawEvent(event) {
+			if (event.name === "fullscreen")
+				Hyprland.refreshWorkspaces();
+		}
+	}
 
 	function pingVolume() {
 		if (root.popupVisible && !root.osd)
@@ -36,8 +50,12 @@ BarStat {
 		osdTimer.restart();
 	}
 
-	onPopupVisibleChanged: if (!root.popupVisible)
-		root.osd = false
+	onPopupVisibleChanged: {
+		if (root.popupVisible)
+			root.mixerCompact = root.osd;
+		else
+			root.osd = false;
+	}
 
 	Connections {
 		target: root.sink ? root.sink.audio : null
@@ -66,7 +84,7 @@ BarStat {
 	popupContent: Component {
 		VolumeMixer {
 			shown: root.popupVisible
-			compact: root.osd || !root.popupVisible
+			compact: root.mixerCompact
 			onCloseRequested: root.closePopup()
 		}
 	}

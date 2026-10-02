@@ -22,7 +22,10 @@ Item {
 	property var onActivate
 	property bool popupWanted: true
 	property bool popupKeyboard: true
+	property bool popupPersistent: false
+	property bool popupPreload: false
 	property bool popupAlignRight: false
+	property bool popupCentered: false
 	property real popupPadding: -1
 	property alias popupContent: popupWindow.contentSource
 
@@ -71,7 +74,9 @@ Item {
 		anchorItem: root
 		contentPadding: root.popupPadding
 		wantsKeyboard: root.popupKeyboard
+		preload: root.popupPreload
 		alignRight: root.popupAlignRight
+		centered: root.popupCentered
 	}
 
 	TextMetrics {

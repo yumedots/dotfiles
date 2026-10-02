@@ -13,7 +13,9 @@ PanelWindow {
 	property var borderColors: null
 	property real borderWidth: -1
 	property bool wantsKeyboard: false
+	property bool preload: false
 	property bool alignRight: false
+	property bool centered: false
 	property real contentPadding: -1
 	property Component contentSource: null
 
@@ -37,12 +39,16 @@ PanelWindow {
 	readonly property real scale: border.scale
 	readonly property real cardWidth: Util.snap(border.contentWidth + 2 * border.inset, root.scale)
 	readonly property real cardHeight: Util.snap(border.contentHeight + 2 * border.inset, root.scale)
-	readonly property real cardX: Util.snap(root.alignRight
-		? root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight
-		: root.outerMargin + Config.tooltipGap + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
-	readonly property real cardY: root.atBottom
-		? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
-		: Math.round(root.barReserve + root.hang)
+	readonly property real cardX: root.centered
+		? Util.snap((root.screenWidth - root.cardWidth) / 2, root.scale)
+		: Util.snap(root.alignRight
+			? root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight
+			: root.outerMargin + Config.tooltipGap + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
+	readonly property real cardY: root.centered
+		? Config.gapsOut
+		: root.atBottom
+			? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
+			: Math.round(root.barReserve + root.hang)
 
 	visible: root.shown || card.opacity > 0
 
@@ -129,10 +135,16 @@ PanelWindow {
 		id: card
 
 		x: root.cardLeft
-		y: root.cardTop
+		y: root.centered && !root.shown ? -root.cardHeight : root.cardTop
 		width: root.cardWidth
 		height: root.cardHeight
 		opacity: root.shown ? 1 : 0
+
+		Behavior on y {
+			enabled: root.centered
+
+			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.InOutCubic }
+		}
 
 		Behavior on opacity {
 			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.OutCubic }
@@ -158,7 +170,7 @@ PanelWindow {
 
 			Loader {
 				sourceComponent: root.contentSource
-				active: root.contentSource !== null && (root.shown || card.opacity > 0)
+				active: root.contentSource !== null && (root.preload || root.shown || card.opacity > 0)
 			}
 		}
 
