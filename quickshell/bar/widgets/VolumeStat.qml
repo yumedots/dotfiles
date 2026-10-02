@@ -21,6 +21,44 @@ BarStat {
 		: Config.iconVolumeLow
 	value: Math.round(root.pct) + "%"
 
+	property bool osd: false
+	popupKeyboard: !root.osd
+
+	function pingVolume() {
+		if (root.popupVisible && !root.osd)
+			return;
+
+		root.osd = true;
+
+		if (!root.popupVisible)
+			root.bar.openExclusive(root, false);
+
+		osdTimer.restart();
+	}
+
+	onPopupVisibleChanged: if (!root.popupVisible)
+		root.osd = false
+
+	Connections {
+		target: root.sink ? root.sink.audio : null
+
+		function onVolumeChanged() {
+			root.pingVolume();
+		}
+
+		function onMutedChanged() {
+			root.pingVolume();
+		}
+	}
+
+	Timer {
+		id: osdTimer
+
+		interval: Config.volumeOsdMs
+
+		onTriggered: root.closePopup()
+	}
+
 	PwObjectTracker {
 		objects: [Pipewire.defaultAudioSink]
 	}
@@ -28,6 +66,7 @@ BarStat {
 	popupContent: Component {
 		VolumeMixer {
 			shown: root.popupVisible
+			compact: root.osd || !root.popupVisible
 			onCloseRequested: root.closePopup()
 		}
 	}

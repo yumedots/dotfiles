@@ -26,6 +26,8 @@ Item {
 	focus: true
 
 	property bool shown: false
+	property bool compact: false
+	readonly property bool showApps: root.hasApps && !root.compact
 
 	onShownChanged: if (!root.shown) {
 		root.keyboard = false;
@@ -34,7 +36,7 @@ Item {
 
 	readonly property real channelsMaxWidth: Config.mixerVisibleChannels * Config.mixerChannelWidth + (Config.mixerVisibleChannels - 1) * Config.mixerChannelGap
 	readonly property real idleWidth: Config.mixerIdleChannels * Config.mixerChannelWidth + (Config.mixerIdleChannels - 1) * Config.mixerChannelGap
-	readonly property real contentWidth: Math.max(root.hasApps ? apps.implicitWidth : 0, root.idleWidth)
+	readonly property real contentWidth: Math.max(root.showApps ? apps.implicitWidth : 0, root.idleWidth)
 	readonly property real pageStep: Config.mixerVisibleChannels * (Config.mixerChannelWidth + Config.mixerChannelGap)
 	readonly property bool pageable: content.implicitWidth > root.channelsMaxWidth
 	readonly property int lastPage: Util.pageCount(content.implicitWidth, root.channelsMaxWidth, root.pageStep) - 1
@@ -464,7 +466,7 @@ Item {
 			width: parent.width
 			height: apps.implicitHeight
 			implicitHeight: height
-			visible: root.hasApps
+			visible: root.showApps
 
 			Row {
 				id: apps
@@ -572,7 +574,7 @@ Item {
 				id: sourceLine
 
 				width: parent.width
-				visible: root.hasInput
+				visible: root.hasInput && !root.compact
 				node: root.source
 
 				onActivate: function () {
