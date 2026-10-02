@@ -31,6 +31,7 @@ end
 
 hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(programs.terminal))
 hl.bind(mainMod .. " + W", hl.dsp.window.close(), { repeating = true })
+hl.bind("F11", hl.dsp.window.fullscreen())
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd(programs.session))
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(programs.fileManager))
 hl.bind(mainMod .. " + SPACE", actions.floatToggle)
