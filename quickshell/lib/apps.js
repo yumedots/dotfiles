@@ -126,6 +126,18 @@ function lookupApp(entries, name) {
 		}
 	}
 
+	const tail = /(\d{3,})$/.exec(wanted);
+
+	if (tail) {
+		for (let j = 0; j < keys.length; j++) {
+			const entry = entries[keys[j]];
+			const iconTail = entry && entry.icon ? /(\d{3,})$/.exec(entry.icon) : null;
+
+			if (iconTail && iconTail[1] === tail[1])
+				return entry;
+		}
+	}
+
 	return null;
 }
 

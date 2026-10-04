@@ -39,6 +39,8 @@ assert(lookupApp(entries, "foo").terminal === true, "Terminal=true is parsed");
 assert(lookupApp(entries, "code-insiders").id === "code-insiders", "an id with a dash is found exactly");
 assert(lookupApp({ "org.vinegarhq.Sober": { id: "org.vinegarhq.Sober", name: "Sober", icon: "org.vinegarhq.Sober" } }, "org.vinegarhq.Sober").name === "Sober", "a mixed case id is found");
 assert(lookupApp({ "com.spotify.Client": { id: "com.spotify.Client", name: "Spotify", icon: "com.spotify.Client" } }, "com.spotify.client").name === "Spotify", "a mixed case id is found from a lowercase query too");
+assert(lookupApp({ skyrim: { id: "skyrim", name: "Skyrim", icon: "steam_icon_489830" } }, "steam_app_489830").id === "skyrim", "a window class matches its launcher entry through the icon number");
+assert(lookupApp({ skyrim: { id: "skyrim", name: "Skyrim", icon: "steam_icon_489830" } }, "steam_app_999999") === null, "a different icon number means no match");
 assert(lookupApp(entries, "nope") === null, "unknown ids return null");
 assert(lookupApp(entries, "") === null, "empty names return null");
 
