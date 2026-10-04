@@ -66,14 +66,15 @@ Item {
 		property string glyph: ""
 		property var onActivate
 
-		width: Config.mediaButtonSize
-		height: Config.mediaButtonSize
+		width: Config.mediaButtonGlyphSize
+		height: Config.mediaButtonGlyphSize
 
 		Text {
 			anchors.centerIn: parent
+
 			font.family: Config.fontFamily
 			font.pixelSize: Config.mediaButtonGlyphSize
-			color: hit.containsMouse ? Config.foreground : Config.muted
+			color: Config.foreground
 			text: button.glyph
 		}
 
@@ -81,7 +82,7 @@ Item {
 			id: hit
 
 			anchors.fill: parent
-			hoverEnabled: true
+			anchors.margins: -Config.barHitPadding
 
 			onClicked: {
 				if (button.onActivate)
@@ -99,16 +100,15 @@ Item {
 		spacing: Config.mediaRowGap
 
 		Item {
-			id: head
+			id: artSlot
 
 			width: parent.width
-			height: Config.mediaArtSize
+			height: Config.mediaArtHeight
 
 			Item {
 				id: art
 
-				width: Config.mediaArtSize
-				height: Config.mediaArtSize
+				anchors.fill: parent
 
 				Rectangle {
 					anchors.fill: parent
@@ -119,7 +119,7 @@ Item {
 					anchors.centerIn: parent
 					visible: root.art === "" || artwork.status !== Image.Ready
 					font.family: Config.fontFamily
-					font.pixelSize: Math.round(art.width * 0.5)
+					font.pixelSize: Math.round(art.height * 0.2)
 					color: Config.muted
 					text: Config.iconApp
 				}
@@ -129,102 +129,137 @@ Item {
 
 					anchors.fill: parent
 					cache: false
-					sourceSize.width: Config.mediaArtSize * 2
+					sourceSize.width: Config.mediaArtHeight * 2
 					fillMode: Image.PreserveAspectCrop
 					source: root.art
 				}
 			}
 
-			Column {
-				id: text
-
-				anchors.left: art.right
-				anchors.leftMargin: Config.mediaTextGap
-				anchors.right: parent.right
-				anchors.verticalCenter: parent.verticalCenter
-				spacing: Config.mediaLineGap
-
-				Text {
-					width: parent.width
-					elide: Text.ElideRight
-					font.family: Config.fontFamily
-					font.pixelSize: Config.mediaTitleSize
-					color: root.player !== null ? Config.foreground : Config.muted
-					text: root.player !== null && root.title !== "" ? root.title : Config.mediaEmpty
-				}
-
-				Text {
-					width: parent.width
-					visible: root.artist !== ""
-					elide: Text.ElideRight
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize
-					color: Config.foreground
-					text: root.artist
-				}
-
-				Text {
-					width: parent.width
-					visible: root.album !== ""
-					elide: Text.ElideRight
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize
-					color: Config.foreground
-					text: root.album
-				}
+			Rectangle {
+				anchors.fill: parent
+				color: "transparent"
+				border.width: 1
+				border.color: Config.dim
 			}
 		}
 
-		Row {
-			id: buttons
+		Rectangle {
+			width: parent.width
+			height: Config.mediaSeparator
+			color: Config.mediaSeparatorColor
+		}
 
-			visible: root.player !== null
-			anchors.horizontalCenter: parent.horizontalCenter
-			spacing: Config.mediaButtonGap
+		Column {
+			width: parent.width
+			spacing: Config.mediaLineGap
 
-			Button {
-				glyph: Config.iconPrev
-
-				onActivate: function () {
-					root.previous();
-				}
+			Text {
+				width: parent.width
+				horizontalAlignment: Text.AlignHCenter
+				elide: Text.ElideRight
+				font.family: Config.fontFamily
+				font.pixelSize: Config.mediaTitleSize
+				color: root.player !== null ? Config.foreground : Config.muted
+				text: root.player !== null && root.title !== "" ? root.title : Config.mediaEmpty
 			}
 
-			Button {
-				glyph: root.playing ? Config.iconPause : Config.iconPlay
-
-				onActivate: function () {
-					root.togglePlay();
-				}
+			Text {
+				width: parent.width
+				visible: root.artist !== ""
+				horizontalAlignment: Text.AlignHCenter
+				elide: Text.ElideRight
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: Config.foreground
+				text: root.artist
 			}
 
-			Button {
-				glyph: Config.iconNext
-
-				onActivate: function () {
-					root.next();
-				}
+			Text {
+				width: parent.width
+				visible: root.album !== ""
+				horizontalAlignment: Text.AlignHCenter
+				elide: Text.ElideRight
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: Config.muted
+				text: root.album
 			}
+		}
+
+		Rectangle {
+			width: parent.width
+			height: Config.mediaSeparator
+			color: Config.mediaSeparatorColor
 		}
 
 		Item {
-			id: progress
+			id: times
 
-			visible: root.clock.known
 			width: parent.width
-			height: Config.mediaProgressHeight
+			height: elapsed.implicitHeight
+			visible: root.clock.known
 
-			Rectangle {
-				anchors.fill: parent
-				color: Config.dim
+			Text {
+				id: elapsed
+
+				anchors.left: parent.left
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: Config.foreground
+				text: root.clock.elapsed
 			}
 
-			Rectangle {
-				anchors.left: parent.left
-				anchors.top: parent.top
-				anchors.bottom: parent.bottom
-				width: parent.width * root.clock.percent / 100
-				color: Config.foreground
+			Text {
+				anchors.right: parent.right
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: Config.muted
+				text: root.clock.total
+			}
+		}
+
+		StepBar {
+			width: parent.width
+			visible: root.clock.known
+			level: root.clock.percent / 100
+		}
+
+		Item {
+			id: controls
+
+			width: parent.width
+			height: Config.mediaButtonGlyphSize
+			visible: root.player !== null
+
+			Row {
+				anchors.horizontalCenter: parent.horizontalCenter
+				spacing: Config.mediaButtonGap
+
+				Button {
+					glyph: Config.iconPrev
+
+					onActivate: function () {
+						root.previous();
+					}
+				}
+
+				Button {
+					glyph: root.playing ? Config.iconPause : Config.iconPlay
+
+					onActivate: function () {
+						root.togglePlay();
+					}
+				}
+
+				Button {
+					glyph: Config.iconNext
+
+					onActivate: function () {
+						root.next();
+					}
+				}
 			}
 		}
 	}
