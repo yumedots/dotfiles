@@ -29,7 +29,7 @@ for i = 1, 10 do
     hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i, follow = false }))
 end
 
-hl.bind(mainMod .. " + T", hl.dsp.exec_cmd(programs.terminal))
+hl.bind(mainMod .. " + RETURN", hl.dsp.exec_cmd(programs.terminal))
 hl.bind(mainMod .. " + W", hl.dsp.window.close(), { repeating = true })
 hl.bind("F11", hl.dsp.window.fullscreen())
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd(programs.session))
