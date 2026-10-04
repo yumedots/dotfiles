@@ -55,7 +55,7 @@ PanelWindow {
 		wallpapers: root.wallpapers
 	})
 	readonly property int listHeight: Config.launcherMaxRows * Config.launcherRowHeight
-	readonly property bool configured: root.screen !== null && root.width === root.screen.width
+	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
 
 	readonly property var modeInfo: Entries.modeInfo(root.mode, Config)
 	readonly property string prompt: root.modeInfo && root.modeInfo.glyph ? root.modeInfo.glyph : Config.launcherPrompt
