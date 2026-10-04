@@ -23,6 +23,7 @@ Item {
 	property bool popupWanted: true
 	property bool popupKeyboard: true
 	property bool popupPersistent: false
+	property bool popupClosable: true
 	property bool popupPreload: false
 	property bool popupAlignRight: false
 	property bool popupFullscreen: false
@@ -77,6 +78,7 @@ Item {
 		preload: root.popupPreload
 		alignRight: root.popupAlignRight
 		fullscreen: root.popupFullscreen
+		closable: root.popupClosable
 	}
 
 	TextMetrics {

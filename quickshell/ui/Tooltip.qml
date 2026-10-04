@@ -16,6 +16,7 @@ PanelWindow {
 	property bool preload: false
 	property bool alignRight: false
 	property bool fullscreen: false
+	property bool closable: true
 	property real contentPadding: -1
 	property Component contentSource: null
 
@@ -192,7 +193,7 @@ PanelWindow {
 		Text {
 			id: closeButton
 
-			visible: !root.fullscreen
+			visible: root.closable && !root.fullscreen
 			anchors.right: parent.right
 			anchors.top: parent.top
 			anchors.margins: Config.tooltipCloseInset
