@@ -482,6 +482,8 @@ assert(pathLines("  /a  ")[0] === "/a", "paths are trimmed");
 assert(windowAppCandidates({ lastIpcObject: { class: "foot", title: "btop" } }, ["foot"]).word === "btop", "a terminal window reports the app running in it");
 assert(windowAppCandidates({ lastIpcObject: { class: "helium", title: "x" } }, ["foot"]).word === "helium", "a non terminal window falls back to its class");
 assert(windowAppCandidates(null, ["foot"]).className === "", "a missing window has no class");
+assert(realWindows([{ lastIpcObject: null }, { lastIpcObject: { title: "Input" } }]).length === 0, "title only toplevels are helper ghosts and get dropped");
+assert(realWindows([{ lastIpcObject: { workspace: "1", class: "" } }, { lastIpcObject: undefined }]).length === 1, "a window hyprland announced stays");
 assert(appEntries({ firefox: { name: "Firefox", exec: "firefox" }, broken: {} }).length === 1, "an entry without a name or exec is skipped");
 assert(appEntries({ firefox: { name: "Firefox", exec: "firefox" } })[0].id === "app:firefox", "the entry id is namespaced");
 assert(appEntries({ avahi: { name: "Avahi", exec: "avahi" } }, ["avahi"]).length === 0, "an ignored app is skipped");

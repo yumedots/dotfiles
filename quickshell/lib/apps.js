@@ -148,6 +148,13 @@ function windowAppCandidates(toplevel, terminals) {
 	return { className: className, word: terminalAppId(className, info.title || "", terminals) };
 }
 
+function realWindows(toplevels) {
+	return (toplevels || []).filter(function (toplevel) {
+		const info = toplevel.lastIpcObject;
+		return Boolean(info) && info.workspace !== undefined;
+	});
+}
+
 function detectPrefix(query, marks) {
 	const text = String(query === undefined || query === null ? "" : query);
 	const modes = Object.keys(marks || {});

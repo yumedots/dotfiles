@@ -168,7 +168,7 @@ PanelWindow {
 	}
 
 	function windowEntries() {
-		const values = Hyprland.toplevels.values ? Hyprland.toplevels.values : [];
+		const values = Apps.realWindows(Hyprland.toplevels.values ? Hyprland.toplevels.values : []);
 
 		return values.map(function (toplevel) {
 			const info = toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
