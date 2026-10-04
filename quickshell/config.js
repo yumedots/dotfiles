@@ -362,5 +362,4 @@ const displayFontTitle = "Font";
 const displayNothing = "No display found";
 const displayIconRefresh = "\uf021";
 
-const fallbackIcon = "application-x-executable";
 const terminalClasses = ["foot", "footclient"];

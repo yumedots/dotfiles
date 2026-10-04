@@ -861,15 +861,6 @@ PanelWindow {
 						visible: iconCell.icon !== ""
 						source: iconCell.icon
 					}
-
-					Text {
-						anchors.centerIn: parent
-						visible: iconCell.icon === ""
-						font.family: Config.fontFamily
-						font.pixelSize: Config.windowsIconSize
-						color: Config.foreground
-						text: root.rowGlyph(iconCell.modelData)
-					}
 				}
 			}
 
