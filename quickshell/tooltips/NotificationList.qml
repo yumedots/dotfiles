@@ -181,7 +181,6 @@ Item {
 				selected: slot.active && !root.opened
 				expanded: root.opened
 				expandable: !root.single
-				single: root.single
 			}
 
 			MouseArea {
