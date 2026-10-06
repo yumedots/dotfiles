@@ -143,12 +143,6 @@ Item {
 			}
 		}
 
-		Rectangle {
-			width: parent.width
-			height: Config.mediaSeparator
-			color: Config.mediaSeparatorColor
-		}
-
 		Column {
 			width: parent.width
 			spacing: Config.mediaLineGap
@@ -165,24 +159,13 @@ Item {
 
 			Text {
 				width: parent.width
-				visible: root.artist !== ""
+				visible: root.artist !== "" || root.album !== ""
 				horizontalAlignment: Text.AlignHCenter
 				elide: Text.ElideRight
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
 				color: Config.foreground
-				text: root.artist
-			}
-
-			Text {
-				width: parent.width
-				visible: root.album !== ""
-				horizontalAlignment: Text.AlignHCenter
-				elide: Text.ElideRight
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: Config.muted
-				text: root.album
+				text: [root.artist, root.album].filter(s => s !== "").join(" - ")
 			}
 		}
 
