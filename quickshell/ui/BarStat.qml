@@ -27,6 +27,7 @@ Item {
 	property bool popupPreload: false
 	property bool popupAlignRight: false
 	property bool popupFullscreen: false
+	property real popupBorderWidth: -1
 	property real popupPadding: -1
 	property alias popupContent: popupWindow.contentSource
 
@@ -79,6 +80,7 @@ Item {
 		alignRight: root.popupAlignRight
 		fullscreen: root.popupFullscreen
 		closable: root.popupClosable
+		borderWidth: root.popupBorderWidth
 	}
 
 	TextMetrics {

@@ -75,6 +75,7 @@ BarStat {
 	}
 
 	popupPadding: 0
+	popupBorderWidth: 0
 	popupKeyboard: root.keyboardPopup
 	popupAlignRight: root.keyboardPopup === false
 

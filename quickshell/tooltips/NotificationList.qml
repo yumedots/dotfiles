@@ -23,9 +23,9 @@ Item {
 	readonly property var current: root.opened
 		? root.ordered[root.detail]
 		: (root.selected >= 0 && root.selected < root.count ? root.ordered[root.selected] : null)
-	readonly property int viewport: root.single
-		? Math.max(Config.notifyRowHeight, list.contentHeight)
-		: Config.notifyVisibleRows * Config.notifyRowHeight
+	readonly property int viewport: Math.max(
+		root.single ? Config.notifyRowHeight : Config.notifyVisibleRows * Config.notifyRowHeight,
+		root.single || root.opened ? list.contentHeight : 0)
 
 	focus: true
 
@@ -157,8 +157,6 @@ Item {
 		keyNavigationEnabled: false
 		model: root.model
 
-
-
 		delegate: Item {
 			id: slot
 
@@ -169,11 +167,11 @@ Item {
 			readonly property real viewport: ListView.view.height
 			readonly property real scroll: ListView.view.contentY
 			readonly property bool cutTop: slot.y < slot.scroll - 1 && slot.y + slot.height > slot.scroll + 1
-			readonly property bool cutBottom: slot.y < slot.scroll + slot.viewport - 1 && slot.y + slot.height > slot.scroll + slot.viewport + 1
+			readonly property bool cutBottom: slot.y + slot.height > slot.scroll + slot.viewport - 1 && slot.y < slot.scroll + slot.viewport + 1
 			readonly property bool boxed: !root.single && !root.opened && slot.height < slot.viewport
 
 			width: ListView.view.width
-			height: root.opened ? block.implicitHeight : Math.min(block.implicitHeight, ListView.view.height)
+			height: root.opened || root.single ? block.implicitHeight : Math.min(block.implicitHeight, ListView.view.height)
 
 			NotificationRow {
 				id: block
@@ -183,6 +181,7 @@ Item {
 				selected: slot.active && !root.opened
 				expanded: root.opened
 				expandable: !root.single
+				single: root.single
 			}
 
 			MouseArea {
@@ -272,7 +271,7 @@ Item {
 	}
 
 	Text {
-		anchors.centerIn: parent
+		anchors.centerIn: list
 		visible: root.empty
 		font.family: Config.fontFamily
 		font.pixelSize: Settings.fontSize

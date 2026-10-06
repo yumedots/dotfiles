@@ -87,6 +87,14 @@ PanelWindow {
 	WlrLayershell.namespace: "tooltip"
 	WlrLayershell.keyboardFocus: root.wantsKeyboard && root.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
+	Region {
+		id: cardRegion
+
+		item: card
+	}
+
+	mask: root.wantsKeyboard ? null : cardRegion
+
 	function refreshAnchor() {
 		if (root.anchorItem === null || root.anchorWindow === null)
 			return;
