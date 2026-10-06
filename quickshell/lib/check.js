@@ -317,6 +317,9 @@ assert(iconFiles("/usr/share/icons/hicolor/48x48/apps/bar.png\n/usr/share/icons/
 assert(iconFiles("/usr/share/pixmaps/baz.xpm").baz === "/usr/share/pixmaps/baz.xpm", "a pixmap is kept");
 assert(iconFiles("/var/lib/flatpak/exports/share/icons/hicolor/scalable/apps/org.vinegarhq.Sober.svg")["org.vinegarhq.Sober"] !== undefined, "a dotted id keeps its dots");
 assert(Object.keys(iconFiles("")).length === 0, "an empty icon listing yields nothing");
+assert(iconLookup(iconFiles("/usr/share/pixmaps/Alacritty.svg"), "alacritty") === "/usr/share/pixmaps/Alacritty.svg", "icon lookup matches case-insensitively");
+assert(iconLookup(iconFiles("/usr/share/pixmaps/Alacritty.svg"), "Alacritty") === "/usr/share/pixmaps/Alacritty.svg", "icon lookup keeps exact matches first");
+assert(iconLookup(iconFiles("/usr/share/pixmaps/Alacritty.svg"), "nope") === "", "an unknown icon resolves to nothing");
 assert(cleanExec("code-insiders %F") === "code-insiders", "field codes are stripped");
 assert(cleanExec("env GDK_BACKEND=x11 firefox %u") === "env GDK_BACKEND=x11 firefox", "an env wrapper stays, only the field code goes");
 assert(cleanExec("app 100%%") === "app 100%", "an escaped percent survives");

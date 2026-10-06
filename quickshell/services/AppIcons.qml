@@ -48,10 +48,14 @@ Item {
 	function iconSource(name) {
 		if (name.indexOf("/") >= 0)
 			return "file://" + name;
+		const file = Apps.iconLookup(root.icons, name);
+
+		if (file)
+			return "file://" + file;
 		if (Quickshell.hasThemeIcon(name))
 			return Quickshell.iconPath(name, true);
 
-		return root.icons[name] ? "file://" + root.icons[name] : "";
+		return "";
 	}
 
 	onEntriesChanged: {
@@ -64,7 +68,7 @@ Item {
 	Request {
 		id: iconScan
 
-		command: ["sh", "-c", "for dir in \"$HOME/.local/share\" $(echo \"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\" | tr ':' ' '); do find \"$dir/icons/hicolor\" \"$dir/pixmaps\" -mindepth 1 -maxdepth 3 \\( -type f -o -type l \\) \\( -name '*.png' -o -name '*.svg' -o -name '*.xpm' \\) 2>/dev/null; done"]
+		command: ["sh", "-c", "for dir in \"$HOME/.local/share\" $(echo \"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\" | tr ':' ' '); do find \"$dir/icons/breeze\" \"$dir/icons/hicolor\" \"$dir/pixmaps\" -mindepth 1 -maxdepth 3 \\( -type f -o -type l \\) \\( -name '*.png' -o -name '*.svg' -o -name '*.xpm' \\) 2>/dev/null; done"]
 
 		onDone: function (text) {
 			root.icons = Apps.iconFiles(text);

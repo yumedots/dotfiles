@@ -46,7 +46,7 @@ Item {
 			const path = image.slice(13);
 			if (path.indexOf("/") === 0)
 				return path;
-			return image;
+			return AppIcons.iconOf(path);
 		}
 
 		if (image.indexOf("/") === 0 || image.indexOf("file://") === 0 || image.indexOf("https://") === 0 || image.indexOf("image://") === 0)

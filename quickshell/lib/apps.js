@@ -45,6 +45,20 @@ function iconFiles(text) {
 	return files;
 }
 
+function iconLookup(files, name) {
+	if (files[name])
+		return files[name];
+
+	const lower = String(name).toLowerCase();
+
+	for (const key in files) {
+		if (key.toLowerCase() === lower)
+			return files[key];
+	}
+
+	return "";
+}
+
 function cleanExec(value) {
 	return String(value === undefined || value === null ? "" : value)
 		.replace(/%[uUfFiIcCkK]/g, "")
