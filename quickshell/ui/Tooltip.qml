@@ -14,6 +14,7 @@ PanelWindow {
 	property real borderWidth: -1
 	property bool wantsKeyboard: false
 	property bool preload: false
+	property bool slideExit: false
 	property bool alignRight: false
 	property bool fullscreen: false
 	property bool closable: true
@@ -65,8 +66,9 @@ PanelWindow {
 		: root.atBottom
 			? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
 			: Math.round(root.barReserve + root.hang)
+	readonly property real slideX: root.screenWidth
 
-	visible: root.shown || card.opacity > 0
+	visible: root.shown || (root.slideExit ? card.sliding : card.opacity > 0)
 
 	anchors.top: !root.atBottom
 	anchors.bottom: root.atBottom
@@ -105,6 +107,12 @@ PanelWindow {
 	function open() {
 		root.refreshAnchor();
 		root.shown = true;
+
+		if (root.slideExit) {
+			slideAnim.stop();
+			card.slideOffset = 0;
+		}
+
 		Qt.callLater(function () {
 			const first = border.content.length > 0 ? border.content[0] : null;
 			const target = first && first.item ? first.item : (first || border);
@@ -114,6 +122,9 @@ PanelWindow {
 	}
 
 	function close() {
+		if (root.slideExit && !slideAnim.running)
+			slideAnim.restart();
+
 		root.shown = false;
 	}
 
@@ -158,11 +169,14 @@ PanelWindow {
 	Item {
 		id: card
 
-		x: root.cardLeft
+		property real slideOffset: 0
+		readonly property bool sliding: slideAnim.running
+
+		x: root.cardLeft + card.slideOffset
 		y: root.fullscreen && !root.shown ? (root.slideBelow ? root.screenHeight : -root.cardHeight) : root.cardTop
 		width: root.cardWidth
 		height: root.cardHeight
-		opacity: root.shown ? 1 : 0
+		opacity: root.shown || (root.slideExit && sliding) ? 1 : 0
 
 		Behavior on y {
 			enabled: root.fullscreen
@@ -196,6 +210,17 @@ PanelWindow {
 				sourceComponent: root.contentSource
 				active: root.contentSource !== null && (root.preload || root.shown || card.opacity > 0)
 			}
+		}
+
+		NumberAnimation {
+			id: slideAnim
+
+			target: card
+			property: "slideOffset"
+			from: 0
+			to: root.slideX - root.cardX
+			duration: Config.popupSlideMs
+			easing.type: Easing.InOutCubic
 		}
 
 		Text {

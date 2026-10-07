@@ -10,6 +10,7 @@ Item {
 	property bool expanded: false
 	property bool expandable: false
 	property bool single: false
+	property bool closing: false
 
 	readonly property real pad: Config.notifyRowPadding
 	readonly property real inset: Config.notifyPadding + root.pad
@@ -194,7 +195,7 @@ Item {
 		width: root.width
 		height: 1
 		color: Config.foreground
-		visible: root.single && !root.urgent
+		visible: root.single && !root.urgent && !root.closing
 
 		transform: Scale {
 			id: timerScale

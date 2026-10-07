@@ -78,10 +78,12 @@ BarStat {
 	popupBorderWidth: 0
 	popupKeyboard: root.keyboardPopup
 	popupAlignRight: root.keyboardPopup === false
+	popupSlide: root.keyboardPopup === false
 
 	popupContent: Component {
 		NotificationList {
 			single: root.keyboardPopup === false
+			closing: !root.popupVisible
 			onCloseRequested: root.closePopup()
 		}
 	}

@@ -9,6 +9,7 @@ Item {
 	signal closeRequested()
 
 	property bool single: false
+	property bool closing: false
 	property int selected: -1
 	property int detail: -1
 
@@ -182,6 +183,7 @@ Item {
 				expanded: root.opened
 				expandable: !root.single
 				single: root.single
+				closing: root.closing
 			}
 
 			MouseArea {

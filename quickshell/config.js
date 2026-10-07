@@ -71,6 +71,7 @@ const tooltipGapRight = 3;
 const tooltipHang = 3;
 const popupCloseDelay = 60;
 const popupFadeMs = 140;
+const popupSlideMs = 400;
 const popupPos = "top-center";
 const popupX = -1;
 const popupY = -1;

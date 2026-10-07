@@ -25,6 +25,7 @@ Item {
 	property bool popupPersistent: false
 	property bool popupClosable: true
 	property bool popupPreload: false
+	property bool popupSlide: false
 	property bool popupAlignRight: false
 	property bool popupFullscreen: false
 	property real popupBorderWidth: -1
@@ -77,6 +78,7 @@ Item {
 		contentPadding: root.popupPadding
 		wantsKeyboard: root.popupKeyboard
 		preload: root.popupPreload
+		slideExit: root.popupSlide
 		alignRight: root.popupAlignRight
 		fullscreen: root.popupFullscreen
 		closable: root.popupClosable
