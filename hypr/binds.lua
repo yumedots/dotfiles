@@ -27,35 +27,57 @@ local function closeWidgetsCommand()
     return command
 end
 
-local launcherPid
+local pidFile = (os.getenv("XDG_RUNTIME_DIR") or "/run/user/1000") .. "/qs-launcher.pid"
+
+local function pidFromFile()
+    local file = io.open(pidFile, "r")
+    local pid = file and file:read("*l") or ""
+
+    if file then file:close() end
+
+    return pid:match("(%d+)")
+end
+
+local function procHolds(pid)
+    local file = io.open("/proc/" .. pid .. "/cmdline", "r")
+    local cmd = file and file:read("*a") or ""
+
+    if file then file:close() end
+
+    return cmd:find("launcherShell.qml", 1, true) ~= nil
+end
+
+local function savePid(pid)
+    local file = io.open(pidFile, "w")
+    if not file then return end
+
+    file:write(pid)
+    file:close()
+end
 
 local function launcherAlive()
-    if not launcherPid then
-        local pipe = io.popen("pgrep -f '^quickshell -p .*launcherShell\\.qml'")
-        local pids = pipe and pipe:read("*a") or ""
+    local pid = pidFromFile()
 
-        if pipe then pipe:close() end
+    if pid and procHolds(pid) then return true end
 
-        launcherPid = pids:match("(%d+)")
-    end
+    local pipe = io.popen("pgrep -f '^quickshell -p .*launcherShell\\.qml'")
+    local pids = pipe and pipe:read("*a") or ""
 
-    if not launcherPid then return false end
+    if pipe then pipe:close() end
 
-    local cmd = io.open("/proc/" .. launcherPid .. "/cmdline")
-    local text = cmd and cmd:read("*a") or ""
+    pid = pids:match("(%d+)")
+    if not pid then return false end
 
-    if cmd then cmd:close() end
-    if text:find("launcherShell.qml", 1, true) then return true end
-
-    launcherPid = nil
-    return false
+    savePid(pid)
+    return true
 end
 
 local function wakeLauncher(action)
     local ipc = "qs ipc -p " .. launcherConfig .. " call shell " .. action
     local start = "ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid quickshell -p " .. launcherConfig
-    local ready = "i=0; until grep -q 'Configuration Loaded' \"$XDG_RUNTIME_DIR/quickshell/by-pid/$!/log.log\" 2>/dev/null; do i=$((i+1)); [ $i -ge 60 ] && break; sleep 0.02; done"
-    local wake = start .. " >/dev/null 2>&1 & " .. ready .. "; " .. ipc .. " || { sleep 0.3; " .. ipc .. "; }"
+    local wake = "printf %s " .. action .. " > \"$XDG_RUNTIME_DIR/qs-launcher-wake\"; "
+        .. start .. " >/dev/null 2>&1 & echo $! > \"$XDG_RUNTIME_DIR/qs-launcher.pid\"; "
+        .. "sleep 0.6; if [ -e \"$XDG_RUNTIME_DIR/qs-launcher-wake\" ]; then " .. ipc .. "; fi"
 
     return function()
         if launcherAlive() then
