@@ -27,12 +27,43 @@ local function closeWidgetsCommand()
     return command
 end
 
+local launcherPid
+
+local function launcherAlive()
+    if not launcherPid then
+        local pipe = io.popen("pgrep -f '^quickshell -p .*launcherShell\\.qml'")
+        local pids = pipe and pipe:read("*a") or ""
+
+        if pipe then pipe:close() end
+
+        launcherPid = pids:match("(%d+)")
+    end
+
+    if not launcherPid then return false end
+
+    local cmd = io.open("/proc/" .. launcherPid .. "/cmdline")
+    local text = cmd and cmd:read("*a") or ""
+
+    if cmd then cmd:close() end
+    if text:find("launcherShell.qml", 1, true) then return true end
+
+    launcherPid = nil
+    return false
+end
+
 local function wakeLauncher(action)
     local ipc = "qs ipc -p " .. launcherConfig .. " call shell " .. action
     local start = "ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid quickshell -p " .. launcherConfig
     local wake = "sleep 0.5; " .. ipc .. " 2>/dev/null || { sleep 0.4; " .. ipc .. "; }"
 
-    return hl.dsp.exec_cmd(ipc .. " 2>/dev/null || { " .. start .. " >/dev/null 2>&1 & " .. wake .. "; }")
+    return function()
+        if launcherAlive() then
+            hl.dispatch(hl.dsp.global("quickshell:" .. action))
+            return
+        end
+
+        hl.exec_cmd(ipc .. " 2>/dev/null || { " .. start .. " >/dev/null 2>&1 & " .. wake .. "; }")
+    end
 end
 
 local function gotoWorkspace(workspace)
