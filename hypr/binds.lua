@@ -1,6 +1,7 @@
 local programs = require("programs")
 local actions = require("actions")
 local mainMod = "SUPER"
+local launcherConfig = "$HOME/.config/quickshell/launcherShell.qml"
 
 hl.config({ binds = { scroll_event_delay = 0 } })
 
@@ -10,6 +11,43 @@ local function switcherOpen()
     end
 
     return false
+end
+
+local function closeWidgetsCommand()
+    local command = ""
+
+    if hl.get_layers({ namespace = "launcher" })[1] then
+        command = command .. "qs ipc -p " .. launcherConfig .. " call shell killPopupsLocal 2>/dev/null; "
+    end
+
+    if hl.get_layers({ namespace = "tooltip" })[1] then
+        command = command .. "qs ipc call shell closeBarPopups 2>/dev/null; "
+    end
+
+    return command
+end
+
+local function wakeLauncher(action)
+    local ipc = "qs ipc -p " .. launcherConfig .. " call shell " .. action
+    local start = "ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid quickshell -p " .. launcherConfig
+    local wake = "sleep 0.5; " .. ipc .. " 2>/dev/null || { sleep 0.4; " .. ipc .. "; }"
+
+    return hl.dsp.exec_cmd(ipc .. " 2>/dev/null || { " .. start .. " >/dev/null 2>&1 & " .. wake .. "; }")
+end
+
+local function gotoWorkspace(workspace)
+    return function()
+        local close = closeWidgetsCommand()
+
+        if close == "" then
+            hl.dispatch(hl.dsp.focus({ workspace = workspace }))
+            return
+        end
+
+        local target = type(workspace) == "number" and tostring(workspace) or "\"" .. workspace .. "\""
+
+        hl.exec_cmd(close .. "hyprctl dispatch 'hl.dsp.focus({workspace = " .. target .. "})'")
+    end
 end
 
 local function focusOrSwitch(direction)
@@ -25,7 +63,7 @@ end
 
 for i = 1, 10 do
     local key = i % 10
-    hl.bind(mainMod .. " + " .. key,         hl.dsp.focus({ workspace = i }))
+    hl.bind(mainMod .. " + " .. key,         gotoWorkspace(i))
     hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i, follow = false }))
 end
 
@@ -35,8 +73,8 @@ hl.bind("F11", hl.dsp.window.fullscreen())
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd(programs.session))
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(programs.fileManager))
 hl.bind(mainMod .. " + SPACE", actions.floatToggle)
-hl.bind("ALT + SPACE", hl.dsp.global("quickshell:launcher"))
-hl.bind(mainMod .. " + TAB", hl.dsp.global("quickshell:windows"))
+hl.bind("ALT + SPACE", wakeLauncher("launcher"))
+hl.bind(mainMod .. " + TAB", wakeLauncher("windows"))
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
 
 local resizeStep = 40
@@ -68,8 +106,8 @@ hl.bind(mainMod .. " + ALT + down",  hl.dsp.window.move({ direction = "down" }))
 
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.workspace.toggle_special("magic"))
 
-hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "+1" }))
-hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "-1" }))
+hl.bind(mainMod .. " + mouse_down", gotoWorkspace("+1"))
+hl.bind(mainMod .. " + mouse_up",   gotoWorkspace("-1"))
 
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
