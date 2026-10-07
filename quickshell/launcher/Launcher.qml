@@ -588,10 +588,6 @@ PanelWindow {
 		visible: root.configured && (root.shown || opacity > 0)
 		focus: true
 
-		Behavior on opacity {
-			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.OutCubic }
-		}
-
 		onOpacityChanged: {
 			if (opacity !== 0)
 				return;
