@@ -12,6 +12,7 @@ PanelWindow {
 	property var anchorWindow
 	property var borderColors: null
 	property real borderWidth: -1
+	property color backgroundColor: Config.surfaceTranslucent
 	property bool wantsKeyboard: false
 	property bool preload: false
 	property bool slideExit: false
@@ -105,10 +106,19 @@ PanelWindow {
 	}
 
 	function open() {
+		const fresh = root.slideExit && !root.shown;
+
 		root.refreshAnchor();
 		root.shown = true;
 
-		if (root.slideExit) {
+		if (fresh) {
+			if (!slideAnim.running)
+				card.slideOffset = root.slideX - root.cardX;
+
+			slideAnim.from = card.slideOffset;
+			slideAnim.to = 0;
+			slideAnim.restart();
+		} else if (root.slideExit) {
 			slideAnim.stop();
 			card.slideOffset = 0;
 		}
@@ -122,8 +132,11 @@ PanelWindow {
 	}
 
 	function close() {
-		if (root.slideExit && !slideAnim.running)
+		if (root.slideExit && root.shown) {
+			slideAnim.from = card.slideOffset;
+			slideAnim.to = root.slideX - root.cardX;
 			slideAnim.restart();
+		}
 
 		root.shown = false;
 	}
@@ -194,6 +207,7 @@ PanelWindow {
 			focus: true
 			anchors.fill: parent
 			padding: root.contentPadding >= 0 ? root.contentPadding : Config.gapsIn
+			backgroundColor: root.backgroundColor
 			borderColors: root.borderColors
 			borderWidth: root.borderWidth
 			borderOpacity: 1
