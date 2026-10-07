@@ -54,7 +54,8 @@ end
 local function wakeLauncher(action)
     local ipc = "qs ipc -p " .. launcherConfig .. " call shell " .. action
     local start = "ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid quickshell -p " .. launcherConfig
-    local wake = "sleep 0.5; " .. ipc .. " 2>/dev/null || { sleep 0.4; " .. ipc .. "; }"
+    local ready = "i=0; until grep -q 'Configuration Loaded' \"$XDG_RUNTIME_DIR/quickshell/by-pid/$!/log.log\" 2>/dev/null; do i=$((i+1)); [ $i -ge 60 ] && break; sleep 0.02; done"
+    local wake = start .. " >/dev/null 2>&1 & " .. ready .. "; " .. ipc .. " || { sleep 0.3; " .. ipc .. "; }"
 
     return function()
         if launcherAlive() then
@@ -62,7 +63,7 @@ local function wakeLauncher(action)
             return
         end
 
-        hl.exec_cmd(ipc .. " 2>/dev/null || { " .. start .. " >/dev/null 2>&1 & " .. wake .. "; }")
+        hl.exec_cmd(wake)
     end
 end
 
