@@ -23,6 +23,7 @@ BarStat {
 	value: Math.round(root.pct) + "%"
 
 	property bool osd: false
+	property double bootAt: Date.now()
 	property bool mixerCompact: false
 	popupKeyboard: !root.osd
 	popupPersistent: root.osd
@@ -40,6 +41,9 @@ BarStat {
 	}
 
 	function pingVolume() {
+		if (Date.now() - root.bootAt < 1000)
+			return;
+
 		if (root.popupVisible && !root.osd)
 			return;
 
