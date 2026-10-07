@@ -12,6 +12,7 @@ ShellRoot {
 	id: shellRoot
 
 	property string role: "main"
+	property double hyprBootAt: Date.now()
 	readonly property bool isLauncher: role === "launcher"
 
 	function toLauncher(fn, arg) {
@@ -223,6 +224,9 @@ ShellRoot {
 		target: Hyprland
 
 		function onActiveToplevelChanged() {
+			if (Date.now() - shellRoot.hyprBootAt < 1000)
+				return;
+
 			if (!Hyprland.activeToplevel)
 				return;
 
@@ -231,6 +235,9 @@ ShellRoot {
 		}
 
 		function onFocusedWorkspaceChanged() {
+			if (Date.now() - shellRoot.hyprBootAt < 1000)
+				return;
+
 			shellRoot.closeWidgets();
 			launcherWindow.close();
 		}
