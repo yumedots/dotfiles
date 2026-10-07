@@ -9,6 +9,7 @@ Item {
 	property bool selected: false
 	property bool expanded: false
 	property bool expandable: false
+	property bool single: false
 
 	readonly property real pad: Config.notifyRowPadding
 	readonly property real inset: Config.notifyPadding + root.pad
@@ -29,6 +30,11 @@ Item {
 	implicitHeight: root.expanded ? Math.max(root.cardHeight, lines.implicitHeight + root.pad * 2) : Config.notifyRowHeight
 	clip: true
 	opacity: root.entry && root.entry.gone === true ? Config.notifyGoneOpacity : 1
+
+	onEntryChanged: {
+		if (timerLine.visible)
+			timerAnim.restart();
+	}
 
 
 	function pictureOf() {
@@ -178,5 +184,33 @@ Item {
 		font.family: Config.fontFamily
 		font.pixelSize: Config.notifyAppFontSize
 		text: root.message
+	}
+
+	Rectangle {
+		id: timerLine
+
+		anchors.left: parent.left
+		anchors.bottom: parent.bottom
+		width: root.width
+		height: 1
+		color: Config.foreground
+		visible: root.single && !root.urgent
+
+		transform: Scale {
+			id: timerScale
+
+			origin.x: 0
+		}
+
+		NumberAnimation {
+			id: timerAnim
+
+			target: timerScale
+			property: "xScale"
+			from: 1
+			to: 0
+			duration: root.entry && root.entry.expireTimeout > 0 ? root.entry.expireTimeout : Config.notifyTimeout
+			running: timerLine.visible
+		}
 	}
 }
