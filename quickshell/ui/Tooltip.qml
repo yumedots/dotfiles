@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs
 
@@ -17,7 +18,8 @@ PanelWindow {
 	property bool preload: false
 	property bool slideExit: false
 	property bool alignRight: false
-	property bool fullscreen: false
+	property bool centered: false
+	readonly property bool fullscreen: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
 	property bool closable: true
 	property real contentPadding: -1
 	property Component contentSource: null
@@ -57,7 +59,7 @@ PanelWindow {
 		? Util.clamp(Config.popupY, 0, root.restY)
 		: root.posBottom ? root.restY - Config.gapsOut
 			: Config.gapsOut
-	readonly property real cardX: root.fullscreen
+	readonly property real cardX: root.fullscreen && root.centered
 		? Util.snap(root.floatX, root.scale)
 		: Util.snap(root.alignRight
 			? root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight
@@ -89,6 +91,15 @@ PanelWindow {
 	WlrLayershell.layer: WlrLayer.Overlay
 	WlrLayershell.namespace: "tooltip"
 	WlrLayershell.keyboardFocus: root.wantsKeyboard && root.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+	Connections {
+		target: Hyprland
+
+		function onRawEvent(event) {
+			if (event.name === "fullscreen")
+				Hyprland.refreshWorkspaces();
+		}
+	}
 
 	Region {
 		id: cardRegion
@@ -186,13 +197,13 @@ PanelWindow {
 		readonly property bool sliding: slideAnim.running
 
 		x: root.cardLeft + card.slideOffset
-		y: root.fullscreen && !root.shown ? (root.slideBelow ? root.screenHeight : -root.cardHeight) : root.cardTop
+		y: root.fullscreen && root.centered && !root.shown ? (root.slideBelow ? root.screenHeight : -root.cardHeight) : root.cardTop
 		width: root.cardWidth
 		height: root.cardHeight
 		opacity: root.shown || (root.slideExit && sliding) ? 1 : 0
 
 		Behavior on y {
-			enabled: root.fullscreen
+			enabled: root.fullscreen && root.centered
 
 			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.InOutCubic }
 		}
@@ -240,7 +251,7 @@ PanelWindow {
 		Text {
 			id: closeButton
 
-			visible: root.closable && !root.fullscreen
+			visible: root.closable && !root.centered
 			anchors.right: parent.right
 			anchors.top: parent.top
 			anchors.margins: Config.tooltipCloseInset

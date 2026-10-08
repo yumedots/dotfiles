@@ -27,7 +27,7 @@ Item {
 	property bool popupPreload: false
 	property bool popupSlide: false
 	property bool popupAlignRight: false
-	property bool popupFullscreen: false
+	property bool popupCentered: false
 	property real popupBorderWidth: -1
 	property real popupPadding: -1
 	property alias popupContent: popupWindow.contentSource
@@ -80,7 +80,7 @@ Item {
 		preload: root.popupPreload
 		slideExit: root.popupSlide
 		alignRight: root.popupAlignRight
-		fullscreen: root.popupFullscreen
+		centered: root.popupCentered
 		closable: root.popupClosable
 		borderWidth: root.popupBorderWidth
 	}

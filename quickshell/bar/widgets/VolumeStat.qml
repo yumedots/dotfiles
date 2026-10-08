@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
 import qs.ui
 import qs
@@ -29,16 +28,7 @@ BarStat {
 	popupPersistent: root.osd
 	popupClosable: !root.osd
 	popupPreload: true
-	popupFullscreen: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
-
-	Connections {
-		target: Hyprland
-
-		function onRawEvent(event) {
-			if (event.name === "fullscreen")
-				Hyprland.refreshWorkspaces();
-		}
-	}
+	popupCentered: true
 
 	function pingVolume() {
 		if (Date.now() - root.bootAt < 1000)
