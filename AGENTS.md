@@ -47,20 +47,17 @@ console.log and runtime errors: /run/user/1000/quickshell/by-id/<newest>/log.qsl
 
 QML lint: `ln -sfn ~/.config/quickshell /tmp/qmlimport/qs` then `/usr/lib/qt6/bin/qmllint -I /tmp/qmlimport <files>` (exit 255 = syntax error; quickshell-dialect warnings are noise). lib/*.js changes: `node quickshell/lib/check.js`.
 
-Visual verification: hyprland-mcp section below.
+Visual verification: hypr-test section below.
 
 
-# Desktop testing with hyprland-mcp
+# Desktop testing with hypr-test
 
-Verify every Hyprland, quickshell and dotfile change with the hyprland MCP server https://github.com/yumedots/hyprland-mcp A change is not verified until it has been seen and confirmed through it.
+Verify every Hyprland, quickshell and dotfile change with scripts/hypr-test. It runs a private nested Hyprland + quickshell on a worktree copy of this repo, so your real session is never touched. A change is not verified until it has been seen through it.
 
-Rules:
-
-- Never disturb my screen. Launch and test only on the private workspace "name:agent" and confirm the window actually landed there before doing anything with it.
-- Verification loop: screenshot, act, screenshot, verify. Repeat until the change behaves as intended, then close everything you opened.
-- Screenshots are saved in ~/Pictures/hyprland-mcp/. If you cannot see images, hand the file to a vision subagent instead of guessing.
-- On SESSION_LOCKED: stop immediately and tell me. Do not keep driving input.
-
-Requirements: Hyprland 0.41+, grim, wtype, wl-clipboard, and the hyprland-mcp-click plugin for hidden clicks. Before touching anything Hyprland-related, check that all of them are present — if any is missing, refuse to start the task and tell me what is missing.
-
-Edit dotfiles in a git worktree, never directly in my live config. Tests run only against the worktree — when everything is verified and working, apply the changes to ~/.config yourself (copy the changed files over or apply the worktree diff; quickshell live-reloads) and tell me what changed. When stuck, read docs/troubleshooting.md.
+- Edit files here in the repo. Test only with scripts/hypr-test, never with hyprctl or input against the real session.
+- `scripts/hypr-test start` — nested Hyprland + quickshell on the worktree copy (fails if one is already running).
+- `scripts/hypr-test shot` — screenshot of the test instance, prints the png path.
+- `scripts/hypr-test run <cmd...>` — run hyprctl/qs/ipc against the test instance only.
+- `scripts/hypr-test stop` — kill it and remove the worktree. Always stop when done.
+- Loop: shot, act via run, shot, verify. On errors the script prints the quickshell log — read it instead of guessing.
+- If you cannot see images, hand the png to a vision subagent instead of guessing.
