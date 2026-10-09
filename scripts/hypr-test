@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+RUN="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr-test"
+STATE="$RUN/state"
+WT="$RUN/worktree"
+SHOTS="$RUN/shots"
+QLOG_DIR="/run/user/$(id -u)/quickshell/by-id"
+
+usage() {
+	echo "usage: hypr-test start|shot|run <cmd> [args...]|stop" >&2
+	exit 1
+}
+
+fail() {
+	echo "hypr-test: $*" >&2
+	exit 1
+}
+
+qslog() {
+	local f
+	if [ -n "${QS_ID:-}" ]; then
+		f="$QLOG_DIR/$QS_ID/log.qslog"
+	else
+		f=$(ls -t "$QLOG_DIR"/*/log.qslog 2>/dev/null | head -1 || true)
+	fi
+	if [ -n "$f" ] && [ -f "$f" ]; then
+		echo "--- quickshell log: $f ---" >&2
+		tail -n 40 "$f" >&2
+	fi
+}
+
+hypr_pid_by_sig() {
+	python3 -c 'import json,subprocess,sys
+d=json.loads(subprocess.run(["hyprctl","instances","-j"],capture_output=True,text=True).stdout or "[]")
+m=[e["pid"] for e in d if e["instance"]==sys.argv[1]]
+print(m[0]) if m else None' "$1" 2>/dev/null || true
+}
+
+new_instance() {
+	python3 -c 'import json,subprocess,sys
+d=json.loads(subprocess.run(["hyprctl","instances","-j"],capture_output=True,text=True).stdout or "[]")
+m=[e for e in d if e["pid"]==int(sys.argv[1])]
+print(m[0]["instance"], m[0]["wl_socket"]) if m else None' "$1" 2>/dev/null || true
+}
+
+qs_instance() {
+	python3 -c 'import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d=[]
+m=[e for e in d if e["config_path"]==sys.argv[1]]
+print(m[0]["id"], m[0]["pid"]) if m else None' "$1" 2>/dev/null
+}
+
+first_monitor() {
+	python3 -c 'import json,sys
+try: m=json.load(sys.stdin)
+except Exception: m=[]
+print(m[0]["name"]) if m else None' 2>/dev/null || true
+}
+
+teardown_wt() {
+	git -C "$REPO" worktree remove --force "$WT" >/dev/null 2>&1 || rm -rf "$WT"
+	git -C "$REPO" worktree prune
+}
+
+abort_start() {
+	pkill -f "$WT/quickshell/shell.qml" 2>/dev/null || true
+	[ -n "${1:-}" ] && kill "$1" 2>/dev/null || true
+	teardown_wt
+	fail "$2"
+}
+
+cmd_start() {
+	if [ -f "$STATE" ]; then
+		. "$STATE"
+		if [ -n "${QS_PID:-}" ] && kill -0 "$QS_PID" 2>/dev/null; then
+			fail "already running (stop first)"
+		fi
+		cmd_stop >/dev/null 2>&1 || true
+	fi
+	mkdir -p "$RUN" "$SHOTS"
+	rm -rf "$WT"
+	git -C "$REPO" worktree prune
+	git -C "$REPO" worktree add --detach "$WT" HEAD >/dev/null 2>&1 || fail "git worktree add failed"
+	rsync -a --exclude .git "$REPO/" "$WT/"
+	pkill -f "$WT/quickshell/shell.qml" 2>/dev/null || true
+	hyprctl eval '_G.HYPRTEST_RULE = hl.window_rule({name="hyprtest-hide", match={class="aquamarine"}, float=true, move="9999 0", no_focus=true, no_anim=true})' >/dev/null || fail "cannot register hide rule on real session"
+	setsid env -u HYPRLAND_INSTANCE_SIGNATURE XDG_CONFIG_HOME="$WT" Hyprland </dev/null >>"$RUN/hyprland.log" 2>&1 &
+	local hp=$!
+	local sig="" sock="" line="" i
+	for i in $(seq 1 40); do
+		line=$(new_instance "$hp")
+		if [ -n "$line" ]; then
+			sig=${line%% *}
+			sock=${line##* }
+			break
+		fi
+		sleep 0.5
+	done
+	if [ -z "$sig" ]; then
+		echo "--- hyprland log ---" >&2
+		tail -n 40 "$RUN/hyprland.log" >&2
+		abort_start "$hp" "nested Hyprland did not start"
+	fi
+	setsid env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" XDG_CONFIG_HOME="$WT" quickshell -n -p "$WT/quickshell/shell.qml" </dev/null >>"$RUN/quickshell.log" 2>&1 &
+	local qid="" qpid="" out=""
+	for i in $(seq 1 40); do
+		line=$(qs list --all -j 2>/dev/null | qs_instance "$WT/quickshell/shell.qml" || true)
+		if [ -n "$line" ]; then
+			qid=${line%% *}
+			qpid=${line##* }
+			break
+		fi
+		sleep 0.5
+	done
+	if [ -z "$qid" ]; then
+		qslog
+		echo "--- quickshell stdout ---" >&2
+		tail -n 40 "$RUN/quickshell.log" >&2
+		abort_start "$hp" "quickshell did not start"
+	fi
+	for i in $(seq 1 20); do
+		out=$(env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" hyprctl monitors -j 2>/dev/null | first_monitor)
+		[ -n "$out" ] && break
+		sleep 0.5
+	done
+	[ -n "$out" ] || out=WAYLAND-1
+	printf 'HYPR_PID=%s\nQS_PID=%s\nQS_ID=%s\nSIG=%s\nSOCK=%s\nWORKTREE=%s\nOUTPUT=%s\n' \
+		"$hp" "$qpid" "$qid" "$sig" "$sock" "$WT" "$out" >"$STATE"
+	echo "started: hyprland pid $hp, quickshell $qid pid $qpid, output $out"
+	echo "worktree: $WT"
+}
+
+cmd_shot() {
+	[ -f "$STATE" ] || fail "not started (run: hypr-test start)"
+	. "$STATE"
+	mkdir -p "$SHOTS"
+	local f="$SHOTS/$(date +%Y%m%d-%H%M%S).png"
+	if ! env HYPRLAND_INSTANCE_SIGNATURE="$SIG" WAYLAND_DISPLAY="$SOCK" grim -o "$OUTPUT" "$f"; then
+		qslog
+		fail "grim failed for output $OUTPUT"
+	fi
+	echo "$f"
+}
+
+cmd_run() {
+	[ -f "$STATE" ] || fail "not started (run: hypr-test start)"
+	. "$STATE"
+	[ $# -ge 1 ] || usage
+	env HYPRLAND_INSTANCE_SIGNATURE="$SIG" WAYLAND_DISPLAY="$SOCK" XDG_CONFIG_HOME="$WORKTREE" "$@"
+}
+
+cmd_stop() {
+	if [ -f "$STATE" ]; then
+		. "$STATE"
+		local hp
+		hp=$(hypr_pid_by_sig "${SIG:-}")
+		pkill -f "$WORKTREE/quickshell/shell.qml" 2>/dev/null || true
+		[ -n "$hp" ] && kill "$hp" 2>/dev/null || true
+		sleep 1
+		[ -n "$hp" ] && kill -9 "$hp" 2>/dev/null || true
+		pkill -9 -f "$WORKTREE/quickshell/shell.qml" 2>/dev/null || true
+		rm -f "$STATE"
+	fi
+	teardown_wt
+	echo "stopped"
+}
+
+case "${1:-}" in
+	start) shift; cmd_start ;;
+	shot) shift; cmd_shot "$@" ;;
+	run) shift; cmd_run "$@" ;;
+	stop) shift; cmd_stop ;;
+	*) usage ;;
+esac
