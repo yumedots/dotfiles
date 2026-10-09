@@ -21,9 +21,9 @@ fail() {
 qslog() {
 	local f
 	if [ -n "${QS_ID:-}" ]; then
-		f="$QLOG_DIR/$QS_ID/log.qslog"
+		f="$QLOG_DIR/$QS_ID/log.log"
 	else
-		f=$(ls -t "$QLOG_DIR"/*/log.qslog 2>/dev/null | head -1 || true)
+		f=$(ls -t "$QLOG_DIR"/*/log.log 2>/dev/null | head -1 || true)
 	fi
 	if [ -n "$f" ] && [ -f "$f" ]; then
 		echo "--- quickshell log: $f ---" >&2
