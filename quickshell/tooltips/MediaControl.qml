@@ -134,17 +134,39 @@ Item {
 				}
 
 				Image {
+					id: incoming
+
 					anchors.fill: parent
 					cache: false
 					sourceSize.width: Config.mediaArtHeight * 2
 					fillMode: Image.PreserveAspectCrop
 					source: root.art
+					opacity: 0
 
 					onStatusChanged: {
+						if (status !== Image.Ready) {
+							fade.stop();
+							opacity = 0;
+						}
+
 						if (root.art === "")
 							art.shown = "";
 						else if (status === Image.Ready)
-							art.shown = String(source);
+							fade.restart();
+					}
+
+					onOpacityChanged: if (opacity >= 1 && status === Image.Ready)
+						art.shown = String(source);
+
+					NumberAnimation {
+						id: fade
+
+						target: incoming
+						property: "opacity"
+						from: 0
+						to: 1
+						duration: Config.popupFadeMs
+						easing.type: Easing.OutCubic
 					}
 				}
 			}
