@@ -109,6 +109,7 @@ Item {
 				id: art
 
 				anchors.fill: parent
+				property string shown: ""
 
 				Rectangle {
 					anchors.fill: parent
@@ -117,7 +118,7 @@ Item {
 
 				Text {
 					anchors.centerIn: parent
-					visible: root.art === "" || artwork.status !== Image.Ready
+					visible: art.shown === ""
 					font.family: Config.fontFamily
 					font.pixelSize: Math.round(art.height * 0.2)
 					color: Config.muted
@@ -125,13 +126,26 @@ Item {
 				}
 
 				Image {
-					id: artwork
+					anchors.fill: parent
+					cache: false
+					sourceSize.width: Config.mediaArtHeight * 2
+					fillMode: Image.PreserveAspectCrop
+					source: art.shown
+				}
 
+				Image {
 					anchors.fill: parent
 					cache: false
 					sourceSize.width: Config.mediaArtHeight * 2
 					fillMode: Image.PreserveAspectCrop
 					source: root.art
+
+					onStatusChanged: {
+						if (root.art === "")
+							art.shown = "";
+						else if (status === Image.Ready)
+							art.shown = String(source);
+					}
 				}
 			}
 
