@@ -12,6 +12,7 @@ BarStat {
 	icon: Config.iconApp
 	readonly property bool wanted: Media.hasContent(root.player)
 	visible: root.wanted
+	popupPreload: true
 
 	onPlayerChanged: if (!root.visible) root.closePopup()
 
