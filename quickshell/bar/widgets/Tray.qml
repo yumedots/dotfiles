@@ -144,66 +144,12 @@ Row {
 		anchorWindow: root.bar
 		anchorItem: root.menuAnchor
 		contentPadding: Config.trayMenuPadding
+		wantsKeyboard: true
+		closable: false
 
-		Column {
-			Repeater {
-				model: menu.children
-
-				delegate: Item {
-					id: option
-
-					required property var modelData
-
-					readonly property bool separator: option.modelData.isSeparator === true
-					readonly property bool enabled: option.modelData.enabled !== false
-
-					implicitWidth: Math.max(Config.trayMenuWidth, label.implicitWidth + 2 * Config.trayMenuPadding)
-					implicitHeight: option.separator ? Config.trayMenuSeparator : Config.trayMenuRowHeight
-					width: implicitWidth
-					height: implicitHeight
-
-					Highlight {
-						active: !option.separator && option.enabled && hit.containsMouse
-					}
-
-					Rectangle {
-						anchors.verticalCenter: parent.verticalCenter
-						width: parent.width
-						height: Config.trayMenuSeparator
-						color: Config.muted
-						visible: option.separator
-					}
-
-					Text {
-						id: label
-
-						anchors.left: parent.left
-						anchors.leftMargin: Config.trayMenuPadding
-						anchors.right: parent.right
-						anchors.rightMargin: Config.trayMenuPadding
-						anchors.verticalCenter: parent.verticalCenter
-						visible: !option.separator
-						elide: Text.ElideRight
-						font.family: Config.fontFamily
-						font.pixelSize: Settings.fontSize
-						color: option.enabled ? Config.foreground : Config.muted
-						text: option.modelData.text
-					}
-
-					MouseArea {
-						id: hit
-
-						anchors.fill: parent
-						enabled: option.enabled && !option.separator
-						hoverEnabled: true
-
-						onClicked: {
-							option.modelData.triggered();
-							root.closeMenu();
-						}
-					}
-				}
-			}
+		MenuLevel {
+			entries: menu.children
+			dismiss: function () { menuPopup.close(); }
 		}
 	}
 }

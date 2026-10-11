@@ -183,6 +183,9 @@ PanelWindow {
 		acceptedButtons: Qt.AllButtons
 
 		onPressed: function (mouse) {
+			if (mouse.button !== Qt.LeftButton)
+				return;
+
 			if (root.insideCard(mouse.x, mouse.y))
 				return;
 

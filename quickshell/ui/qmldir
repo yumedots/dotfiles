@@ -1,5 +1,6 @@
 module ui
 AppIcon 1.0 AppIcon.qml
+MenuLevel 1.0 MenuLevel.qml
 HyprBorder 1.0 HyprBorder.qml
 Tooltip 1.0 Tooltip.qml
 BarStat 1.0 BarStat.qml
