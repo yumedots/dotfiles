@@ -105,6 +105,16 @@ ShellRoot {
 			Handoff.run(shellRoot.closeLauncherUnderWidget);
 	}
 
+	function trayGroup() {
+		if (bars.instances.length === 0)
+			return;
+
+		const tray = bars.instances[0].widgets["tray"];
+
+		if (tray && typeof tray.clicked === "function")
+			tray.clicked();
+	}
+
 	function media(action) {
 		const command = Media.command(Mpris.players.values ? Mpris.players.values : [], action);
 
@@ -125,14 +135,14 @@ ShellRoot {
 	}
 
 	Instantiator {
-		model: shellRoot.isLauncher ? [] : [["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["display", "display"]]
+		model: shellRoot.isLauncher ? [] : [["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["display", "display"], ["tray", "tray"]]
 
 		delegate: GlobalShortcut {
 			required property var modelData
 
 			name: modelData[0]
 
-			onPressed: shellRoot.openWidget(modelData[1], true)
+			onPressed: modelData[1] === "tray" ? shellRoot.trayGroup() : shellRoot.openWidget(modelData[1], true)
 		}
 	}
 
@@ -220,6 +230,10 @@ ShellRoot {
 
 		function display() {
 			shellRoot.openWidget("display", true);
+		}
+
+		function tray() {
+			shellRoot.trayGroup();
 		}
 	}
 

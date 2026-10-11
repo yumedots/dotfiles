@@ -147,6 +147,7 @@ hl.bind(mainMod .. " + S", actions.scratchpadSwap)
 hl.bind(mainMod .. " + O", hl.dsp.global("quickshell:notifications"))
 hl.bind(mainMod .. " + D", hl.dsp.global("quickshell:contributions"))
 hl.bind(mainMod .. " + P", hl.dsp.global("quickshell:display"))
+hl.bind(mainMod .. " + T", hl.dsp.global("quickshell:tray"))
 
 hl.bind(mainMod .. " + left",  focusOrSwitch("left"))
 hl.bind(mainMod .. " + right", focusOrSwitch("right"))
