@@ -13,6 +13,7 @@ Item {
 	property color barColor: Config.red
 	property color textColor: root.barColor
 	property string icon: ""
+	property real iconLift: 0
 	property var iconComponent: null
 	property real iconWidth: 0
 	property string value: ""
@@ -92,7 +93,7 @@ Item {
 		id: iconsMetrics
 		font.family: Config.fontFamily
 		font.pixelSize: Settings.iconSize
-		text: Config.iconCpu + Config.iconMemory + Config.iconVolumeLow + Config.iconVolumeMid + Config.iconVolumeHigh
+		text: Config.iconCpu + Config.iconMemory + Config.iconVolumeLow + Config.iconVolumeMid + Config.iconVolumeHigh + Config.iconBatteryFull + Config.iconBatteryHigh + Config.iconBatteryMid + Config.iconBatteryLow + Config.iconBatteryAlert + Config.iconBatteryCharge + Config.iconPowerPlug
 	}
 
 	TextMetrics {
@@ -129,7 +130,7 @@ Item {
 
 			visible: root.iconComponent === null
 			x: 0
-			y: root.inkAbove - root.iconAscent
+			y: root.inkAbove - root.iconAscent - root.iconLift
 			font.family: Config.fontFamily
 			font.pixelSize: Settings.iconSize
 			color: root.inkColor
@@ -142,7 +143,7 @@ Item {
 			active: root.iconComponent !== null
 			sourceComponent: root.iconComponent
 			x: 0
-			y: 0
+			y: 0 - root.iconLift
 			width: root.iconBreadth
 			height: root.contentHeight
 

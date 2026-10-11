@@ -24,6 +24,7 @@ BarStat {
 
 	dim: root.applyFailed
 	dimColor: Config.muted
+	iconLift: 2
 	icon: System.batteryIcon(root.battery, root.icons)
 	barColor: root.battery === null ? Config.foreground : Color.dangerColor(Config.powerBase, Config.powerWarn, Config.powerDanger, Config.powerWarnAt, Config.powerDangerAt, root.battery.pct)
 	textColor: root.barColor
@@ -34,6 +35,7 @@ BarStat {
 	function refresh() {
 		batteryFile.reload();
 		governorFile.reload();
+		governorCurFile.reload();
 	}
 
 	function setGovernor(next) {
@@ -41,9 +43,8 @@ BarStat {
 		setGovernorProcess.running = true;
 	}
 
-function handleGovernors(text) {
+	function handleGovernors(text) {
 		root.governors = System.cpuGovernors(text);
-		root.governor = System.currentGovernor(text);
 	}
 
 	FileView {
@@ -60,6 +61,14 @@ function handleGovernors(text) {
 		path: "/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors"
 		blockLoading: true
 		onLoaded: root.handleGovernors(governorFile.text())
+	}
+
+	FileView {
+		id: governorCurFile
+
+		path: "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+		blockLoading: true
+		onLoaded: root.governor = governorCurFile.text().trim()
 	}
 
 	Process {
@@ -96,9 +105,6 @@ function handleGovernors(text) {
 			id: monitor
 
 			source: root
-			battery: root.battery
-			governors: root.governors
-			governor: root.governor
 			onCloseRequested: root.closePopup()
 			onGovernorPicked: function (next) {
 				root.setGovernor(next);
