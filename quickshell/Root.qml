@@ -115,6 +115,25 @@ ShellRoot {
 			tray.clicked();
 	}
 
+	function speedtest() {
+		if (bars.instances.length === 0)
+			return;
+
+		const net = bars.instances[0].widgets["network"];
+
+		if (net && typeof net.requestSpeedTest === "function")
+			net.requestSpeedTest();
+	}
+
+	function widgetAction(id) {
+		if (id === "tray")
+			shellRoot.trayGroup();
+		else if (id === "speedtest")
+			shellRoot.speedtest();
+		else
+			shellRoot.openWidget(id, true);
+	}
+
 	function media(action) {
 		const command = Media.command(Mpris.players.values ? Mpris.players.values : [], action);
 
@@ -135,14 +154,14 @@ ShellRoot {
 	}
 
 	Instantiator {
-		model: shellRoot.isLauncher ? [] : [["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["tray", "tray"]]
+		model: shellRoot.isLauncher ? [] : [["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["speedtest", "speedtest"], ["display", "display"], ["tray", "tray"]]
 
 		delegate: GlobalShortcut {
 			required property var modelData
 
 			name: modelData[0]
 
-			onPressed: modelData[1] === "tray" ? shellRoot.trayGroup() : shellRoot.openWidget(modelData[1], true)
+			onPressed: shellRoot.widgetAction(modelData[1])
 		}
 	}
 
@@ -208,6 +227,10 @@ ShellRoot {
 
 		function network() {
 			shellRoot.openWidget("network", true);
+		}
+
+		function speedtest() {
+			shellRoot.speedtest();
 		}
 
 		function killPopups() {
