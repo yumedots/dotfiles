@@ -211,15 +211,15 @@ function megaBits(bytesPerSecond) {
 }
 
 function speedText(bytesPerSecond) {
-	return megaBits(bytesPerSecond).toFixed(megaBits(bytesPerSecond) >= 100 ? 0 : 1);
+	return megaBits(bytesPerSecond).toFixed(0);
 }
 
 function speedCeiling(bytesPerSecond) {
-	const ladder = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
-	const mbps = megaBits(bytesPerSecond);
+	const ladder = [5, 10, 25, 50, 100, 250, 500, 1000];
+	const mbps = megaBits(bytesPerSecond) * 1.5;
 
 	for (let i = 0; i < ladder.length; i++)
-		if (mbps <= ladder[i])
+		if (mbps < ladder[i])
 			return ladder[i] * 125000;
 
 	return ladder[ladder.length - 1] * 125000;

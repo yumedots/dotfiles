@@ -1297,9 +1297,9 @@ assert(up[0] === "sh" && up[2].indexOf("speed_upload") < 0, "the upload test is 
 
 assert(megaBits(125000).toFixed(1) === "1.0", "a byte rate converts to megabits per second");
 assert(megaBits(0) === 0 && megaBits(null) === 0, "no traffic reads as zero megabits");
-assert(speedText(125000) === "1.0", "small speeds keep one decimal place");
-assert(speedText(12500000) === "100", "triple digit speeds drop the decimal");
-assert(speedText(null) === "0.0", "a missing reading is not a crash");
+assert(speedText(125000) === "1", "a megabit reads as a whole number");
+assert(speedText(12500000) === "100", "triple digit speeds stay whole numbers");
+assert(speedText(null) === "0", "a missing reading is not a crash");
 
 assert(speedCeiling(0) === 625000, "a needle with nothing to show rests on the first rung");
 assert(speedCeiling(125000) === 625000, "one megabit sits inside the five megabit rung");
