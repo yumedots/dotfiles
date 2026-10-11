@@ -78,7 +78,9 @@ PanelWindow {
 
 	margins.left: 0
 
-	visible: root.shown || card.opacity > 0
+	property bool alwaysMapped: false
+
+	visible: alwaysMapped || root.shown || card.opacity > 0
 
 	onVisibleChanged: {
 		if (root.visible || root.pendingFocus === "")
@@ -102,7 +104,9 @@ PanelWindow {
 				return;
 			}
 
-			root.focusWindow(root.pendingFocus);
+			const address = root.pendingFocus;
+			root.pendingFocus = "";
+			root.focusWindow(address);
 		}
 	}
 

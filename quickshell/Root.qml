@@ -303,5 +303,6 @@ ShellRoot {
 
 	Launcher {
 		id: launcherWindow
+		alwaysMapped: shellRoot.isLauncher
 	}
 }
