@@ -75,6 +75,7 @@ const popupSlideMs = 400;
 const popupPos = "top-center";
 const popupX = -1;
 const popupY = -1;
+const popupBorderWidth = 1;
 const volumeOsdMs = 1500;
 const borderFallbackWidth = 1;
 const borderFallbackColor = "#ffffff";

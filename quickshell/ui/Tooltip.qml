@@ -12,7 +12,7 @@ PanelWindow {
 	property Item anchorItem
 	property var anchorWindow
 	property var borderColors: null
-	property real borderWidth: -1
+	property real borderWidth: Config.popupBorderWidth
 	property color backgroundColor: Config.surfaceTranslucent
 	property bool wantsKeyboard: false
 	property bool preload: false
