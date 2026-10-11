@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
 import qs.ui
 import qs
@@ -27,11 +28,45 @@ Item {
 
 	property bool shown: false
 	property bool compact: false
+	property int iconEpoch: 0
 	readonly property bool showApps: root.hasApps && !root.compact
 
 	onShownChanged: if (!root.shown) {
 		root.keyboard = false;
 		root.shift = false;
+	} else {
+		Hyprland.refreshToplevels();
+		refreshTimer.restart();
+	}
+
+	function bumpIcons() {
+		root.iconEpoch++;
+	}
+
+	Timer {
+		id: nodeRefreshTimer
+
+		interval: 1000
+		onTriggered: root.bumpIcons()
+	}
+
+	onNodesChanged: nodeRefreshTimer.restart()
+	onRunningOutputChanged: nodeRefreshTimer.restart()
+
+	Timer {
+		id: refreshTimer
+
+		interval: 1500
+		onTriggered: { Hyprland.refreshToplevels(); root.bumpIcons(); }
+	}
+
+	Connections {
+		target: Hyprland
+
+		function onToplevelsChanged() {
+			root.bumpIcons();
+			refreshTimer.restart();
+		}
 	}
 
 	readonly property real channelsMaxWidth: Config.mixerVisibleChannels * Config.mixerChannelWidth + (Config.mixerVisibleChannels - 1) * Config.mixerChannelGap
@@ -146,9 +181,24 @@ Item {
 		if (!node)
 			return "";
 
-		const app = System.streamApp(node.properties);
+		const ids = System.streamIds(node.properties);
+		const pid = Number(node.properties ? node.properties["application.process.id"] || 0 : 0);
 
-		return AppIcons.iconOf(app.name, app.icons);
+		(Hyprland.toplevels.values || []).forEach(function (toplevel) {
+			const info = toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
+
+			if (pid && Number(info.pid) === pid)
+				ids.push(info.class);
+		});
+
+		for (let i = 0; i < ids.length; i++) {
+			const icon = AppIcons.iconOf(ids[i]);
+
+			if (icon !== "")
+				return icon;
+		}
+
+		return "";
 	}
 
 	function openPicker(direction) {
@@ -212,9 +262,16 @@ Item {
 		property bool appIcon: false
 		property bool muted: false
 		property real volume: 0
+		property string iconSource: ""
+
+		function refreshIcon() {
+			channel.lastEpoch = root.iconEpoch;
+			channel.iconSource = root.iconFor(channel.node);
+		}
 
 		readonly property bool selected: System.sameNode(channel.node, root.selectedNode)
-		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
+		property int lastEpoch: -1
+		onAppIconChanged: if (channel.appIcon) channel.refreshIcon()
 		readonly property int percent: Math.round(channel.volume * 100)
 		readonly property real level: Util.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(channel.level * Config.mixerStepCount) - 1

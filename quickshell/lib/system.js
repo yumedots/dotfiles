@@ -14,22 +14,20 @@ function isInputStream(isStream, mediaClass) {
 	return String(mediaClass === undefined || mediaClass === null ? "" : mediaClass).indexOf("Input") >= 0;
 }
 
-function streamApp(props) {
+function streamId(props) {
 	const values = props || {};
 	const binary = String(values["application.process.binary"] || "");
-	const icons = [];
 
-	if (values["application.icon-name"])
-		icons.push(String(values["application.icon-name"]));
-	if (values["application.name"])
-		icons.push(String(values["application.name"]).toLowerCase());
-	if (binary)
-		icons.push(binary.substring(binary.lastIndexOf("/") + 1));
+	return String(values["node.name"] || values["application.name"] || binary.substring(binary.lastIndexOf("/") + 1));
+}
 
-	return {
-		name: values["application.name"] || values["node.description"] || values["node.name"] || "",
-		icons: icons
-	};
+function streamIds(props) {
+	const values = props || {};
+	const binary = String(values["application.process.binary"] || "");
+	const game = (String(values["node.name"] || values["application.name"] || "").match(/(\d{3,})\b/) || [])[1];
+	const ids = [values["node.name"], values["application.name"], game ? "steam_app_" + game : "", binary.substring(binary.lastIndexOf("/") + 1)];
+
+	return ids.filter(function (id) { return id; }).map(String);
 }
 
 function parseRunningStreams(text, direction) {
