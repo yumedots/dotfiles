@@ -154,7 +154,7 @@ ShellRoot {
 	}
 
 	Instantiator {
-		model: shellRoot.isLauncher ? [] : [["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["speedtest", "speedtest"], ["display", "display"], ["tray", "tray"]]
+		model: shellRoot.isLauncher ? [] : [["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"]]
 
 		delegate: GlobalShortcut {
 			required property var modelData
@@ -257,6 +257,10 @@ ShellRoot {
 
 		function display() {
 			shellRoot.openWidget("display", true);
+		}
+
+		function power() {
+			shellRoot.openWidget("power", true);
 		}
 
 		function tray() {

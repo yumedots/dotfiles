@@ -365,6 +365,65 @@ function killCommand(pid, signal) {
 	return ["kill", signal || "-9", String(pid)];
 }
 
+function parseBattery(text) {
+	const vals = {};
+
+	String(text || "").split("\n").forEach(function (line) {
+		const at = line.indexOf("=");
+
+		if (at < 0)
+			return;
+
+		vals[line.substring(0, at).trim()] = line.substring(at + 1).trim();
+	});
+
+	if (vals["POWER_SUPPLY_PRESENT"] === "0" || vals["POWER_SUPPLY_CAPACITY"] === undefined)
+		return null;
+
+	const state = vals["POWER_SUPPLY_STATUS"] || "Unknown";
+
+	return {
+		pct: parseFloat(vals["POWER_SUPPLY_CAPACITY"]) || 0,
+		charging: state === "Charging" || state === "Full",
+		full: state === "Full"
+	};
+}
+
+function batteryIcon(battery, icons) {
+	if (!battery)
+		return icons.plug;
+
+	if (battery.charging)
+		return icons.charge;
+
+	const p = battery.pct;
+
+	return p >= 90 ? icons.full
+		: p >= 60 ? icons.high
+		: p >= 30 ? icons.mid
+		: p >= 10 ? icons.low
+		: icons.alert;
+}
+
+function cpuGovernors(text) {
+	const line = String(text || "").split("\n").filter(function (row) { return /\w/.test(row); }).pop();
+
+	if (line === undefined || line.indexOf(":") >= 0)
+		return [];
+
+	return line.replace(/\[|\]/g, "").split(/\s+/).filter(function (word) { return /\w/.test(word); });
+}
+
+function currentGovernor(text) {
+	const hit = String(text || "").split("\n").find(function (row) { return row.indexOf("[") >= 0; });
+
+	return hit ? /\[([a-z_-]+)\]/.exec(hit)[1] : "";
+}
+
+function governorCommand(governor) {
+	return ["sh", "-c", "echo '" + governor + "' | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor"];
+}
+
 function parseMeminfo(text) {
 	const vals = {};
 

@@ -52,6 +52,7 @@ PanelWindow {
 		if (id === "media") return mediaComponent;
 		if (id === "network") return networkComponent;
 		if (id === "volume") return volumeComponent;
+		if (id === "power") return powerComponent;
 		if (id === "display") return displayComponent;
 		if (id === "spacer") return spacerComponent;
 
@@ -186,6 +187,7 @@ PanelWindow {
 	Component { id: mediaComponent; MediaStat {} }
 	Component { id: networkComponent; NetworkStat {} }
 	Component { id: volumeComponent; VolumeStat {} }
+	Component { id: powerComponent; PowerStat {} }
 	Component { id: displayComponent; DisplayStat {} }
 	Component { id: spacerComponent; Spacer {} }
 

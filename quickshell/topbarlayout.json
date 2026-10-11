@@ -18,6 +18,7 @@
 				{ "id": "notify" },
 				{ "id": "cpu" },
 				{ "id": "memory" },
+				{ "id": "power" },
 				{ "id": "display" },
 				{ "id": "volume" }
 			]

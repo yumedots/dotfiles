@@ -1175,6 +1175,41 @@ assert(readJson("not json", null) === null && readJson("", "fb") === "fb", "a co
 
 });
 
+section("power", function () {
+assert(parseBattery("") === null, "an empty uevent has no battery");
+assert(parseBattery("POWER_SUPPLY_PRESENT=1\nPOWER_SUPPLY_STATUS=Discharging\nPOWER_SUPPLY_CAPACITY=42\n") !== null, "a normal battery is found");
+assert(parseBattery("POWER_SUPPLY_PRESENT=1\nPOWER_SUPPLY_STATUS=Discharging\nPOWER_SUPPLY_CAPACITY=88\n").pct === 88, "the capacity reads as a percent");
+assert(parseBattery("POWER_SUPPLY_PRESENT=0\nPOWER_SUPPLY_CAPACITY=50\n") === null, "an absent battery reads as none");
+assert(parseBattery("POWER_SUPPLY_PRESENT=1\nPOWER_SUPPLY_STATUS=Charging\nPOWER_SUPPLY_CAPACITY=10\n").charging === true, "a charging battery is marked");
+assert(parseBattery("POWER_SUPPLY_PRESENT=1\nPOWER_SUPPLY_STATUS=Full\nPOWER_SUPPLY_CAPACITY=100\n").charging === true, "a full battery counts as charging");
+assert(parseBattery("POWER_SUPPLY_PRESENT=1\nPOWER_SUPPLY_STATUS=Not charging\nPOWER_SUPPLY_CAPACITY=60\n").charging === false, "not charging is not charging");
+assert(parseBattery("POWER_SUPPLY_CAPACITY=50\n") !== null, "a battery without a present flag still shows");
+
+const icons = { full: "F", high: "H", mid: "M", low: "L", alert: "A", charge: "C", plug: "P" };
+assert(batteryIcon(null, icons) === "P", "no battery shows the plug");
+assert(batteryIcon({ pct: 100, charging: false }, icons) === "F", "a battery at a hundred shows full");
+assert(batteryIcon({ pct: 90, charging: false }, icons) === "F", "ninety and up shows full");
+assert(batteryIcon({ pct: 89, charging: false }, icons) === "H", "eighty nine shows high");
+assert(batteryIcon({ pct: 60, charging: false }, icons) === "H", "sixty shows high");
+assert(batteryIcon({ pct: 59, charging: false }, icons) === "M", "fifty nine shows mid");
+assert(batteryIcon({ pct: 30, charging: false }, icons) === "M", "thirty shows mid");
+assert(batteryIcon({ pct: 29, charging: false }, icons) === "L", "twenty nine shows low");
+assert(batteryIcon({ pct: 10, charging: false }, icons) === "L", "ten shows low");
+assert(batteryIcon({ pct: 9, charging: false }, icons) === "A", "nine shows the warning");
+assert(batteryIcon({ pct: 50, charging: true }, icons) === "C", "charging overrides the level");
+
+assert(cpuGovernors("performance powersave\n").length === 2, "the governors list comes through");
+assert(cpuGovernors("performance powersave\n")[0] === "performance", "and in order");
+assert(cpuGovernors("") .length === 0, "no cpufreq, no governors");
+assert(cpuGovernors("[wiggle] performance\n").length === 2, "a bracketed governor is unbracketed");
+assert(cpuGovernors("other: info\n\nperformance powersave\n").length === 2, "the governor line is found among other lines");
+assert(currentGovernor("scaling_governor: performance powersave\n") === "", "without a bracket nothing is current");
+assert(currentGovernor("scaling_governor: [performance] powersave\n") === "performance", "the bracketed governor is the current one");
+assert(currentGovernor("other: info\nscaling_governor: [powersave] performance\n") === "powersave", "the current one is found among other lines");
+assert(governorCommand("performance").join(" ").indexOf("performance") >= 0, "the governor command carries the governor");
+assert(governorCommand("powersave")[2].indexOf("cpu*") > 0, "the command reaches every cpu");
+});
+
 section("network", function () {
 const devs = parseDevs("enp4s0:ethernet:connected:Wired connection 1\nlo:loopback:connected (externally):lo\nwlp5s0:wifi:disconnected:(none)\n");
 
@@ -1268,10 +1303,13 @@ assert(speedText(null) === "0.0", "a missing reading is not a crash");
 
 assert(speedCeiling(0) === 625000, "a needle with nothing to show rests on the first rung");
 assert(speedCeiling(125000) === 625000, "one megabit sits inside the five megabit rung");
-assert(speedCeiling(12500000) === 12500000, "an exact rung is its own ceiling");
+assert(speedCeiling(12500000) === 31250000, "a speed on a rung still gets headroom above it");
 assert(speedCeiling(15000000) === 31250000, "a speed past its rung climbs to the next one");
 assert(speedCeiling(null) === 625000, "a missing reading is a floor, not a crash");
-assert(speedCeiling(1e12) === 1250000000, "absurd speeds stop at the top rung");
+assert(speedCeiling(62375000) === 125000000, "499 megabits reads half dial, not pegged");
+assert(speedCeiling(100000000) === 125000000, "800 megabits keeps climbing on the same dial");
+assert(speedCeiling(118750000) === 125000000, "950 megabits reaches the end of the dial");
+assert(speedCeiling(1e12) === 125000000, "absurd speeds stop at the top rung");
 });
 
 console.log("check ok (" + ran + " assertions" + (filter === "" ? "" : ", filter " + filter) + ")");
