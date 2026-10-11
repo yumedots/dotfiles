@@ -1158,4 +1158,95 @@ assert(readJson("not json", null) === null && readJson("", "fb") === "fb", "a co
 
 });
 
+section("network", function () {
+const devs = parseDevs("enp4s0:ethernet:connected:Wired connection 1\nlo:loopback:connected (externally):lo\nwlp5s0:wifi:disconnected:(none)\n");
+
+assert(devs.length === 3, "every device line becomes a row");
+assert(devs[0].device === "enp4s0" && devs[0].type === "ethernet", "a wired card reads as ethernet");
+assert(devs[2].state === "disconnected" && devs[2].connection === "(none)", "an unplugged card knows it is not connected");
+assert(pickDev(devs).device === "enp4s0", "the wired card is picked");
+assert(pickDev(parseDevs("wlp5s0:wifi:connected:Casa\n")).type === "wifi", "on wifi alone the wireless card is picked");
+assert(pickDev(parseDevs("lo:loopback:connected:lo\n")) === null, "a loopback only box has nothing to show");
+assert(parseDevs("").length === 0 && parseDevs(null).length === 0, "no devices at all is not a crash");
+assert(parseDevs("garbage").length === 0, "a malformed line is dropped rather than thrown");
+
+const rates = parseRates("Inter-|   Receive\n face |bytes packets\n    lo: 100 5 0 0 0 0 0 0 100 5\nenp4s0: 4096 9 0 0 0 0 0 0 2048 9\n");
+
+assert(rates.lo.rx === 100 && rates.lo.tx === 100, "loopback is parsed even though it is filtered later");
+assert(rates.enp4s0.rx === 4096 && rates.enp4s0.tx === 2048, "receive and transmit bytes land in the right slots");
+assert(parseRates("").enp4s0 === undefined, "an empty reading gives no devices");
+
+assert(deviceInfo("IP4.ADDRESS[1]:10.0.0.184/24\nIP4.GATEWAY:10.0.0.1\nIP4.DNS[1]:75.75.75.75\nIP4.DNS[2]:75.75.76.76\n").ip === "10.0.0.184/24", "the address comes through with its mask");
+assert(deviceInfo("IP4.ADDRESS[1]:10.0.0.184/24\nIP4.GATEWAY:10.0.0.1\nIP4.DNS[1]:75.75.75.75\nIP4.DNS[2]:75.75.76.76\n").gateway === "10.0.0.1", "the gateway comes through");
+assert(deviceInfo("IP4.ADDRESS[1]:10.0.0.184/24\nIP4.GATEWAY:10.0.0.1\nIP4.DNS[1]:75.75.75.75\nIP4.DNS[2]:75.75.76.76\n").dns === "75.75.75.75, 75.75.76.76", "every dns server is listed in order");
+assert(deviceInfo("GENERAL.DEVICE:enp4s0\n").ip === "" && deviceInfo("").gateway === "", "a link with no ipv4 yet reads as blank instead of undefined");
+
+const before = { enp4s0: { rx: 1000, tx: 500 } };
+const after = { enp4s0: { rx: 3000, tx: 1500 } };
+const moved = rateBetween(before, after, "enp4s0", 2);
+
+assert(moved.down === 1000 && moved.up === 500, "byte counters become a rate over the elapsed seconds");
+assert(rateBetween(before, after, "wlp5s0", 2).down === 0, "a device that was not counted before reads as idle");
+assert(rateBetween(before, after, "enp4s0", 0).down === 0, "no elapsed time does not divide by zero");
+assert(rateBetween(null, after, "enp4s0", 2).down === 0, "a missing first sample cannot produce a rate");
+assert(rateBetween({ enp4s0: { rx: 9000, tx: 9000 } }, after, "enp4s0", 2).down === 0, "a counter that went backwards is clamped instead of going negative");
+
+assert(rateText(512) === "512 B/s", "tiny transfers stay in bytes");
+assert(rateText(2048) === "2 KB/s", "kilobytes drop the decimal");
+assert(rateText(1024 * 1024 * 3.5) === "3.5 MB/s", "megabytes keep one decimal");
+assert(rateText(0) === "0 B/s" && rateText(null) === "0 B/s", "nothing moving reads as zero");
+assert(megaText(1024 * 1024 * 12.34) === "12.3", "the speed test result reads as plain megabytes");
+
+assert(signalBars(100) === 4 && signalBars(81) === 4, "above eighty is a full four bars");
+assert(signalBars(80) === 3 && signalBars(56) === 3, "eighty and under drops to three bars");
+assert(signalBars(55) === 2 && signalBars(31) === 2, "fifty five and under keeps two bars");
+assert(signalBars(30) === 1 && signalBars(6) === 1, "anything above five still gets one bar");
+assert(signalBars(5) === 0 && signalBars(0) === 0 && signalBars(null) === 0, "five and under shows no bars at all");
+
+const wifi = parseWifiList("*:Casa:88:6:2437 MHz:WPA2:AA\\:BB\\:CC\\:DD\\:EE\\:FF\n:My Phone:72:1:2412 MHz:WPA2 WPA3:11\\:22\\:33\\:44\\:55\\:66\n::90:11:5180 MHz::00\\:11\\:22\\:33\\:44\\:55\n");
+
+assert(wifi.length === 3, "every network with a row is kept");
+assert(wifi[0].active === true && wifi[1].active === false, "the connected network is marked, the rest are not");
+assert(wifi[0].ssid === "Casa" && wifi[0].signal === 88, "ssid and signal come through");
+assert(wifi[0].bssid === "AA:BB:CC:DD:EE:FF", "escaped colons in a mac address are unescaped");
+assert(wifi[2].ssid === "", "a hidden network keeps its row with an empty ssid");
+assert(wifi[1].security === "WPA2 WPA3", "a space in the security field survives");
+assert(wifi[0].freq === "2437 MHz", "the frequency column comes through");
+assert(parseWifiList("").length === 0 && parseWifiList(null).length === 0, "no networks is an empty list");
+assert(parseWifiList("short").length === 0, "a truncated line is dropped");
+
+assert(currentSignal("*:Casa:88:6:2437 MHz:WPA2:AA\\:BB\n:Other:40:1:2412 MHz:WPA2:CC\\:DD\n") === 88, "the connected network's signal is read from the scan");
+assert(currentSignal(":Other:40:1:2412 MHz:WPA2:CC\\:DD\n") === -1, "with nothing connected the signal reads as unknown");
+
+const known = knownNetworks("Casa:aaa-bbb\nGuest:ccc-ddd\n\n");
+
+assert(known.length === 2 && known[0].name === "Casa" && known[0].uuid === "aaa-bbb", "saved profiles come back as name and uuid");
+assert(knownNetworks("").length === 0, "no saved profiles is an empty list");
+
+assert(connectCommand("Casa", "hunter2", false).join(" ") === "nmcli dev wifi connect Casa password hunter2", "a secured network takes its password");
+assert(connectCommand("Cafe", "", false).join(" ") === "nmcli dev wifi connect Cafe", "an open network needs no password");
+assert(connectCommand("Hidden", "", true).join(" ") === "nmcli dev wifi connect Hidden hidden yes", "a hidden network is told it is hidden");
+assert(forgetCommand("Casa").join(" ") === "nmcli connection delete id Casa", "forgetting removes the saved profile");
+assert(disconnectCommand("wlp5s0").join(" ") === "nmcli device disconnect wlp5s0", "disconnecting drops the link");
+assert(radioCommand(false).join(" ") === "nmcli radio wifi off", "the radio can be turned off");
+assert(radioCommand(true).join(" ") === "nmcli radio wifi on", "the radio can be turned back on");
+assert(listCommand().join(" ") === "nmcli -t -f IN-USE,SSID,SIGNAL,CHAN,FREQ,SECURITY,BSSID device wifi list", "the scan asks for exactly the columns that are drawn");
+assert(scanCommand("wlp5s0").join(" ") === "nmcli --wait 10 device wifi rescan ifname wlp5s0", "a rescan waits for the hardware instead of racing it");
+
+const down = speedDownCommand("https://speed.cloudflare.com/__down", 1000000);
+
+assert(down[down.length - 1].indexOf("__down?bytes=1000000") >= 0, "the download test asks for a known size");
+assert(down[down.length - 1].indexOf("speed_download") < 0, "the transfer is silent so the sampling loop owns the reading");
+
+const up = speedUpCommand("https://speed.cloudflare.com/__up", 500);
+
+assert(up[0] === "sh" && up[2].indexOf("speed_upload") < 0, "the upload test is a quiet shell pipe the sampling loop can watch");
+
+assert(megaBits(125000).toFixed(1) === "1.0", "a byte rate converts to megabits per second");
+assert(megaBits(0) === 0 && megaBits(null) === 0, "no traffic reads as zero megabits");
+assert(speedText(125000) === "1.0", "small speeds keep one decimal place");
+assert(speedText(12500000) === "100", "triple digit speeds drop the decimal");
+assert(speedText(null) === "0.0", "a missing reading is not a crash");
+});
+
 console.log("check ok (" + ran + " assertions" + (filter === "" ? "" : ", filter " + filter) + ")");
