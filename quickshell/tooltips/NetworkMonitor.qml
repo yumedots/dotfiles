@@ -13,7 +13,7 @@ ProcessPanel {
 	property real testUp: 0
 	property real live: 0
 	property real best: 0
-	property real progress: 0
+	property real moved: 0
 	property var testPrev: null
 	property double started: 0
 
@@ -23,14 +23,13 @@ ProcessPanel {
 	readonly property string link: root.net && root.net.linked ? (root.net.ip !== "" ? root.net.ip : root.net.iface) : Config.networkWiredNothing
 	readonly property bool testing: root.stage !== ""
 	readonly property bool done: !root.testing && root.best > 0
-	readonly property bool showGauge: root.testing || root.done
-	readonly property real hero: root.stage === "down" ? root.live : root.testDown
-	readonly property real ceiling: Network.speedCeiling(root.stage === "down" ? root.best : root.testDown)
+	readonly property real hero: root.testing ? root.live : root.testDown
+	readonly property real ceiling: Network.speedCeiling(root.testing ? root.best : root.testDown)
 	readonly property color testInk: root.stage === "up" ? root.upInk : root.downInk
 	readonly property string captionText: root.testing
 		? (root.stage === "down" ? Config.networkSpeedTestingDown : Config.networkSpeedTestingUp)
-		: (root.done ? Config.networkSpeedDoneLabel : "")
-	readonly property string buttonText: root.done ? Config.networkSpeedAgain : Config.networkSpeedNone
+		: ""
+	readonly property string buttonText: root.testing ? Config.networkSpeedCancel : root.done ? Config.networkSpeedAgain : Config.networkSpeedNone
 
 	title: Config.networkTitle
 	detail: root.net ? root.net.iface + " · " + root.net.dev.connection : ""
@@ -84,7 +83,7 @@ ProcessPanel {
 		root.testUp = 0;
 		root.live = 0;
 		root.best = 0;
-		root.progress = 0;
+		root.moved = 0;
 		root.testPrev = null;
 		root.started = Date.now();
 		downTest.command = Network.speedDownCommand(Config.networkSpeedDownUrl, Config.networkSpeedBytes);
@@ -93,11 +92,24 @@ ProcessPanel {
 		finishTimer.restart();
 	}
 
+	function cancelTest() {
+		if (!root.testing)
+			return;
+
+		sampleTimer.stop();
+		finishTimer.stop();
+
+		if (root.stage === "down")
+			root.testDown = root.best;
+
+		root.stage = "";
+	}
+
 	function finishUp() {
 		root.stage = "up";
 		root.live = 0;
 		root.best = 0;
-		root.progress = 0;
+		root.moved = 0;
 		root.testPrev = null;
 		root.started = Date.now();
 		upTest.command = Network.speedUpCommand(Config.networkSpeedUpUrl, Config.networkSpeedUpBytes);
@@ -137,108 +149,24 @@ ProcessPanel {
 		const bytes = row ? (root.stage === "down" ? row.rx : row.tx) : 0;
 
 		if (root.testPrev && now > root.testPrev.at && bytes >= root.testPrev.bytes) {
-			const moved = bytes - root.testPrev.bytes;
+			const delta = bytes - root.testPrev.bytes;
 
-			if (moved > 0) {
-				const inst = moved / ((now - root.testPrev.at) / 1000);
+			if (delta > 0) {
+				const inst = delta / ((now - root.testPrev.at) / 1000);
 
+				root.moved += delta;
 				root.live = root.live > 0 ? root.live + (inst - root.live) * 0.5 : inst;
 				root.best = Math.max(root.best, root.live);
 			}
 		}
 
 		root.testPrev = { at: now, bytes: bytes };
-		root.progress = Util.clamp((now - root.started) / 1000 / Config.networkSpeedSeconds, 0, 1);
 	}
 
 	viz: [
 		Item {
 			width: parent.width
-			height: root.showGauge ? Config.speedGaugeSize + gaugeCaption.implicitHeight + 4 : runButton.height
-			visible: root.showGauge
-
-			SpeedGauge {
-				anchors.horizontalCenter: parent.horizontalCenter
-
-				value: root.hero
-				ceiling: root.ceiling
-				progress: root.testing ? root.progress : 0
-				ink: root.testInk
-				valueText: root.testing || root.done ? Network.speedText(root.hero) : Config.networkSpeedIdle
-			}
-
-			Text {
-				id: gaugeCaption
-
-				anchors.top: parent.top
-				anchors.topMargin: Config.speedGaugeSize + 4
-				anchors.horizontalCenter: parent.horizontalCenter
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.testInk
-				text: root.captionText
-			}
-		},
-
-		Rectangle {
-			id: runButton
-
-			width: runLabel.implicitWidth + 2 * Config.speedButtonPadX
-			height: runLabel.implicitHeight + 2 * Config.speedButtonPadY
-			anchors.horizontalCenter: parent.horizontalCenter
-			visible: !root.testing
-			color: "transparent"
-			radius: height / 2
-			border.width: 1
-			border.color: root.done ? root.downInk : Config.foreground
-
-			Text {
-				id: runLabel
-
-				anchors.centerIn: parent
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.done ? root.downInk : Config.foreground
-				text: root.buttonText
-			}
-
-			MouseArea {
-				anchors.fill: parent
-
-				onClicked: root.runTest()
-			}
-		},
-
-		Item {
-			width: parent.width
-			height: uploadLabel.implicitHeight
-			visible: root.done
-
-			Text {
-				id: uploadLabel
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.upInk
-				text: Config.networkSpeedUploadLabel
-			}
-
-			Text {
-				anchors.right: parent.right
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.upInk
-				text: Network.speedText(root.testUp) + " " + Config.networkSpeedUnit
-			}
-		},
-
-		Item {
-			width: parent.width
 			height: Config.networkGraphHeight
-			visible: !root.showGauge
 
 			Repeater {
 				model: root.net ? root.net.history : []
@@ -309,7 +237,111 @@ ProcessPanel {
 					text: modelData.text
 				}
 			}
-		}
+		},
+
+		Item {
+			width: parent.width
+			height: Config.speedGaugeSize + gaugeCaption.implicitHeight + 4
+
+			SpeedGauge {
+				anchors.horizontalCenter: parent.horizontalCenter
+
+				value: root.hero
+				ceiling: root.ceiling
+				ink: root.testInk
+				valueText: Network.speedText(root.hero)
+			}
+
+			Text {
+				id: gaugeCaption
+
+				anchors.top: parent.top
+				anchors.topMargin: Config.speedGaugeSize + 4
+				anchors.horizontalCenter: parent.horizontalCenter
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.testInk
+				text: root.captionText
+			}
+		},
+		Item {
+			width: parent.width
+			height: downLabel.implicitHeight
+			visible: root.done
+
+			Text {
+				id: downLabel
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.downInk
+				text: Config.networkSpeedDoneLabel
+			}
+
+			Text {
+				anchors.right: parent.right
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.downInk
+				text: Network.speedText(root.testDown) + " " + Config.networkSpeedUnit
+			}
+		},
+
+		Item {
+			width: parent.width
+			height: upLabel.implicitHeight
+			visible: root.done
+
+			Text {
+				id: upLabel
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.upInk
+				text: Config.networkSpeedUploadLabel
+			}
+
+			Text {
+				anchors.right: parent.right
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.upInk
+				text: Network.speedText(root.testUp) + " " + Config.networkSpeedUnit
+			}
+		},
+
+		Rectangle {
+			id: runButton
+
+			width: runLabel.implicitWidth + 2 * Config.speedButtonPadX
+			height: runLabel.implicitHeight + 2 * Config.speedButtonPadY
+			anchors.horizontalCenter: parent.horizontalCenter
+			color: "transparent"
+			radius: height / 2
+			border.width: 1
+			border.color: root.testing ? Config.foreground : root.done ? root.downInk : Config.foreground
+
+			Text {
+				id: runLabel
+
+				anchors.centerIn: parent
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.testing ? Config.foreground : root.done ? root.downInk : Config.foreground
+				text: root.buttonText
+			}
+
+			MouseArea {
+				anchors.fill: parent
+
+				onClicked: root.testing ? root.cancelTest() : root.runTest()
+			}
+		},
+
 	]
 
 	FileView {
@@ -327,7 +359,15 @@ ProcessPanel {
 				downTest.running = true;
 		}
 
-		onRunningChanged: if (!downTest.running && root.stage === "down") root.finish()
+		onRunningChanged: {
+			if (downTest.running || root.stage !== "down")
+				return;
+
+			if (root.moved > 0 && Date.now() - root.started < Config.networkSpeedSeconds * 1000)
+				downTest.reload();
+			else
+				root.finish();
+		}
 	}
 
 	Request {
@@ -338,7 +378,15 @@ ProcessPanel {
 				upTest.running = true;
 		}
 
-		onRunningChanged: if (!upTest.running && root.stage === "up") root.finish()
+		onRunningChanged: {
+			if (upTest.running || root.stage !== "up")
+				return;
+
+			if (root.moved > 0 && Date.now() - root.started < Config.networkSpeedSeconds * 1000)
+				upTest.reload();
+			else
+				root.finish();
+		}
 	}
 
 	Timer {
