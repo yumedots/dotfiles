@@ -17,6 +17,7 @@ BarStat {
 	property string wifiRaw: ""
 	property real peak: 1
 	property bool scanned: false
+	property bool testPending: false
 
 	readonly property var devs: Network.parseDevs(root.devRaw)
 	readonly property var dev: Network.pickDev(root.devs)
@@ -64,6 +65,24 @@ BarStat {
 
 		wifiRun.command = Network.scanCommand(root.iface);
 		wifiRun.reload();
+	}
+
+	function requestSpeedTest() {
+		if (!root.popupVisible) {
+			if (root.bar)
+				root.bar.activateWidget(root, false);
+			else
+				root.openPopup();
+		}
+
+		Handoff.run(function () {
+			if (!root.testPending)
+				root.testPending = true;
+		});
+	}
+
+	function clearSpeedTest() {
+		root.testPending = false;
 	}
 
 	onIfaceChanged: refreshInfo()

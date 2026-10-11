@@ -1,4 +1,6 @@
 import QtQuick
+import Quickshell
+import Quickshell.Io
 import qs
 import qs.ui
 import qs.services
@@ -12,8 +14,7 @@ ProcessPanel {
 	property real live: 0
 	property real best: 0
 	property real progress: 0
-	property var samples: []
-	property double at: 0
+	property var testPrev: null
 	property double started: 0
 
 	readonly property var net: root.source
@@ -22,6 +23,14 @@ ProcessPanel {
 	readonly property string link: root.net && root.net.linked ? (root.net.ip !== "" ? root.net.ip : root.net.iface) : Config.networkWiredNothing
 	readonly property bool testing: root.stage !== ""
 	readonly property bool done: !root.testing && root.best > 0
+	readonly property bool showGauge: root.testing || root.done
+	readonly property real hero: root.testing ? root.live : root.testDown
+	readonly property real ceiling: Network.speedCeiling(root.testing ? root.best : root.testDown)
+	readonly property color testInk: root.stage === "up" ? root.upInk : root.downInk
+	readonly property string captionText: root.testing
+		? (root.stage === "down" ? Config.networkSpeedTestingDown : Config.networkSpeedTestingUp)
+		: (root.done ? Config.networkSpeedDoneLabel : "")
+	readonly property string buttonText: root.done ? Config.networkSpeedAgain : Config.networkSpeedNone
 
 	title: Config.networkTitle
 	detail: root.net ? root.net.iface + " · " + root.net.dev.connection : ""
@@ -76,9 +85,8 @@ ProcessPanel {
 		root.live = 0;
 		root.best = 0;
 		root.progress = 0;
-		root.samples = [];
+		root.testPrev = null;
 		root.started = Date.now();
-		root.at = root.started;
 		downTest.command = Network.speedDownCommand(Config.networkSpeedDownUrl, Config.networkSpeedBytes);
 		downTest.reload();
 		sampleTimer.restart();
@@ -88,10 +96,10 @@ ProcessPanel {
 	function finishUp() {
 		root.stage = "up";
 		root.live = 0;
+		root.best = 0;
 		root.progress = 0;
-		root.samples = [];
+		root.testPrev = null;
 		root.started = Date.now();
-		root.at = root.started;
 		upTest.command = Network.speedUpCommand(Config.networkSpeedUpUrl, Config.networkSpeedUpBytes);
 		upTest.reload();
 		sampleTimer.restart();
@@ -99,60 +107,136 @@ ProcessPanel {
 	}
 
 	function finish() {
-		sampleTimer.stop();
-		finishTimer.stop();
-
 		if (!root.testing)
 			return;
+
+		sampleTimer.stop();
+		finishTimer.stop();
 
 		if (root.stage === "down") {
 			root.testDown = root.best;
 			root.finishUp();
 		} else {
 			root.testUp = root.best;
+			root.best = root.testDown;
 			root.stage = "";
 		}
 	}
 
 	function sample() {
+		testFile.reload();
+		root.read(testFile.text());
+	}
+
+	function read(text) {
 		if (!root.testing || !root.net)
 			return;
 
 		const now = Date.now();
-		const secs = (now - root.at) / 1000;
+		const row = Network.parseRates(text)[root.net.iface];
+		const bytes = row ? (root.stage === "down" ? row.rx : row.tx) : 0;
 
-		root.at = now;
+		if (root.testPrev && now > root.testPrev.at && bytes >= root.testPrev.bytes) {
+			const moved = bytes - root.testPrev.bytes;
 
-		if (root.stage === "down")
-			root.samples = root.samples.concat([{ at: now, bytes: root.net.counts[root.net.iface] ? root.net.counts[root.net.iface].rx : 0 }]);
-		else
-			root.samples = root.samples.concat([{ at: now, bytes: root.net.counts[root.net.iface] ? root.net.counts[root.net.iface].tx : 0 }]);
-
-		if (root.samples.length < 3)
-			return;
-
-		const recent = root.samples.filter(function (point) {
-			return now - point.at <= Config.networkSpeedSampleMs * 2;
-		});
-
-		if (recent.length < 2)
-			return;
-
-		const span = (recent[recent.length - 1].at - recent[0].at) / 1000;
-		const moved = recent[recent.length - 1].bytes - recent[0].bytes;
-
-		if (span > 0 && moved >= 0) {
-			root.live = moved / span;
-			root.best = Math.max(root.best, root.live);
+			if (moved > 0) {
+				root.live = moved / ((now - root.testPrev.at) / 1000);
+				root.best = Math.max(root.best, root.live);
+			}
 		}
 
+		root.testPrev = { at: now, bytes: bytes };
 		root.progress = Util.clamp((now - root.started) / 1000 / Config.networkSpeedSeconds, 0, 1);
 	}
 
 	viz: [
 		Item {
 			width: parent.width
+			height: root.showGauge ? Config.speedGaugeSize + gaugeCaption.implicitHeight + 4 : runButton.height
+			visible: root.showGauge
+
+			SpeedGauge {
+				anchors.horizontalCenter: parent.horizontalCenter
+
+				value: root.hero
+				ceiling: root.ceiling
+				progress: root.testing ? root.progress : 0
+				ink: root.testInk
+				valueText: root.testing || root.done ? Network.speedText(root.hero) : Config.networkSpeedIdle
+			}
+
+			Text {
+				id: gaugeCaption
+
+				anchors.top: parent.top
+				anchors.topMargin: Config.speedGaugeSize + 4
+				anchors.horizontalCenter: parent.horizontalCenter
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.testInk
+				text: root.captionText
+			}
+		},
+
+		Rectangle {
+			id: runButton
+
+			width: runLabel.implicitWidth + 2 * Config.speedButtonPadX
+			height: runLabel.implicitHeight + 2 * Config.speedButtonPadY
+			anchors.horizontalCenter: parent.horizontalCenter
+			visible: !root.testing
+			color: "transparent"
+			radius: height / 2
+			border.width: 1
+			border.color: root.done ? root.downInk : Config.foreground
+
+			Text {
+				id: runLabel
+
+				anchors.centerIn: parent
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.done ? root.downInk : Config.foreground
+				text: root.buttonText
+			}
+
+			MouseArea {
+				anchors.fill: parent
+
+				onClicked: root.runTest()
+			}
+		},
+
+		Item {
+			width: parent.width
+			height: uploadLabel.implicitHeight
+			visible: root.done
+
+			Text {
+				id: uploadLabel
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.upInk
+				text: Config.networkSpeedUploadLabel
+			}
+
+			Text {
+				anchors.right: parent.right
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.upInk
+				text: Network.speedText(root.testUp) + " " + Config.networkSpeedUnit
+			}
+		},
+
+		Item {
+			width: parent.width
 			height: Config.networkGraphHeight
+			visible: !root.showGauge
 
 			Repeater {
 				model: root.net ? root.net.history : []
@@ -223,84 +307,15 @@ ProcessPanel {
 					text: modelData.text
 				}
 			}
-		},
-
-		Text {
-			width: parent.width
-			horizontalAlignment: Text.AlignHCenter
-
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			color: root.testing ? root.downInk : Config.foreground
-			text: root.testing ? Config.networkSpeedRunning : (root.done ? "" : Config.networkSpeedNone)
-
-			MouseArea {
-				anchors.fill: parent
-				enabled: !root.testing
-
-				onClicked: root.runTest()
-			}
-		},
-
-		Item {
-			width: parent.width
-			height: speedValue.implicitHeight
-			visible: root.testing || root.done
-
-			Text {
-				id: speedValue
-
-				anchors.left: parent.left
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.stage === "up" ? root.upInk : root.downInk
-				text: Network.speedText(root.testing ? root.live : root.testDown)
-			}
-
-			Text {
-				anchors.right: parent.right
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.stage === "up" ? root.upInk : root.downInk
-				text: Config.networkSpeedUnit + (root.stage === "up" ? " ↑" : " ↓")
-			}
-		},
-
-		Item {
-			width: parent.width
-			height: Config.speedBarHeight
-			visible: root.testing || root.done
-
-			Rectangle {
-				anchors.left: parent.left
-				anchors.right: parent.right
-				anchors.verticalCenter: parent.verticalCenter
-				height: 1
-				color: Config.networkIdle
-			}
-
-			Rectangle {
-				anchors.left: parent.left
-				anchors.top: parent.top
-				anchors.bottom: parent.bottom
-				width: parent.width * root.progress
-				color: root.stage === "up" ? root.upInk : root.downInk
-				opacity: 0.5
-			}
-		},
-
-		Text {
-			width: parent.width
-			visible: root.done
-
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			color: Config.foreground
-			text: Network.speedText(root.testDown) + " ↓ / " + Network.speedText(root.testUp) + " ↑ " + Config.networkSpeedUnit
 		}
 	]
+
+	FileView {
+		id: testFile
+
+		path: "/proc/net/dev"
+		blockLoading: true
+	}
 
 	Request {
 		id: downTest
@@ -309,6 +324,8 @@ ProcessPanel {
 			if (!downTest.running)
 				downTest.running = true;
 		}
+
+		onRunningChanged: if (!downTest.running && root.stage === "down") root.finish()
 	}
 
 	Request {
@@ -318,6 +335,8 @@ ProcessPanel {
 			if (!upTest.running)
 				upTest.running = true;
 		}
+
+		onRunningChanged: if (!upTest.running && root.stage === "up") root.finish()
 	}
 
 	Timer {
@@ -336,5 +355,16 @@ ProcessPanel {
 		repeat: false
 		running: false
 		onTriggered: root.finish()
+	}
+
+	Connections {
+		target: root.net
+
+		function onTestPendingChanged() {
+			if (root.net.testPending) {
+				root.net.clearSpeedTest();
+				root.runTest();
+			}
+		}
 	}
 }

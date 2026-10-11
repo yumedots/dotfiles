@@ -20,7 +20,7 @@ eval(fs.readdirSync(__dirname).filter(function (name) { return name.endsWith(".j
 }).join("\n"));
 
 const Config = new Function(fs.readFileSync(__dirname + "/../config.js", "utf8").replace(".pragma library", "")
-	+ "\nreturn { weatherCodes: weatherCodes, weatherCoords: weatherCoords, weatherIcon: weatherIcon, weatherLoadingIcon: weatherLoadingIcon, weatherLocation: weatherLocation, weatherStationCount: weatherStationCount };")();
+	+ "\nreturn { weatherCodes: weatherCodes, weatherCoords: weatherCoords, weatherIcon: weatherIcon, weatherLoadingIcon: weatherLoadingIcon, weatherLocation: weatherLocation, weatherStationCount: weatherStationCount, networkSpeedBytes: networkSpeedBytes };")();
 
 section("apps", function () {
 const entries = desktopEntries([
@@ -1237,6 +1237,7 @@ const down = speedDownCommand("https://speed.cloudflare.com/__down", 1000000);
 
 assert(down[down.length - 1].indexOf("__down?bytes=1000000") >= 0, "the download test asks for a known size");
 assert(down[down.length - 1].indexOf("speed_download") < 0, "the transfer is silent so the sampling loop owns the reading");
+assert(Config.networkSpeedBytes < 100000000, "the download stays under the size the server refuses with a 403");
 
 const up = speedUpCommand("https://speed.cloudflare.com/__up", 500);
 
@@ -1247,6 +1248,13 @@ assert(megaBits(0) === 0 && megaBits(null) === 0, "no traffic reads as zero mega
 assert(speedText(125000) === "1.0", "small speeds keep one decimal place");
 assert(speedText(12500000) === "100", "triple digit speeds drop the decimal");
 assert(speedText(null) === "0.0", "a missing reading is not a crash");
+
+assert(speedCeiling(0) === 625000, "a needle with nothing to show rests on the first rung");
+assert(speedCeiling(125000) === 625000, "one megabit sits inside the five megabit rung");
+assert(speedCeiling(12500000) === 12500000, "an exact rung is its own ceiling");
+assert(speedCeiling(15000000) === 31250000, "a speed past its rung climbs to the next one");
+assert(speedCeiling(null) === 625000, "a missing reading is a floor, not a crash");
+assert(speedCeiling(1e12) === 1250000000, "absurd speeds stop at the top rung");
 });
 
 console.log("check ok (" + ran + " assertions" + (filter === "" ? "" : ", filter " + filter) + ")");
