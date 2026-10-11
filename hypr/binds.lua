@@ -183,14 +183,14 @@ hl.bind(mainMod .. " + CTRL + ALT + left",  hl.dsp.window.resize({ x = -resizeSt
 hl.bind(mainMod .. " + CTRL + ALT + up",    hl.dsp.window.resize({ x = 0, y = resizeStep, relative = true }),  { repeating = true })
 hl.bind(mainMod .. " + CTRL + ALT + down",  hl.dsp.window.resize({ x = 0, y = -resizeStep, relative = true }), { repeating = true })
 
-hl.bind(mainMod .. " + F", hl.dsp.global("quickshell:media"))
+hl.bind(mainMod .. " + D", hl.dsp.global("quickshell:media"))
 hl.bind(mainMod .. " + Z", hl.dsp.global("quickshell:cpu"))
 hl.bind(mainMod .. " + X", hl.dsp.global("quickshell:memory"))
 hl.bind(mainMod .. " + C", hl.dsp.global("quickshell:volume"))
 hl.bind(mainMod .. " + A", hl.dsp.global("quickshell:calendar"))
 hl.bind(mainMod .. " + S", actions.scratchpadSwap)
 hl.bind(mainMod .. " + O", hl.dsp.global("quickshell:notifications"))
-hl.bind(mainMod .. " + D", hl.dsp.global("quickshell:contributions"))
+hl.bind(mainMod .. " + F", hl.dsp.global("quickshell:contributions"))
 hl.bind(mainMod .. " + P", hl.dsp.global("quickshell:display"))
 hl.bind(mainMod .. " + T", hl.dsp.global("quickshell:tray"))
 
