@@ -10,6 +10,7 @@ hl.config({
         float_switch_override_focus = false,
 
         sensitivity = 0,
+        repeat_rate = 8,
     },
 
     cursor = {

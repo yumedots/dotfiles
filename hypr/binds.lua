@@ -174,7 +174,7 @@ hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(programs.browser))
 hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd(programs.fileManager))
 hl.bind(mainMod .. " + SPACE", actions.floatToggle)
 hl.bind("ALT + SPACE", wakeLauncher("launcher"))
-hl.bind(mainMod .. " + TAB", wakeLauncher("windows"))
+hl.bind(mainMod .. " + TAB", wakeLauncher("windows"), { repeating = true })
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
 
 local resizeStep = 40
