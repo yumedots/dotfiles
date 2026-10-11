@@ -104,10 +104,55 @@ local function gotoWorkspace(workspace)
     end
 end
 
+local function focusTarget(direction)
+    local current = hl.get_active_window()
+    if not current then return nil end
+
+    local cx = current.at.x + current.size.x / 2
+    local cy = current.at.y + current.size.y / 2
+    local wsid = current.workspace.id
+    local best, bestScore = nil, nil
+
+    for _, w in ipairs(hl.get_windows()) do
+        if w.address ~= current.address and w.mapped and not w.hidden and w.workspace.id == wsid then
+            local dx = w.at.x + w.size.x / 2 - cx
+            local dy = w.at.y + w.size.y / 2 - cy
+            local along, across
+
+            if direction == "left" then
+                along, across = -dx, math.abs(dy)
+            elseif direction == "right" then
+                along, across = dx, math.abs(dy)
+            elseif direction == "up" then
+                along, across = -dy, math.abs(dx)
+            else
+                along, across = dy, math.abs(dx)
+            end
+
+            if along > 0 then
+                local score = along * along + 4 * across * across
+
+                if not bestScore or score < bestScore then
+                    best, bestScore = w, score
+                end
+            end
+        end
+    end
+
+    return best
+end
+
 local function focusOrSwitch(direction)
     return function()
         if switcherOpen() then
             hl.exec_cmd("qs ipc call shell windowsStep " .. direction)
+            return
+        end
+
+        local target = focusTarget(direction)
+
+        if target then
+            hl.dispatch(hl.dsp.focus({ window = target }))
             return
         end
 
