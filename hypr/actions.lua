@@ -87,6 +87,10 @@ end
 
 hl.on("window.open", followFloat)
 
+hl.on("window.active", function ()
+    hl.dispatch(hl.dsp.window.bring_to_top())
+end)
+
 return {
     floatToggle = floatToggle,
     scratchpadSwap = scratchpadSwap,
