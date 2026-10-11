@@ -49,7 +49,7 @@ ProcessPanel {
 		return rows;
 	}
 
-	function segments() {
+	function segments(breadth) {
 		const m = root.mem;
 
 		if (!m || m.pool <= 0)
@@ -69,7 +69,7 @@ ProcessPanel {
 			parts.push({ value: m.swapFree, color: Config.memoryFree });
 		}
 
-		const width = Config.memoryTooltipWidth - divider;
+		const width = breadth - divider;
 		let x = 0;
 
 		return parts.map(function (part) {
@@ -94,12 +94,14 @@ ProcessPanel {
 
 	viz: [
 		Item {
+			id: vizBar
+
 			width: parent.width
 			height: Config.memoryVizHeight
 			visible: root.mem !== null
 
 			Repeater {
-				model: root.segments()
+				model: root.segments(vizBar.width)
 
 				delegate: Rectangle {
 					required property var modelData
