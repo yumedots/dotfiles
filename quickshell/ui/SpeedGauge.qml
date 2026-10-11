@@ -21,6 +21,14 @@ Item {
 	readonly property real ringSegW: 2 * Math.PI * gauge.ringR * gauge.span / 360 / Config.speedRingSegs - Config.speedRingGap
 	readonly property real progSegW: 2 * Math.PI * gauge.progR * gauge.span / 360 / Config.speedProgSegs - Config.speedProgGap
 	readonly property real frac: gauge.ceiling > 0 ? Math.min(1, Math.max(0, gauge.value / gauge.ceiling)) : 0
+	property real shownFrac: frac
+
+	Behavior on shownFrac {
+		NumberAnimation {
+			duration: 300
+			easing.type: Easing.OutQuad
+		}
+	}
 
 	implicitWidth: Config.speedGaugeSize
 	implicitHeight: Config.speedGaugeSize
@@ -68,7 +76,7 @@ Item {
 					y: gauge.cy - gauge.ringR - height / 2
 					width: gauge.ringSegW
 					height: Config.speedRingWidth
-					color: index / (Config.speedRingSegs - 1) <= gauge.frac ? gauge.ink : gauge.track
+					color: index / (Config.speedRingSegs - 1) <= gauge.shownFrac ? gauge.ink : gauge.track
 				}
 			}
 		}
@@ -77,7 +85,7 @@ Item {
 			width: gauge.width
 			height: gauge.height
 			transformOrigin: Item.Center
-			rotation: gauge.start + gauge.span * gauge.frac
+			rotation: gauge.start + gauge.span * gauge.shownFrac
 
 			Rectangle {
 				x: gauge.cx - width / 2

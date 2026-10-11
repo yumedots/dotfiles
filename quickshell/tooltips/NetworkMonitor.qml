@@ -24,8 +24,8 @@ ProcessPanel {
 	readonly property bool testing: root.stage !== ""
 	readonly property bool done: !root.testing && root.best > 0
 	readonly property bool showGauge: root.testing || root.done
-	readonly property real hero: root.testing ? root.live : root.testDown
-	readonly property real ceiling: Network.speedCeiling(root.testing ? root.best : root.testDown)
+	readonly property real hero: root.stage === "down" ? root.live : root.testDown
+	readonly property real ceiling: Network.speedCeiling(root.stage === "down" ? root.best : root.testDown)
 	readonly property color testInk: root.stage === "up" ? root.upInk : root.downInk
 	readonly property string captionText: root.testing
 		? (root.stage === "down" ? Config.networkSpeedTestingDown : Config.networkSpeedTestingUp)
@@ -140,7 +140,9 @@ ProcessPanel {
 			const moved = bytes - root.testPrev.bytes;
 
 			if (moved > 0) {
-				root.live = moved / ((now - root.testPrev.at) / 1000);
+				const inst = moved / ((now - root.testPrev.at) / 1000);
+
+				root.live = root.live > 0 ? root.live + (inst - root.live) * 0.5 : inst;
 				root.best = Math.max(root.best, root.live);
 			}
 		}
