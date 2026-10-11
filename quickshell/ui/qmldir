@@ -12,6 +12,7 @@ Scrollbar 1.0 Scrollbar.qml
 SearchField 1.0 SearchField.qml
 NotificationRow 1.0 NotificationRow.qml
 CellGrid 1.0 CellGrid.qml
+SignalBars 1.0 SignalBars.qml
 StepBar 1.0 StepBar.qml
 Highlight 1.0 Highlight.qml
 singleton Handoff 1.0 Handoff.qml

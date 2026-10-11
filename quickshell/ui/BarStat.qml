@@ -13,6 +13,8 @@ Item {
 	property color barColor: Config.red
 	property color textColor: root.barColor
 	property string icon: ""
+	property var iconComponent: null
+	property real iconWidth: 0
 	property string value: ""
 	property real gap: 0
 	property bool showBar: true
@@ -57,6 +59,7 @@ Item {
 	}
 
 	readonly property bool iconMode: root.mode === "icon"
+	readonly property real iconBreadth: root.iconComponent ? root.iconWidth : iconMetrics.width
 	readonly property color inkColor: root.dim ? root.dimColor : (root.mono ? Config.foreground : root.textColor)
 	readonly property int filled: Util.filledCells(root.pct, Config.barCells)
 	readonly property real valueAscent: -valueMetrics.boundingRect.y
@@ -66,7 +69,7 @@ Item {
 	readonly property real inkBelow: Math.max(iconsMetrics.tightBoundingRect.y + iconsMetrics.tightBoundingRect.height, root.valueBelow)
 	readonly property real baselineLift: 0
 
-	implicitWidth: root.iconMode ? Math.ceil(iconMetrics.width + root.gap) : Config.lineLength + root.gap
+	implicitWidth: root.iconMode ? Math.ceil(root.iconBreadth + root.gap) : Config.lineLength + root.gap
 	readonly property real contentHeight: Math.round(root.inkAbove + root.inkBelow)
 	implicitHeight: root.contentHeight + (root.showBar ? Math.ceil(Config.barThickness) : 0)
 
@@ -124,12 +127,26 @@ Item {
 		Text {
 			id: labelIcon
 
+			visible: root.iconComponent === null
 			x: 0
 			y: root.inkAbove - root.iconAscent
 			font.family: Config.fontFamily
 			font.pixelSize: Settings.iconSize
 			color: root.inkColor
 			text: root.icon
+		}
+
+		Loader {
+			id: iconSlot
+
+			active: root.iconComponent !== null
+			sourceComponent: root.iconComponent
+			x: 0
+			y: 0
+			width: root.iconBreadth
+			height: root.contentHeight
+
+			property color ink: root.inkColor
 		}
 
 		Text {

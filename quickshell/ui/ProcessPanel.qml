@@ -12,12 +12,14 @@ Item {
 	property color detailColor: Config.foreground
 	property color listInk: Config.foreground
 	property color totalInk: Config.foreground
+	property bool showTotal: true
 	property real panelWidth: Config.cpuTooltipWidth
 	property real panelPadding: Config.cpuTooltipPadding
 	property int topCount: Config.cpuTopCount
 	property string psField: "pcpu"
 	property var rowText: (value) => String(value)
 	property var rowColor: (value) => Config.foreground
+	property bool showProcessList: true
 	property alias viz: vizColumn.data
 
 	property var allProcs: []
@@ -27,7 +29,7 @@ Item {
 	readonly property bool searching: searchField.typing
 	readonly property bool filtering: panel.searching || panel.filter !== ""
 	readonly property var procs: panel.filtering ? System.filterProcesses(panel.allProcs, Config.psIgnore, panel.filter) : (panel.heldProcs.length > 0 ? panel.heldProcs : System.topProcesses(panel.allProcs, Config.psIgnore))
-	readonly property bool showList: panel.procs.length > 0 || panel.filtering
+	readonly property bool showList: panel.showProcessList && (panel.procs.length > 0 || panel.filtering)
 	readonly property real pct: panel.source ? panel.source.pct : 0
 	readonly property bool onScreen: panel.Window.window ? panel.Window.window.visible : false
 
@@ -58,7 +60,7 @@ Item {
 			panel.forceActiveFocus();
 	}
 
-	Component.onCompleted: topProcesses.reload()
+	Component.onCompleted: if (panel.showProcessList) topProcesses.reload()
 
 	Keys.onPressed: function (event) {
 		if (panel.searching)
@@ -93,7 +95,7 @@ Item {
 
 	Timer {
 		interval: Config.cpuPollMs * 2
-		running: panel.onScreen
+		running: panel.onScreen && panel.showProcessList
 		repeat: true
 		triggeredOnStart: true
 		onTriggered: topProcesses.reload()
@@ -127,6 +129,7 @@ Item {
 				id: totalText
 
 				anchors.right: parent.right
+				visible: panel.showTotal
 
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
