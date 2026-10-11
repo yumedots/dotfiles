@@ -13,6 +13,7 @@ Item {
 	property color listInk: Config.foreground
 	property color totalInk: Config.foreground
 	property bool showTotal: true
+	property string totalOverride: ""
 	property real panelWidth: Config.cpuTooltipWidth
 	property real panelPadding: Config.cpuTooltipPadding
 	property int topCount: Config.cpuTopCount
@@ -134,7 +135,7 @@ Item {
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
 				color: panel.totalInk
-				text: Math.round(panel.pct) + "%"
+				text: panel.totalOverride !== "" ? panel.totalOverride : Math.round(panel.pct) + "%"
 			}
 		}
 
