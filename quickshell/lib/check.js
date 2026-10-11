@@ -350,14 +350,31 @@ assert(!isInputStream(true, null), "a null media class is not an input stream");
 
 const streamProps = {
 	"application.name": "Firefox",
-	"application.icon-name": "firefox",
 	"application.process.binary": "/usr/lib/firefox/firefox"
 };
-assert(streamApp(streamProps).name === "Firefox", "the app name comes from the stream properties");
-assert(streamApp(streamProps).icons[0] === "firefox", "the app icon name is preferred");
-assert(streamApp({ "node.description": "Dummy Output" }).name === "Dummy Output", "a stream without an app name falls back to its description");
-assert(streamApp({ "application.process.binary": "/usr/bin/mpv" }).icons.indexOf("mpv") >= 0, "the icon falls back to the process binary");
-assert(streamApp(null).name === "" && streamApp(null).icons.length === 0, "missing properties yield nothing");
+assert(streamIds(streamProps)[0] === "Firefox", "a stream without a node name is ided by its app name");
+assert(streamIds({ "node.name": "spotify", "application.name": "Spotify" })[0] === "spotify", "the node name leads the ids when there is one");
+assert(streamIds({ "application.process.binary": "/usr/bin/mpv" }).indexOf("mpv") >= 0, "the process binary is in the list, without its path");
+assert(streamIds({ "node.name": "TESV: Skyrim", "application.process.binary": "wine64-preloader" })[0] === "TESV: Skyrim", "a wine stream keeps its own name over the preloader");
+assert(streamIds({ "node.name": "TESV: Skyrim 489830" }).indexOf("steam_app_489830") >= 0, "a trailing game number gets a steam_app candidate too");
+assert(streamIds({ "node.name": "spotify" }).indexOf("steam_app") < 0, "names without trailing numbers get no steam_app candidate");
+assert(streamIds(null).length === 0, "missing properties yield no ids");
+
+const streamEntries = desktopEntries([
+	{ id: "firefox", name: "Firefox", command: ["/usr/lib/firefox/firefox"], icon: "firefox" },
+	{ id: "com.spotify.Client", name: "Spotify", command: ["spotify"], icon: "com.spotify.Client", startupClass: "spotify" }
+]);
+assert(lookupApp(streamEntries, "Spotify").icon === "com.spotify.Client", "a flatpak stream resolves through its window class");
+assert(lookupApp(streamEntries, streamIds({ "application.name": "Spotify" })[0]).icon === "com.spotify.Client", "and through its display name when the node name is missing");
+
+const skyrimEntries = desktopEntries([{ id: "The Elder Scrolls V Skyrim Special Edition", name: "The Elder Scrolls V: Skyrim Special Edition", icon: "steam_icon_489830" }]);
+assert(lookupApp(skyrimEntries, "steam_app_489830").icon === "steam_icon_489830", "a steam game window class resolves through its icon number");
+assert(lookupApp(skyrimEntries, "Skyrim Special Edition") === null, "a first-person title is not matched to a launcher entry");
+
+const titleProps = { "node.name": "vlc", "application.name": "VLC - Now Playing: Some Song" };
+const vlcEntries = desktopEntries([{ id: "vlc", name: "VLC media player", command: ["vlc"], icon: "vlc" }]);
+assert(lookupApp(vlcEntries, "VLC - Now Playing: Some Song") === null, "a player that names itself after the track has no entry of its own");
+assert(lookupApp(vlcEntries, streamIds(titleProps)[0]).icon === "vlc", "but its node name still finds the app, so the channel keeps its icon");
 
 const nodeDump = JSON.stringify([
 	{ id: 53, type: "PipeWire:Interface:Node", info: { state: "running", props: { "media.class": "Audio/Sink" } } },
