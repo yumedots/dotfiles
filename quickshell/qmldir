@@ -13,5 +13,6 @@ BarLayout 1.0 lib/bar-layout.js
 Media 1.0 lib/media.js
 Wallpaper 1.0 lib/wallpaper.js
 Display 1.0 lib/display.js
+Network 1.0 lib/network.js
 singleton Settings 1.0 Settings.qml
 Root 1.0 Root.qml

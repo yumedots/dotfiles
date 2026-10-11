@@ -50,6 +50,7 @@ PanelWindow {
 		if (id === "cpu") return cpuComponent;
 		if (id === "memory") return memoryComponent;
 		if (id === "media") return mediaComponent;
+		if (id === "network") return networkComponent;
 		if (id === "volume") return volumeComponent;
 		if (id === "display") return displayComponent;
 		if (id === "spacer") return spacerComponent;
@@ -183,6 +184,7 @@ PanelWindow {
 	Component { id: cpuComponent; CpuStat {} }
 	Component { id: memoryComponent; MemoryStat {} }
 	Component { id: mediaComponent; MediaStat {} }
+	Component { id: networkComponent; NetworkStat {} }
 	Component { id: volumeComponent; VolumeStat {} }
 	Component { id: displayComponent; DisplayStat {} }
 	Component { id: spacerComponent; Spacer {} }
