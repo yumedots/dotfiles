@@ -10,6 +10,8 @@ Item {
 	property color track: Config.networkIdle
 	property string valueText: ""
 	property string unit: Config.networkSpeedUnit
+	property string arrow: ""
+	property string arrowSide: "right"
 
 	readonly property real start: 225
 	readonly property real span: 270
@@ -22,7 +24,7 @@ Item {
 
 	Behavior on shownFrac {
 		NumberAnimation {
-			duration: 300
+			duration: 450
 			easing.type: Easing.OutQuad
 		}
 	}
@@ -71,11 +73,15 @@ Item {
 		}
 
 		Column {
+			id: readout
+
 			width: gauge.width
 			anchors.verticalCenter: parent.verticalCenter
-			spacing: 2
+			spacing: 1
 
 			Text {
+				id: valueText
+
 				width: parent.width
 				horizontalAlignment: Text.AlignHCenter
 
@@ -95,6 +101,22 @@ Item {
 				opacity: 0.6
 				text: gauge.unit
 			}
+		}
+
+		Text {
+			id: sideArrow
+
+			anchors.verticalCenter: valueText.verticalCenter
+			anchors.left: gauge.arrowSide === "right" ? valueText.right : undefined
+			anchors.right: gauge.arrowSide === "left" ? valueText.left : undefined
+			anchors.leftMargin: Config.speedArrowGap
+			anchors.rightMargin: Config.speedArrowGap
+			visible: text !== ""
+
+			font.family: Config.fontFamily
+			font.pixelSize: Config.speedArrowSize
+			color: gauge.ink
+			text: gauge.arrow
 		}
 	}
 }

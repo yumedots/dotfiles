@@ -26,10 +26,10 @@ ProcessPanel {
 	readonly property real hero: root.testing ? root.live : root.testDown
 	readonly property real ceiling: Network.speedCeiling(root.testing ? root.best : root.testDown)
 	readonly property color testInk: root.stage === "up" ? root.upInk : root.downInk
-	readonly property string captionText: root.testing
-		? (root.stage === "down" ? Config.networkSpeedTestingDown : Config.networkSpeedTestingUp)
-		: ""
-	readonly property string buttonText: root.testing ? Config.networkSpeedCancel : root.done ? Config.networkSpeedAgain : Config.networkSpeedNone
+	readonly property string buttonText: root.testing
+		? Config.networkSpeedCancelKey + " " + (root.stage === "down" ? Config.networkSpeedTestingDown : Config.networkSpeedTestingUp)
+		: root.done ? "\u{2193} " + Network.speedText(root.testDown) + " \u{2191} " + Network.speedText(root.testUp) + " " + Config.networkSpeedAgain
+			: Config.networkSpeedNone
 
 	title: Config.networkTitle
 	detail: root.net ? root.net.iface + " · " + root.net.dev.connection : ""
@@ -38,6 +38,7 @@ ProcessPanel {
 	totalInk: root.downInk
 	showTotal: false
 	showProcessList: false
+	keyAction: (event) => Input.network(event, root)
 	panelWidth: Config.networkTooltipWidth
 	panelPadding: Config.networkTooltipPadding
 
@@ -92,6 +93,18 @@ ProcessPanel {
 		finishTimer.restart();
 	}
 
+	function primaryAction() {
+		if (root.testing)
+			root.cancelTest();
+		else
+			root.runTest();
+	}
+
+	function selectRun() {
+		if (runButton.visible)
+			runButton.forceActiveFocus();
+	}
+
 	function cancelTest() {
 		if (!root.testing)
 			return;
@@ -99,10 +112,18 @@ ProcessPanel {
 		sampleTimer.stop();
 		finishTimer.stop();
 
-		if (root.stage === "down")
-			root.testDown = root.best;
-
 		root.stage = "";
+		root.live = 0;
+		root.best = 0;
+		root.moved = 0;
+		root.testDown = 0;
+		root.testUp = 0;
+		root.testPrev = null;
+	}
+
+	function unselectRun() {
+		runButton.focus = false;
+		root.forceActiveFocus();
 	}
 
 	function finishUp() {
@@ -155,7 +176,7 @@ ProcessPanel {
 				const inst = delta / ((now - root.testPrev.at) / 1000);
 
 				root.moved += delta;
-				root.live = root.live > 0 ? root.live + (inst - root.live) * 0.5 : inst;
+				root.live = root.live > 0 ? root.live + (inst - root.live) * 0.2 : inst;
 				root.best = Math.max(root.best, root.live);
 			}
 		}
@@ -241,7 +262,7 @@ ProcessPanel {
 
 		Item {
 			width: parent.width
-			height: Config.speedGaugeSize + gaugeCaption.implicitHeight + 4
+			height: Config.speedGaugeSize
 
 			SpeedGauge {
 				anchors.horizontalCenter: parent.horizontalCenter
@@ -250,95 +271,48 @@ ProcessPanel {
 				ceiling: root.ceiling
 				ink: root.testInk
 				valueText: Network.speedText(root.hero)
-			}
-
-			Text {
-				id: gaugeCaption
-
-				anchors.top: parent.top
-				anchors.topMargin: Config.speedGaugeSize + 4
-				anchors.horizontalCenter: parent.horizontalCenter
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.testInk
-				text: root.captionText
+				arrow: root.stage === "down" ? "\u{2193}" : root.stage === "up" ? "\u{2191}" : ""
+				arrowSide: root.stage === "up" ? "left" : "right"
 			}
 		},
-		Item {
-			width: parent.width
-			height: downLabel.implicitHeight
-			visible: root.done
-
-			Text {
-				id: downLabel
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.downInk
-				text: Config.networkSpeedDoneLabel
-			}
-
-			Text {
-				anchors.right: parent.right
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.downInk
-				text: Network.speedText(root.testDown) + " " + Config.networkSpeedUnit
-			}
-		},
-
-		Item {
-			width: parent.width
-			height: upLabel.implicitHeight
-			visible: root.done
-
-			Text {
-				id: upLabel
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.upInk
-				text: Config.networkSpeedUploadLabel
-			}
-
-			Text {
-				anchors.right: parent.right
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.upInk
-				text: Network.speedText(root.testUp) + " " + Config.networkSpeedUnit
-			}
-		},
-
 		Rectangle {
 			id: runButton
 
-			width: runLabel.implicitWidth + 2 * Config.speedButtonPadX
+			width: Math.min(runLabel.implicitWidth + 2 * Config.speedButtonPadX, parent.width)
 			height: runLabel.implicitHeight + 2 * Config.speedButtonPadY
 			anchors.horizontalCenter: parent.horizontalCenter
+			focus: true
 			color: "transparent"
-			radius: height / 2
-			border.width: 1
-			border.color: root.testing ? Config.foreground : root.done ? root.downInk : Config.foreground
+			radius: 0
+
+			Highlight {
+				anchors.fill: parent
+
+				active: runButton.activeFocus || runHit.containsMouse
+			}
 
 			Text {
 				id: runLabel
 
 				anchors.centerIn: parent
+				width: Math.min(implicitWidth, parent.width)
+
+				elide: Text.ElideRight
+				horizontalAlignment: Text.AlignHCenter
 
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
-				color: root.testing ? Config.foreground : root.done ? root.downInk : Config.foreground
+				color: runButton.activeFocus || runHit.containsMouse ? Config.launcherHighlightText : root.done ? root.downInk : Config.foreground
 				text: root.buttonText
 			}
 
 			MouseArea {
-				anchors.fill: parent
+				id: runHit
 
-				onClicked: root.testing ? root.cancelTest() : root.runTest()
+				anchors.fill: parent
+				hoverEnabled: true
+
+				onClicked: root.primaryAction()
 			}
 		},
 
