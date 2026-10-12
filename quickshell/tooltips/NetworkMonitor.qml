@@ -32,7 +32,7 @@ ProcessPanel {
 			: Config.networkSpeedNone
 
 	title: Config.networkTitle
-	detail: root.net ? root.net.iface + " · " + root.net.dev.connection : ""
+	detail: root.net ? root.net.dev.connection : ""
 	detailColor: root.downInk
 	listInk: root.downInk
 	totalInk: root.downInk
