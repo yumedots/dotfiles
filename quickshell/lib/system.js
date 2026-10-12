@@ -424,20 +424,6 @@ function governorCommand(governor) {
 	return ["sh", "-c", "echo '" + governor + "' | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor"];
 }
 
-function raplWatts(before, now, ms) {
-	if (!(before >= 0) || !(now >= before) || !(ms > 0))
-		return 0;
-
-	return (now - before) / 1000 / ms;
-}
-
-function energyShare(watts, pcpu, threads) {
-	if (!(watts > 0) || !(pcpu > 0) || !(threads > 0))
-		return 0;
-
-	return watts * pcpu / (100 * threads);
-}
-
 function parseMeminfo(text) {
 	const vals = {};
 

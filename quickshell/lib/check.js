@@ -1208,13 +1208,6 @@ assert(currentGovernor("scaling_governor: [performance] powersave\n") === "perfo
 assert(currentGovernor("other: info\nscaling_governor: [powersave] performance\n") === "powersave", "the current one is found among other lines");
 assert(governorCommand("performance").join(" ").indexOf("performance") >= 0, "the governor command carries the governor");
 assert(governorCommand("powersave")[2].indexOf("cpu*") > 0, "the command reaches every cpu");
-assert(raplWatts(0, 4680000, 300) === 15.6, "a microjoule delta over millis reads as watts");
-assert(raplWatts(-1, 100, 300) === 0, "a missing first sample is not a reading");
-assert(raplWatts(100, 50, 300) === 0, "a wrapped counter without a range is not a reading");
-assert(raplWatts(100, 200, 0) === 0, "no time delta means no rate");
-assert(energyShare(15.6, 50, 16).toFixed(2) === "0.49", "a process takes its cpu share of the package");
-assert(energyShare(0, 50, 16) === 0, "no package reading means no share");
-assert(energyShare(15.6, 0, 16) === 0, "an idle process sips nothing");
 });
 
 section("network", function () {
