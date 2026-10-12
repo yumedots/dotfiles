@@ -142,7 +142,7 @@ function clipEntries(list, sources) {
 		return {
 			id: "clip:" + entry.id,
 			kind: "clip",
-			name: entry.text,
+			name: entry.kind === "image" ? "Image" : entry.text,
 			keywords: [],
 			clipId: entry.id,
 			image: entry.kind === "image",

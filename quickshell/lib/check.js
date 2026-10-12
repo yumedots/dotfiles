@@ -53,6 +53,7 @@ assert(clipEntries([{ id: "42", text: "hello" }])[0].id === "clip:42", "and is k
 assert(clipEntries([{ id: "42", text: "hello" }])[0].image === false, "text previews are not images");
 assert(clipEntries([{ id: "935", text: "x", kind: "image", format: "png" }])[0].image === true, "binary image previews are images");
 assert(clipEntries([{ id: "935", text: "x", kind: "image", format: "png" }])[0].format === "png", "the entry keeps the image format");
+assert(clipEntries([{ id: "935", text: "[[ binary data 24 KiB png 361x452 ]]", kind: "image", format: "png" }])[0].name === "Image", "image rows are labeled Image, not binary data");
 assert(clipEntries([{ id: "42", text: "hello" }], { "42": "Alacritty" })[0].appId === "Alacritty", "a mapped clip knows its source app");
 assert(fileEntries(["/tmp/a b.txt"])[0].path === "/tmp/a b.txt", "a file entry keeps its path, spaces and all");
 assert(rememberable({ kind: "app" }) && rememberable({ kind: "command" }) && rememberable({ kind: "action" }), "usage counts apps, commands and actions");
