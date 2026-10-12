@@ -123,6 +123,28 @@ QtObject {
 		}, root.mixerArrows[event.key]);
 	}
 
+	function network(event, target) {
+		if (event.text === Config.networkSpeedCancelKey && target.testing)
+			return root.act(event, { [Config.networkSpeedCancelKey]: () => target.cancelTest() }, Config.networkSpeedCancelKey);
+
+		if (target.testing)
+			return root.act(event, {
+				escape: () => target.closeRequested(),
+				accept: () => target.cancelTest(),
+				space: () => target.cancelTest()
+			});
+
+		return root.act(event, {
+			escape: () => target.unselectRun(),
+			accept: () => target.primaryAction(),
+			space: () => target.primaryAction(),
+			up: () => target.selectRun(),
+			down: () => target.selectRun(),
+			left: () => target.selectRun(),
+			right: () => target.selectRun()
+		});
+	}
+
 	function picker(event, target) {
 		return root.act(event, {
 			escape: () => target.closePicker(),

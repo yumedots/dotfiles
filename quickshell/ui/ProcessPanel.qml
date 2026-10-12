@@ -33,6 +33,7 @@ Item {
 	readonly property bool showList: panel.showProcessList && (panel.procs.length > 0 || panel.filtering)
 	readonly property real pct: panel.source ? panel.source.pct : 0
 	readonly property bool onScreen: panel.Window.window ? panel.Window.window.visible : false
+	property var keyAction: null
 
 	focus: true
 
@@ -73,6 +74,8 @@ Item {
 		} else if (Input.cancel(event)) {
 			panel.closeRequested();
 			event.accepted = true;
+		} else if (panel.keyAction !== null && panel.keyAction(event)) {
+			return;
 		} else {
 			procList.handleKey(event);
 		}
