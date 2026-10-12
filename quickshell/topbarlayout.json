@@ -16,11 +16,10 @@
 				{ "id": "media" },
 				{ "id": "network" },
 				{ "id": "notify" },
+				{ "id": "volume" },
 				{ "id": "cpu" },
 				{ "id": "memory" },
-				{ "id": "power" },
-				{ "id": "display" },
-				{ "id": "volume" }
+				{ "id": "display" }
 			]
 		}
 	}
