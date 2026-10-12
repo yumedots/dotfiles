@@ -38,7 +38,6 @@ PanelWindow {
 	property string clipPreviewText: ""
 	property string clipPreviewId: ""
 	property bool clipPreviewLoading: false
-	property bool clipPreviewIsImage: false
 	property string clipPreviewPath: ""
 	readonly property bool isClipboard: root.mode === "clipboard"
 
@@ -461,7 +460,6 @@ PanelWindow {
 			root.clipPreviewText = "";
 			root.clipPreviewId = "";
 			root.clipPreviewLoading = false;
-			root.clipPreviewIsImage = false;
 			root.clipPreviewPath = "";
 			return;
 		}
@@ -472,7 +470,6 @@ PanelWindow {
 
 		root.clipPreviewId = clipId;
 		root.clipPreviewLoading = true;
-		root.clipPreviewIsImage = entry ? entry.image === true : false;
 		root.clipPreviewPath = "";
 
 		if (entry && entry.image) {
@@ -482,7 +479,6 @@ PanelWindow {
 			return;
 		}
 
-		root.clipPreviewText = "";
 		clipDecodeReq.clipId = clipId;
 		clipDecodeReq.command = ["sh", "-c", "cliphist decode " + Shell.shellQuote(clipId) + " 2>/dev/null"];
 		clipDecodeReq.running = true;
@@ -496,7 +492,7 @@ PanelWindow {
 	function clipImageCommand(clipId) {
 		const out = root.clipImagePath(clipId);
 
-		return ["sh", "-c", "rm -f " + Shell.shellQuote(out) + " && cliphist decode " + Shell.shellQuote(clipId) + " >" + Shell.shellQuote(out) + " 2>/dev/null"];
+		return ["sh", "-c", "[ -s " + Shell.shellQuote(out) + " ] || { rm -f " + Shell.shellQuote(out) + " && cliphist decode " + Shell.shellQuote(clipId) + " >" + Shell.shellQuote(out) + " 2>/dev/null; }"];
 	}
 
 	function clipEntry(clipId) {
@@ -891,8 +887,7 @@ PanelWindow {
 							font.family: Config.fontFamily
 							font.pixelSize: Config.fontSize
 							color: root.clipPreviewText === "" ? Config.muted : Config.foreground
-							text: root.clipPreviewText !== "" ? root.clipPreviewText
-							      : (root.clipPreviewIsImage || root.results.length === 0 ? "" : "Loading…")
+							text: root.clipPreviewText
 							textFormat: Text.PlainText
 						}
 
@@ -917,8 +912,8 @@ PanelWindow {
 						fillMode: Image.PreserveAspectFit
 						cache: true
 						asynchronous: true
+						retainWhileLoading: true
 						source: root.clipPreviewPath === "" ? "" : root.clipPreviewPath
-						sourceSize.width: Config.wallpaperPreviewWidth
 					}
 				}
 				// right pane: the results list
