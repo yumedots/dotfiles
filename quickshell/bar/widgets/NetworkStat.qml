@@ -110,7 +110,6 @@ BarStat {
 		path: "/proc/net/dev"
 		blockLoading: true
 
-		onTextChanged: root.handleNet(netFile.text())
 		onLoaded: root.handleNet(netFile.text())
 	}
 

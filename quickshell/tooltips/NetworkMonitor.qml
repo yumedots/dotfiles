@@ -48,8 +48,6 @@ ProcessPanel {
 		if (!root.net)
 			return out;
 
-		out.push({ label: "down", text: Network.rateText(root.net.down), color: root.downInk });
-		out.push({ label: "up", text: Network.rateText(root.net.up), color: root.upInk });
 
 		if (root.net.isWifi)
 			out.push({ label: "signal", text: root.net.signal >= 0 ? root.net.signal + "%" : "—", color: root.upInk });
@@ -176,7 +174,7 @@ ProcessPanel {
 				const inst = delta / ((now - root.testPrev.at) / 1000);
 
 				root.moved += delta;
-				root.live = root.live > 0 ? root.live + (inst - root.live) * 0.2 : inst;
+				root.live = root.live > 0 ? root.live + (inst - root.live) * 0.15 : inst;
 				root.best = Math.max(root.best, root.live);
 			}
 		}
@@ -185,6 +183,31 @@ ProcessPanel {
 	}
 
 	viz: [
+		Item {
+			width: parent.width
+			height: Math.max(rateDown.implicitHeight, rateUp.implicitHeight)
+
+			Text {
+				id: rateDown
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.downInk
+				text: "\u{2193} " + Network.rateText(root.net ? root.net.down : 0)
+			}
+
+			Text {
+				id: rateUp
+
+				anchors.left: rateDown.right
+				anchors.leftMargin: Config.networkGraphGap * 3
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: root.upInk
+				text: "\u{2191} " + Network.rateText(root.net ? root.net.up : 0)
+			}
+		},
 		Item {
 			width: parent.width
 			height: Config.networkGraphHeight
