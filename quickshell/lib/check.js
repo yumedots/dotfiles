@@ -1321,6 +1321,21 @@ assert(speedCeiling(62375000) === 125000000, "499 megabits reads half dial, not 
 assert(speedCeiling(100000000) === 125000000, "800 megabits keeps climbing on the same dial");
 assert(speedCeiling(118750000) === 125000000, "950 megabits reaches the end of the dial");
 assert(speedCeiling(1e12) === 125000000, "absurd speeds stop at the top rung");
+
+assert(brailleGraph([], 1, 3, "down").length === 3, "an empty graph still draws its full width");
+assert(brailleGraph([0], 0, 1, "down").codePointAt(0) === 0x2800, "no traffic is a blank cell");
+assert(brailleGraph([100], 100, 1, "down").codePointAt(0) === 0x28ff, "a full bar lights every dot");
+assert(brailleGraph([50], 100, 1, "down").codePointAt(0) === 0x28cc, "download bars fill from the floor");
+assert(brailleGraph([50], 100, 1, "up").codePointAt(0) === 0x2833, "upload bars fill from the ceiling");
+assert(brailleGraph([0.001], 100, 1, "down").codePointAt(0) === 0x2888, "the faintest traffic still lights a dot");
+assert(brailleGraph([100], 100, 3, "down") === "⣿⣿⣿", "one sample stretches across the whole width");
+assert(brailleGraph([100, 0], 100, 1, "down").codePointAt(0) === 0x280f, "two samples share one cell left to right");
+assert(brailleGraph([0, 0, 100], 100, 3, "down") === "⠀⠀⣰", "young dead air still hugs the right edge");
+assert(brailleGraph([0, 0, 0], 100, 2, "down").length === 2, "an idle line stays blank but full width");
+assert(brailleGraph([0, 100, 0, 0, 0, 50], 100, 6, "down") === "⠀⠀⠀⣰⠀⣀", "gappy traffic keeps its shape while young");
+assert(brailleGraph([0, 0, 10, 20, 30, 40, 50, 60], 60, 3, "down") === "⣈⣬⣿", "once the window fills the newest samples scroll one to one");
+assert(brailleMasks([100], 100, 1, "down")[0] === 0xff, "a full cell lights all eight dots");
+assert(brailleMasks([0, 100, 0, 0, 0, 50], 100, 6, "up").length === 6, "masks come back one per cell");
 });
 
 console.log("check ok (" + ran + " assertions" + (filter === "" ? "" : ", filter " + filter) + ")");

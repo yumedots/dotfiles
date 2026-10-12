@@ -118,6 +118,42 @@ function rateText(bytesPerSecond) {
 	return Math.round(value) + " B/s";
 }
 
+function brailleMasks(values, peak, cells, dir) {
+	const cols = cells * 2;
+	const top = peak > 0 ? peak : 1;
+	const count = values.length;
+	const masks = [];
+
+	for (let c = 0; c < cells; c++) {
+		let mask = 0;
+
+		for (let k = 0; k < 2; k++) {
+			const fromEnd = cols - 1 - (c * 2 + k);
+			const sample = count > 0 && fromEnd < count ? values[count - 1 - fromEnd] : values[0];
+			const value = count > 0 ? Math.max(0, Number(sample) || 0) : 0;
+			let lit = Math.min(4, Math.ceil(value / top * 4));
+
+			if (value > 0 && lit < 1)
+				lit = 1;
+
+			if (lit > 0) {
+				const dots = (1 << lit) - 1;
+				mask |= dir === "up" ? dots << (k * 4) : dots << (4 - lit) << (k * 4);
+			}
+		}
+
+		masks.push(mask);
+	}
+
+	return masks;
+}
+
+function brailleGraph(values, peak, cells, dir) {
+	return brailleMasks(values, peak, cells, dir).map(function (mask) {
+		return String.fromCodePoint(0x2800 + mask);
+	}).join("");
+}
+
 function megaText(bytesPerSecond) {
 	return (Math.max(0, Number(bytesPerSecond) || 0) / 1024 / 1024).toFixed(1);
 }

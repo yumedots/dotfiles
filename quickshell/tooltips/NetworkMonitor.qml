@@ -42,6 +42,35 @@ ProcessPanel {
 	panelWidth: Config.networkTooltipWidth
 	panelPadding: Config.networkTooltipPadding
 
+	function graphValues(dir) {
+		return (root.net ? root.net.history : []).map(function (point) {
+			return dir === "up" ? point.up : point.down;
+		});
+	}
+
+	function pushDots(out, masks, top, ink, cells, pitch, size) {
+		for (let c = 0; c < cells; c++) {
+			const mask = masks[c] || 0;
+
+			for (let k = 0; k < 2; k++)
+				for (let b = 0; b < 4; b++)
+					if ((mask >> (k * 4 + b)) & 1)
+						out.push({ x: Math.round((c * 2 + k + 0.5) * pitch - size / 2), y: Math.round((top + b + 0.5) * pitch - size / 2), c: ink });
+		}
+	}
+
+	function graphDots(cells) {
+		const out = [];
+		const pitch = Config.networkGraphHeight / 8;
+		const size = pitch * 0.76;
+		const peak = root.scaleOf();
+
+		pushDots(out, Network.brailleMasks(graphValues("up"), peak, cells, "up"), 0, root.upInk, cells, pitch, size);
+		pushDots(out, Network.brailleMasks(graphValues("down"), peak, cells, "down"), 4, root.downInk, cells, pitch, size);
+
+		return out;
+	}
+
 	function details() {
 		const out = [];
 
@@ -209,42 +238,26 @@ ProcessPanel {
 			}
 		},
 		Item {
+			id: graph
 			width: parent.width
 			height: Config.networkGraphHeight
+			clip: true
+
+			readonly property int cells: Math.max(4, Math.min(Config.networkHistory, Math.floor(width / (Config.networkGraphHeight / 4))))
+			readonly property real dotPitch: Config.networkGraphHeight / 8
 
 			Repeater {
-				model: root.net ? root.net.history : []
+				model: root.graphDots(graph.cells)
 
 				delegate: Rectangle {
 					required property var modelData
-					required property int index
 
-					property real peak: root.scaleOf()
-
-					x: index * (Config.networkGraphGap + width)
-					width: Math.max(1, (parent.width - (Config.networkHistory - 1) * Config.networkGraphGap) / Config.networkHistory)
-					height: Math.max(1, parent.height * modelData.down / peak)
-					anchors.bottom: parent.bottom
-					color: root.downInk
-					opacity: 0.9
-				}
-			}
-
-			Repeater {
-				model: root.net ? root.net.history : []
-
-				delegate: Rectangle {
-					required property var modelData
-					required property int index
-
-					property real peak: root.scaleOf()
-
-					x: index * (Config.networkGraphGap + width)
-					width: Math.max(1, (parent.width - (Config.networkHistory - 1) * Config.networkGraphGap) / Config.networkHistory)
-					height: Math.max(1, parent.height * modelData.up / peak)
-					anchors.top: parent.top
-					color: root.upInk
-					opacity: 0.6
+					x: modelData.x
+					y: modelData.y
+					width: Math.round(graph.dotPitch * 0.75)
+					height: width
+					radius: width / 2
+					color: modelData.c
 				}
 			}
 		},

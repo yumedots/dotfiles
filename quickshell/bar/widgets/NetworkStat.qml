@@ -44,6 +44,8 @@ BarStat {
 
 		root.prev = root.counts;
 		root.counts = now;
+
+		pushHistory();
 	}
 
 	function refresh() {
@@ -86,7 +88,6 @@ BarStat {
 	}
 
 	onIfaceChanged: refreshInfo()
-	onDownChanged: pushHistory()
 	onPopupVisibleChanged: {
 		if (root.popupVisible)
 			root.scan();
