@@ -83,9 +83,6 @@ ProcessPanel {
 
 		out.push({ label: "ipv4", text: root.link, color: Config.foreground });
 
-		if (root.net.info.gateway !== "")
-			out.push({ label: "gateway", text: root.net.info.gateway, color: Config.foreground });
-
 		if (root.net.info.dns !== "")
 			out.push({ label: "dns", text: root.net.info.dns, color: Config.foreground });
 
