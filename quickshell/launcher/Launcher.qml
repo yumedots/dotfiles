@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.ui
@@ -29,6 +30,7 @@ PanelWindow {
 	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
 	readonly property string winName: root.windows && root.results.length > 0 ? root.results[root.winCurrent].name : ""
 	property var clips: []
+	property var clipList: []
 	property string clipSources: ""
 	property bool windows: false
 	property int winIndex: 0
@@ -125,10 +127,11 @@ PanelWindow {
 		}
 	}
 
+	Component.onCompleted: clipsList.running = true
+
 	function open() {
 		root.query = "";
 		root.pendingFocus = "";
-		root.clips = [];
 		root.group = "";
 		root.forced = "";
 		Hyprland.refreshToplevels();
@@ -137,6 +140,7 @@ PanelWindow {
 		terminalFile.running = true;
 		savedFile.running = true;
 		settingsFile.running = true;
+		clipsList.running = true;
 		root.shown = true;
 		root.winIndex = root.windows ? 1 : 0;
 		Qt.callLater(function () {
@@ -501,6 +505,19 @@ PanelWindow {
 		return null;
 	}
 
+	function buildClips() {
+		const next = Entries.clipEntries(root.clipList, Parse.parseClipboardSources(root.clipSources));
+		const keyOf = function (list) {
+			return list.map(function (clip) { return clip.clipId + "|" + clip.appId; }).join("\n");
+		};
+
+		if (keyOf(next) !== keyOf(root.clips))
+			root.clips = next;
+
+		if (root.isClipboard)
+			Qt.callLater(root.decodeCurrentClip);
+	}
+
 	function decodeCurrentClip() {
 		if (!root.isClipboard)
 			return;
@@ -576,7 +593,7 @@ PanelWindow {
 
 	onModeChanged: {
 		if (root.mode === "clipboard") {
-			clipSourcesFile.running = true;
+			clipSourcesFile.reload();
 			clipsList.running = true;
 		} else if (root.mode === "wallpaper")
 			root.warmNext();
@@ -666,19 +683,23 @@ PanelWindow {
 		command: ["sh", "-c", "cliphist list 2>/dev/null | head -n " + Config.launcherMaxResults]
 
 		onDone: function (text) {
-			root.clips = Entries.clipEntries(Parse.parseClipboardList(text), Parse.parseClipboardSources(root.clipSources));
-			if (root.isClipboard)
-				Qt.callLater(root.decodeCurrentClip);
+			root.clipList = Parse.parseClipboardList(text);
+			root.buildClips();
 		}
 	}
 
-	Request {
+	FileView {
 		id: clipSourcesFile
 
-		command: Shell.readCommand(root.stateDir + "/clip-apps.txt")
+		path: root.stateDir + "/clip-apps.txt"
+		preload: true
+		watchChanges: true
+		printErrors: false
 
-		onDone: function (text) {
-			root.clipSources = text;
+		onFileChanged: clipSourcesFile.reload()
+		onLoaded: {
+			root.clipSources = clipSourcesFile.text();
+			root.buildClips();
 		}
 	}
 
