@@ -38,6 +38,7 @@ PanelWindow {
 	property string clipPreviewText: ""
 	property string clipPreviewId: ""
 	property bool clipPreviewLoading: false
+	property bool clipPreviewIsImage: false
 	property string clipPreviewPath: ""
 	readonly property bool isClipboard: root.mode === "clipboard"
 
@@ -460,6 +461,7 @@ PanelWindow {
 			root.clipPreviewText = "";
 			root.clipPreviewId = "";
 			root.clipPreviewLoading = false;
+			root.clipPreviewIsImage = false;
 			root.clipPreviewPath = "";
 			return;
 		}
@@ -470,6 +472,7 @@ PanelWindow {
 
 		root.clipPreviewId = clipId;
 		root.clipPreviewLoading = true;
+		root.clipPreviewIsImage = entry ? entry.image === true : false;
 		root.clipPreviewPath = "";
 
 		if (entry && entry.image) {
@@ -866,20 +869,19 @@ PanelWindow {
 					width: root.isClipboard ? (parent.width - Config.launcherGap) / 2 : 0
 					clip: true
 
-					// the decoded text; the Flickable scrolls natively with
-					// momentum for wheel, touchpad and drag input
+					// the decoded text; keyboard paging jumps instantly,
+					// no smooth scrolling and no scrollbar
 					Flickable {
 						id: previewFlick
 
 						anchors.fill: parent
 						anchors.margins: Config.launcherTextGap
-						anchors.rightMargin: Config.scrollbarWidth + Config.launcherGap
 						visible: root.clipPreviewPath === ""
 						clip: true
 						contentWidth: width
 						contentHeight: previewText.paintedHeight
 						boundsBehavior: Flickable.StopAtBounds
-						interactive: true
+						interactive: false
 
 						Text {
 							id: previewText
@@ -889,10 +891,19 @@ PanelWindow {
 							font.family: Config.fontFamily
 							font.pixelSize: Config.fontSize
 							color: root.clipPreviewText === "" ? Config.muted : Config.foreground
-							text: root.clipPreviewText === ""
-							      ? (root.results.length === 0 ? "" : "Loading…")
-							      : root.clipPreviewText
+							text: root.clipPreviewText !== "" ? root.clipPreviewText
+							      : (root.clipPreviewIsImage || root.results.length === 0 ? "" : "Loading…")
 							textFormat: Text.PlainText
+						}
+
+						MouseArea {
+							anchors.fill: parent
+							acceptedButtons: Qt.NoButton
+
+							onWheel: function (wheel) {
+								root.scrollPreview(wheel.angleDelta.y > 0 ? -Config.launcherRowHeight : Config.launcherRowHeight);
+								wheel.accepted = true;
+							}
 						}
 					}
 
@@ -908,13 +919,6 @@ PanelWindow {
 						asynchronous: true
 						source: root.clipPreviewPath === "" ? "" : root.clipPreviewPath
 						sourceSize.width: Config.wallpaperPreviewWidth
-					}
-
-					// the same scrollbar the list uses
-					Scrollbar {
-						view: previewFlick
-						offset: Config.launcherGap
-						visible: root.clipPreviewPath === ""
 					}
 				}
 				// right pane: the results list
