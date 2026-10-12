@@ -232,6 +232,9 @@ PanelWindow {
 	}
 
 	function stepWindows(step) {
+		if (!Input.switchRepeat())
+			return;
+
 		root.winIndex = Util.wrap(root.winIndex, step, root.results.length);
 	}
 

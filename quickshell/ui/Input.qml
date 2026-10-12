@@ -40,7 +40,7 @@ QtObject {
 		if (action === undefined)
 			return false;
 
-		action();
+		action(event);
 		event.accepted = true;
 		return true;
 	}
@@ -165,5 +165,17 @@ QtObject {
 			up: () => target.stepWindows(-target.windowColumns),
 			down: () => target.stepWindows(target.windowColumns)
 		});
+	}
+
+	property double switchStepAt: 0
+
+	function switchRepeat() {
+		const now = Date.now();
+
+		if (now - root.switchStepAt < Config.windowStepMs)
+			return false;
+
+		root.switchStepAt = now;
+		return true;
 	}
 }

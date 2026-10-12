@@ -219,6 +219,7 @@ const windowsGridCell = 92;
 const windowsRowMargin = 60;
 const windowsHighlightSize = 84;
 const windowsLabelGap = 2;
+const windowStepMs = 80;
 const windowsIconSize = 76;
 const windowsTitleSize = 11;
 const launcherActions = [

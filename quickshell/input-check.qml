@@ -212,6 +212,12 @@ QtObject {
 		Input.switcher(down, stub);
 		root.assert(seen === "window3", "the switcher moves a row");
 
+		Input.switchStepAt = 0;
+		root.assert(Input.switchRepeat() === true, "the first repeat in a burst steps");
+		root.assert(Input.switchRepeat() === false, "repeats inside the step window are dropped");
+		Input.switchStepAt = Date.now() - Config.windowStepMs;
+		root.assert(Input.switchRepeat() === true, "repeats after the step window step again");
+
 		console.log("input check ok");
 		Qt.quit();
 	}
