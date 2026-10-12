@@ -1,32 +1,3 @@
-[General]
-ColorScheme=BreezeDark
-
-[KFileDialog Settings]
-Allow Expansion=false
-Automatically select filename extension=true
-Breadcrumb Navigation=false
-Decoration position=2
-Show Full Path=false
-Show Inline Previews=true
-Show Preview=false
-Show Speedbar=true
-Show hidden files=false
-Sort by=Name
-Sort directories first=true
-Sort hidden files last=false
-Sort reversed=false
-Speedbar Width=144
-View Style=DetailTree
-
-# SPDX-FileCopyrightText: Andrew Lake <jamboarder@gmail.com>
-# SPDX-FileCopyrightText: Marco Martin <notmart@gmail.com>
-# SPDX-FileCopyrightText: Nate Graham <nate@kde.org>
-# SPDX-FileCopyrightText: Noah Davis <noahadvs@gmail.com>
-# SPDX-FileCopyrightText: Neal Gompa <ngompa@kde.org>
-# SPDX-FileCopyrightText: David Redondo <kde@david-redondo.de>
-# SPDX-FileCopyrightText: Thomas Duckworth <tduck973564@gmail.com>
-# SPDX-License-Identifier: LGPL-2.0-or-later
-
 [ColorEffects:Disabled]
 Color=56,56,56
 ColorAmount=0
@@ -159,8 +130,28 @@ ForegroundNormal=252,252,252
 ForegroundPositive=39,174,96
 ForegroundVisited=155,89,182
 
+[General]
+ColorScheme=BreezeDark
+
 [KDE]
 contrast=4
+
+[KFileDialog Settings]
+Allow Expansion=false
+Automatically select filename extension=true
+Breadcrumb Navigation=false
+Decoration position=2
+Show Full Path=false
+Show Inline Previews=true
+Show Preview=false
+Show Speedbar=true
+Show hidden files=false
+Sort by=Name
+Sort directories first=true
+Sort hidden files last=false
+Sort reversed=false
+Speedbar Width=144
+View Style=DetailTree
 
 [WM]
 activeBackground=39,44,49
