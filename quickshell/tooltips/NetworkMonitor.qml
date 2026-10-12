@@ -27,9 +27,26 @@ ProcessPanel {
 	readonly property real ceiling: Network.speedCeiling(root.testing ? root.best : root.testDown)
 	readonly property color testInk: root.stage === "up" ? root.upInk : root.downInk
 	readonly property string buttonText: root.testing
-		? Config.networkSpeedCancelKey + " " + (root.stage === "down" ? Config.networkSpeedTestingDown : Config.networkSpeedTestingUp)
-		: root.done ? "\u{2193} " + Network.speedText(root.testDown) + " \u{2191} " + Network.speedText(root.testUp) + " " + Config.networkSpeedAgain
-			: Config.networkSpeedNone
+
+	function applyDns() {
+		const conn = root.net && root.net.dev ? root.net.dev.connection : ""
+		if (!conn)
+			return
+
+		const idx = parseInt(root.dnsIndex) || 0
+		const last = root.dnsPresets.length - 1
+		if (idx === last) {
+			root.dnsEditing = true
+			root.dnsApplied = root.dnsCustom
+			return
+		}
+		root.dnsEditing = false
+		const list = root.dnsPresets[idx].list
+		root.dnsApplied = root.dnsPresets[idx].label
+		Util.run(["nmcli", "connection", "modify", "id", conn, "ipv4.dns", list])
+		Util.run(["nmcli", "connection", "up", "id", conn])
+	}
+
 
 	title: Config.networkTitle
 	detail: root.net ? root.net.dev.connection : ""
@@ -38,7 +55,55 @@ ProcessPanel {
 	totalInk: root.downInk
 	showTotal: false
 	showProcessList: false
-	keyAction: (event) => Input.network(event, root)
+	keyAction: function(event) {
+		if (root.dnsEditing) {
+			if (event.key === Qt.Key_Escape) {
+				root.dnsEditing = false
+				event.accepted = true
+				return
+			}
+			if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+				root.applyDns()
+				event.accepted = true
+				return
+			}
+			return
+		}
+
+		if (event.key === Qt.Key_Down) {
+			root.dnsIndex = "0"
+			event.accepted = true
+			return
+		}
+		if (event.key === Qt.Key_Left) {
+			let i = (parseInt(root.dnsIndex) || 0) - 1
+			if (i < 0)
+				i = root.dnsPresets.length - 1
+			root.dnsIndex = String(i)
+			event.accepted = true
+			return
+		}
+		if (event.key === Qt.Key_Right) {
+			let i = (parseInt(root.dnsIndex) || 0) + 1
+			if (i >= root.dnsPresets.length)
+				i = 0
+			root.dnsIndex = String(i)
+			event.accepted = true
+			return
+		}
+		if (event.key === Qt.Key_Up) {
+			root.dnsIndex = "-1"
+			event.accepted = true
+			return
+		}
+		if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+			root.applyDns()
+			event.accepted = true
+			return
+		}
+
+		Input.network(event, root)
+	}
 	panelWidth: Config.networkTooltipWidth
 	panelPadding: Config.networkTooltipPadding
 
@@ -348,6 +413,64 @@ ProcessPanel {
 				onClicked: root.primaryAction()
 			}
 		},
+		Repeater {
+			model: root.dnsPresets
+
+			delegate: Rectangle {
+				id: box
+				required property var modelData
+				required property int index
+
+				width: dnsLabel.implicitWidth + Settings.fontSize / 2
+				height: dnsLabel.implicitHeight + Settings.fontSize / 4
+				radius: 4
+
+				color: (String(root.dnsIndex) === String(index) && !root.dnsEditing) || (index === root.dnsPresets.length - 1 && root.dnsEditing) ? Config.accent : "transparent"
+				border.color: Config.border
+				border.width: 1
+
+				Text {
+					id: dnsLabel
+					anchors.centerIn: parent
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize * 0.9
+					color: Config.foreground
+					text: index === root.dnsPresets.length - 1 ? (root.dnsEditing ? root.dnsCustom : (root.dnsApplied || "Custom")) : modelData.label
+				}
+
+				MouseArea {
+					anchors.fill: parent
+					onClicked: {
+						root.dnsIndex = String(index)
+						root.applyDns()
+					}
+				}
+			}
+		},
+		Rectangle {
+			id: dnsEditBox
+			visible: root.dnsEditing
+			width: dnsInput.implicitWidth + Settings.fontSize
+			height: dnsInput.implicitHeight + Settings.fontSize / 2
+			radius: 4
+			color: "transparent"
+			border.color: Config.accent
+			border.width: 1
+
+			TextInput {
+				id: dnsInput
+				anchors.fill: parent
+				anchors.margins: Settings.fontSize / 4
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: Config.foreground
+				focus: root.dnsEditing
+				text: root.dnsCustom
+				onTextEdited: root.dnsCustom = text
+				onAccepted: root.applyDns()
+				onActiveFocusChanged: if (!activeFocus && root.dnsEditing) root.dnsEditing = false
+			}
+		}
 
 	]
 
