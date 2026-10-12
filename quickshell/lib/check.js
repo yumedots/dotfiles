@@ -1242,7 +1242,7 @@ assert(parseRates("").enp4s0 === undefined, "an empty reading gives no devices")
 
 assert(deviceInfo("IP4.ADDRESS[1]:10.0.0.184/24\nIP4.GATEWAY:10.0.0.1\nIP4.DNS[1]:75.75.75.75\nIP4.DNS[2]:75.75.76.76\n").ip === "10.0.0.184/24", "the address comes through with its mask");
 assert(deviceInfo("IP4.ADDRESS[1]:10.0.0.184/24\nIP4.GATEWAY:10.0.0.1\nIP4.DNS[1]:75.75.75.75\nIP4.DNS[2]:75.75.76.76\n").gateway === "10.0.0.1", "the gateway comes through");
-assert(deviceInfo("IP4.ADDRESS[1]:10.0.0.184/24\nIP4.GATEWAY:10.0.0.1\nIP4.DNS[1]:75.75.75.75\nIP4.DNS[2]:75.75.76.76\n").dns === "75.75.75.75, 75.75.76.76", "every dns server is listed in order");
+assert(deviceInfo("IP4.ADDRESS[1]:10.0.0.184/24\nIP4.GATEWAY:10.0.0.1\nIP4.DNS[1]:75.75.75.75\nIP4.DNS[2]:75.75.76.76\n").dns === "75.75.75.75", "only the first dns server is listed");
 assert(deviceInfo("GENERAL.DEVICE:enp4s0\n").ip === "" && deviceInfo("").gateway === "", "a link with no ipv4 yet reads as blank instead of undefined");
 
 const before = { enp4s0: { rx: 1000, tx: 500 } };

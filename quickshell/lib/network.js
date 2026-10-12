@@ -89,7 +89,7 @@ function deviceInfo(text) {
 	return {
 		ip: show["IP4.ADDRESS[1]"] || "",
 		gateway: show["IP4.GATEWAY"] || "",
-		dns: dns.join(", ")
+		dns: dns[0] || ""
 	};
 }
 
