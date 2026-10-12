@@ -1,0 +1,69 @@
+#!/bin/sh
+# qs-clipwatch: runs from `wl-paste --watch`, mapping each new clipboard
+# entry to the app class that was focused when the copy happened.
+#
+# For every clipboard change wl-paste spawns this script with the new
+# contents on stdin ("text" generic type catches text, images arrive via
+# the companion image watcher). Once cliphist has stored the entry, the
+# script records "<clipId> <Hyprland class>" in the id->class map that the
+# launcher reads to show source-app icons (via AppIcons.iconOf).
+#
+# Usage: qs-clipwatch <watch-kind: text|image> <map file> <lock file>
+# stdin: the new clipboard content (text watcher) or the mime list (image watcher)
+set -eu
+
+MODE="${1:?watch kind}"
+MAP="${2:?map file}"
+LOCK="${3:?lock file}"
+
+mkdir -p "$(dirname "$MAP")" || exit 0
+
+if ! command -v hyprctl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1 || ! command -v cliphist >/dev/null 2>&1 || ! command -v flock >/dev/null 2>&1; then
+	exit 0
+fi
+
+data="$(mktemp)"
+trap 'rm -f "$data"' EXIT INT TERM
+cat >"$data"
+
+# The app the user copied from is whatever was focused right now: the
+# user hits Ctrl+C in Alacritty and the clipboard changes while
+# Alacritty still has focus.
+class="$(hyprctl activewindow -j 2>/dev/null | jq -r '.class // empty' 2>/dev/null || true)"
+[ -n "$class" ] || exit 0
+
+old="$(cliphist list 2>/dev/null | head -n 1 | cut -f1)"
+
+# cliphist store (the sibling watcher) runs concurrently with this hook,
+# so wait until the freshly stored entry shows up at the top. Duplicated
+# content reuses its old id instead, in which case we rewrite its owner.
+if [ "$MODE" = "image" ]; then
+	needle="[[ binary data"
+else
+	needle="$(head -c 200 "$data" | tr '\n' ' ' | head -c 120)"
+fi
+
+top=""; tries=0
+while [ $tries -lt 25 ]; do
+	top="$(cliphist list 2>/dev/null | head -n 1)"
+	case "$top" in
+		"$old"*) ;;
+		*"${needle}"*) break ;;
+		"") ;;
+		*) [ -s "$data" ] || break ;;
+	esac
+	sleep 0.08
+	tries=$((tries + 1))
+done
+[ -n "$top" ] || exit 0
+
+id="$(printf '%s' "$top" | cut -f1)"
+
+{
+	flock -x 9
+	[ -f "$MAP" ] || : >"$MAP"
+	awk -v id="$id" -v cls="$class" '$1 != id { print } END { print id " " cls }' "$MAP" 2>/dev/null >"$MAP.tmp"
+	mv "$MAP.tmp" "$MAP"
+	tail -n 400 "$MAP" >"$MAP.tmp" && mv "$MAP.tmp" "$MAP"
+} 9>"$LOCK" 2>/dev/null
+exit 0

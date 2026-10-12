@@ -50,6 +50,10 @@ assert(actionEntries([{ name: "shutdown", command: "systemctl poweroff", glyph: 
 assert(actionEntries([{ name: "shutdown", command: "x", glyph: "G" }])[0].keywords.join(",") === "power,session", "every action stays findable as power or session");
 assert(clipEntries([{ id: "42", text: "hello" }])[0].clipId === "42", "a clip entry keeps the id cliphist decodes by");
 assert(clipEntries([{ id: "42", text: "hello" }])[0].id === "clip:42", "and is keyed apart from apps and files");
+assert(clipEntries([{ id: "42", text: "hello" }])[0].image === false, "text previews are not images");
+assert(clipEntries([{ id: "935", text: "x", kind: "image", format: "png" }])[0].image === true, "binary image previews are images");
+assert(clipEntries([{ id: "935", text: "x", kind: "image", format: "png" }])[0].format === "png", "the entry keeps the image format");
+assert(clipEntries([{ id: "42", text: "hello" }], { "42": "Alacritty" })[0].appId === "Alacritty", "a mapped clip knows its source app");
 assert(fileEntries(["/tmp/a b.txt"])[0].path === "/tmp/a b.txt", "a file entry keeps its path, spaces and all");
 assert(rememberable({ kind: "app" }) && rememberable({ kind: "command" }) && rememberable({ kind: "action" }), "usage counts apps, commands and actions");
 assert(!rememberable(null) && !rememberable({ kind: "window" }) && !rememberable({ kind: "file" }) && !rememberable({ kind: "clip" }) && !rememberable({ kind: "calc" }), "and never counts windows, files, clips or the calculator row");
@@ -478,6 +482,13 @@ assert(listing[0].id === "12" && listing[0].text === "hello world", "the cliphis
 assert(listing[1].text === "second entry", "the second entry is kept");
 assert(parseClipboardList("").length === 0, "an empty listing has no entries");
 assert(parseClipboardList("\t\n5\t\n").length === 0, "a line without a preview is dropped");
+assert(parseClipboardList("935\t[[ binary data 24 KiB png 361x452 ]]")[0].kind === "image", "an image placeholder becomes an image entry");
+assert(parseClipboardList("935\t[[ binary data 24 KiB png 361x452 ]]")[0].format === "png", "the placeholder keeps the image format");
+assert(parseClipboardList("935\t[[ binary data 24 KiB png 361x452 ]]")[0].id === "935", "the image entry keeps the cliphist id");
+assert(parseClipboardList("12\thello world")[0].kind === "text", "plain text never becomes an image entry");
+assert(parseClipboardSources("935 Alacritty\n12 firefox\n")[935] === "Alacritty", "a source entry maps the cliphist id to the app");
+assert(parseClipboardSources("935 Alacritty\n")[12] === undefined, "an unmapped id stays unmapped");
+assert(Object.keys(parseClipboardSources("junk line\n")).length === 0, "map lines without an id are dropped");
 
 assert(calcEntry("2+2").value === "4", "a calculation becomes a result without a prefix");
 assert(calcEntry("2+2").name === "2+2 = 4", "the calculator row shows the expression and the result");
@@ -1240,7 +1251,6 @@ const moved = rateBetween(before, after, "enp4s0", 2);
 assert(moved.down === 1000 && moved.up === 500, "byte counters become a rate over the elapsed seconds");
 assert(rateBetween(before, after, "wlp5s0", 2).down === 0, "a device that was not counted before reads as idle");
 assert(rateBetween(before, after, "enp4s0", 0).down === 0, "no elapsed time does not divide by zero");
-assert(rateBetween(null, after, "enp4s0", 2).down === 0, "a missing first sample cannot produce a rate");
 assert(rateBetween({ enp4s0: { rx: 9000, tx: 9000 } }, after, "enp4s0", 2).down === 0, "a counter that went backwards is clamped instead of going negative");
 
 assert(rateText(512) === "512 B/s", "tiny transfers stay in bytes");

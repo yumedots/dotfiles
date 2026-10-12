@@ -29,9 +29,15 @@ PanelWindow {
 	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
 	readonly property string winName: root.windows && root.results.length > 0 ? root.results[root.winCurrent].name : ""
 	property var clips: []
+	property string clipSources: ""
 	property bool windows: false
 	property int winIndex: 0
 	property string pendingFocus: ""
+	property string clipPreviewText: ""
+	property string clipPreviewId: ""
+	property bool clipPreviewLoading: false
+	property string clipPreviewPath: ""
+	readonly property bool isClipboard: root.mode === "clipboard"
 
 	readonly property var prefix: Apps.detectPrefix(root.query, Entries.modeMarks(Config.launcherModes))
 	readonly property string search: root.windows || root.group !== "" || root.forced !== "" ? root.query : root.prefix.text
@@ -77,6 +83,15 @@ PanelWindow {
 	color: "transparent"
 
 	margins.left: 0
+
+	Region {
+		id: emptyRegion
+
+		width: 0
+		height: 0
+	}
+
+	mask: root.shown ? null : emptyRegion
 
 	property bool alwaysMapped: false
 
@@ -256,6 +271,22 @@ PanelWindow {
 			return;
 		}
 
+		if (root.isClipboard) {
+			const page = Math.max(1, previewFlick.height - Config.launcherRowHeight);
+			let delta = 0;
+
+			if (event.key === Qt.Key_PageDown || (event.key === Qt.Key_Right && !field.typing))
+				delta = page;
+			else if (event.key === Qt.Key_PageUp || (event.key === Qt.Key_Left && !field.typing))
+				delta = -page;
+
+			if (delta !== 0) {
+				root.scrollPreview(delta);
+				event.accepted = true;
+				return;
+			}
+		}
+
 		if (!field.typing && Input.accept(event)) {
 			root.activate(root.results[list.currentIndex]);
 			event.accepted = true;
@@ -420,6 +451,76 @@ PanelWindow {
 		Quickshell.execDetached(["sh", "-c", command]);
 	}
 
+	function decodeClip(clipId) {
+		if (!clipId) {
+			root.clipPreviewText = "";
+			root.clipPreviewId = "";
+			root.clipPreviewLoading = false;
+			root.clipPreviewPath = "";
+			return;
+		}
+		if (root.clipPreviewId === clipId && (root.clipPreviewText !== "" || root.clipPreviewPath !== ""))
+			return;
+
+		const entry = root.clipEntry(clipId);
+
+		root.clipPreviewId = clipId;
+		root.clipPreviewLoading = true;
+		root.clipPreviewPath = "";
+
+		if (entry && entry.image) {
+			clipImageReq.clipId = clipId;
+			clipImageReq.command = root.clipImageCommand(clipId);
+			clipImageReq.running = true;
+			return;
+		}
+
+		root.clipPreviewText = "";
+		clipDecodeReq.clipId = clipId;
+		clipDecodeReq.command = ["sh", "-c", "cliphist decode " + Shell.shellQuote(clipId) + " 2>/dev/null"];
+		clipDecodeReq.running = true;
+	}
+
+	// PNG/JPEG/... bytes picked from the last "[[ binary data … fmt WxH ]]" placeholder.
+	function clipImagePath(clipId) {
+		return Quickshell.env("XDG_RUNTIME_DIR") + "/qs-clip-" + clipId + ".png";
+	}
+
+	function clipImageCommand(clipId) {
+		const out = root.clipImagePath(clipId);
+
+		return ["sh", "-c", "rm -f " + Shell.shellQuote(out) + " && cliphist decode " + Shell.shellQuote(clipId) + " >" + Shell.shellQuote(out) + " 2>/dev/null"];
+	}
+
+	function clipEntry(clipId) {
+		for (let i = 0; i < root.clips.length; i++) {
+			if (root.clips[i] && root.clips[i].clipId === clipId)
+				return root.clips[i];
+		}
+
+		return null;
+	}
+
+	function decodeCurrentClip() {
+		if (!root.isClipboard)
+			return;
+		const entry = root.results[list.currentIndex >= 0 ? list.currentIndex : 0];
+		if (entry && entry.clipId)
+			root.decodeClip(entry.clipId);
+		else
+			root.decodeClip("");
+	}
+
+	function scrollPreview(delta) {
+		if (typeof previewFlick !== "undefined" && previewFlick) {
+			previewFlick.contentY = Util.clamp(
+				previewFlick.contentY + delta,
+				0,
+				Math.max(0, previewFlick.contentHeight - previewFlick.height)
+			);
+		}
+	}
+
 	function focusWindow(address) {
 		const target = address.indexOf("0x") === 0 ? address : "0x" + address;
 
@@ -474,9 +575,10 @@ PanelWindow {
 	}
 
 	onModeChanged: {
-		if (root.mode === "clipboard")
+		if (root.mode === "clipboard") {
+			clipSourcesFile.running = true;
 			clipsList.running = true;
-		else if (root.mode === "wallpaper")
+		} else if (root.mode === "wallpaper")
 			root.warmNext();
 	}
 
@@ -564,7 +666,55 @@ PanelWindow {
 		command: ["sh", "-c", "cliphist list 2>/dev/null | head -n " + Config.launcherMaxResults]
 
 		onDone: function (text) {
-			root.clips = Entries.clipEntries(Parse.parseClipboardList(text));
+			root.clips = Entries.clipEntries(Parse.parseClipboardList(text), Parse.parseClipboardSources(root.clipSources));
+			if (root.isClipboard)
+				Qt.callLater(root.decodeCurrentClip);
+		}
+	}
+
+	Request {
+		id: clipSourcesFile
+
+		command: Shell.readCommand(root.stateDir + "/clip-apps.txt")
+
+		onDone: function (text) {
+			root.clipSources = text;
+		}
+	}
+
+	Request {
+		id: clipDecodeReq
+
+		property string clipId: ""
+
+		command: ["sh", "-c", "cliphist decode " + Shell.shellQuote(clipId) + " 2>/dev/null"]
+
+		onDone: function (text) {
+			if (clipDecodeReq.clipId !== "" && clipDecodeReq.clipId !== root.clipPreviewId)
+				return;
+
+			root.clipPreviewText = text;
+			root.clipPreviewLoading = false;
+
+			if (typeof previewFlick !== "undefined" && previewFlick)
+				previewFlick.contentY = 0;
+		}
+	}
+
+	Request {
+		id: clipImageReq
+
+		property string clipId: ""
+
+		command: ["sh", "-c", "true"]
+
+		onDone: function (text) {
+			if (clipImageReq.clipId === "" || clipImageReq.clipId !== root.clipPreviewId)
+				return;
+
+			root.clipPreviewText = "";
+			root.clipPreviewPath = "file://" + root.clipImagePath(clipImageReq.clipId);
+			root.clipPreviewLoading = false;
 		}
 	}
 
@@ -572,6 +722,7 @@ PanelWindow {
 		id: backdrop
 
 		anchors.fill: parent
+		enabled: root.shown
 
 		onClicked: function (mouse) {
 			if (!card.contains(card.mapFromItem(backdrop, mouse.x, mouse.y)))
@@ -584,7 +735,9 @@ PanelWindow {
 
 		anchors.centerIn: parent
 
-		width: root.windows ? windowsGrid.width + card.inset * 2 : Config.launcherWidth
+		width: root.windows ? windowsGrid.width + card.inset * 2
+		      : root.isClipboard ? Config.launcherWidth * 2 + Config.launcherGap + card.inset * 2
+		      : Config.launcherWidth
 		height: root.windows ? windowsGrid.height + windowName.height + Config.windowsLabelGap + card.inset * 2 : column.implicitHeight + card.inset * 2
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
@@ -676,142 +829,230 @@ PanelWindow {
 				}
 			}
 
-			Selector {
-				id: list
-
-				width: column.width
-				height: root.listHeight
-				visible: root.results.length > 0
-				visibleRows: Config.launcherMaxRows
-				rowHeight: Config.launcherRowHeight
-				rowSpacing: Config.launcherGap
-				model: root.results
-
-
-
-				delegate: Item {
-					id: row
-
-					required property var modelData
-					required property int index
-
-					width: list.width
-					height: Config.launcherRowHeight
-
-					readonly property bool active: row.index === list.currentIndex
-					readonly property bool pinned: root.pins.indexOf(row.modelData.id) >= 0 || row.modelData.kind === "saved"
-					readonly property bool current: row.modelData.kind === "wallpaper" && row.modelData.path === root.activeWallpaper
-
-					Item {
-						id: rowIcon
-
-						anchors.left: parent.left
-						anchors.verticalCenter: parent.verticalCenter
-						width: Config.launcherIconSlot
-						height: Config.launcherIconSlot
-
-						AppIcon {
-							anchors.centerIn: parent
-							implicitSize: Config.launcherIconSize
-							visible: row.modelData.appId !== undefined && row.modelData.appId !== ""
-							source: row.modelData.appId !== undefined && row.modelData.appId !== "" ? AppIcons.iconOf(row.modelData.appId) : ""
-						}
-
-						Text {
-							anchors.centerIn: parent
-							visible: row.modelData.appId === undefined || row.modelData.appId === ""
-							font.family: Config.fontFamily
-							font.pixelSize: Config.launcherIconSize
-							color: row.active ? Config.launcherHighlightText : Config.foreground
-							text: root.rowGlyph(row.modelData)
-						}
-					}
-
-					Text {
-						id: rowMark
-
-						anchors.right: rowPin.left
-						anchors.rightMargin: row.current ? Config.launcherTextGap : 0
-							anchors.verticalCenter: parent.verticalCenter
-							width: row.current ? implicitWidth : 0
-							visible: row.current
-							font.family: Config.fontFamily
-							font.pixelSize: Config.launcherIconSize
-							color: row.active ? Config.launcherHighlightText : Config.muted
-							text: Config.launcherIconActive
-						}
-
-						Text {
-						anchors.left: rowIcon.right
-						anchors.leftMargin: Config.launcherTextGap
-						anchors.right: rowMark.left
-						anchors.rightMargin: row.current ? 0 : Config.launcherTextGap
-						anchors.verticalCenter: parent.verticalCenter
-						elide: Text.ElideRight
-						font.family: Config.fontFamily
-						font.pixelSize: Config.launcherFontSize
-						color: row.active ? Config.launcherHighlightText : Config.foreground
-						text: row.modelData.name
-					}
-
-					Text {
-						id: rowPin
-
-						anchors.right: parent.right
-						anchors.rightMargin: Config.launcherPadding
-						anchors.verticalCenter: parent.verticalCenter
-						visible: row.pinned
-						font.family: Config.fontFamily
-						font.pixelSize: Config.launcherIconSize
-						color: Config.foreground
-						text: Config.launcherIconPin
-					}
-
-					HoverHandler {
-						property point origin: Qt.point(0, 0)
-
-						onPointChanged: {
-							if (!hovered)
-								return;
-
-							const at = point.scenePosition;
-
-							if (at.x === origin.x && at.y === origin.y)
-								return;
-
-							origin = Qt.point(at.x, at.y);
-							list.currentIndex = row.index;
-						}
-					}
-
-					MouseArea {
-						anchors.fill: parent
-
-						onClicked: {
-							list.currentIndex = row.index;
-							root.activate(row.modelData);
-						}
-					}
-				}
-			}
-
+			// ── results pane: clipboard preview + list ────────────────────
 			Item {
 				width: parent.width
 				height: root.listHeight
-				visible: root.results.length === 0
 
-				Text {
+				// left pane: clipboard text preview, nothing else
+				Item {
+					id: previewPane
+
 					anchors.left: parent.left
+					anchors.top: parent.top
+					anchors.bottom: parent.bottom
+					visible: root.isClipboard
+					width: root.isClipboard ? (parent.width - Config.launcherGap) / 2 : 0
+					clip: true
+
+					// the decoded text; the Flickable scrolls natively with
+					// momentum for wheel, touchpad and drag input
+					Flickable {
+						id: previewFlick
+
+						anchors.fill: parent
+						anchors.margins: Config.launcherTextGap
+						anchors.rightMargin: Config.scrollbarWidth + Config.launcherGap
+						visible: root.clipPreviewPath === ""
+						clip: true
+						contentWidth: width
+						contentHeight: previewText.paintedHeight
+						boundsBehavior: Flickable.StopAtBounds
+						interactive: true
+
+						Text {
+							id: previewText
+
+							width: previewFlick.width
+							wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+							font.family: Config.fontFamily
+							font.pixelSize: Config.fontSize
+							color: root.clipPreviewText === "" ? Config.muted : Config.foreground
+							text: root.clipPreviewText === ""
+							      ? (root.results.length === 0 ? "" : "Loading…")
+							      : root.clipPreviewText
+							textFormat: Text.PlainText
+						}
+					}
+
+					// image clips mirror the wallpaper preview mechanics
+					Image {
+						id: clipShot
+
+						anchors.fill: parent
+						anchors.margins: Config.launcherTextGap
+						visible: root.clipPreviewPath !== ""
+						fillMode: Image.PreserveAspectFit
+						cache: true
+						asynchronous: true
+						source: root.clipPreviewPath === "" ? "" : root.clipPreviewPath
+						sourceSize.width: Config.wallpaperPreviewWidth
+					}
+
+					// the same scrollbar the list uses
+					Scrollbar {
+						view: previewFlick
+						offset: Config.launcherGap
+						visible: root.clipPreviewPath === ""
+					}
+				}
+				// right pane: the results list
+				Item {
+					id: listPane
+
+					anchors.left: root.isClipboard ? previewPane.right : parent.left
+					anchors.leftMargin: root.isClipboard ? Config.launcherGap : 0
 					anchors.right: parent.right
-					anchors.leftMargin: Config.launcherPadding
-					anchors.rightMargin: Config.launcherPadding
-					anchors.verticalCenter: parent.verticalCenter
-					horizontalAlignment: Text.AlignHCenter
-					elide: Text.ElideRight
-					font.family: Config.fontFamily
-					font.pixelSize: Config.launcherFontSize
-					color: Config.muted
-					text: root.emptyText()
+					anchors.top: parent.top
+					anchors.bottom: parent.bottom
+
+					Selector {
+						id: list
+
+						anchors.fill: parent
+						visible: root.results.length > 0
+						visibleRows: Config.launcherMaxRows
+						rowHeight: Config.launcherRowHeight
+						rowSpacing: Config.launcherGap
+						model: root.results
+
+						delegate: Item {
+							id: row
+
+							required property var modelData
+							required property int index
+
+							width: list.width
+							height: Config.launcherRowHeight
+
+							readonly property bool active: row.index === list.currentIndex
+							readonly property bool pinned: root.pins.indexOf(row.modelData.id) >= 0 || row.modelData.kind === "saved"
+							readonly property bool current: row.modelData.kind === "wallpaper" && row.modelData.path === root.activeWallpaper
+
+							Item {
+								id: rowIcon
+
+								anchors.left: parent.left
+								anchors.verticalCenter: parent.verticalCenter
+								width: Config.launcherIconSlot
+								height: Config.launcherIconSlot
+
+								readonly property string clipIcon: row.modelData.kind === "clip" && row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : ""
+
+								AppIcon {
+									id: rowIconImage
+
+									anchors.centerIn: parent
+									implicitSize: Config.launcherIconSize
+									visible: rowIcon.clipIcon !== "" || (row.modelData.appId !== undefined && row.modelData.appId !== "")
+									source: rowIcon.clipIcon !== "" ? rowIcon.clipIcon : (row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : "")
+								}
+
+								Text {
+									anchors.centerIn: parent
+									visible: !rowIconImage.visible
+									font.family: Config.fontFamily
+									font.pixelSize: Config.launcherIconSize
+									color: row.active ? Config.launcherHighlightText : Config.foreground
+									text: root.rowGlyph(row.modelData)
+								}
+							}
+
+							Text {
+								id: rowMark
+
+								anchors.right: rowPin.left
+								anchors.rightMargin: row.current ? Config.launcherTextGap : 0
+								anchors.verticalCenter: parent.verticalCenter
+								width: row.current ? implicitWidth : 0
+								visible: row.current
+								font.family: Config.fontFamily
+								font.pixelSize: Config.launcherIconSize
+								color: row.active ? Config.launcherHighlightText : Config.muted
+								text: Config.launcherIconActive
+							}
+
+							Text {
+								anchors.left: rowIcon.right
+								anchors.leftMargin: Config.launcherTextGap
+								anchors.right: rowMark.left
+								anchors.rightMargin: row.current ? 0 : Config.launcherTextGap
+								anchors.verticalCenter: parent.verticalCenter
+								elide: Text.ElideRight
+								font.family: Config.fontFamily
+								font.pixelSize: Config.launcherFontSize
+								color: row.active ? Config.launcherHighlightText : Config.foreground
+								text: row.modelData.name
+							}
+
+							Text {
+								id: rowPin
+
+								anchors.right: parent.right
+								anchors.rightMargin: Config.launcherPadding
+								anchors.verticalCenter: parent.verticalCenter
+								visible: row.pinned
+								font.family: Config.fontFamily
+								font.pixelSize: Config.launcherIconSize
+								color: Config.foreground
+								text: Config.launcherIconPin
+							}
+							HoverHandler {
+								property point origin: Qt.point(0, 0)
+
+								onPointChanged: {
+									if (!hovered)
+										return;
+
+									const at = point.scenePosition;
+
+									if (at.x === origin.x && at.y === origin.y)
+										return;
+
+									origin = Qt.point(at.x, at.y);
+									list.currentIndex = row.index;
+								}
+							}
+
+							MouseArea {
+								anchors.fill: parent
+
+								onClicked: {
+									list.currentIndex = row.index;
+									root.activate(row.modelData);
+								}
+							}
+						}
+					}
+
+					// decode on selection change without shadowing Selector's handlers
+					Connections {
+						target: list
+
+						function onCurrentIndexChanged() {
+							root.decodeCurrentClip();
+						}
+					}
+
+					Item {
+						width: parent.width
+						height: root.listHeight
+						visible: root.results.length === 0
+
+						Text {
+							anchors.left: parent.left
+							anchors.right: parent.right
+							anchors.leftMargin: Config.launcherPadding
+							anchors.rightMargin: Config.launcherPadding
+							anchors.verticalCenter: parent.verticalCenter
+							horizontalAlignment: Text.AlignHCenter
+							elide: Text.ElideRight
+							font.family: Config.fontFamily
+							font.pixelSize: Config.launcherFontSize
+							color: Config.muted
+							text: root.emptyText()
+						}
+					}
 				}
 			}
 		}

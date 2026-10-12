@@ -135,9 +135,20 @@ function actionEntries(items) {
 	});
 }
 
-function clipEntries(list) {
+function clipEntries(list, sources) {
 	return (list || []).map(function (entry) {
-		return { id: "clip:" + entry.id, kind: "clip", name: entry.text, keywords: [], clipId: entry.id };
+		const appId = sources && entry.id ? sources[entry.id] || "" : "";
+
+		return {
+			id: "clip:" + entry.id,
+			kind: "clip",
+			name: entry.text,
+			keywords: [],
+			clipId: entry.id,
+			image: entry.kind === "image",
+			format: entry.format || "",
+			appId: appId
+		};
 	});
 }
 

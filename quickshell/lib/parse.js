@@ -30,11 +30,55 @@ function parseClipboardList(text) {
 		const id = line.substring(0, tab).trim();
 		const preview = line.substring(tab + 1).trim();
 
-		if (id !== "" && preview !== "")
-			entries.push({ id: id, text: preview });
+		if (id === "" || preview === "")
+			return;
+
+		const format = parseClipboardImage(preview);
+
+		entries.push({ id: id, text: preview, kind: format !== "" ? "image" : "text", format: format });
 	});
 
 	return entries;
+}
+
+// cliphist previews images as "[[ binary data 24 KiB png 361x452 ]]".
+// Returns the image format for sized image placeholders, "" otherwise.
+function parseClipboardImage(preview) {
+	const match = /^\[\[\s*binary data\s+.*?\b(png|jpe?g|gif|webp|bmp|ico|tiff?)\s+(\d+)\s*x\s*(\d+).*?\]\]$/i.exec(preview || "");
+
+	if (!match)
+		return "";
+
+	return match[1].toLowerCase();
+}
+
+// Matches the wl-paste observer's top-of-list view ("992 MARKER77-no-newline"
+// or "935 [[ binary data 24 KiB png 361x452 ]]") against the stored cliphist
+// id -> app-class map lines ("989 Alacritty").
+function parseClipboardSources(text) {
+	const sources = {};
+
+	String(text || "").split("\n").forEach(function (line) {
+		const trimmed = line.trim();
+
+		if (trimmed === "")
+			return;
+
+		const space = trimmed.indexOf(" ");
+
+		if (space <= 0)
+			return;
+
+		const id = trimmed.substring(0, space).trim();
+		const app = trimmed.substring(space + 1).trim();
+
+		if (!/^\d+$/.test(id) || app === "")
+			return;
+
+		sources[id] = app;
+	});
+
+	return sources;
 }
 
 function calculate(expression) {
