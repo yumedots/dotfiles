@@ -16,6 +16,9 @@ ProcessPanel {
 	property real moved: 0
 	property var testPrev: null
 	property double started: 0
+	property bool dnsFocus: false
+	property bool dnsEditing: false
+	property string dnsCustom: ""
 
 	readonly property var net: root.source
 	readonly property color downInk: Util.pick(Config.mono, Config.networkDown, Config.networkDownMono)
@@ -27,26 +30,9 @@ ProcessPanel {
 	readonly property real ceiling: Network.speedCeiling(root.testing ? root.best : root.testDown)
 	readonly property color testInk: root.stage === "up" ? root.upInk : root.downInk
 	readonly property string buttonText: root.testing
-
-	function applyDns() {
-		const conn = root.net && root.net.dev ? root.net.dev.connection : ""
-		if (!conn)
-			return
-
-		const idx = parseInt(root.dnsIndex) || 0
-		const last = root.dnsPresets.length - 1
-		if (idx === last) {
-			root.dnsEditing = true
-			root.dnsApplied = root.dnsCustom
-			return
-		}
-		root.dnsEditing = false
-		const list = root.dnsPresets[idx].list
-		root.dnsApplied = root.dnsPresets[idx].label
-		Util.run(["nmcli", "connection", "modify", "id", conn, "ipv4.dns", list])
-		Util.run(["nmcli", "connection", "up", "id", conn])
-	}
-
+		? (root.stage === "down" ? Config.networkSpeedTestingDown : Config.networkSpeedTestingUp)
+		: root.done ? "\u{2193} " + Network.speedText(root.testDown) + " \u{2191} " + Network.speedText(root.testUp) + " " + Config.networkSpeedAgain
+			: Config.networkSpeedNone
 
 	title: Config.networkTitle
 	detail: root.net ? root.net.dev.connection : ""
@@ -57,52 +43,29 @@ ProcessPanel {
 	showProcessList: false
 	keyAction: function(event) {
 		if (root.dnsEditing) {
-			if (event.key === Qt.Key_Escape) {
-				root.dnsEditing = false
-				event.accepted = true
-				return
+			if (Input.accept(event)) {
+				root.confirmDns();
+				event.accepted = true;
+				return true;
 			}
-			if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-				root.applyDns()
-				event.accepted = true
-				return
-			}
-			return
+
+			return false;
 		}
 
-		if (event.key === Qt.Key_Down) {
-			root.dnsIndex = "0"
-			event.accepted = true
-			return
-		}
-		if (event.key === Qt.Key_Left) {
-			let i = (parseInt(root.dnsIndex) || 0) - 1
-			if (i < 0)
-				i = root.dnsPresets.length - 1
-			root.dnsIndex = String(i)
-			event.accepted = true
-			return
-		}
-		if (event.key === Qt.Key_Right) {
-			let i = (parseInt(root.dnsIndex) || 0) + 1
-			if (i >= root.dnsPresets.length)
-				i = 0
-			root.dnsIndex = String(i)
-			event.accepted = true
-			return
-		}
-		if (event.key === Qt.Key_Up) {
-			root.dnsIndex = "-1"
-			event.accepted = true
-			return
-		}
-		if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-			root.applyDns()
-			event.accepted = true
-			return
+		if (root.dnsFocus)
+			return Input.act(event, {
+				up: () => root.leaveDns(),
+				accept: () => root.editDns(),
+				space: () => root.editDns()
+			});
+
+		if (!root.testing && event.key === Qt.Key_Down && root.net && root.net.info.dns !== "") {
+			root.enterDns();
+			event.accepted = true;
+			return true;
 		}
 
-		Input.network(event, root)
+		return Input.network(event, root);
 	}
 	panelWidth: Config.networkTooltipWidth
 	panelPadding: Config.networkTooltipPadding
@@ -148,9 +111,6 @@ ProcessPanel {
 
 		out.push({ label: "ipv4", text: root.link, color: Config.foreground });
 
-		if (root.net.info.dns !== "")
-			out.push({ label: "dns", text: root.net.info.dns, color: Config.foreground });
-
 		return out;
 	}
 
@@ -183,10 +143,47 @@ ProcessPanel {
 	}
 
 	function primaryAction() {
+		root.dnsFocus = false;
+
 		if (root.testing)
 			root.cancelTest();
 		else
 			root.runTest();
+	}
+
+	function enterDns() {
+		if (!root.net || root.net.info.dns === "")
+			return;
+
+		root.dnsFocus = true;
+		root.forceActiveFocus();
+	}
+
+	function leaveDns() {
+		root.dnsFocus = false;
+		root.selectRun();
+	}
+
+	function editDns() {
+		if (!root.net || root.net.info.dns === "")
+			return;
+
+		root.dnsFocus = true;
+		root.dnsEditing = true;
+		root.dnsCustom = root.net.info.dns;
+	}
+
+	function confirmDns() {
+		const list = root.dnsCustom.trim();
+		const conn = root.net && root.net.dev ? root.net.dev.connection : "";
+
+		if (!list || !conn)
+			return;
+
+		root.dnsEditing = false;
+		dnsRun.command = ["sh", "-c", "nmcli connection modify id " + Shell.shellQuote(conn) + " ipv4.dns " + Shell.shellQuote(list) + " ipv4.ignore-auto-dns yes && nmcli connection up id " + Shell.shellQuote(conn)];
+		dnsRun.running = true;
+		root.selectRun();
 	}
 
 	function selectRun() {
@@ -359,6 +356,84 @@ ProcessPanel {
 		},
 
 		Item {
+			id: dnsRow
+
+			visible: root.net && root.net.info.dns !== ""
+			width: parent.width
+			height: Math.max(dnsLabel.implicitHeight, dnsValue.implicitHeight)
+
+			readonly property bool hot: !root.dnsEditing && (root.dnsFocus || dnsHit.containsMouse)
+			readonly property bool live: root.dnsEditing
+
+			Text {
+				id: dnsLabel
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: Config.foreground
+				text: "dns"
+			}
+
+			Highlight {
+				active: dnsRow.hot
+				fillParent: false
+				anchors.right: parent.right
+				anchors.verticalCenter: parent.verticalCenter
+				width: dnsValue.implicitWidth + 8
+				height: dnsValue.implicitHeight + 4
+			}
+
+			Text {
+				id: dnsValue
+
+				visible: !dnsRow.live
+				anchors.right: parent.right
+				width: parent.width - dnsLabel.width - 8
+				elide: Text.ElideRight
+				horizontalAlignment: Text.AlignRight
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: dnsRow.hot ? Config.launcherHighlightText : Config.foreground
+				text: root.net ? root.net.info.dns : ""
+			}
+
+			TextInput {
+				visible: dnsRow.live
+				anchors.right: parent.right
+				anchors.verticalCenter: parent.verticalCenter
+				width: parent.width - dnsLabel.width - 8
+				horizontalAlignment: Text.AlignRight
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: Config.foreground
+				selectByMouse: true
+				focus: dnsRow.live
+				text: root.dnsCustom
+
+				onTextEdited: root.dnsCustom = text
+				onAccepted: root.confirmDns()
+				onActiveFocusChanged: if (activeFocus) selectAll()
+
+				Keys.onEscapePressed: (event) => {
+					root.dnsEditing = false;
+					root.forceActiveFocus();
+					event.accepted = true;
+				}
+			}
+
+			MouseArea {
+				id: dnsHit
+				anchors.fill: parent
+				hoverEnabled: true
+				visible: !dnsRow.live
+
+				onClicked: root.editDns()
+			}
+		},
+
+		Item {
 			width: parent.width
 			height: Config.speedGaugeSize
 
@@ -413,64 +488,6 @@ ProcessPanel {
 				onClicked: root.primaryAction()
 			}
 		},
-		Repeater {
-			model: root.dnsPresets
-
-			delegate: Rectangle {
-				id: box
-				required property var modelData
-				required property int index
-
-				width: dnsLabel.implicitWidth + Settings.fontSize / 2
-				height: dnsLabel.implicitHeight + Settings.fontSize / 4
-				radius: 4
-
-				color: (String(root.dnsIndex) === String(index) && !root.dnsEditing) || (index === root.dnsPresets.length - 1 && root.dnsEditing) ? Config.accent : "transparent"
-				border.color: Config.border
-				border.width: 1
-
-				Text {
-					id: dnsLabel
-					anchors.centerIn: parent
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize * 0.9
-					color: Config.foreground
-					text: index === root.dnsPresets.length - 1 ? (root.dnsEditing ? root.dnsCustom : (root.dnsApplied || "Custom")) : modelData.label
-				}
-
-				MouseArea {
-					anchors.fill: parent
-					onClicked: {
-						root.dnsIndex = String(index)
-						root.applyDns()
-					}
-				}
-			}
-		},
-		Rectangle {
-			id: dnsEditBox
-			visible: root.dnsEditing
-			width: dnsInput.implicitWidth + Settings.fontSize
-			height: dnsInput.implicitHeight + Settings.fontSize / 2
-			radius: 4
-			color: "transparent"
-			border.color: Config.accent
-			border.width: 1
-
-			TextInput {
-				id: dnsInput
-				anchors.fill: parent
-				anchors.margins: Settings.fontSize / 4
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: Config.foreground
-				focus: root.dnsEditing
-				text: root.dnsCustom
-				onTextEdited: root.dnsCustom = text
-				onAccepted: root.applyDns()
-				onActiveFocusChanged: if (!activeFocus && root.dnsEditing) root.dnsEditing = false
-			}
-		}
 
 	]
 
@@ -479,6 +496,10 @@ ProcessPanel {
 
 		path: "/proc/net/dev"
 		blockLoading: true
+	}
+
+	Process {
+		id: dnsRun
 	}
 
 	Request {
