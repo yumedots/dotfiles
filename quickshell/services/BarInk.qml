@@ -11,8 +11,15 @@ Item {
 	visible: false
 
 	property bool bare: false
+	property bool wantsBare: false
+	property bool fading: false
+	property string currentInk: ""
 	property var inks: ({})
 	property var pendingBar: null
+	property var bareBars: []
+	property var queue: []
+
+	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
 
 	function key(bar, id) {
 		const screen = bar && bar.screen ? bar.screen.name : "";
@@ -31,82 +38,194 @@ Item {
 
 	function toggle(bar) {
 		if (root.bare) {
-			root.bare = false;
+			root.stop();
+			return;
+		}
+
+		root.bareBars = bar !== null ? [bar] : [];
+		root.start();
+	}
+
+	function toggleAll(bars) {
+		if (root.bare) {
+			root.stop();
+			return;
+		}
+
+		root.bareBars = (bars || []).slice();
+		root.start();
+	}
+
+	function ensure(bar) {
+		if (bar === null || root.bareBars.indexOf(bar) >= 0)
+			return;
+
+		root.bareBars.push(bar);
+		root.bare = true;
+		root.queue.push(bar);
+		sampleSoon.restart();
+	}
+
+	function stop() {
+		root.fade();
+		root.bare = false;
+		root.pendingBar = null;
+		root.bareBars = [];
+		root.queue = [];
+		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: false }));
+
+		if (!stateWrite.running)
+			stateWrite.running = true;
+	}
+
+	function start() {
+		root.bare = true;
+		root.queue = root.bareBars.slice();
+		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: true }));
+
+		if (!stateWrite.running)
+			stateWrite.running = true;
+
+		sampleSoon.restart();
+	}
+
+	function pump() {
+		if (root.pendingBar !== null || root.queue.length === 0)
+			return;
+
+		root.detect(root.queue[0]);
+	}
+
+	function fade() {
+		root.fading = true;
+		fadeTimer.restart();
+	}
+
+	function detect(bar) {
+		root.pendingBar = bar;
+
+		if (bar === null || !bar.screen) {
 			root.pendingBar = null;
 			return;
 		}
 
-		root.pendingBar = bar;
-		root.bare = true;
-		monRun.command = ["hyprctl", "monitors", "-j"];
-
-		if (!monRun.running)
-			monRun.running = true;
+		sampleRun.running = false;
+		sampleRun.command = [Quickshell.shellDir + "/scripts/bar-ink-sample", bar.screen.name, "" + Math.max(1, Math.round(bar.implicitHeight))];
+		sampleRun.running = true;
 	}
 
 	function applyMean(bar, mean) {
-		const ink = mean < 0 ? "" : BarInkLib.inkFor(mean);
-		const next = {};
+		if (root.bareBars.indexOf(bar) < 0) {
+			root.pendingBar = null;
+			return;
+		}
+
+		const ink = mean < 0 ? "" : BarInkLib.settleInk(mean, root.currentInk);
+		const next = Object.assign({}, root.inks);
 		const ids = Object.keys(bar.widgets || {});
+		let same = ink !== "";
 
 		for (let i = 0; i < ids.length; i++) {
-			if (bar.widgets[ids[i]] && bar.widgets[ids[i]].width > 0)
+			if (bar.widgets[ids[i]] && bar.widgets[ids[i]].width > 0) {
 				next[root.key(bar, ids[i])] = ink;
+
+				if (root.inks[root.key(bar, ids[i])] !== ink)
+					same = false;
+			}
 		}
 
-		root.inks = next;
 		root.pendingBar = null;
+
+		const at = root.queue.indexOf(bar);
+
+		if (at >= 0)
+			root.queue.splice(at, 1);
+
+		if (same)
+			return;
+
+		root.fade();
+		root.inks = next;
+		root.currentInk = ink;
+		root.bare = true;
+		root.pump();
+	}
+
+	Timer {
+		id: fadeTimer
+
+		interval: Config.popupSlideMs
+		repeat: false
+		running: false
+
+		onTriggered: root.fading = false
+	}
+
+	Timer {
+		id: sampleSoon
+
+		interval: 300
+		repeat: false
+		running: false
+
+		onTriggered: root.pump()
+	}
+
+	Timer {
+		id: sampleTimer
+
+		interval: 30000
+		repeat: true
+		running: true
+
+		onTriggered: {
+			if (!root.bare)
+				return;
+
+			root.pendingBar = null;
+			root.queue = root.bareBars.slice();
+			root.pump();
+		}
 	}
 
 	Process {
-		id: monRun
-
-		property string out: ""
+		id: sampleRun
 
 		stdout: StdioCollector {
-			onStreamFinished: monRun.out = text
+			onStreamFinished: sampleRun.handleSample(text)
 		}
 
-		onExited: {
-			const bar = root.pendingBar;
-
-			if (exitCode !== 0 || bar === null || !bar.screen) {
-				root.pendingBar = null;
-				return;
-			}
-
-			const geo = BarInkLib.monitorGeo(monRun.out, bar.screen.name);
-
-			if (geo === null) {
-				root.pendingBar = null;
-				return;
-			}
-
-			stripRun.command = BarInkLib.stripCommand(geo.x, geo.y, geo.w, bar.implicitHeight);
-
-			if (!stripRun.running)
-				stripRun.running = true;
-		}
-	}
-
-	Process {
-		id: stripRun
-
-		property string out: ""
-
-		stdout: StdioCollector {
-			onStreamFinished: stripRun.out = text
-		}
-
-		onExited: {
+		function handleSample(text) {
 			const bar = root.pendingBar;
 
 			root.pendingBar = null;
 
-			if (exitCode !== 0 || bar === null)
+			if (bar === null)
 				return;
 
-			root.applyMean(bar, BarInkLib.parseMean(stripRun.out));
+			root.applyMean(bar, BarInkLib.parseMean(text));
 		}
 	}
+
+	Process {
+		id: stateWrite
+	}
+
+	FileView {
+		id: stateFile
+
+		path: root.statePath
+		blockLoading: true
+		printErrors: false
+
+		onLoaded: {
+			try {
+				root.wantsBare = JSON.parse(stateFile.text()).bare === true;
+			} catch (e) {
+				root.wantsBare = false;
+			}
+		}
+	}
+
+	Component.onCompleted: stateFile.reload()
 }
