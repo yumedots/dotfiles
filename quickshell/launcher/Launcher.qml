@@ -857,11 +857,11 @@ PanelWindow {
 				width: parent.width
 				height: root.listHeight
 
-				// left pane: clipboard text preview, nothing else
+				// right pane: clipboard text preview, nothing else
 				Item {
 					id: previewPane
 
-					anchors.left: parent.left
+					anchors.right: parent.right
 					anchors.top: parent.top
 					anchors.bottom: parent.bottom
 					visible: root.isClipboard
@@ -919,13 +919,13 @@ PanelWindow {
 						source: root.clipPreviewPath === "" ? "" : root.clipPreviewPath
 					}
 				}
-				// right pane: the results list
+				// left pane: the results list
 				Item {
 					id: listPane
 
-					anchors.left: root.isClipboard ? previewPane.right : parent.left
-					anchors.leftMargin: root.isClipboard ? Config.launcherGap : 0
-					anchors.right: parent.right
+					anchors.left: parent.left
+					anchors.right: root.isClipboard ? previewPane.left : parent.right
+					anchors.rightMargin: root.isClipboard ? Config.launcherGap : 0
 					anchors.top: parent.top
 					anchors.bottom: parent.bottom
 
