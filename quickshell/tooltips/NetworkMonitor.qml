@@ -321,6 +321,12 @@ ProcessPanel {
 			}
 		},
 
+		Rectangle {
+			width: parent.width
+			height: 1
+			color: Config.muted
+		},
+
 		Repeater {
 			model: root.details()
 
