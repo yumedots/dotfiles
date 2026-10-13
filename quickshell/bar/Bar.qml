@@ -247,10 +247,8 @@ PanelWindow {
 	MouseArea {
 		anchors.fill: parent
 
-		onClicked: {
-			bar.closePopups(null);
-			BarInk.toggle(bar);
-		}
+		onClicked: bar.closePopups(null)
+		onDoubleClicked: BarInk.toggle(bar)
 	}
 
 	Row {
