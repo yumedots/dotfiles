@@ -23,6 +23,8 @@ local autostart = {
 
 hl.on("hyprland.start", function ()
   for _, app in ipairs(autostart) do once(app[1], app[2]) end
+
+  hl.exec_cmd("pgrep -f 'quickshell -p .*launcherShell' >/dev/null || { ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid quickshell -p " .. cfg .. "/quickshell/launcherShell.qml >/dev/null 2>&1 & } &")
 end)
 
 if prefs.wallpaper then
