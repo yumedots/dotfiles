@@ -16,6 +16,7 @@ PanelWindow {
 	property string terminal: ""
 	property var usage: ({})
 	property var procs: []
+	property var procRows: []
 	property var saved: []
 	property string group: ""
 	property string forced: ""
@@ -54,7 +55,7 @@ PanelWindow {
 	readonly property string shotPath: root.held && root.held.kind === "wallpaper" ? root.held.preview : ""
 	readonly property var appEntries: Entries.appEntries(AppIcons.entries, Config.launcherIgnoreApps, Config.launcherAppAliases)
 	readonly property var results: root.mode === "procs"
-		? Entries.procEntries(System.filterProcesses(root.procs, Config.psIgnore, root.search, Config.launcherMaxResults))
+		? Entries.procEntries(System.filterProcesses(root.procRows, Config.psIgnore, root.search, Config.launcherMaxResults))
 		: Apps.results(root.mode, root.search, {
 		clips: root.clips,
 		windows: root.windowEntries(),
@@ -130,7 +131,14 @@ PanelWindow {
 		}
 	}
 
-	Component.onCompleted: clipsList.running = true
+	Component.onCompleted: {
+		clipsList.running = true;
+		pinsFile.running = true;
+		usageFile.running = true;
+		terminalFile.running = true;
+		savedFile.running = true;
+		settingsFile.running = true;
+	}
 
 	function open() {
 		root.query = "";
@@ -138,12 +146,6 @@ PanelWindow {
 		root.group = "";
 		root.forced = "";
 		Hyprland.refreshToplevels();
-		pinsFile.running = true;
-		usageFile.running = true;
-		terminalFile.running = true;
-		savedFile.running = true;
-		settingsFile.running = true;
-		clipsList.running = true;
 		root.shown = true;
 		root.winIndex = root.windows ? 1 : 0;
 		Qt.callLater(function () {
@@ -624,8 +626,10 @@ PanelWindow {
 		if (root.mode === "clipboard") {
 			clipSourcesFile.reload();
 			clipsList.running = true;
-		} else if (root.mode === "wallpaper")
+		} else if (root.mode === "wallpaper") {
+			settingsFile.running = true;
 			root.warmNext();
+		}
 	}
 
 	Request {
@@ -729,6 +733,7 @@ PanelWindow {
 
 		onDone: function (text) {
 			root.procs = System.parseTopProcesses(text);
+			root.procRows = System.holdProcessOrder(root.procRows, System.filterProcesses(root.procs, Config.psIgnore, "", Config.launcherMaxResults));
 		}
 	}
 
@@ -1204,14 +1209,6 @@ PanelWindow {
 						source: iconCell.icon
 					}
 
-					Text {
-						anchors.centerIn: parent
-						visible: iconCell.icon === ""
-						font.family: Config.fontFamily
-						font.pixelSize: Config.windowsIconSize
-						color: Config.foreground
-						text: root.rowGlyph(modelData)
-					}
 				}
 			}
 
