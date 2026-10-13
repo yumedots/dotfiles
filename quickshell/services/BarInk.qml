@@ -159,6 +159,18 @@ Item {
 		}
 
 		const ink = mean < 0 ? "" : BarInkLib.settleInk(mean, root.currentInk);
+
+		if (ink === "") {
+			root.pendingBar = null;
+
+			const at = root.queue.indexOf(bar);
+
+			if (at >= 0)
+				root.queue.splice(at, 1);
+
+			root.pump();
+			return;
+		}
 		const next = Object.assign({}, root.inks);
 		const ids = Object.keys(bar.widgets || {});
 		let same = ink !== "";

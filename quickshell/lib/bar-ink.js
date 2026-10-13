@@ -28,7 +28,7 @@ function inkFor(mean) {
 
 function settleInk(mean, current) {
 	if (current === "black")
-		return mean < 0.425 ? "white" : "black";
+		return mean < 0.4 ? "white" : "black";
 
-	return mean >= 0.575 ? "black" : "white";
+	return mean >= 0.6 ? "black" : "white";
 }

@@ -1240,6 +1240,7 @@ assert(parseMean("") === -1, "an empty pipe is a miss rather than black ink");
 assert(quotePath("a'b") === "'a'\\''b'", "paths with quotes stay one argument");
 assert(inkFor(0.9) === "black" && inkFor(0.1) === "white" && inkFor(0.5) === "black", "bright ground takes black ink at the midpoint");
 assert(settleInk(0.55, "white") === "white" && settleInk(0.45, "black") === "black", "mid grays keep the standing ink instead of flapping");
+assert(settleInk(0.5, "white") === "white" && settleInk(0.5, "black") === "black", "dead center never flips on its own");
 assert(settleInk(0.7, "white") === "black" && settleInk(0.3, "black") === "white", "only a real swing flips the ink");
 });
 
