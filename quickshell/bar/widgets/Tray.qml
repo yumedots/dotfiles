@@ -73,6 +73,13 @@ Row {
 			color: BarInk.pick(root.bar, "tray", Config.foreground)
 			text: Config.iconPrev
 			rotation: root.expanded ? 180 : 0
+
+			Behavior on color {
+				enabled: BarInk.fading
+				ColorAnimation {
+					duration: Config.popupSlideMs
+				}
+			}
 		}
 
 		MouseArea {
@@ -117,6 +124,13 @@ Row {
 				source: icon
 				colorization: 1
 				colorizationColor: BarInk.pick(root.bar, "tray", Config.foreground)
+
+				Behavior on colorizationColor {
+					enabled: BarInk.fading
+					ColorAnimation {
+						duration: Config.popupSlideMs
+					}
+				}
 			}
 
 			MouseArea {

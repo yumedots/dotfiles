@@ -137,6 +137,13 @@ Item {
 			font.pixelSize: Settings.iconSize
 			color: root.inkColor
 			text: root.icon
+
+			Behavior on color {
+				enabled: BarInk.fading
+				ColorAnimation {
+					duration: Config.popupSlideMs
+				}
+			}
 		}
 
 		Loader {
@@ -164,6 +171,13 @@ Item {
 			font.pixelSize: Settings.fontSize
 			color: root.inkColor
 			text: root.value
+
+			Behavior on color {
+				enabled: BarInk.fading
+				ColorAnimation {
+					duration: Config.popupSlideMs
+				}
+			}
 		}
 
 		Item {

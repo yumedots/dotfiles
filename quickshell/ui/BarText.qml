@@ -71,6 +71,13 @@ Item {
 		font.pixelSize: root.pixelSize
 		color: root.color
 		text: root.text
+
+		Behavior on color {
+			enabled: BarInk.fading
+			ColorAnimation {
+				duration: Config.popupSlideMs
+			}
+		}
 	}
 
 	MouseArea {
