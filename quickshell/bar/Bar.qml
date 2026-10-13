@@ -126,6 +126,20 @@ PanelWindow {
 		BarInk.toggle(bar);
 	}
 
+	Component.onCompleted: {
+		if (BarInk.wantsBare)
+			BarInk.ensure(bar);
+	}
+
+	Connections {
+		target: BarInk
+
+		function onWantsBareChanged() {
+			if (BarInk.wantsBare)
+				BarInk.ensure(bar);
+		}
+	}
+
 	readonly property point origin: Qt.point(bar.margins.left, bar.atBottom
 		? (bar.screen ? bar.screen.height : 0) - bar.margins.bottom - bar.implicitHeight
 		: bar.margins.top)

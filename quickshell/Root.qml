@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import qs
 import qs.ui
+import qs.services
 import "bar"
 import "launcher"
 
@@ -126,8 +127,12 @@ ShellRoot {
 	}
 
 	function bareBar() {
+		const all = [];
+
 		for (let i = 0; i < bars.instances.length; i++)
-			bars.instances[i].toggleBare();
+			all.push(bars.instances[i]);
+
+		BarInk.toggleAll(all);
 	}
 
 	function widgetAction(id) {
@@ -135,6 +140,8 @@ ShellRoot {
 			shellRoot.trayGroup();
 		else if (id === "speedtest")
 			shellRoot.speedtest();
+		else if (id === "bareBar")
+			shellRoot.bareBar();
 		else
 			shellRoot.openWidget(id, true);
 	}
@@ -159,7 +166,7 @@ ShellRoot {
 	}
 
 	Instantiator {
-		model: shellRoot.isLauncher ? [] : [["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"]]
+		model: shellRoot.isLauncher ? [] : [["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"], ["bareBar", "bareBar"]]
 
 		delegate: GlobalShortcut {
 			required property var modelData
