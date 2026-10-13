@@ -2,6 +2,7 @@ module services
 CachedFile 1.0 CachedFile.qml
 Request 1.0 Request.qml
 singleton AppIcons 1.0 AppIcons.qml
+singleton BarInk 1.0 BarInk.qml
 singleton Notifications 1.0 Notifications.qml
 singleton Github 1.0 Github.qml
 singleton Weather 1.0 Weather.qml
