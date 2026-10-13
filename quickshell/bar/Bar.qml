@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import qs.ui
 import qs
+import qs.services
 import "widgets"
 
 PanelWindow {
@@ -121,6 +122,10 @@ PanelWindow {
 		bar.openExclusive(bar.widgets[id], keyboard);
 	}
 
+	function toggleBare() {
+		BarInk.toggle(bar);
+	}
+
 	readonly property point origin: Qt.point(bar.margins.left, bar.atBottom
 		? (bar.screen ? bar.screen.height : 0) - bar.margins.bottom - bar.implicitHeight
 		: bar.margins.top)
@@ -236,7 +241,16 @@ PanelWindow {
 		anchors.fill: parent
 		padding: Config.barInset
 		borderWidth: Config.barBorderWidth
-		backgroundColor: bar.layout.transparent ? "transparent" : Config.surfaceTranslucent
+		backgroundColor: BarInk.bare ? "transparent" : bar.layout.transparent ? "transparent" : Config.surfaceTranslucent
+	}
+
+	MouseArea {
+		anchors.fill: parent
+
+		onClicked: {
+			bar.closePopups(null);
+			BarInk.toggle(bar);
+		}
 	}
 
 	Row {

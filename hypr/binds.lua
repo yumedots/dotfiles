@@ -160,6 +160,65 @@ local function focusOrSwitch(direction)
     end
 end
 
+-- ponytail: with exactly two windows side by side there is no window "above"
+-- to swap with, so the move does nothing. Toggling the split first makes them
+-- stack, and the move then lands the window in the pressed direction.
+-- Ceiling: only the two-window case is special-cased; three or more windows
+-- keep the plain directional move.
+local function moveOrSplit(direction)
+    return function()
+        local win = hl.get_active_window()
+        if not win or win.floating then
+            hl.dispatch(hl.dsp.window.move({ direction = direction }))
+            return
+        end
+
+        local vertical = direction == "up" or direction == "down"
+        local count, neighbor = 0, nil
+
+        for _, w in ipairs(hl.get_windows()) do
+            if w.address ~= win.address and w.mapped and not w.hidden
+               and not w.floating and w.workspace.id == win.workspace.id then
+                count = count + 1
+                neighbor = w
+            end
+        end
+
+        if count == 1 and neighbor and not focusTarget(direction) then
+            local overlapY = math.min(win.at.y + win.size.y, neighbor.at.y + neighbor.size.y)
+                - math.max(win.at.y, neighbor.at.y)
+            local overlapX = math.min(win.at.x + win.size.x, neighbor.at.x + neighbor.size.x)
+                - math.max(win.at.x, neighbor.at.x)
+            local sameRow = vertical and overlapY > 0
+            local sameCol = not vertical and overlapX > 0
+
+            if sameRow or sameCol then
+                hl.dispatch(hl.dsp.layout("togglesplit"))
+
+                -- togglesplit lands the focused window on either side; moving
+                -- from the top of a fresh stack re-splits back, so only move
+                -- when it ended up on the wrong one
+                local moved = hl.get_active_window()
+                local other = hl.get_window("address:" .. neighbor.address) or neighbor
+
+                if moved and other then
+                    local wrong = vertical
+                        and ((direction == "up" and moved.at.y > other.at.y)
+                            or (direction == "down" and moved.at.y < other.at.y))
+
+                    if wrong then
+                        hl.dispatch(hl.dsp.window.move({ direction = direction }))
+                    end
+                end
+
+                return
+            end
+        end
+
+        hl.dispatch(hl.dsp.window.move({ direction = direction }))
+    end
+end
+
 for i = 1, 10 do
     local key = i % 10
     hl.bind(mainMod .. " + " .. key,         gotoWorkspace(i))
@@ -196,6 +255,7 @@ hl.bind(mainMod .. " + G", hl.dsp.global("quickshell:contributions"))
 hl.bind(mainMod .. " + P", hl.dsp.global("quickshell:display"))
 hl.bind(mainMod .. " + T", hl.dsp.global("quickshell:tray"))
 hl.bind(mainMod .. " + V", hl.dsp.global("quickshell:network"))
+hl.bind(mainMod .. " + SHIFT + H", hl.dsp.global("quickshell:bareBar"))
 
 hl.bind(mainMod .. " + left",  focusOrSwitch("left"))
 hl.bind(mainMod .. " + right", focusOrSwitch("right"))
@@ -204,8 +264,8 @@ hl.bind(mainMod .. " + down",  focusOrSwitch("down"))
 
 hl.bind(mainMod .. " + ALT + left",  hl.dsp.window.move({ direction = "left" }))
 hl.bind(mainMod .. " + ALT + right", hl.dsp.window.move({ direction = "right" }))
-hl.bind(mainMod .. " + ALT + up",    hl.dsp.window.move({ direction = "up" }))
-hl.bind(mainMod .. " + ALT + down",  hl.dsp.window.move({ direction = "down" }))
+hl.bind(mainMod .. " + ALT + up",    moveOrSplit("up"))
+hl.bind(mainMod .. " + ALT + down",  moveOrSplit("down"))
 
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.workspace.toggle_special("magic"))
 

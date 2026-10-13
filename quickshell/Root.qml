@@ -125,6 +125,11 @@ ShellRoot {
 			net.requestSpeedTest();
 	}
 
+	function bareBar() {
+		for (let i = 0; i < bars.instances.length; i++)
+			bars.instances[i].toggleBare();
+	}
+
 	function widgetAction(id) {
 		if (id === "tray")
 			shellRoot.trayGroup();
@@ -231,6 +236,10 @@ ShellRoot {
 
 		function speedtest() {
 			shellRoot.speedtest();
+		}
+
+		function bareBar() {
+			shellRoot.bareBar();
 		}
 
 		function killPopups() {
