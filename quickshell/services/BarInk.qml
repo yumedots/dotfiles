@@ -16,6 +16,8 @@ Item {
 	property string currentInk: ""
 	property var inks: ({})
 	property var pendingBar: null
+	property var filePending: null
+	property var fileQueue: []
 	property var bareBars: []
 	property var queue: []
 
@@ -70,8 +72,10 @@ Item {
 		root.fade();
 		root.bare = false;
 		root.pendingBar = null;
+		root.filePending = null;
 		root.bareBars = [];
 		root.queue = [];
+		root.fileQueue = [];
 		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: false }));
 
 		if (!stateWrite.running)
@@ -94,6 +98,40 @@ Item {
 			return;
 
 		root.detect(root.queue[0]);
+	}
+
+	function poke() {
+		if (!root.bare)
+			return;
+
+		root.queue = root.bareBars.slice();
+		confirmTimer.restart();
+	}
+
+	function reinkFile(path) {
+		if (!root.bare || !path)
+			return;
+
+		for (let i = 0; i < root.bareBars.length; i++) {
+			if (root.bareBars[i] !== null)
+				root.fileQueue.push({ bar: root.bareBars[i], path: path });
+		}
+
+		root.pumpFile();
+	}
+
+	function pumpFile() {
+		if (root.filePending !== null || root.fileQueue.length === 0)
+			return;
+
+		const job = root.fileQueue.shift();
+
+		if (job.bar === null || !job.bar.screen)
+			return;
+
+		root.filePending = job.bar;
+		fileRun.command = BarInkLib.fileMeanCommand(job.path, job.bar.screen.width, job.bar.screen.height, job.bar.implicitHeight);
+		fileRun.running = true;
 	}
 
 	function fade() {
@@ -162,6 +200,16 @@ Item {
 	}
 
 	Timer {
+		id: confirmTimer
+
+		interval: 600
+		repeat: false
+		running: false
+
+		onTriggered: root.pump()
+	}
+
+	Timer {
 		id: sampleSoon
 
 		interval: 300
@@ -185,6 +233,28 @@ Item {
 			root.pendingBar = null;
 			root.queue = root.bareBars.slice();
 			root.pump();
+		}
+	}
+
+	Process {
+		id: fileRun
+
+		stdout: StdioCollector {
+			onStreamFinished: fileRun.handleFile(text)
+		}
+
+		function handleFile(text) {
+			const bar = root.filePending;
+
+			root.filePending = null;
+
+			if (bar === null) {
+				root.pumpFile();
+				return;
+			}
+
+			root.applyMean(bar, BarInkLib.parseMean(text));
+			root.pumpFile();
 		}
 	}
 
