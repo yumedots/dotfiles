@@ -131,10 +131,7 @@ function brailleMasks(values, peak, cells, dir) {
 			const at = Math.max(0, count - cols) + c * 2 + k;
 			const sample = at < count ? values[at] : 0;
 			const value = Math.max(0, Number(sample) || 0);
-			let lit = Math.min(4, Math.ceil(value / top * 4));
-
-			if (value > 0 && lit < 1)
-				lit = 1;
+			const lit = value < 16 * 1024 ? 0 : Math.min(4, Math.floor(value / top * 4 + 0.5));
 
 			if (lit > 0) {
 				const dots = (1 << lit) - 1;
