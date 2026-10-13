@@ -18,6 +18,7 @@ Item {
 	property var pendingBar: null
 	property var filePending: null
 	property var fileQueue: []
+	property var fileMeans: ({})
 	property var bareBars: []
 	property var queue: []
 
@@ -68,6 +69,13 @@ Item {
 		sampleSoon.restart();
 	}
 
+	function persist() {
+		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, means: root.fileMeans }));
+
+		if (!stateWrite.running)
+			stateWrite.running = true;
+	}
+
 	function stop() {
 		root.fade();
 		root.bare = false;
@@ -76,20 +84,13 @@ Item {
 		root.bareBars = [];
 		root.queue = [];
 		root.fileQueue = [];
-		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: false }));
-
-		if (!stateWrite.running)
-			stateWrite.running = true;
+		root.persist();
 	}
 
 	function start() {
 		root.bare = true;
 		root.queue = root.bareBars.slice();
-		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: true }));
-
-		if (!stateWrite.running)
-			stateWrite.running = true;
-
+		root.persist();
 		sampleSoon.restart();
 	}
 
@@ -113,8 +114,17 @@ Item {
 			return;
 
 		for (let i = 0; i < root.bareBars.length; i++) {
-			if (root.bareBars[i] !== null)
-				root.fileQueue.push({ bar: root.bareBars[i], path: path });
+			const bar = root.bareBars[i];
+
+			if (bar === null || !bar.screen)
+				continue;
+
+			const key = path + "|" + bar.screen.width + "x" + bar.screen.height;
+
+			if (root.fileMeans[key] !== undefined)
+				root.applyMean(bar, root.fileMeans[key]);
+			else
+				root.fileQueue.push({ bar: bar, path: path, key: key });
 		}
 
 		root.pumpFile();
@@ -130,6 +140,8 @@ Item {
 			return;
 
 		root.filePending = job.bar;
+		fileRun.fileKey = job.key;
+		fileRun.running = false;
 		fileRun.command = BarInkLib.fileMeanCommand(job.path, job.bar.screen.width, job.bar.screen.height, job.bar.implicitHeight);
 		fileRun.running = true;
 	}
@@ -251,6 +263,8 @@ Item {
 	Process {
 		id: fileRun
 
+		property string fileKey: ""
+
 		stdout: StdioCollector {
 			onStreamFinished: fileRun.handleFile(text)
 		}
@@ -265,7 +279,17 @@ Item {
 				return;
 			}
 
-			root.applyMean(bar, BarInkLib.parseMean(text));
+			const mean = BarInkLib.parseMean(text);
+
+			if (mean >= 0) {
+				const next = Object.assign({}, root.fileMeans);
+
+				next[fileRun.fileKey] = mean;
+				root.fileMeans = next;
+				root.persist();
+			}
+
+			root.applyMean(bar, mean);
 			root.pumpFile();
 		}
 	}
@@ -302,7 +326,10 @@ Item {
 
 		onLoaded: {
 			try {
-				root.wantsBare = JSON.parse(stateFile.text()).bare === true;
+				const state = JSON.parse(stateFile.text());
+
+				root.wantsBare = state.bare === true;
+				root.fileMeans = state.means || {};
 			} catch (e) {
 				root.wantsBare = false;
 			}
