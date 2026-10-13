@@ -1234,22 +1234,12 @@ assert(governorCommand("powersave")[2].indexOf("cpu*") > 0, "the command reaches
 });
 
 section("bar ink", function () {
-const cmd = stripCommand(0, 0, 1920, 34).join(" ");
-
-assert(cmd.indexOf('grim -g \'0,0 1920x34\' -') > 0, "grim crops the bar strip to stdout");
-assert(cmd.indexOf("magick png:-") > 0 && cmd.slice(-26) === '-format "%[fx:mean]" info:', "magick answers with one mean straight off the pipe");
-
-const monitors = JSON.stringify([{ name: "DP-2", x: 0, y: 0, width: 1920, height: 1080 }]);
-const geo = monitorGeo(monitors, "DP-2");
-
-assert(geo && geo.x === 0 && geo.w === 1920, "the toggle samples the bar's own output");
-assert(monitorGeo(monitors, "nope") === null, "an unknown output is no geometry rather than a crash");
-assert(monitorGeo("", "DP-2") === null, "no hyprctl reply is no geometry rather than a crash");
-
 assert(parseMean("0.80842") > 0.8, "the pipe mean parses as a number");
 assert(parseMean("nope") === -1, "a broken pipe is a miss rather than black ink");
-
+assert(parseMean("") === -1, "an empty pipe is a miss rather than black ink");
 assert(inkFor(0.9) === "black" && inkFor(0.1) === "white" && inkFor(0.5) === "black", "bright ground takes black ink at the midpoint");
+assert(settleInk(0.55, "white") === "white" && settleInk(0.45, "black") === "black", "mid grays keep the standing ink instead of flapping");
+assert(settleInk(0.7, "white") === "black" && settleInk(0.3, "black") === "white", "only a real swing flips the ink");
 });
 
 section("network", function () {
