@@ -91,7 +91,8 @@ const modeConfig = {
 	launcherIconCalc: "=",
 	launcherIconWindow: "w",
 	launcherIconFile: "f",
-	launcherIconClipboard: "k"
+	launcherIconClipboard: "k",
+	launcherIconProcess: "p"
 };
 
 assert(modeMarks(modeConfig.launcherModes)["clipboard"] === "$", "a mark comes back keyed by its mode");
@@ -139,6 +140,7 @@ assert(glyphOf({ kind: "action", glyph: "P" }, modeConfig) === "P", "an entry wi
 assert(glyphOf({ kind: "command" }, modeConfig) === "c", "a command falls back to the command glyph");
 assert(glyphOf({ kind: "saved" }, modeConfig) === "c", "so does a saved entry");
 assert(glyphOf({ kind: "file" }, modeConfig) === "f" && glyphOf({ kind: "clip" }, modeConfig) === "k", "files and clips have their own");
+assert(glyphOf({ kind: "proc" }, modeConfig) === "p", "so do process rows");
 assert(glyphOf({ kind: "mode" }, modeConfig) === "" && glyphOf(null, modeConfig) === "", "a mode carries its glyph from the config, nothing invents one");
 assert(rememberable({ kind: "saved" }) && rememberable({ kind: "app" }) && !rememberable({ kind: "mode" }) && !rememberable({ kind: "group" }), "usage counts what gets launched, not what navigates");
 
@@ -621,6 +623,13 @@ assert(filterProcesses(null, [], "x", 5).length === 0, "no processes, no matches
 assert(killCommand(4711, "-9").join(" ") === "kill -9 4711", "force quit is a kill of that pid");
 assert(killCommand(4711, "-15").join(" ") === "kill -15 4711", "the signal comes from the caller");
 assert(killCommand(0, "-9").length === 0, "a row without a pid is not killed");
+
+const procRow = procEntries(parseTopProcesses("90.6  4711 freebuff        /usr/bin/freebuff\n"))[0];
+assert(procRow.id === "proc:4711" && procRow.kind === "proc" && procRow.pid === 4711, "a process row is keyed by its pid and is not an app");
+assert(procRow.keywords[0] === "/usr/bin/freebuff" && procRow.value === 90.6, "the command line makes it findable and the cpu share rides along");
+assert(procRow.appId === "freebuff", "the process name doubles as the icon lookup key");
+assert(procEntries(null).length === 0, "no processes, no rows");
+assert(!rememberable(procRow), "killing a process is not something usage remembers");
 
 });
 
@@ -1330,11 +1339,12 @@ assert(brailleGraph([50000, 50000], 100000, 1, "up").codePointAt(0) === 0x2833, 
 assert(brailleGraph([20000, 20000], 100000, 1, "down").codePointAt(0) === 0x2888, "a whisper over the noise floor still lights a dot");
 assert(brailleGraph([100000, 100], 100000, 1, "down").codePointAt(0) === 0x280f, "a stray byte next to the peak stays dark");
 assert(brailleGraph([10000, 10000], 100000, 1, "down").codePointAt(0) === 0x2800, "ten kilobytes stay dark under the noise floor");
-assert(brailleGraph([100000], 100000, 3, "down") === "⠏⠀⠀", "a fresh reading starts at the left edge");
+assert(brailleGraph([100000], 100000, 3, "down") === "⠀⠀⣰", "a fresh reading hugs the right edge");
 assert(brailleGraph([100000, 0], 100000, 1, "down").codePointAt(0) === 0x280f, "two samples share one cell left to right");
-assert(brailleGraph([0, 0, 100000], 100000, 3, "down") === "⠀⠏⠀", "young traffic grows out from the left");
+assert(brailleGraph([0, 0, 100000], 100000, 3, "down") === "⠀⠀⣰", "young traffic hugs the right edge");
+assert(brailleGraph([100, 200, 50000], 50000, 3, "down") === "⠀⠀⣰", "a burst after trickle still lands on the right edge");
 assert(brailleGraph([0, 0, 0], 100, 2, "down").length === 2, "an idle line stays blank but full width");
-assert(brailleGraph([0, 100000, 0, 0, 0, 50000], 100000, 6, "down") === "⣰⠀⣀⠀⠀⠀", "gappy traffic keeps its shape while young");
+assert(brailleGraph([0, 100000, 0, 0, 0, 50000], 100000, 6, "down") === "⠀⠀⠀⣰⠀⣀", "gappy traffic keeps its shape while young");
 assert(brailleGraph([0, 0, 20000, 40000, 60000, 80000, 100000, 120000], 120000, 3, "down") === "⢈⣬⣾", "once the window fills the newest samples scroll one to one");
 assert(brailleMasks([100000, 100000], 100000, 1, "down")[0] === 0xff, "a full cell lights all eight dots");
 assert(brailleMasks([0, 100000, 0, 0, 0, 50000], 100000, 6, "up").length === 6, "masks come back one per cell");

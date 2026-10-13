@@ -121,17 +121,21 @@ function rateText(bytesPerSecond) {
 function brailleMasks(values, peak, cells, dir) {
 	const cols = cells * 2;
 	const top = peak > 0 ? peak : 1;
+	const quiet = 16 * 1024;
 	const count = values.length;
 	const masks = [];
+
+	let i = count - cols;
 
 	for (let c = 0; c < cells; c++) {
 		let mask = 0;
 
 		for (let k = 0; k < 2; k++) {
-			const at = Math.max(0, count - cols) + c * 2 + k;
-			const sample = at < count ? values[at] : 0;
+			const sample = i >= 0 && i < count ? values[i] : 0;
+
+			i++;
 			const value = Math.max(0, Number(sample) || 0);
-			const lit = value < 16 * 1024 ? 0 : Math.min(4, Math.floor(value / top * 4 + 0.5));
+			const lit = value < quiet ? 0 : Math.min(4, Math.floor(value / top * 4 + 0.5));
 
 			if (lit > 0) {
 				const dots = (1 << lit) - 1;
