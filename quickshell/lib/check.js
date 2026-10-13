@@ -1238,6 +1238,11 @@ assert(parseMean("0.80842") > 0.8, "the pipe mean parses as a number");
 assert(parseMean("nope") === -1, "a broken pipe is a miss rather than black ink");
 assert(parseMean("") === -1, "an empty pipe is a miss rather than black ink");
 assert(quotePath("a'b") === "'a'\\''b'", "paths with quotes stay one argument");
+
+const screens = ": DP-2: 1920x1080, scale: 1.3333334, currently displaying: image: /pics/a.png\n";
+
+assert(wallpaperForScreen(screens, "DP-2") === "/pics/a.png", "the wallpaper path lands per output");
+assert(wallpaperForScreen("", "DP-2") === "", "no daemon reply is an empty path");
 assert(inkFor(0.9) === "black" && inkFor(0.1) === "white" && inkFor(0.5) === "black", "bright ground takes black ink at the midpoint");
 assert(settleInk(0.55, "white") === "white" && settleInk(0.45, "black") === "black", "mid grays keep the standing ink instead of flapping");
 assert(settleInk(0.5, "white") === "white" && settleInk(0.5, "black") === "black", "dead center never flips on its own");

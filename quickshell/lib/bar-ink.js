@@ -11,6 +11,19 @@ function fileMeanCommand(path, screenW, screenH, barH) {
 	return ["sh", "-c", "magick " + quotePath(path) + " -resize " + geo + "^ -gravity center -extent " + geo + " -crop " + strip + "+0+0 +repage -colorspace Gray -format \"%[fx:mean]\" info:"];
 }
 
+function wallpaperForScreen(text, name) {
+	const lines = String(text || "").split("\n");
+
+	for (let i = 0; i < lines.length; i++) {
+		const hit = new RegExp("^:\\s*" + name + ":\\s*\\d+x\\d+.*image:\\s*(.+?)\\s*$").exec(lines[i]);
+
+		if (hit)
+			return hit[1];
+	}
+
+	return "";
+}
+
 function parseMean(text) {
 	const clean = String(text || "").trim();
 
