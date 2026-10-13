@@ -163,6 +163,9 @@ end
 -- ponytail: with exactly two windows side by side there is no window "above"
 -- to swap with, so the move does nothing. Toggling the split first makes them
 -- stack, and the move then lands the window in the pressed direction.
+-- The side is decided from the geometry BEFORE the toggle: window reads right
+-- after a dispatch can come back stale, and the old post-toggle read is why
+-- this never moved anything in practice.
 -- Ceiling: only the two-window case is special-cased; three or more windows
 -- keep the plain directional move.
 local function moveOrSplit(direction)
@@ -184,31 +187,21 @@ local function moveOrSplit(direction)
             end
         end
 
-        if count == 1 and neighbor and not focusTarget(direction) then
+        if vertical and count == 1 and neighbor and not focusTarget(direction) then
             local overlapY = math.min(win.at.y + win.size.y, neighbor.at.y + neighbor.size.y)
                 - math.max(win.at.y, neighbor.at.y)
-            local overlapX = math.min(win.at.x + win.size.x, neighbor.at.x + neighbor.size.x)
-                - math.max(win.at.x, neighbor.at.x)
-            local sameRow = vertical and overlapY > 0
-            local sameCol = not vertical and overlapX > 0
 
-            if sameRow or sameCol then
+            if overlapY > 0 then
+                -- side by side: togglesplit stacks them and the focused window
+                -- keeps its own side (left lands on top), so the window on the
+                -- wrong side for the pressed direction swaps with the other one;
+                -- movewindow here just re-splits back to side by side
+                local onRight = win.at.x > neighbor.at.x
+
                 hl.dispatch(hl.dsp.layout("togglesplit"))
 
-                -- togglesplit lands the focused window on either side; moving
-                -- from the top of a fresh stack re-splits back, so only move
-                -- when it ended up on the wrong one
-                local moved = hl.get_active_window()
-                local other = hl.get_window("address:" .. neighbor.address) or neighbor
-
-                if moved and other then
-                    local wrong = vertical
-                        and ((direction == "up" and moved.at.y > other.at.y)
-                            or (direction == "down" and moved.at.y < other.at.y))
-
-                    if wrong then
-                        hl.dispatch(hl.dsp.window.move({ direction = direction }))
-                    end
+                if (direction == "up") == onRight then
+                    hl.dispatch(hl.dsp.window.swap({ next = true }))
                 end
 
                 return
