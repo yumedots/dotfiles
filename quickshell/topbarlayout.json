@@ -9,13 +9,13 @@
 				{ "id": "workspaces" }
 			],
 			"center": [
+				{ "id": "notify" },
 				{ "id": "clock" }
 			],
 			"right": [
 				{ "id": "tray" },
 				{ "id": "media" },
 				{ "id": "network" },
-				{ "id": "notify" },
 				{ "id": "volume" },
 				{ "id": "cpu" },
 				{ "id": "memory" },

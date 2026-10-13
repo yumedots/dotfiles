@@ -260,7 +260,7 @@ PanelWindow {
 		anchors.bottom: parent.bottom
 		anchors.bottomMargin: border.inset
 		spacing: Config.spacing
-		x: Math.round(bar.width / 2 - (bar.centerItem ? bar.centerItem.x + bar.centerItem.width / 2 : centerRow.width / 2))
+		x: Math.round(bar.width / 2 - (bar.centerItem ? bar.centerItem.mapToItem(centerRow, bar.centerItem.width / 2, 0).x : centerRow.width / 2))
 
 		Repeater {
 			model: bar.layout.center
