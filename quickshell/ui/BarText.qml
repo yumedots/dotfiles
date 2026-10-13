@@ -75,7 +75,7 @@ Item {
 		Behavior on color {
 			enabled: BarInk.fading
 			ColorAnimation {
-				duration: Config.popupSlideMs
+				duration: Config.barInkFadeMs
 			}
 		}
 	}

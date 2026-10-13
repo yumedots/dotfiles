@@ -21,6 +21,7 @@ Item {
 	property var fileMeans: ({})
 	property var bareBars: []
 	property var queue: []
+	property var walls: ({})
 
 	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
 
@@ -59,13 +60,34 @@ Item {
 		root.start();
 	}
 
+	function seed(bar) {
+		if (bar === null || !bar.screen)
+			return false;
+
+		const wall = root.walls[bar.screen.name];
+
+		if (!wall)
+			return false;
+
+		const key = wall + "|" + bar.screen.width + "x" + bar.screen.height;
+
+		if (root.fileMeans[key] === undefined)
+			return false;
+
+		root.applyMean(bar, root.fileMeans[key]);
+		return true;
+	}
+
 	function ensure(bar) {
 		if (bar === null || root.bareBars.indexOf(bar) >= 0)
 			return;
 
 		root.bareBars.push(bar);
 		root.bare = true;
-		root.queue.push(bar);
+
+		if (!root.seed(bar))
+			root.queue.push(bar);
+
 		sampleSoon.restart();
 	}
 
@@ -89,7 +111,13 @@ Item {
 
 	function start() {
 		root.bare = true;
-		root.queue = root.bareBars.slice();
+		root.queue = [];
+
+		for (let i = 0; i < root.bareBars.length; i++) {
+			if (!root.seed(root.bareBars[i]))
+				root.queue.push(root.bareBars[i]);
+		}
+
 		root.persist();
 		sampleSoon.restart();
 	}
@@ -216,7 +244,7 @@ Item {
 	Timer {
 		id: fadeTimer
 
-		interval: Config.popupSlideMs
+		interval: Config.barInkFadeMs
 		repeat: false
 		running: false
 
@@ -231,6 +259,20 @@ Item {
 		running: false
 
 		onTriggered: root.pump()
+	}
+
+	Timer {
+		id: queryTimer
+
+		interval: 10000
+		repeat: true
+		running: true
+		triggeredOnStart: true
+
+		onTriggered: {
+			if (!queryRun.running)
+				queryRun.running = true;
+		}
 	}
 
 	Timer {
@@ -257,6 +299,27 @@ Item {
 			root.pendingBar = null;
 			root.queue = root.bareBars.slice();
 			root.pump();
+		}
+	}
+
+	Process {
+		id: queryRun
+
+		stdout: StdioCollector {
+			onStreamFinished: queryRun.handleQuery(text)
+		}
+
+		function handleQuery(text) {
+			const walls = {};
+
+			for (let i = 0; i < root.bareBars.length; i++) {
+				const bar = root.bareBars[i];
+
+				if (bar && bar.screen)
+					walls[bar.screen.name] = BarInkLib.wallpaperForScreen(text, bar.screen.name);
+			}
+
+			root.walls = walls;
 		}
 	}
 
