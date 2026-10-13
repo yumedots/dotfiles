@@ -287,6 +287,15 @@ PanelWindow {
 			return;
 		}
 
+		if (root.isClipboard && event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
+			if (previewText.selectedText !== "") {
+				Quickshell.execDetached(["sh", "-c", "touch " + Shell.shellQuote(Quickshell.env("XDG_RUNTIME_DIR") + "/qs-clip-self")]);
+				root.copy(previewText.selectedText);
+				event.accepted = true;
+				return;
+			}
+		}
+
 		if (root.isClipboard) {
 			const page = Math.max(1, previewFlick.height - Config.launcherRowHeight);
 			let delta = 0;
@@ -602,6 +611,8 @@ PanelWindow {
 			Quickshell.execDetached(["xdg-open", entry.path]);
 		else if (entry.kind === "wallpaper") {
 			Quickshell.execDetached(Wallpaper.applyCommand(entry.path, Config));
+			Quickshell.execDetached(["sh", "-c", "qs ipc call shell reinkFile " + Shell.shellQuote(entry.path) + " 2>/dev/null"]);
+			Quickshell.execDetached(["sh", "-c", "qs ipc call shell reink 2>/dev/null"]);
 			root.saveWallpaper(entry.path);
 		}
 
@@ -917,20 +928,28 @@ PanelWindow {
 						visible: root.clipPreviewPath === ""
 						clip: true
 						contentWidth: width
-						contentHeight: previewText.paintedHeight
+						contentHeight: previewText.contentHeight
 						boundsBehavior: Flickable.StopAtBounds
 						interactive: false
 
-						Text {
+						TextEdit {
 							id: previewText
 
 							width: previewFlick.width
-							wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+							readOnly: true
+							selectByMouse: true
+							selectByKeyboard: false
+							activeFocusOnPress: false
+							persistentSelection: true
+							cursorVisible: false
+							wrapMode: TextEdit.Wrap
 							font.family: Config.fontFamily
 							font.pixelSize: Config.fontSize
 							color: root.clipPreviewText === "" ? Config.muted : Config.foreground
 							text: root.clipPreviewText
-							textFormat: Text.PlainText
+							textFormat: TextEdit.PlainText
+							selectionColor: Config.launcherHighlight
+							selectedTextColor: Config.launcherHighlightText
 						}
 
 						MouseArea {
