@@ -59,6 +59,19 @@ done
 
 id="$(printf '%s' "$top" | cut -f1)"
 
+# Copies made from the launcher preview plant $self first: the new entry
+# came from the clipboard itself, so it keeps no owner and shows the
+# clipboard icon instead of the focused app's icon.
+self="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/qs-clip-self"
+if [ -f "$self" ]; then
+	mtime=$(stat -c %Y "$self" 2>/dev/null || echo 0)
+	if [ $(( $(date +%s) - mtime )) -lt 5 ]; then
+		rm -f "$self"
+		exit 0
+	fi
+	rm -f "$self"
+fi
+
 {
 	flock -x 9
 	[ -f "$MAP" ] || : >"$MAP"
