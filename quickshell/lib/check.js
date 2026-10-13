@@ -92,7 +92,8 @@ const modeConfig = {
 	launcherIconWindow: "w",
 	launcherIconFile: "f",
 	launcherIconClipboard: "k",
-	launcherIconProcess: "p"
+	launcherIconProcess: "p",
+	launcherIconFallback: "P"
 };
 
 assert(modeMarks(modeConfig.launcherModes)["clipboard"] === "$", "a mark comes back keyed by its mode");
@@ -141,6 +142,7 @@ assert(glyphOf({ kind: "command" }, modeConfig) === "c", "a command falls back t
 assert(glyphOf({ kind: "saved" }, modeConfig) === "c", "so does a saved entry");
 assert(glyphOf({ kind: "file" }, modeConfig) === "f" && glyphOf({ kind: "clip" }, modeConfig) === "k", "files and clips have their own");
 assert(glyphOf({ kind: "proc" }, modeConfig) === "p", "so do process rows");
+assert(glyphOf({ kind: "app", appId: "noicon" }, modeConfig) === "P" && glyphOf({ kind: "window", appId: "noicon" }, modeConfig) === "w", "rows whose app has no desktop icon fall back to a nerd font glyph");
 assert(glyphOf({ kind: "mode" }, modeConfig) === "" && glyphOf(null, modeConfig) === "", "a mode carries its glyph from the config, nothing invents one");
 assert(rememberable({ kind: "saved" }) && rememberable({ kind: "app" }) && !rememberable({ kind: "mode" }) && !rememberable({ kind: "group" }), "usage counts what gets launched, not what navigates");
 
@@ -1229,6 +1231,25 @@ assert(currentGovernor("scaling_governor: [performance] powersave\n") === "perfo
 assert(currentGovernor("other: info\nscaling_governor: [powersave] performance\n") === "powersave", "the current one is found among other lines");
 assert(governorCommand("performance").join(" ").indexOf("performance") >= 0, "the governor command carries the governor");
 assert(governorCommand("powersave")[2].indexOf("cpu*") > 0, "the command reaches every cpu");
+});
+
+section("bar ink", function () {
+const cmd = stripCommand(0, 0, 1920, 34).join(" ");
+
+assert(cmd.indexOf('grim -g \'0,0 1920x34\' -') > 0, "grim crops the bar strip to stdout");
+assert(cmd.indexOf("magick png:-") > 0 && cmd.slice(-26) === '-format "%[fx:mean]" info:', "magick answers with one mean straight off the pipe");
+
+const monitors = JSON.stringify([{ name: "DP-2", x: 0, y: 0, width: 1920, height: 1080 }]);
+const geo = monitorGeo(monitors, "DP-2");
+
+assert(geo && geo.x === 0 && geo.w === 1920, "the toggle samples the bar's own output");
+assert(monitorGeo(monitors, "nope") === null, "an unknown output is no geometry rather than a crash");
+assert(monitorGeo("", "DP-2") === null, "no hyprctl reply is no geometry rather than a crash");
+
+assert(parseMean("0.80842") > 0.8, "the pipe mean parses as a number");
+assert(parseMean("nope") === -1, "a broken pipe is a miss rather than black ink");
+
+assert(inkFor(0.9) === "black" && inkFor(0.1) === "white" && inkFor(0.5) === "black", "bright ground takes black ink at the midpoint");
 });
 
 section("network", function () {
