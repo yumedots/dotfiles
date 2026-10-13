@@ -55,6 +55,7 @@ ProcessPanel {
 		if (root.dnsFocus)
 			return Input.act(event, {
 				up: () => root.leaveDns(),
+				down: () => root.leaveDns(),
 				accept: () => root.editDns(),
 				space: () => root.editDns()
 			});
