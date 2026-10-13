@@ -197,9 +197,12 @@ const launcherIconPin = "\ueba0";
 const launcherIconActive = "\u{f00c}";
 const launcherIconApps = "\u{f0c9}";
 const launcherIconWallpaper = "\u{f0e09}";
+const launcherIconProcess = "\u{f0874}";
+const launcherIconFallback = "\u{f2d0}";
 const launcherModes = [
 	{ mode: "clipboard", name: "Clipboard", mark: "", glyph: launcherIconClipboard, keywords: ["copy", "paste"] },
-	{ mode: "wallpaper", name: "Wallpaper", mark: "~", glyph: launcherIconWallpaper, keywords: ["wallpaper", "background", "desktop"] }
+	{ mode: "wallpaper", name: "Wallpaper", mark: "~", glyph: launcherIconWallpaper, keywords: ["wallpaper", "background", "desktop"] },
+	{ mode: "procs", name: "Processes", mark: "%", glyph: launcherIconProcess, keywords: ["top", "atop", "cpu", "processes", "monitor", "kill"] }
 ];
 const launcherGroups = [
 	{ id: "apps", name: "Apps", glyph: launcherIconApps, keywords: ["programs", "applications"] }

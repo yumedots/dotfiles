@@ -152,6 +152,20 @@ function clipEntries(list, sources) {
 	});
 }
 
+function procEntries(list) {
+	return (list || []).map(function (proc) {
+		return {
+			id: "proc:" + proc.pid,
+			kind: "proc",
+			name: proc.name,
+			keywords: [proc.cmd],
+			appId: proc.name,
+			pid: proc.pid,
+			value: proc.value
+		};
+	});
+}
+
 function fileEntries(paths) {
 	return (paths || []).map(function (path) {
 		return { id: "file:" + path, kind: "file", name: path, keywords: [], path: path };
@@ -213,7 +227,9 @@ function glyphOf(entry, config) {
 		file: config.launcherIconFile,
 		clip: config.launcherIconClipboard,
 		calc: config.launcherIconCalc,
-		wallpaper: config.launcherIconWallpaper
+		wallpaper: config.launcherIconWallpaper,
+		proc: config.launcherIconProcess,
+		app: config.launcherIconFallback
 	};
 
 	return kinds[entry.kind] || "";

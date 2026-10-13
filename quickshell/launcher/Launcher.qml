@@ -15,6 +15,7 @@ PanelWindow {
 	property var pins: []
 	property string terminal: ""
 	property var usage: ({})
+	property var procs: []
 	property var saved: []
 	property string group: ""
 	property string forced: ""
@@ -52,7 +53,9 @@ PanelWindow {
 	readonly property var held: root.mode === "wallpaper" ? root.results[list.currentIndex] : null
 	readonly property string shotPath: root.held && root.held.kind === "wallpaper" ? root.held.preview : ""
 	readonly property var appEntries: Entries.appEntries(AppIcons.entries, Config.launcherIgnoreApps, Config.launcherAppAliases)
-	readonly property var results: Apps.results(root.mode, root.search, {
+	readonly property var results: root.mode === "procs"
+		? Entries.procEntries(System.filterProcesses(root.procs, Config.psIgnore, root.search, Config.launcherMaxResults))
+		: Apps.results(root.mode, root.search, {
 		clips: root.clips,
 		windows: root.windowEntries(),
 		entries: Entries.all(Config, root.appEntries, root.saved),
@@ -251,6 +254,12 @@ PanelWindow {
 	function handleKeys(event) {
 		if (root.windows) {
 			Input.switcher(event, root);
+			return;
+		}
+
+		if (root.mode === "procs" && event.text === Config.procKillKey) {
+			root.killProc(root.results[list.currentIndex]);
+			event.accepted = true;
 			return;
 		}
 
@@ -548,6 +557,13 @@ PanelWindow {
 			: "focuswindow address:" + target);
 	}
 
+	function killProc(entry) {
+		if (!entry || entry.kind !== "proc")
+			return;
+
+		Quickshell.execDetached(System.killCommand(entry.pid, Config.procKillSignal));
+	}
+
 	function activate(entry) {
 		if (!entry)
 			return;
@@ -688,6 +704,29 @@ PanelWindow {
 			root.clipList = Parse.parseClipboardList(text);
 			root.buildClips();
 		}
+	}
+
+	Request {
+		id: procList
+
+		command: ["ps", "-eo", "pcpu=,pid=,comm:16=,args=", "--sort=-pcpu"]
+
+		function reload() {
+			if (!procList.running)
+				procList.running = true;
+		}
+
+		onDone: function (text) {
+			root.procs = System.parseTopProcesses(text);
+		}
+	}
+
+	Timer {
+		interval: Config.cpuPollMs * 2
+		running: root.shown && root.mode === "procs"
+		repeat: true
+		triggeredOnStart: true
+		onTriggered: procList.reload()
 	}
 
 	FileView {
@@ -960,16 +999,17 @@ PanelWindow {
 								width: Config.launcherIconSlot
 								height: Config.launcherIconSlot
 
-								readonly property string clipIcon: row.modelData.kind === "clip" && row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : ""
+							readonly property string clipIcon: row.modelData.kind === "clip" && row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : ""
+							readonly property string icon: rowIcon.clipIcon !== "" ? rowIcon.clipIcon : (row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : "")
 
-								AppIcon {
-									id: rowIconImage
+							AppIcon {
+								id: rowIconImage
 
-									anchors.centerIn: parent
-									implicitSize: Config.launcherIconSize
-									visible: rowIcon.clipIcon !== "" || (row.modelData.appId !== undefined && row.modelData.appId !== "")
-									source: rowIcon.clipIcon !== "" ? rowIcon.clipIcon : (row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : "")
-								}
+								anchors.centerIn: parent
+								implicitSize: Config.launcherIconSize
+								visible: rowIcon.icon !== ""
+								source: rowIcon.icon
+							}
 
 								Text {
 									anchors.centerIn: parent
@@ -998,14 +1038,28 @@ PanelWindow {
 							Text {
 								anchors.left: rowIcon.right
 								anchors.leftMargin: Config.launcherTextGap
-								anchors.right: rowMark.left
-								anchors.rightMargin: row.current ? 0 : Config.launcherTextGap
+								anchors.right: rowUsage.left
+								anchors.rightMargin: row.current && !rowUsage.visible ? 0 : Config.launcherTextGap
 								anchors.verticalCenter: parent.verticalCenter
 								elide: Text.ElideRight
 								font.family: Config.fontFamily
 								font.pixelSize: Config.launcherFontSize
 								color: row.active ? Config.launcherHighlightText : Config.foreground
 								text: row.modelData.name
+							}
+
+							Text {
+								id: rowUsage
+
+								anchors.right: rowMark.left
+								anchors.rightMargin: Config.launcherTextGap
+								anchors.verticalCenter: parent.verticalCenter
+								width: visible ? implicitWidth : 0
+								visible: row.modelData.kind === "proc"
+								font.family: Config.fontFamily
+								font.pixelSize: Config.launcherFontSize
+								color: row.active ? Config.launcherHighlightText : Config.muted
+								text: row.modelData.kind === "proc" ? row.modelData.value.toFixed(1) + "%" : ""
 							}
 
 							Text {
@@ -1041,6 +1095,11 @@ PanelWindow {
 								anchors.fill: parent
 
 								onClicked: {
+									if (row.modelData.kind === "proc" && row.active) {
+										root.killProc(row.modelData);
+										return;
+									}
+
 									list.currentIndex = row.index;
 									root.activate(row.modelData);
 								}
@@ -1124,6 +1183,15 @@ PanelWindow {
 						implicitSize: Config.windowsIconSize
 						visible: iconCell.icon !== ""
 						source: iconCell.icon
+					}
+
+					Text {
+						anchors.centerIn: parent
+						visible: iconCell.icon === ""
+						font.family: Config.fontFamily
+						font.pixelSize: Config.windowsIconSize
+						color: Config.foreground
+						text: root.rowGlyph(modelData)
 					}
 				}
 			}
