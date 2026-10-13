@@ -1,5 +1,16 @@
 .pragma library
 
+function quotePath(arg) {
+	return "'" + String(arg).replace(/'/g, "'\\''") + "'";
+}
+
+function fileMeanCommand(path, screenW, screenH, barH) {
+	const geo = Math.max(1, Math.round(screenW)) + "x" + Math.max(1, Math.round(screenH));
+	const strip = Math.max(1, Math.round(screenW)) + "x" + Math.max(1, Math.round(barH));
+
+	return ["sh", "-c", "magick " + quotePath(path) + " -resize " + geo + "^ -gravity center -extent " + geo + " -crop " + strip + "+0+0 +repage -colorspace Gray -format \"%[fx:mean]\" info:"];
+}
+
 function parseMean(text) {
 	const clean = String(text || "").trim();
 

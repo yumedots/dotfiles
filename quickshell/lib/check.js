@@ -1237,6 +1237,7 @@ section("bar ink", function () {
 assert(parseMean("0.80842") > 0.8, "the pipe mean parses as a number");
 assert(parseMean("nope") === -1, "a broken pipe is a miss rather than black ink");
 assert(parseMean("") === -1, "an empty pipe is a miss rather than black ink");
+assert(quotePath("a'b") === "'a'\\''b'", "paths with quotes stay one argument");
 assert(inkFor(0.9) === "black" && inkFor(0.1) === "white" && inkFor(0.5) === "black", "bright ground takes black ink at the midpoint");
 assert(settleInk(0.55, "white") === "white" && settleInk(0.45, "black") === "black", "mid grays keep the standing ink instead of flapping");
 assert(settleInk(0.7, "white") === "black" && settleInk(0.3, "black") === "white", "only a real swing flips the ink");
