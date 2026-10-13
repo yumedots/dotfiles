@@ -253,10 +253,6 @@ ShellRoot {
 			BarInk.poke();
 		}
 
-		function reinkFile(path: string) {
-			BarInk.reinkFile(path);
-		}
-
 		function killPopups() {
 			if (shellRoot.isLauncher) {
 				launcherWindow.close();

@@ -16,6 +16,9 @@ Item {
 	property string currentInk: ""
 	property var inks: ({})
 	property var pendingBar: null
+	property var pendingFile: null
+	property real watchBase: -1
+	property int watchTries: 0
 	property var filePending: null
 	property var fileQueue: []
 	property var fileMeans: ({})
@@ -141,6 +144,48 @@ Item {
 		if (!root.bare || !path)
 			return;
 
+		root.pendingFile = path;
+
+		for (let i = 0; i < root.bareBars.length; i++) {
+			const bar = root.bareBars[i];
+
+			if (bar === null || !bar.screen)
+				continue;
+
+			const key = path + "|" + bar.screen.width + "x" + bar.screen.height;
+
+			if (root.fileMeans[key] === undefined)
+				root.fileQueue.push({ bar: bar, path: path, key: key });
+		}
+
+		root.pumpFile();
+		root.watchBase = -1;
+		root.watchTries = 0;
+		root.sampleBar();
+	}
+
+	function sampleBar() {
+		if (root.bareBars.length === 0 || watchRun.running)
+			return;
+
+		const bar = root.bareBars[0];
+
+		if (bar === null || !bar.screen)
+			return;
+
+		watchRun.command = [Quickshell.shellDir + "/scripts/bar-ink-sample", bar.screen.name, "" + Math.max(1, Math.round(bar.implicitHeight))];
+		watchRun.running = true;
+	}
+
+	function answerFile() {
+		const path = root.pendingFile;
+
+		root.pendingFile = null;
+		watchTimer.stop();
+
+		if (!path)
+			return;
+
 		for (let i = 0; i < root.bareBars.length; i++) {
 			const bar = root.bareBars[i];
 
@@ -249,6 +294,56 @@ Item {
 		running: false
 
 		onTriggered: root.fading = false
+	}
+
+	Timer {
+		id: watchTimer
+
+		interval: 120
+		repeat: true
+		running: false
+
+		onTriggered: {
+			if (root.watchTries >= 30) {
+				root.answerFile();
+				return;
+			}
+
+			root.watchTries++;
+			root.sampleBar();
+		}
+	}
+
+	Process {
+		id: watchRun
+
+		stdout: StdioCollector {
+			onStreamFinished: watchRun.handleWatch(text)
+		}
+
+		function handleWatch(text) {
+			const mean = BarInkLib.parseMean(text);
+
+			if (mean < 0) {
+				root.answerFile();
+				return;
+			}
+
+			if (root.watchBase < 0) {
+				root.watchBase = mean;
+				root.watchTries = 0;
+				watchTimer.restart();
+				return;
+			}
+
+			if (Math.abs(mean - root.watchBase) > 0.04 || root.watchTries >= 30) {
+				watchTimer.stop();
+				root.answerFile();
+				return;
+			}
+
+			root.watchTries++;
+		}
 	}
 
 	Timer {
@@ -378,6 +473,23 @@ Item {
 
 	Process {
 		id: stateWrite
+	}
+
+	FileView {
+		id: pathFile
+
+		path: Quickshell.shellDir + "/cache/bar-ink-path.txt"
+		blockLoading: true
+		printErrors: false
+
+		onFileChanged: pathFile.reload()
+
+		onLoaded: {
+			const path = pathFile.text().trim();
+
+			if (path !== "")
+				root.reinkFile(path);
+		}
 	}
 
 	FileView {
