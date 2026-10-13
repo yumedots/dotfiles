@@ -1,11 +1,13 @@
 import QtQuick
 import qs
+import qs.services
 
 Item {
 	id: root
 
 	property string text: ""
-	property color color: Config.foreground
+	property string inkId: ""
+	property color color: BarInk.pick(root.bar, root.inkId, Config.foreground)
 	property int pixelSize: Settings.fontSize
 	property real padding: 0
 	property var bar: null

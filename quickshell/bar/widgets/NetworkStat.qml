@@ -8,6 +8,8 @@ import "../../tooltips"
 BarStat {
 	id: root
 
+	inkId: "network"
+
 	property var prev: null
 	property var counts: ({})
 	property var history: []

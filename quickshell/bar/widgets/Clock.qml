@@ -7,6 +7,8 @@ import "../../tooltips"
 BarText {
 	id: root
 
+	inkId: "clock"
+
 	property var settings: null
 
 	readonly property string stamp: Qt.formatDateTime(clock.date, root.settings && root.settings.format ? root.settings.format : Config.clockFormat)

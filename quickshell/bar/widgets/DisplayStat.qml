@@ -7,6 +7,8 @@ import "../../tooltips"
 BarStat {
 	id: root
 
+	inkId: "display"
+
 	property string raw: ""
 
 	readonly property var listed: Display.monitorsFromText(root.raw)

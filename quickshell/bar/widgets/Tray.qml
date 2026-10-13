@@ -70,7 +70,7 @@ Row {
 			anchors.centerIn: parent
 			font.family: Config.fontFamily
 			font.pixelSize: Config.trayGroupSize
-			color: Config.foreground
+			color: BarInk.pick(root.bar, "tray", Config.foreground)
 			text: Config.iconPrev
 			rotation: root.expanded ? 180 : 0
 		}
@@ -116,7 +116,7 @@ Row {
 				anchors.fill: icon
 				source: icon
 				colorization: 1
-				colorizationColor: Config.foreground
+				colorizationColor: BarInk.pick(root.bar, "tray", Config.foreground)
 			}
 
 			MouseArea {

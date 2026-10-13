@@ -2,10 +2,12 @@ import QtQuick
 import Quickshell.Hyprland
 import qs.ui
 import qs
+import qs.services
 
 Row {
 	id: root
 	spacing: Config.workspaceSpacing
+	property var bar: null
 
 	readonly property real baselineLift: Math.ceil(Config.barThickness)
 	readonly property var persistentIds: [1, 2, 3, 4]
@@ -73,9 +75,10 @@ Row {
 			readonly property int workspaceId: index + 1
 
 			visible: root.ids.indexOf(ws.workspaceId) >= 0
+			bar: root.bar
 			text: "" + ws.workspaceId
 			padding: Config.workspacePadding
-			color: root.focusedId === ws.workspaceId ? Config.workspaceActive : Config.workspaceInactive
+			color: BarInk.pick(root.bar, "workspaces", root.focusedId === ws.workspaceId ? Config.workspaceActive : Config.workspaceInactive)
 
 			onActivate: function () { root.focusWorkspace(ws.workspaceId); }
 		}

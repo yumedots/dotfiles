@@ -7,6 +7,8 @@ import "../../tooltips"
 BarStat {
 	id: root
 
+	inkId: "volume"
+
 	readonly property var sink: Pipewire.defaultAudioSink
 	readonly property real volume: root.sink && root.sink.audio ? root.sink.audio.volume : 0
 	readonly property bool isMuted: root.sink && root.sink.audio ? root.sink.audio.muted : false

@@ -7,6 +7,8 @@ import "../../tooltips"
 BarStat {
 	id: root
 
+	inkId: "media"
+
 	readonly property var player: Media.pickPlayer(Mpris.players.values ? Mpris.players.values : [])
 
 	icon: Config.iconApp

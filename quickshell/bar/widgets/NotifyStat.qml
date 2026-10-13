@@ -8,6 +8,8 @@ import "../../tooltips"
 BarStat {
 	id: root
 
+	inkId: "notify"
+
 	property bool keyboardPopup: false
 
 	icon: Config.iconBell

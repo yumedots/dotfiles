@@ -7,6 +7,8 @@ import "../../tooltips"
 BarStat {
 	id: root
 
+	inkId: "cpu"
+
 	property var prev: null
 	property string lastRead: ""
 	property var cores: []

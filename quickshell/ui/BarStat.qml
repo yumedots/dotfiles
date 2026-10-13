@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import qs
+import qs.services
 
 Item {
 	id: root
@@ -13,6 +14,7 @@ Item {
 	property color barColor: Config.red
 	property color textColor: root.barColor
 	property string icon: ""
+	property string inkId: ""
 	property real iconLift: 0
 	property var iconComponent: null
 	property real iconWidth: 0
@@ -61,7 +63,7 @@ Item {
 
 	readonly property bool iconMode: root.mode === "icon"
 	readonly property real iconBreadth: root.iconComponent ? root.iconWidth : iconMetrics.width
-	readonly property color inkColor: root.dim ? root.dimColor : (root.mono ? Config.foreground : root.textColor)
+	readonly property color inkColor: BarInk.pick(root.bar, root.inkId, root.dim ? root.dimColor : (root.mono ? Config.foreground : root.textColor))
 	readonly property int filled: Util.filledCells(root.pct, Config.barCells)
 	readonly property real valueAscent: -valueMetrics.boundingRect.y
 	readonly property real iconAscent: -iconMetrics.boundingRect.y

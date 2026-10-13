@@ -7,6 +7,8 @@ import "../../tooltips"
 BarStat {
 	id: root
 
+	inkId: "memory"
+
 	property var memory: null
 
 	readonly property real usedGB: root.memory ? root.memory.used / 1024 / 1024 : 0
