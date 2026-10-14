@@ -127,8 +127,18 @@ cmd_start() {
 		sleep 0.5
 	done
 	[ -n "$out" ] || out=WAYLAND-1
-	printf 'HYPR_PID=%s\nQS_PID=%s\nQS_ID=%s\nSIG=%s\nSOCK=%s\nWORKTREE=%s\nOUTPUT=%s\n' \
-		"$hp" "$qpid" "$qid" "$sig" "$sock" "$WT" "$out" >"$STATE"
+	setsid env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" XDG_CONFIG_HOME="$WT" awww-daemon </dev/null >>"$RUN/awww.log" 2>&1 &
+	local apid=$!
+	for i in $(seq 1 20); do
+		env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" awww query >/dev/null 2>&1 && break
+		sleep 0.5
+	done
+	local wall=${HYPR_TEST_WALL:-$(awww query 2>/dev/null | sed -n 's/.*currently displaying: image: //p' | head -1)}
+	if [ -n "$wall" ]; then
+		env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" awww img "$wall" >/dev/null 2>&1 || true
+	fi
+	printf 'HYPR_PID=%s\nQS_PID=%s\nQS_ID=%s\nSIG=%s\nSOCK=%s\nWORKTREE=%s\nOUTPUT=%s\nAWWW_PID=%s\n' \
+		"$hp" "$qpid" "$qid" "$sig" "$sock" "$WT" "$out" "$apid" >"$STATE"
 	echo "started: hyprland pid $hp, quickshell $qid pid $qpid, output $out"
 	echo "worktree: $WT"
 }
@@ -158,6 +168,7 @@ cmd_stop() {
 		local hp
 		hp=$(hypr_pid_by_sig "${SIG:-}")
 		pkill -f "$WORKTREE/quickshell/shell.qml" 2>/dev/null || true
+		[ -n "${AWWW_PID:-}" ] && kill "$AWWW_PID" 2>/dev/null || true
 		[ -n "$hp" ] && kill "$hp" 2>/dev/null || true
 		sleep 1
 		[ -n "$hp" ] && kill -9 "$hp" 2>/dev/null || true
