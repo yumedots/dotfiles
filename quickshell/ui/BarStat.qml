@@ -141,7 +141,7 @@ Item {
 			Behavior on color {
 				enabled: BarInk.fading
 				ColorAnimation {
-					duration: Config.barInkFadeMs
+					duration: Config.barFadeMs
 				}
 			}
 		}
@@ -175,7 +175,7 @@ Item {
 			Behavior on color {
 				enabled: BarInk.fading
 				ColorAnimation {
-					duration: Config.barInkFadeMs
+					duration: Config.barFadeMs
 				}
 			}
 		}
