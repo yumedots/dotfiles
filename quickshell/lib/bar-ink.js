@@ -4,23 +4,41 @@ function quotePath(arg) {
 	return "'" + String(arg).replace(/'/g, "'\\''") + "'";
 }
 
-function screenMeanCommand(name, barRatio) {
-	const pct = Math.max(1, Math.min(100, barRatio * 100)).toFixed(2);
+function wallScanCommand(dir, depth) {
+	const images = quotePath("\\.(jpg|jpeg|png|webp|gif|bmp|avif)$");
 
-	return ["sh", "-c", "grim -o " + quotePath(name) + " - | magick png:- -colorspace Gray -crop 100%x" + pct + "%+0+0 +repage -format \"%[fx:mean]\" info:"];
+	return ["sh", "-c", "find " + quotePath(dir) + " -maxdepth " + depth
+		+ " \\( -name node_modules -o -name .git \\) -prune -o -type f -printf '%T@\\t%p\\n' 2>/dev/null | grep -iE " + images + " | sort"];
 }
 
-function wallpaperForScreen(text, name) {
-	const lines = String(text || "").split("\n");
+function parseList(text) {
+	const files = [];
 
-	for (let i = 0; i < lines.length; i++) {
-		const hit = new RegExp("^:\\s*" + name + ":\\s*\\d+x\\d+.*image:\\s*(.+?)\\s*$").exec(lines[i]);
+	String(text || "").split("\n").forEach(function (line) {
+		const tab = line.indexOf("\t");
 
-		if (hit)
-			return hit[1];
-	}
+		if (tab > 0 && tab < line.length - 1)
+			files.push({ mtime: line.slice(0, tab), path: line.slice(tab + 1) });
+	});
 
-	return "";
+	return files;
+}
+
+function fileMeanCommand(path, w, h, barPx) {
+	const pct = Math.max(1, Math.min(100, barPx / h * 100)).toFixed(2);
+	const size = w + "x" + h;
+
+	return ["magick", String(path), "-resize", size + "^", "-gravity", "center", "-extent", size,
+		"-gravity", "northwest", "-colorspace", "Gray", "-crop", "100%x" + pct + "%+0+0", "+repage",
+		"-format", "%[fx:mean]", "info:"];
+}
+
+function keyFor(path, mtime, w, h, barPx) {
+	return String(path) + "|" + String(mtime) + "@" + w + "x" + h + "x" + barPx;
+}
+
+function fileOf(key) {
+	return key.slice(0, key.lastIndexOf("@"));
 }
 
 function parseMean(text) {

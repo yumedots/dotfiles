@@ -14,15 +14,18 @@ Item {
 	property bool wantsBare: false
 	property bool fading: false
 	property var inks: ({})
-	property var lastWalls: ({})
 	property var means: ({})
 	property var bareBars: []
-	property var sampleQueue: []
-	property var sampling: null
-	property string samplePath: ""
-	property string sampleKey: ""
+	property var bars: []
+	property var mtimes: ({})
+	property var jobs: []
+	property var job: null
+	property string wall: ""
+	property string wallDir: ""
+	property bool persistPending: false
 
 	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
+	readonly property string settingsPath: Quickshell.shellDir + "/cache/settings.lua"
 
 	function key(bar) {
 		return bar && bar.screen ? bar.screen.name : "";
@@ -47,13 +50,13 @@ Item {
 		root.start();
 	}
 
-	function toggleAll(bars) {
+	function toggleAll(all) {
 		if (root.bare) {
 			root.stop();
 			return;
 		}
 
-		root.bareBars = (bars || []).slice();
+		root.bareBars = (all || []).slice();
 		root.start();
 	}
 
@@ -62,73 +65,72 @@ Item {
 			return;
 
 		root.bareBars = root.bareBars.concat([bar]);
-		root.lastWalls = {};
+		scanTimer.restart();
+	}
+
+	function register(bar) {
+		if (bar && root.bars.indexOf(bar) < 0) {
+			root.bars = root.bars.concat([bar]);
+			scanTimer.restart();
+		}
+	}
+
+	function unregister(bar) {
+		root.bars = root.bars.filter(function (b) { return b !== bar; });
 	}
 
 	function persist() {
 		stateWrite.running = false;
 		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, means: root.means }));
 		stateWrite.running = true;
+		root.persistPending = false;
 	}
 
 	function stop() {
 		root.fade();
 		root.bare = false;
 		root.bareBars = [];
-		root.sampleQueue = [];
+		root.jobs = [];
 		root.persist();
 	}
 
 	function start() {
-		root.lastWalls = {};
 		root.persist();
-		root.poll();
+		root.runScan();
 	}
 
-	function poll() {
-		if (!queryRun.running)
-			queryRun.running = true;
-	}
-
-	function queueSample(bar) {
-		if (root.sampleQueue.indexOf(bar) < 0)
-			root.sampleQueue = root.sampleQueue.concat([bar]);
-
-		root.pumpSample();
-	}
-
-	function pumpSample() {
-		if (root.sampling !== null || root.sampleQueue.length === 0)
+	function runScan() {
+		if (root.wallDir === "")
 			return;
 
-		const bar = root.sampleQueue[0];
-
-		root.sampleQueue = root.sampleQueue.slice(1);
-
-		if (!bar || !bar.screen || root.bareBars.indexOf(bar) < 0)
-			return root.pumpSample();
-
-		root.sampling = bar;
-		root.samplePath = root.lastWalls[bar.screen.name] || "";
-		statRun.running = false;
-		statRun.command = ["stat", "-c", "%Y", root.samplePath];
-		statRun.running = true;
-	}
-
-	function runSample() {
-		const bar = root.sampling;
-
-		if (bar === null)
-			return root.pumpSample();
-
-		sampleRun.running = false;
-		sampleRun.command = BarInkLib.screenMeanCommand(bar.screen.name, bar.implicitHeight / bar.screen.height);
-		sampleRun.running = true;
+		scanRun.running = false;
+		scanRun.command = BarInkLib.wallScanCommand(root.wallDir.replace(/^~/, Quickshell.env("HOME")), Config.wallpaperDepth);
+		scanRun.running = true;
 	}
 
 	function fade() {
 		root.fading = true;
 		fadeTimer.restart();
+	}
+
+	function meanFor(bar) {
+		const mtime = root.mtimes[root.wall];
+
+		if (mtime === undefined || !bar.screen || !(bar.implicitHeight > 0))
+			return -1;
+
+		const mean = root.means[BarInkLib.keyFor(root.wall, mtime, bar.screen.width, bar.screen.height, bar.implicitHeight)];
+
+		return mean === undefined ? -1 : mean;
+	}
+
+	function applyCurrent() {
+		for (let i = 0; i < root.bareBars.length; i++) {
+			const mean = root.meanFor(root.bareBars[i]);
+
+			if (mean >= 0)
+				root.applyMean(root.bareBars[i], mean);
+		}
 	}
 
 	function applyMean(bar, mean) {
@@ -151,6 +153,74 @@ Item {
 		root.persist();
 	}
 
+	function handleList(text) {
+		const files = BarInkLib.parseList(text);
+		const mtimes = {};
+		const valid = {};
+
+		for (let i = 0; i < files.length; i++) {
+			mtimes[files[i].path] = files[i].mtime;
+			valid[files[i].path + "|" + files[i].mtime] = true;
+		}
+
+		root.mtimes = mtimes;
+
+		if (files.length === 0)
+			return root.applyCurrent();
+
+		const next = {};
+		let pruned = false;
+
+		for (const k in root.means) {
+			if (valid[BarInkLib.fileOf(k)])
+				next[k] = root.means[k];
+			else
+				pruned = true;
+		}
+
+		const queue = [];
+
+		for (let b = 0; b < root.bars.length; b++) {
+			const bar = root.bars[b];
+
+			if (!bar.screen || !(bar.implicitHeight > 0))
+				continue;
+
+			for (let i = 0; i < files.length; i++) {
+				const k = BarInkLib.keyFor(files[i].path, files[i].mtime, bar.screen.width, bar.screen.height, bar.implicitHeight);
+
+				if (next[k] === undefined)
+					queue.push({ key: k, path: files[i].path, w: bar.screen.width, h: bar.screen.height, barPx: bar.implicitHeight });
+			}
+		}
+
+		if (pruned || queue.length > 0) {
+			root.means = next;
+			root.persistPending = root.persistPending || pruned;
+		}
+
+		root.jobs = queue;
+		root.pumpJob();
+	}
+
+	function pumpJob() {
+		if (sampleRun.running)
+			return;
+
+		if (root.jobs.length === 0) {
+			if (root.persistPending)
+				root.persist();
+
+			return root.applyCurrent();
+		}
+
+		root.job = root.jobs[0];
+		root.jobs = root.jobs.slice(1);
+		sampleRun.running = false;
+		sampleRun.command = BarInkLib.fileMeanCommand(root.job.path, root.job.w, root.job.h, root.job.barPx);
+		sampleRun.running = true;
+	}
+
 	Timer {
 		id: fadeTimer
 
@@ -162,86 +232,19 @@ Item {
 	}
 
 	Timer {
-		id: queryTimer
+		id: scanTimer
 
-		interval: 500
-		repeat: true
-		running: root.bareBars.length > 0
-		triggeredOnStart: true
-
-		onTriggered: root.poll()
-	}
-
-	Timer {
-		id: settleTimer
-
-		interval: 3000
+		interval: 300
 		repeat: false
 
-		onTriggered: root.runSample()
+		onTriggered: root.runScan()
 	}
 
 	Process {
-		id: queryRun
-
-		command: ["awww", "query"]
+		id: scanRun
 
 		stdout: StdioCollector {
-			onStreamFinished: queryRun.handleQuery(text)
-		}
-
-		function handleQuery(text) {
-			const next = Object.assign({}, root.lastWalls);
-			const changed = [];
-
-			for (let i = 0; i < root.bareBars.length; i++) {
-				const bar = root.bareBars[i];
-
-				if (!bar || !bar.screen)
-					continue;
-
-				const name = bar.screen.name;
-				const path = BarInkLib.wallpaperForScreen(text, name);
-
-				if (path === "" || path === root.lastWalls[name])
-					continue;
-
-				next[name] = path;
-				changed.push(bar);
-			}
-
-			root.lastWalls = next;
-
-			for (let i = 0; i < changed.length; i++)
-				root.queueSample(changed[i]);
-		}
-	}
-
-	Process {
-		id: statRun
-
-		stdout: StdioCollector {
-			onStreamFinished: statRun.handleStat(text)
-		}
-
-		function handleStat(text) {
-			const bar = root.sampling;
-			const mtime = String(text || "").trim();
-
-			if (bar === null)
-				return root.pumpSample();
-
-			root.sampleKey = mtime !== "" ? [bar.screen.width, bar.screen.height, bar.implicitHeight, root.samplePath, mtime].join("|") : "";
-
-			const cached = root.means[root.sampleKey];
-
-			if (root.sampleKey !== "" && cached !== undefined) {
-				root.sampling = null;
-				root.applyMean(bar, cached);
-				return root.pumpSample();
-			}
-
-			settleTimer.restart();
+			onStreamFinished: root.handleList(text)
 		}
 	}
 
@@ -249,40 +252,46 @@ Item {
 		id: sampleRun
 
 		stdout: StdioCollector {
-			onStreamFinished: sampleRun.handleSample(text)
-		}
+			onStreamFinished: {
+				const mean = BarInkLib.parseMean(text);
 
-		function handleSample(text) {
-			const bar = root.sampling;
+				if (mean >= 0) {
+					const next = Object.assign({}, root.means);
 
-			root.sampling = null;
-
-			if (bar === null)
-				return root.pumpSample();
-
-			const mean = BarInkLib.parseMean(text);
-
-			if (mean >= 0 && root.sampleKey !== "") {
-				const prefix = root.sampleKey.slice(0, root.sampleKey.lastIndexOf("|") + 1);
-				const next = {};
-
-				for (const k in root.means) {
-					if (k.indexOf(prefix) !== 0)
-						next[k] = root.means[k];
+					next[root.job.key] = mean;
+					root.means = next;
+					root.persistPending = true;
 				}
 
-				next[root.sampleKey] = mean;
-				root.means = next;
-				root.persist();
-			}
+				if (root.jobs.length === 0 && root.persistPending)
+					root.persist();
 
-			root.applyMean(bar, mean);
-			root.pumpSample();
+				root.pumpJob();
+			}
 		}
 	}
 
 	Process {
 		id: stateWrite
+	}
+
+	FileView {
+		id: settingsFile
+
+		path: root.settingsPath
+		blockLoading: true
+		printErrors: false
+		watchChanges: true
+
+		onLoaded: {
+			const text = settingsFile.text();
+
+			root.wall = Wallpaper.wallpaperFromText(text) || "";
+			root.wallDir = Wallpaper.dirFromText(text) || Config.wallpaperDir;
+			scanTimer.restart();
+		}
+
+		onFileChanged: settingsFile.reload()
 	}
 
 	FileView {
@@ -304,5 +313,8 @@ Item {
 		}
 	}
 
-	Component.onCompleted: stateFile.reload()
+	Component.onCompleted: {
+		stateFile.reload();
+		settingsFile.reload();
+	}
 }

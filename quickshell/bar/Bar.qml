@@ -127,9 +127,13 @@ PanelWindow {
 	}
 
 	Component.onCompleted: {
+		BarInk.register(bar);
+
 		if (BarInk.wantsBare)
 			BarInk.ensure(bar);
 	}
+
+	Component.onDestruction: BarInk.unregister(bar)
 
 	Connections {
 		target: BarInk
