@@ -1234,9 +1234,8 @@ assert(governorCommand("powersave")[2].indexOf("cpu*") > 0, "the command reaches
 });
 
 section("bar ink", function () {
-assert(parseMean("0.80842") > 0.8, "the pipe mean parses as a number");
-assert(parseMean("nope") === -1, "a broken pipe is a miss rather than black ink");
-assert(parseMean("") === -1, "an empty pipe is a miss rather than black ink");
+assert(parseInk("black 0.4321\n") === "black" && parseInk("white 0.0721") === "white", "awww ink prints the ink first");
+assert(parseInk("nope") === "" && parseInk("") === "", "a broken or empty ink reading is a miss rather than black ink");
 assert(quotePath("a'b") === "'a'\\''b'", "paths with quotes stay one argument");
 
 assert(parseList("1700.5\t/w/a.png\n1800\t/w/b jpg.png\n\n").length === 2, "each listed line is one file, blank lines skipped");
@@ -1244,12 +1243,10 @@ assert(parseList("1700.5\t/w/a.png")[0].path === "/w/a.png" && parseList("1700.5
 assert(parseList("no tab here\n").length === 0, "a line without a tab is dropped");
 assert(wallScanCommand("/w", 2)[2].indexOf("-maxdepth 2") > 0, "the scan honours the wallpaper depth");
 assert(wallScanCommand("/it's", 2)[2].indexOf("'/it'\\''s'") > 0, "a dir with a quote stays one argument");
-assert(fileMeanCommand("/w/a.png", 2560, 1440, 40).indexOf("2560x1440^") > 0, "the mean is taken at the screen size, fill-cropped");
-assert(fileMeanCommand("/w/a.png", 2560, 1440, 40)[fileMeanCommand("/w/a.png", 2560, 1440, 40).length - 2] === "%[fx:mean]", "the mean is the last value printed");
+assert(inkCommand("awww", "/w/a.png", 2560, 1440, 40).join(" ") === "awww ink /w/a.png --width 2560 --height 1440 --band 40", "the ink is read from the frame awww would draw at the screen size");
 assert(keyFor("/w/a.png", "1700.5", 1920, 1080, 40) === "/w/a.png|1700.5@1920x1080x40", "the key carries file, mtime, screen and bar height");
 assert(fileOf(keyFor("/w/a@b.png", "1", 1, 1, 1)) === "/w/a@b.png|1", "a file key is recovered from a cache key");
-assert(inkFor(0.9) === "black" && inkFor(0.1) === "white" && inkFor(0.5) === "black", "bright ground takes black ink at the midpoint");
-assert(inkFor(0.45) === "white" && inkFor(0.55) === "black", "mid grays follow their own brightness, no carried-over ink");
+
 });
 
 section("network", function () {

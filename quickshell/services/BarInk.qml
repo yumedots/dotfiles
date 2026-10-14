@@ -14,7 +14,7 @@ Item {
 	property bool wantsBare: false
 	property bool fading: false
 	property var inks: ({})
-	property var means: ({})
+	property var wallInks: ({})
 	property var bareBars: []
 	property var bars: []
 	property var mtimes: ({})
@@ -26,6 +26,7 @@ Item {
 
 	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
 	readonly property string settingsPath: Quickshell.shellDir + "/cache/settings.lua"
+	readonly property string inkBin: Quickshell.env("HOME") + "/awww/target/release/awww"
 
 	function key(bar) {
 		return bar && bar.screen ? bar.screen.name : "";
@@ -81,7 +82,7 @@ Item {
 
 	function persist() {
 		stateWrite.running = false;
-		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, means: root.means }));
+		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, wallInks: root.wallInks }));
 		stateWrite.running = true;
 		root.persistPending = false;
 	}
@@ -113,33 +114,30 @@ Item {
 		fadeTimer.restart();
 	}
 
-	function meanFor(bar) {
+	function inkFor(bar) {
 		const mtime = root.mtimes[root.wall];
 
 		if (mtime === undefined || !bar.screen || !(bar.implicitHeight > 0))
-			return -1;
+			return "";
 
-		const mean = root.means[BarInkLib.keyFor(root.wall, mtime, bar.screen.width, bar.screen.height, bar.implicitHeight)];
-
-		return mean === undefined ? -1 : mean;
+		return root.wallInks[BarInkLib.keyFor(root.wall, mtime, bar.screen.width, bar.screen.height, bar.implicitHeight)] || "";
 	}
 
 	function applyCurrent() {
 		for (let i = 0; i < root.bareBars.length; i++) {
-			const mean = root.meanFor(root.bareBars[i]);
+			const ink = root.inkFor(root.bareBars[i]);
 
-			if (mean >= 0)
-				root.applyMean(root.bareBars[i], mean);
+			if (ink !== "")
+				root.applyInk(root.bareBars[i], ink);
 		}
 	}
 
-	function applyMean(bar, mean) {
-		if (root.bareBars.indexOf(bar) < 0 || mean < 0)
+	function applyInk(bar, ink) {
+		if (root.bareBars.indexOf(bar) < 0 || ink === "")
 			return;
 
 		const k = root.key(bar);
 		const current = root.inks[k] || "";
-		const ink = BarInkLib.inkFor(mean);
 
 		if (ink === current && root.bare)
 			return;
@@ -171,9 +169,9 @@ Item {
 		const next = {};
 		let pruned = false;
 
-		for (const k in root.means) {
-			if (valid[BarInkLib.fileOf(k)])
-				next[k] = root.means[k];
+		for (const k in root.wallInks) {
+			if (valid[BarInkLib.fileOf(k)] && BarInkLib.isInk(root.wallInks[k]))
+				next[k] = root.wallInks[k];
 			else
 				pruned = true;
 		}
@@ -195,7 +193,7 @@ Item {
 		}
 
 		if (pruned || queue.length > 0) {
-			root.means = next;
+			root.wallInks = next;
 			root.persistPending = root.persistPending || pruned;
 		}
 
@@ -217,7 +215,7 @@ Item {
 		root.job = root.jobs[0];
 		root.jobs = root.jobs.slice(1);
 		sampleRun.running = false;
-		sampleRun.command = BarInkLib.fileMeanCommand(root.job.path, root.job.w, root.job.h, root.job.barPx);
+		sampleRun.command = BarInkLib.inkCommand(root.inkBin, root.job.path, root.job.w, root.job.h, root.job.barPx);
 		sampleRun.running = true;
 	}
 
@@ -253,13 +251,13 @@ Item {
 
 		stdout: StdioCollector {
 			onStreamFinished: {
-				const mean = BarInkLib.parseMean(text);
+				const ink = BarInkLib.parseInk(text);
 
-				if (mean >= 0) {
-					const next = Object.assign({}, root.means);
+				if (ink !== "") {
+					const next = Object.assign({}, root.wallInks);
 
-					next[root.job.key] = mean;
-					root.means = next;
+					next[root.job.key] = ink;
+					root.wallInks = next;
 					root.persistPending = true;
 				}
 
@@ -306,7 +304,7 @@ Item {
 				const state = JSON.parse(stateFile.text());
 
 				root.wantsBare = state.bare === true;
-				root.means = state.means || {};
+				root.wallInks = state.wallInks || {};
 			} catch (e) {
 				root.wantsBare = false;
 			}

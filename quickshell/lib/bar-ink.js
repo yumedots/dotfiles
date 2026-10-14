@@ -24,13 +24,8 @@ function parseList(text) {
 	return files;
 }
 
-function fileMeanCommand(path, w, h, barPx) {
-	const pct = Math.max(1, Math.min(100, barPx / h * 100)).toFixed(2);
-	const size = w + "x" + h;
-
-	return ["magick", String(path), "-resize", size + "^", "-gravity", "center", "-extent", size,
-		"-gravity", "northwest", "-colorspace", "Gray", "-crop", "100%x" + pct + "%+0+0", "+repage",
-		"-format", "%[fx:mean]", "info:"];
+function inkCommand(bin, path, w, h, barPx) {
+	return [String(bin), "ink", String(path), "--width", String(w), "--height", String(h), "--band", String(barPx)];
 }
 
 function keyFor(path, mtime, w, h, barPx) {
@@ -41,17 +36,12 @@ function fileOf(key) {
 	return key.slice(0, key.lastIndexOf("@"));
 }
 
-function parseMean(text) {
-	const clean = String(text || "").trim();
-
-	if (clean === "")
-		return -1;
-
-	const mean = Number(clean);
-
-	return mean >= 0 && mean <= 1 ? mean : -1;
+function isInk(value) {
+	return value === "black" || value === "white";
 }
 
-function inkFor(mean) {
-	return mean >= 0.5 ? "black" : "white";
+function parseInk(text) {
+	const word = String(text || "").trim().split(/\s+/)[0];
+
+	return isInk(word) ? word : "";
 }
