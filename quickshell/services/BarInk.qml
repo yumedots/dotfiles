@@ -15,9 +15,12 @@ Item {
 	property bool fading: false
 	property var inks: ({})
 	property var lastWalls: ({})
+	property var means: ({})
 	property var bareBars: []
 	property var sampleQueue: []
 	property var sampling: null
+	property string samplePath: ""
+	property string sampleKey: ""
 
 	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
 
@@ -64,7 +67,7 @@ Item {
 
 	function persist() {
 		stateWrite.running = false;
-		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare }));
+		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, means: root.means }));
 		stateWrite.running = true;
 	}
 
@@ -91,7 +94,7 @@ Item {
 		if (root.sampleQueue.indexOf(bar) < 0)
 			root.sampleQueue = root.sampleQueue.concat([bar]);
 
-		settleTimer.restart();
+		root.pumpSample();
 	}
 
 	function pumpSample() {
@@ -106,6 +109,18 @@ Item {
 			return root.pumpSample();
 
 		root.sampling = bar;
+		root.samplePath = root.lastWalls[bar.screen.name] || "";
+		statRun.running = false;
+		statRun.command = ["stat", "-c", "%Y", root.samplePath];
+		statRun.running = true;
+	}
+
+	function runSample() {
+		const bar = root.sampling;
+
+		if (bar === null)
+			return root.pumpSample();
+
 		sampleRun.running = false;
 		sampleRun.command = BarInkLib.screenMeanCommand(bar.screen.name, bar.implicitHeight / bar.screen.height);
 		sampleRun.running = true;
@@ -163,7 +178,7 @@ Item {
 		interval: 3000
 		repeat: false
 
-		onTriggered: root.pumpSample()
+		onTriggered: root.runSample()
 	}
 
 	Process {
@@ -177,6 +192,7 @@ Item {
 
 		function handleQuery(text) {
 			const next = Object.assign({}, root.lastWalls);
+			const changed = [];
 
 			for (let i = 0; i < root.bareBars.length; i++) {
 				const bar = root.bareBars[i];
@@ -191,10 +207,41 @@ Item {
 					continue;
 
 				next[name] = path;
-				root.queueSample(bar);
+				changed.push(bar);
 			}
 
 			root.lastWalls = next;
+
+			for (let i = 0; i < changed.length; i++)
+				root.queueSample(changed[i]);
+		}
+	}
+
+	Process {
+		id: statRun
+
+		stdout: StdioCollector {
+			onStreamFinished: statRun.handleStat(text)
+		}
+
+		function handleStat(text) {
+			const bar = root.sampling;
+			const mtime = String(text || "").trim();
+
+			if (bar === null)
+				return root.pumpSample();
+
+			root.sampleKey = mtime !== "" ? [bar.screen.width, bar.screen.height, bar.implicitHeight, root.samplePath, mtime].join("|") : "";
+
+			const cached = root.means[root.sampleKey];
+
+			if (root.sampleKey !== "" && cached !== undefined) {
+				root.sampling = null;
+				root.applyMean(bar, cached);
+				return root.pumpSample();
+			}
+
+			settleTimer.restart();
 		}
 	}
 
@@ -210,9 +257,26 @@ Item {
 
 			root.sampling = null;
 
-			if (bar !== null)
-				root.applyMean(bar, BarInkLib.parseMean(text));
+			if (bar === null)
+				return root.pumpSample();
 
+			const mean = BarInkLib.parseMean(text);
+
+			if (mean >= 0 && root.sampleKey !== "") {
+				const prefix = root.sampleKey.slice(0, root.sampleKey.lastIndexOf("|") + 1);
+				const next = {};
+
+				for (const k in root.means) {
+					if (k.indexOf(prefix) !== 0)
+						next[k] = root.means[k];
+				}
+
+				next[root.sampleKey] = mean;
+				root.means = next;
+				root.persist();
+			}
+
+			root.applyMean(bar, mean);
 			root.pumpSample();
 		}
 	}
@@ -233,6 +297,7 @@ Item {
 				const state = JSON.parse(stateFile.text());
 
 				root.wantsBare = state.bare === true;
+				root.means = state.means || {};
 			} catch (e) {
 				root.wantsBare = false;
 			}
