@@ -4,11 +4,10 @@ function quotePath(arg) {
 	return "'" + String(arg).replace(/'/g, "'\\''") + "'";
 }
 
-function fileMeanCommand(path, screenW, screenH, barH) {
-	const geo = Math.max(1, Math.round(screenW)) + "x" + Math.max(1, Math.round(screenH));
-	const strip = Math.max(1, Math.round(screenW)) + "x" + Math.max(1, Math.round(barH));
+function screenMeanCommand(name, barRatio) {
+	const pct = Math.max(1, Math.min(100, barRatio * 100)).toFixed(2);
 
-	return ["sh", "-c", "magick " + quotePath(path) + " -resize " + geo + "^ -gravity center -extent " + geo + " -crop " + strip + "+0+0 +repage -colorspace Gray -format \"%[fx:mean]\" info:"];
+	return ["sh", "-c", "grim -o " + quotePath(name) + " - | magick png:- -colorspace Gray -crop 100%x" + pct + "%+0+0 +repage -format \"%[fx:mean]\" info:"];
 }
 
 function wallpaperForScreen(text, name) {
@@ -37,11 +36,4 @@ function parseMean(text) {
 
 function inkFor(mean) {
 	return mean >= 0.5 ? "black" : "white";
-}
-
-function settleInk(mean, current) {
-	if (current === "black")
-		return mean < 0.4 ? "white" : "black";
-
-	return mean >= 0.6 ? "black" : "white";
 }

@@ -1244,9 +1244,7 @@ const screens = ": DP-2: 1920x1080, scale: 1.3333334, currently displaying: imag
 assert(wallpaperForScreen(screens, "DP-2") === "/pics/a.png", "the wallpaper path lands per output");
 assert(wallpaperForScreen("", "DP-2") === "", "no daemon reply is an empty path");
 assert(inkFor(0.9) === "black" && inkFor(0.1) === "white" && inkFor(0.5) === "black", "bright ground takes black ink at the midpoint");
-assert(settleInk(0.55, "white") === "white" && settleInk(0.45, "black") === "black", "mid grays keep the standing ink instead of flapping");
-assert(settleInk(0.5, "white") === "white" && settleInk(0.5, "black") === "black", "dead center never flips on its own");
-assert(settleInk(0.7, "white") === "black" && settleInk(0.3, "black") === "white", "only a real swing flips the ink");
+assert(inkFor(0.45) === "white" && inkFor(0.55) === "black", "mid grays follow their own brightness, no carried-over ink");
 });
 
 section("network", function () {
