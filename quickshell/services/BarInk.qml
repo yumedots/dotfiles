@@ -15,10 +15,9 @@ Item {
 	property bool fading: false
 	property var inks: ({})
 	property var lastWalls: ({})
-	property var fileMeans: ({})
 	property var bareBars: []
-	property var fileQueue: []
-	property var filePending: null
+	property var sampleQueue: []
+	property var sampling: null
 
 	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
 
@@ -65,7 +64,7 @@ Item {
 
 	function persist() {
 		stateWrite.running = false;
-		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, means: root.fileMeans }));
+		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare }));
 		stateWrite.running = true;
 	}
 
@@ -73,8 +72,7 @@ Item {
 		root.fade();
 		root.bare = false;
 		root.bareBars = [];
-		root.fileQueue = [];
-		root.filePending = null;
+		root.sampleQueue = [];
 		root.persist();
 	}
 
@@ -89,34 +87,28 @@ Item {
 			queryRun.running = true;
 	}
 
-	function queueInk(bar, path) {
-		const key = path + "|" + bar.screen.width + "x" + bar.screen.height;
+	function queueSample(bar) {
+		if (root.sampleQueue.indexOf(bar) < 0)
+			root.sampleQueue = root.sampleQueue.concat([bar]);
 
-		if (root.fileMeans[key] !== undefined) {
-			root.applyMean(bar, root.fileMeans[key]);
-			return;
-		}
-
-		root.fileQueue = root.fileQueue.concat([{ bar: bar, path: path, key: key }]);
-		root.pumpFile();
+		settleTimer.restart();
 	}
 
-	function pumpFile() {
-		if (root.filePending !== null || root.fileQueue.length === 0)
+	function pumpSample() {
+		if (root.sampling !== null || root.sampleQueue.length === 0)
 			return;
 
-		const job = root.fileQueue[0];
+		const bar = root.sampleQueue[0];
 
-		root.fileQueue = root.fileQueue.slice(1);
+		root.sampleQueue = root.sampleQueue.slice(1);
 
-		if (job.bar === null || !job.bar.screen)
-			return root.pumpFile();
+		if (!bar || !bar.screen || root.bareBars.indexOf(bar) < 0)
+			return root.pumpSample();
 
-		root.filePending = job.bar;
-		fileRun.fileKey = job.key;
-		fileRun.running = false;
-		fileRun.command = BarInkLib.fileMeanCommand(job.path, job.bar.screen.width, job.bar.screen.height, job.bar.implicitHeight);
-		fileRun.running = true;
+		root.sampling = bar;
+		sampleRun.running = false;
+		sampleRun.command = BarInkLib.screenMeanCommand(bar.screen.name, bar.implicitHeight / bar.screen.height);
+		sampleRun.running = true;
 	}
 
 	function fade() {
@@ -130,7 +122,7 @@ Item {
 
 		const k = root.key(bar);
 		const current = root.inks[k] || "";
-		const ink = BarInkLib.settleInk(mean, current);
+		const ink = BarInkLib.inkFor(mean);
 
 		if (ink === current && root.bare)
 			return;
@@ -165,6 +157,15 @@ Item {
 		onTriggered: root.poll()
 	}
 
+	Timer {
+		id: settleTimer
+
+		interval: 3000
+		repeat: false
+
+		onTriggered: root.pumpSample()
+	}
+
 	Process {
 		id: queryRun
 
@@ -190,7 +191,7 @@ Item {
 					continue;
 
 				next[name] = path;
-				root.queueInk(bar, path);
+				root.queueSample(bar);
 			}
 
 			root.lastWalls = next;
@@ -198,36 +199,21 @@ Item {
 	}
 
 	Process {
-		id: fileRun
-
-		property string fileKey: ""
+		id: sampleRun
 
 		stdout: StdioCollector {
-			onStreamFinished: fileRun.handleFile(text)
+			onStreamFinished: sampleRun.handleSample(text)
 		}
 
-		function handleFile(text) {
-			const bar = root.filePending;
+		function handleSample(text) {
+			const bar = root.sampling;
 
-			root.filePending = null;
+			root.sampling = null;
 
-			if (bar === null) {
-				root.pumpFile();
-				return;
-			}
+			if (bar !== null)
+				root.applyMean(bar, BarInkLib.parseMean(text));
 
-			const mean = BarInkLib.parseMean(text);
-
-			if (mean >= 0) {
-				const next = Object.assign({}, root.fileMeans);
-
-				next[fileRun.fileKey] = mean;
-				root.fileMeans = next;
-				root.persist();
-			}
-
-			root.applyMean(bar, mean);
-			root.pumpFile();
+			root.pumpSample();
 		}
 	}
 
@@ -247,7 +233,6 @@ Item {
 				const state = JSON.parse(stateFile.text());
 
 				root.wantsBare = state.bare === true;
-				root.fileMeans = state.means || {};
 			} catch (e) {
 				root.wantsBare = false;
 			}
