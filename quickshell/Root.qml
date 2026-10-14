@@ -127,6 +127,7 @@ ShellRoot {
 	}
 
 	function bareBar() {
+
 		const all = [];
 
 		for (let i = 0; i < bars.instances.length; i++)
@@ -247,10 +248,6 @@ ShellRoot {
 
 		function bareBar() {
 			shellRoot.bareBar();
-		}
-
-		function reink() {
-			BarInk.poke();
 		}
 
 		function killPopups() {

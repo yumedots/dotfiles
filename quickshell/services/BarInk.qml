@@ -13,30 +13,24 @@ Item {
 	property bool bare: false
 	property bool wantsBare: false
 	property bool fading: false
-	property string currentInk: ""
 	property var inks: ({})
-	property var pendingBar: null
-	property var pendingFile: null
-	property var filePending: null
-	property var fileQueue: []
+	property var lastWalls: ({})
 	property var fileMeans: ({})
 	property var bareBars: []
-	property var queue: []
-	property var walls: ({})
+	property var fileQueue: []
+	property var filePending: null
 
 	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
 
-	function key(bar, id) {
-		const screen = bar && bar.screen ? bar.screen.name : "";
-
-		return screen + "/" + id;
+	function key(bar) {
+		return bar && bar.screen ? bar.screen.name : "";
 	}
 
 	function pick(bar, id, normal) {
 		if (!root.bare || !id)
 			return normal;
 
-		const ink = root.inks[root.key(bar, id)];
+		const ink = root.inks[root.key(bar)];
 
 		return ink === "black" || ink === "white" ? ink : normal;
 	}
@@ -61,113 +55,49 @@ Item {
 		root.start();
 	}
 
-	function seed(bar) {
-		if (bar === null || !bar.screen)
-			return false;
-
-		const wall = root.walls[bar.screen.name];
-
-		if (!wall)
-			return false;
-
-		const key = wall + "|" + bar.screen.width + "x" + bar.screen.height;
-
-		if (root.fileMeans[key] === undefined)
-			return false;
-
-		root.applyMean(bar, root.fileMeans[key]);
-		return true;
-	}
-
 	function ensure(bar) {
 		if (bar === null || root.bareBars.indexOf(bar) >= 0)
 			return;
 
-		root.bareBars.push(bar);
-		root.bare = true;
-
-		if (!root.seed(bar))
-			root.queue.push(bar);
-
-		sampleSoon.restart();
+		root.bareBars = root.bareBars.concat([bar]);
+		root.lastWalls = {};
 	}
 
 	function persist() {
+		stateWrite.running = false;
 		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, means: root.fileMeans }));
-
-		if (!stateWrite.running)
-			stateWrite.running = true;
+		stateWrite.running = true;
 	}
 
 	function stop() {
 		root.fade();
 		root.bare = false;
-		root.pendingBar = null;
-		root.filePending = null;
 		root.bareBars = [];
-		root.queue = [];
 		root.fileQueue = [];
+		root.filePending = null;
 		root.persist();
 	}
 
 	function start() {
-		root.bare = true;
-		root.queue = [];
-
-		for (let i = 0; i < root.bareBars.length; i++) {
-			if (!root.seed(root.bareBars[i]))
-				root.queue.push(root.bareBars[i]);
-		}
-
+		root.lastWalls = {};
 		root.persist();
-		sampleSoon.restart();
+		root.poll();
 	}
 
-	function pump() {
-		if (root.pendingBar !== null || root.queue.length === 0)
-			return;
-
-		root.detect(root.queue[0]);
+	function poll() {
+		if (!queryRun.running)
+			queryRun.running = true;
 	}
 
-	function poke() {
-		if (!root.bare)
+	function queueInk(bar, path) {
+		const key = path + "|" + bar.screen.width + "x" + bar.screen.height;
+
+		if (root.fileMeans[key] !== undefined) {
+			root.applyMean(bar, root.fileMeans[key]);
 			return;
-
-		root.queue = root.bareBars.slice();
-		confirmTimer.restart();
-	}
-
-	function reinkFile(path) {
-		if (!root.bare || !path)
-			return;
-
-		root.pendingFile = path;
-		fileSoon.restart();
-	}
-
-	function answerFile() {
-		const path = root.pendingFile;
-
-		root.pendingFile = null;
-
-		if (!path)
-			return;
-
-		for (let i = 0; i < root.bareBars.length; i++) {
-			const bar = root.bareBars[i];
-
-			if (bar === null || !bar.screen)
-				continue;
-
-			const key = path + "|" + bar.screen.width + "x" + bar.screen.height;
-
-			if (root.fileMeans[key] !== undefined)
-				root.applyMean(bar, root.fileMeans[key]);
-			else
-				root.fileQueue.push({ bar: bar, path: path, key: key });
 		}
 
+		root.fileQueue = root.fileQueue.concat([{ bar: bar, path: path, key: key }]);
 		root.pumpFile();
 	}
 
@@ -175,10 +105,12 @@ Item {
 		if (root.filePending !== null || root.fileQueue.length === 0)
 			return;
 
-		const job = root.fileQueue.shift();
+		const job = root.fileQueue[0];
+
+		root.fileQueue = root.fileQueue.slice(1);
 
 		if (job.bar === null || !job.bar.screen)
-			return;
+			return root.pumpFile();
 
 		root.filePending = job.bar;
 		fileRun.fileKey = job.key;
@@ -192,72 +124,30 @@ Item {
 		fadeTimer.restart();
 	}
 
-	function detect(bar) {
-		root.pendingBar = bar;
-
-		if (bar === null || !bar.screen) {
-			root.pendingBar = null;
-			return;
-		}
-
-		sampleRun.running = false;
-		sampleRun.command = [Quickshell.shellDir + "/scripts/bar-ink-sample", bar.screen.name, "" + Math.max(1, Math.round(bar.implicitHeight))];
-		sampleRun.running = true;
-	}
-
 	function applyMean(bar, mean) {
-		if (root.bareBars.indexOf(bar) < 0) {
-			root.pendingBar = null;
+		if (root.bareBars.indexOf(bar) < 0 || mean < 0)
 			return;
-		}
 
-		const ink = mean < 0 ? "" : BarInkLib.settleInk(mean, root.currentInk);
+		const k = root.key(bar);
+		const current = root.inks[k] || "";
+		const ink = BarInkLib.settleInk(mean, current);
 
-		if (ink === "") {
-			root.pendingBar = null;
-
-			const at = root.queue.indexOf(bar);
-
-			if (at >= 0)
-				root.queue.splice(at, 1);
-
-			root.pump();
+		if (ink === current && root.bare)
 			return;
-		}
+
 		const next = Object.assign({}, root.inks);
-		const ids = Object.keys(bar.widgets || {});
-		let same = ink !== "";
 
-		for (let i = 0; i < ids.length; i++) {
-			if (bar.widgets[ids[i]] && bar.widgets[ids[i]].width > 0) {
-				next[root.key(bar, ids[i])] = ink;
-
-				if (root.inks[root.key(bar, ids[i])] !== ink)
-					same = false;
-			}
-		}
-
-		root.pendingBar = null;
-
-		const at = root.queue.indexOf(bar);
-
-		if (at >= 0)
-			root.queue.splice(at, 1);
-
-		if (same)
-			return;
-
+		next[k] = ink;
 		root.fade();
 		root.inks = next;
-		root.currentInk = ink;
 		root.bare = true;
-		root.pump();
+		root.persist();
 	}
 
 	Timer {
 		id: fadeTimer
 
-		interval: Config.barInkFadeMs
+		interval: Config.barFadeMs
 		repeat: false
 		running: false
 
@@ -265,84 +155,45 @@ Item {
 	}
 
 	Timer {
-		id: fileSoon
-
-		interval: 300
-		repeat: false
-		running: false
-
-		onTriggered: root.answerFile()
-	}
-
-	Timer {
-		id: confirmTimer
-
-		interval: 600
-		repeat: false
-		running: false
-
-		onTriggered: root.pump()
-	}
-
-	Timer {
 		id: queryTimer
 
-		interval: 10000
+		interval: 500
 		repeat: true
-		running: true
+		running: root.bareBars.length > 0
 		triggeredOnStart: true
 
-		onTriggered: {
-			if (!queryRun.running)
-				queryRun.running = true;
-		}
-	}
-
-	Timer {
-		id: sampleSoon
-
-		interval: 300
-		repeat: false
-		running: false
-
-		onTriggered: root.pump()
-	}
-
-	Timer {
-		id: sampleTimer
-
-		interval: 30000
-		repeat: true
-		running: true
-
-		onTriggered: {
-			if (!root.bare)
-				return;
-
-			root.pendingBar = null;
-			root.queue = root.bareBars.slice();
-			root.pump();
-		}
+		onTriggered: root.poll()
 	}
 
 	Process {
 		id: queryRun
+
+		command: ["awww", "query"]
 
 		stdout: StdioCollector {
 			onStreamFinished: queryRun.handleQuery(text)
 		}
 
 		function handleQuery(text) {
-			const walls = {};
+			const next = Object.assign({}, root.lastWalls);
 
 			for (let i = 0; i < root.bareBars.length; i++) {
 				const bar = root.bareBars[i];
 
-				if (bar && bar.screen)
-					walls[bar.screen.name] = BarInkLib.wallpaperForScreen(text, bar.screen.name);
+				if (!bar || !bar.screen)
+					continue;
+
+				const name = bar.screen.name;
+				const path = BarInkLib.wallpaperForScreen(text, name);
+
+				if (path === "" || path === root.lastWalls[name])
+					continue;
+
+				next[name] = path;
+				root.queueInk(bar, path);
 			}
 
-			root.walls = walls;
+			root.lastWalls = next;
 		}
 	}
 
@@ -381,43 +232,7 @@ Item {
 	}
 
 	Process {
-		id: sampleRun
-
-		stdout: StdioCollector {
-			onStreamFinished: sampleRun.handleSample(text)
-		}
-
-		function handleSample(text) {
-			const bar = root.pendingBar;
-
-			root.pendingBar = null;
-
-			if (bar === null)
-				return;
-
-			root.applyMean(bar, BarInkLib.parseMean(text));
-		}
-	}
-
-	Process {
 		id: stateWrite
-	}
-
-	FileView {
-		id: pathFile
-
-		path: Quickshell.shellDir + "/cache/bar-ink-path.txt"
-		blockLoading: true
-		printErrors: false
-
-		onFileChanged: pathFile.reload()
-
-		onLoaded: {
-			const path = pathFile.text().trim();
-
-			if (path !== "")
-				root.reinkFile(path);
-		}
 	}
 
 	FileView {

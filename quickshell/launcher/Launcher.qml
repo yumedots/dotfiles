@@ -613,8 +613,6 @@ PanelWindow {
 			Quickshell.execDetached(["xdg-open", entry.path]);
 		else if (entry.kind === "wallpaper") {
 			Quickshell.execDetached(Wallpaper.applyCommand(entry.path, Config));
-			root.writeFile(Quickshell.shellDir + "/cache/bar-ink-path.txt", entry.path);
-			Quickshell.execDetached(["sh", "-c", "qs ipc call shell reink 2>/dev/null"]);
 			root.saveWallpaper(entry.path);
 		}
 
