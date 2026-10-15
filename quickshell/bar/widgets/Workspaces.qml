@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell.Hyprland
-import qs.ui
 import qs
 import qs.services
 
@@ -15,6 +14,14 @@ Row {
 	readonly property int pool: Math.max(root.persistentIds.length, root.highest)
 	property var ids: []
 	property int focusedId: -1
+	property color ink: BarInk.pick(root.bar, "workspaces", Config.foreground)
+
+	Behavior on ink {
+		enabled: BarInk.fading
+		ColorAnimation {
+			duration: BarInk.fadeMs
+		}
+	}
 
 	readonly property string liveState: {
 		const workspaces = Hyprland.workspaces.values;
@@ -95,11 +102,9 @@ Row {
 			readonly property bool active: root.focusedId === ws.workspaceId
 
 			visible: root.ids.indexOf(ws.workspaceId) >= 0
-			property var bar: root.bar
 
-			readonly property color activeBg: BarInk.pick(root.bar, "workspaces", Config.workspaceActive)
-			readonly property color activeFg: ("" + activeBg).indexOf("black") >= 0 ? "#ffffff" : Config.surface
-			readonly property color inactiveFg: BarInk.pick(root.bar, "workspaces", Config.foreground)
+			readonly property bool boxed: ws.active && (BarInk.bare || (root.bar !== null && root.bar.layout.transparent === true))
+			readonly property color labelColor: ws.boxed ? Qt.rgba(1 - root.ink.r, 1 - root.ink.g, 1 - root.ink.b, 1) : root.ink
 
 			implicitWidth: ws.workspaceId >= 10 ? label.implicitWidth + 8 : root.slotWidth
 			implicitHeight: sampleMetrics.tightBoundingRect.height
@@ -110,20 +115,21 @@ Row {
 				width: ws.implicitWidth
 				height: root.slotHeight
 				radius: 4
-				color: ws.active ? ws.activeBg : "transparent"
+				color: root.ink
+				visible: ws.boxed
 
 				x: 0
 				y: (sampleMetrics.tightBoundingRect.height - root.slotHeight) / 2
+			}
 
-				Text {
-					id: label
+			Text {
+				id: label
 
-					anchors.centerIn: parent
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize
-					color: ws.active ? ws.activeFg : ws.inactiveFg
-					text: "" + ws.workspaceId
-				}
+				anchors.centerIn: selector
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: ws.labelColor
+				text: "" + ws.workspaceId
 			}
 
 			MouseArea {
