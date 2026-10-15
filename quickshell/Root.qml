@@ -295,6 +295,9 @@ ShellRoot {
 			if (!Hyprland.activeToplevel)
 				return;
 
+			if (shellRoot.isLauncher)
+				Hyprland.refreshToplevels();
+
 			shellRoot.closeWidgets();
 			launcherWindow.close();
 		}
