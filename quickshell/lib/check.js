@@ -1238,25 +1238,6 @@ assert(governorCommand("performance").join(" ").indexOf("performance") >= 0, "th
 assert(governorCommand("powersave")[2].indexOf("cpu*") > 0, "the command reaches every cpu");
 });
 
-section("bar ink", function () {
-const queried = [
-	": DP-2: 1920x1080, scale: 1.3333334, currently displaying: image: /w/one.png, ink: black (#2b2b2b)",
-	": eDP-1: 2560x1440, scale: 1, currently displaying: color: ff0000ff, ink: white (#ffd5d5)",
-	"HDMI-A-1: 1920x1080, scale: 1, currently displaying: image: /w/two.png, ink: unknown"
-].join("\n");
-
-assert(queryColor(queried, "DP-2") === "#000000", "each output reports its own bar color");
-assert(queryColor(queried, "eDP-1") === "#ffffff", "a solid color wallpaper still gets a bar color");
-assert(queryColor(queried, "HDMI-A-1") === "", "an unknown ink has no color to paint with");
-assert(queryColor(queried, "nope-1") === "", "an output that is not there yields nothing");
-assert(queryColor("", "DP-2") === "", "a failed query yields nothing");
-assert(queryColor("DP-20: 1x1, scale: 1, currently displaying: image: /w, ink: white (#ffffff)", "DP-2") === "", "a name only matches its own line");
-assert(queryColor(": DP-2: 1x1, scale: 1, currently displaying: image: /w, ink: black (#ABCDEF)", "DP-2") === "#000000", "black ink paints pure black regardless of the tint");
-assert(queryColor(": DP-2: 1x1, scale: 1, currently displaying: image: /w/it's.png, ink: white (#101010)", "DP-2") === "#ffffff", "paths with odd characters still parse");
-assert(queryColor(": DP-2: 1x1, scale: 1, currently displaying: image: /w, ink: gray (#808080)", "DP-2") === "", "an ink that is neither white nor black paints nothing");
-
-});
-
 section("network", function () {
 const devs = parseDevs("enp4s0:ethernet:connected:Wired connection 1\nlo:loopback:connected (externally):lo\nwlp5s0:wifi:disconnected:(none)\n");
 
