@@ -1165,7 +1165,7 @@ PanelWindow {
 			id: windowsGrid
 
 			visible: root.windows
-			results: root.results
+			results: root.windows ? root.results : []
 			entries: root.windowEntries()
 			index: root.winCurrent
 			title: root.winName
