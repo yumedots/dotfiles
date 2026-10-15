@@ -13,9 +13,6 @@ const monoLight = "#cfcfcf";
 const monoMid = "#9a9a9a";
 const monoSoft = "#6f6f6f";
 
-const workspaceActive = foreground;
-const workspaceInactive = muted;
-const workspacePadding = 1;
 const workspaceSpacing = 6;
 
 const fontFamily = "GoogleSansCode Nerd Font";
