@@ -1048,6 +1048,11 @@ const switching = applyCommand("/a/one.jpg", { wallpaperTransition: "fade", wall
 
 assert(switching.join(" ") === "awww img --transition-type fade --transition-duration 0.4 --transition-fps 60 /a/one.jpg", "the switch animates through awww, got " + switching.join(" "));
 
+const banded = applyCommand("/a/one.jpg", { wallpaperTransition: "fade", wallpaperTransitionMs: 400, wallpaperTransitionFps: 60 }, 31.2);
+
+assert(banded.join(" ") === "awww img --transition-type fade --transition-duration 0.4 --transition-fps 60 --ink-band 32 /a/one.jpg", "a band rounds up to whole rows before it reaches awww, got " + banded.join(" "));
+assert(applyCommand("/a/one.jpg", { wallpaperTransition: "fade", wallpaperTransitionMs: 400, wallpaperTransitionFps: 60 }, 0).join(" ").indexOf("--ink-band") < 0, "a band of zero skips the daemon ink so the bar scans instead");
+
 const saved = settingsText("/a/one.jpg", "/home/g/Walls");
 
 assert(saved.indexOf('wallpaper = "/a/one.jpg"') >= 0 && saved.indexOf('wallpaperDir = "/home/g/Walls"') >= 0, "the picked picture and folder are written back to the settings lua");
@@ -1235,6 +1240,17 @@ assert(governorCommand("powersave")[2].indexOf("cpu*") > 0, "the command reaches
 
 section("bar ink", function () {
 assert(parseInk("black 0.4321\n") === "black" && parseInk("white 0.0721") === "white", "awww ink prints the ink first");
+
+const queried = [
+	"DP-2: 1920x1080, scale: 1.3333334, currently displaying: image: /w/one.png, ink: black",
+	"eDP-1: 2560x1440, scale: 1, currently displaying: color: ff0000ff, ink: unknown"
+].join("\n");
+
+assert(queryInk(queried, "DP-2") === "black", "each output reports its own ink");
+assert(queryInk(queried, "eDP-1") === "", "an unknown ink is left to the scan");
+assert(queryInk(queried, "HDMI-A-1") === "", "an output that is not there yields nothing");
+assert(queryInk("", "DP-2") === "", "a failed query yields nothing");
+assert(queryInk("DP-20: 1x1, scale: 1, currently displaying: image: /w, ink: white", "DP-2") === "", "a name only matches its own line");
 assert(parseInk("nope") === "" && parseInk("") === "", "a broken or empty ink reading is a miss rather than black ink");
 assert(quotePath("a'b") === "'a'\\''b'", "paths with quotes stay one argument");
 

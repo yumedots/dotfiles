@@ -72,14 +72,19 @@ function entries(text, dir, thumbs) {
 		});
 }
 
-function applyCommand(path, config) {
-	return [
+function applyCommand(path, config, band) {
+	const cmd = [
 		"awww", "img",
 		"--transition-type", config.wallpaperTransition,
 		"--transition-duration", String(config.wallpaperTransitionMs / 1000),
-		"--transition-fps", String(config.wallpaperTransitionFps),
-		path
+		"--transition-fps", String(config.wallpaperTransitionFps)
 	];
+
+	if (band > 0)
+		cmd.push("--ink-band", String(Math.ceil(band)));
+
+	cmd.push(path);
+	return cmd;
 }
 
 function settingsText(image, dir) {

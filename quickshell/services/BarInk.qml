@@ -22,11 +22,13 @@ Item {
 	property var job: null
 	property string wall: ""
 	property string wallDir: ""
+	property int savedBand: 0
 	property bool persistPending: false
 
+	readonly property int fadeMs: Config.wallpaperTransitionMs
 	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
 	readonly property string settingsPath: Quickshell.shellDir + "/cache/settings.lua"
-	readonly property string inkBin: Quickshell.env("HOME") + "/awww/target/release/awww"
+	readonly property string inkBin: "awww"
 
 	function key(bar) {
 		return bar && bar.screen ? bar.screen.name : "";
@@ -82,7 +84,7 @@ Item {
 
 	function persist() {
 		stateWrite.running = false;
-		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, wallInks: root.wallInks }));
+		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, wallInks: root.wallInks, band: root.bandPx() || root.savedBand }));
 		stateWrite.running = true;
 		root.persistPending = false;
 	}
@@ -100,7 +102,40 @@ Item {
 		root.runScan();
 	}
 
+	function bandPx() {
+		let px = 0;
+
+		for (let i = 0; i < root.bars.length; i++) {
+			const h = root.bars[i].implicitHeight;
+
+			if (h > px)
+				px = h;
+		}		return Math.ceil(px) || root.savedBand;
+	}
+
+	function queryDaemon() {
+		queryRun.running = false;
+		queryRun.command = [root.inkBin, "query"];
+		queryRun.running = true;
+	}
+
+	function handleQuery(text) {
+		for (let i = 0; i < root.bareBars.length; i++) {
+			const bar = root.bareBars[i];
+
+			if (!bar.screen)
+				continue;
+
+			const ink = BarInkLib.queryInk(text, bar.screen.name);
+
+			if (ink !== "")
+				root.applyInk(bar, ink);
+		}
+	}
+
 	function runScan() {
+		root.queryDaemon();
+
 		if (root.wallDir === "")
 			return;
 
@@ -222,7 +257,7 @@ Item {
 	Timer {
 		id: fadeTimer
 
-		interval: Config.barFadeMs
+		interval: root.fadeMs
 		repeat: false
 		running: false
 
@@ -236,6 +271,14 @@ Item {
 		repeat: false
 
 		onTriggered: root.runScan()
+	}
+
+	Process {
+		id: queryRun
+
+		stdout: StdioCollector {
+			onStreamFinished: root.handleQuery(text)
+		}
 	}
 
 	Process {
@@ -305,6 +348,7 @@ Item {
 
 				root.wantsBare = state.bare === true;
 				root.wallInks = state.wallInks || {};
+				root.savedBand = state.band || 0;
 			} catch (e) {
 				root.wantsBare = false;
 			}

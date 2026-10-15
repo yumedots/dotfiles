@@ -45,3 +45,24 @@ function parseInk(text) {
 
 	return isInk(word) ? word : "";
 }
+
+function queryInk(text, name) {
+	const prefix = String(name) + ": ";
+	const lines = String(text || "").split("\n");
+
+	for (let i = 0; i < lines.length; i++) {
+		if (lines[i].slice(0, prefix.length) !== prefix)
+			continue;
+
+		const at = lines[i].lastIndexOf("ink: ");
+
+		if (at < 0)
+			return "";
+
+		const word = lines[i].slice(at + 5).trim().split(/\s+/)[0];
+
+		return isInk(word) ? word : "";
+	}
+
+	return "";
+}
