@@ -1239,29 +1239,21 @@ assert(governorCommand("powersave")[2].indexOf("cpu*") > 0, "the command reaches
 });
 
 section("bar ink", function () {
-assert(parseInk("black 0.4321\n") === "black" && parseInk("white 0.0721") === "white", "awww ink prints the ink first");
-
 const queried = [
-	"DP-2: 1920x1080, scale: 1.3333334, currently displaying: image: /w/one.png, ink: black",
-	"eDP-1: 2560x1440, scale: 1, currently displaying: color: ff0000ff, ink: unknown"
+	": DP-2: 1920x1080, scale: 1.3333334, currently displaying: image: /w/one.png, ink: black (#2b2b2b)",
+	": eDP-1: 2560x1440, scale: 1, currently displaying: color: ff0000ff, ink: white (#ffd5d5)",
+	"HDMI-A-1: 1920x1080, scale: 1, currently displaying: image: /w/two.png, ink: unknown"
 ].join("\n");
 
-assert(queryInk(queried, "DP-2") === "black", "each output reports its own ink");
-assert(queryInk(queried, "eDP-1") === "", "an unknown ink is left to the scan");
-assert(queryInk(queried, "HDMI-A-1") === "", "an output that is not there yields nothing");
-assert(queryInk("", "DP-2") === "", "a failed query yields nothing");
-assert(queryInk("DP-20: 1x1, scale: 1, currently displaying: image: /w, ink: white", "DP-2") === "", "a name only matches its own line");
-assert(parseInk("nope") === "" && parseInk("") === "", "a broken or empty ink reading is a miss rather than black ink");
-assert(quotePath("a'b") === "'a'\\''b'", "paths with quotes stay one argument");
-
-assert(parseList("1700.5\t/w/a.png\n1800\t/w/b jpg.png\n\n").length === 2, "each listed line is one file, blank lines skipped");
-assert(parseList("1700.5\t/w/a.png")[0].path === "/w/a.png" && parseList("1700.5\t/w/a.png")[0].mtime === "1700.5", "mtime and path split at the first tab");
-assert(parseList("no tab here\n").length === 0, "a line without a tab is dropped");
-assert(wallScanCommand("/w", 2)[2].indexOf("-maxdepth 2") > 0, "the scan honours the wallpaper depth");
-assert(wallScanCommand("/it's", 2)[2].indexOf("'/it'\\''s'") > 0, "a dir with a quote stays one argument");
-assert(inkCommand("awww", "/w/a.png", 2560, 1440, 40).join(" ") === "awww ink /w/a.png --width 2560 --height 1440 --band 40", "the ink is read from the frame awww would draw at the screen size");
-assert(keyFor("/w/a.png", "1700.5", 1920, 1080, 40) === "/w/a.png|1700.5@1920x1080x40", "the key carries file, mtime, screen and bar height");
-assert(fileOf(keyFor("/w/a@b.png", "1", 1, 1, 1)) === "/w/a@b.png|1", "a file key is recovered from a cache key");
+assert(queryColor(queried, "DP-2") === "#000000", "each output reports its own bar color");
+assert(queryColor(queried, "eDP-1") === "#ffffff", "a solid color wallpaper still gets a bar color");
+assert(queryColor(queried, "HDMI-A-1") === "", "an unknown ink has no color to paint with");
+assert(queryColor(queried, "nope-1") === "", "an output that is not there yields nothing");
+assert(queryColor("", "DP-2") === "", "a failed query yields nothing");
+assert(queryColor("DP-20: 1x1, scale: 1, currently displaying: image: /w, ink: white (#ffffff)", "DP-2") === "", "a name only matches its own line");
+assert(queryColor(": DP-2: 1x1, scale: 1, currently displaying: image: /w, ink: black (#ABCDEF)", "DP-2") === "#000000", "black ink paints pure black regardless of the tint");
+assert(queryColor(": DP-2: 1x1, scale: 1, currently displaying: image: /w/it's.png, ink: white (#101010)", "DP-2") === "#ffffff", "paths with odd characters still parse");
+assert(queryColor(": DP-2: 1x1, scale: 1, currently displaying: image: /w, ink: gray (#808080)", "DP-2") === "", "an ink that is neither white nor black paints nothing");
 
 });
 

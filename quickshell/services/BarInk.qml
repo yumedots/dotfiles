@@ -14,16 +14,9 @@ Item {
 	property bool wantsBare: false
 	property bool fading: false
 	property var inks: ({})
-	property var wallInks: ({})
 	property var bareBars: []
 	property var bars: []
-	property var mtimes: ({})
-	property var jobs: []
-	property var job: null
-	property string wall: ""
-	property string wallDir: ""
 	property int savedBand: 0
-	property bool persistPending: false
 
 	readonly property int fadeMs: Config.wallpaperTransitionMs
 	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
@@ -38,9 +31,7 @@ Item {
 		if (!root.bare || !id)
 			return normal;
 
-		const ink = root.inks[root.key(bar)];
-
-		return ink === "black" || ink === "white" ? ink : normal;
+		return root.inks[root.key(bar)] || normal;
 	}
 
 	function toggle(bar) {
@@ -50,7 +41,9 @@ Item {
 		}
 
 		root.bareBars = bar !== null ? [bar] : [];
-		root.start();
+		root.bare = true;
+		root.persist();
+		root.queryDaemon();
 	}
 
 	function toggleAll(all) {
@@ -60,7 +53,9 @@ Item {
 		}
 
 		root.bareBars = (all || []).slice();
-		root.start();
+		root.bare = true;
+		root.persist();
+		root.queryDaemon();
 	}
 
 	function ensure(bar) {
@@ -68,13 +63,14 @@ Item {
 			return;
 
 		root.bareBars = root.bareBars.concat([bar]);
-		scanTimer.restart();
+		root.bare = true;
+		queryTimer.restart();
 	}
 
 	function register(bar) {
 		if (bar && root.bars.indexOf(bar) < 0) {
 			root.bars = root.bars.concat([bar]);
-			scanTimer.restart();
+			queryTimer.restart();
 		}
 	}
 
@@ -84,22 +80,15 @@ Item {
 
 	function persist() {
 		stateWrite.running = false;
-		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, wallInks: root.wallInks, band: root.bandPx() || root.savedBand }));
+		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, band: root.bandPx() || root.savedBand }));
 		stateWrite.running = true;
-		root.persistPending = false;
 	}
 
 	function stop() {
 		root.fade();
 		root.bare = false;
 		root.bareBars = [];
-		root.jobs = [];
 		root.persist();
-	}
-
-	function start() {
-		root.persist();
-		root.runScan();
 	}
 
 	function bandPx() {
@@ -110,7 +99,9 @@ Item {
 
 			if (h > px)
 				px = h;
-		}		return Math.ceil(px) || root.savedBand;
+		}
+
+		return Math.ceil(px) || root.savedBand;
 	}
 
 	function queryDaemon() {
@@ -120,28 +111,27 @@ Item {
 	}
 
 	function handleQuery(text) {
-		for (let i = 0; i < root.bareBars.length; i++) {
-			const bar = root.bareBars[i];
+		const next = Object.assign({}, root.inks);
+		let changed = false;
+
+		for (let i = 0; i < root.bars.length; i++) {
+			const bar = root.bars[i];
 
 			if (!bar.screen)
 				continue;
 
-			const ink = BarInkLib.queryInk(text, bar.screen.name);
+			const color = BarInkLib.queryColor(text, bar.screen.name);
 
-			if (ink !== "")
-				root.applyInk(bar, ink);
+			if (color !== "" && color !== next[bar.screen.name]) {
+				next[bar.screen.name] = color;
+				changed = true;
+			}
 		}
-	}
 
-	function runScan() {
-		root.queryDaemon();
-
-		if (root.wallDir === "")
-			return;
-
-		scanRun.running = false;
-		scanRun.command = BarInkLib.wallScanCommand(root.wallDir.replace(/^~/, Quickshell.env("HOME")), Config.wallpaperDepth);
-		scanRun.running = true;
+		if (changed) {
+			root.fade();
+			root.inks = next;
+		}
 	}
 
 	function fade() {
@@ -149,109 +139,9 @@ Item {
 		fadeTimer.restart();
 	}
 
-	function inkFor(bar) {
-		const mtime = root.mtimes[root.wall];
-
-		if (mtime === undefined || !bar.screen || !(bar.implicitHeight > 0))
-			return "";
-
-		return root.wallInks[BarInkLib.keyFor(root.wall, mtime, bar.screen.width, bar.screen.height, bar.implicitHeight)] || "";
-	}
-
-	function applyCurrent() {
-		for (let i = 0; i < root.bareBars.length; i++) {
-			const ink = root.inkFor(root.bareBars[i]);
-
-			if (ink !== "")
-				root.applyInk(root.bareBars[i], ink);
-		}
-	}
-
-	function applyInk(bar, ink) {
-		if (root.bareBars.indexOf(bar) < 0 || ink === "")
-			return;
-
-		const k = root.key(bar);
-		const current = root.inks[k] || "";
-
-		if (ink === current && root.bare)
-			return;
-
-		const next = Object.assign({}, root.inks);
-
-		next[k] = ink;
-		root.fade();
-		root.inks = next;
-		root.bare = true;
-		root.persist();
-	}
-
-	function handleList(text) {
-		const files = BarInkLib.parseList(text);
-		const mtimes = {};
-		const valid = {};
-
-		for (let i = 0; i < files.length; i++) {
-			mtimes[files[i].path] = files[i].mtime;
-			valid[files[i].path + "|" + files[i].mtime] = true;
-		}
-
-		root.mtimes = mtimes;
-
-		if (files.length === 0)
-			return root.applyCurrent();
-
-		const next = {};
-		let pruned = false;
-
-		for (const k in root.wallInks) {
-			if (valid[BarInkLib.fileOf(k)] && BarInkLib.isInk(root.wallInks[k]))
-				next[k] = root.wallInks[k];
-			else
-				pruned = true;
-		}
-
-		const queue = [];
-
-		for (let b = 0; b < root.bars.length; b++) {
-			const bar = root.bars[b];
-
-			if (!bar.screen || !(bar.implicitHeight > 0))
-				continue;
-
-			for (let i = 0; i < files.length; i++) {
-				const k = BarInkLib.keyFor(files[i].path, files[i].mtime, bar.screen.width, bar.screen.height, bar.implicitHeight);
-
-				if (next[k] === undefined)
-					queue.push({ key: k, path: files[i].path, w: bar.screen.width, h: bar.screen.height, barPx: bar.implicitHeight });
-			}
-		}
-
-		if (pruned || queue.length > 0) {
-			root.wallInks = next;
-			root.persistPending = root.persistPending || pruned;
-		}
-
-		root.jobs = queue;
-		root.pumpJob();
-	}
-
-	function pumpJob() {
-		if (sampleRun.running)
-			return;
-
-		if (root.jobs.length === 0) {
-			if (root.persistPending)
-				root.persist();
-
-			return root.applyCurrent();
-		}
-
-		root.job = root.jobs[0];
-		root.jobs = root.jobs.slice(1);
-		sampleRun.running = false;
-		sampleRun.command = BarInkLib.inkCommand(root.inkBin, root.job.path, root.job.w, root.job.h, root.job.barPx);
-		sampleRun.running = true;
+	function follow() {
+		followTimer.ticks = 0;
+		followTimer.restart();
 	}
 
 	Timer {
@@ -265,12 +155,38 @@ Item {
 	}
 
 	Timer {
-		id: scanTimer
+		id: queryTimer
 
 		interval: 300
 		repeat: false
 
-		onTriggered: root.runScan()
+		onTriggered: root.queryDaemon()
+	}
+
+	Timer {
+		id: followTimer
+
+		property int ticks: 0
+
+		interval: 100
+		repeat: true
+
+		onTriggered: {
+			root.queryDaemon();
+			ticks++;
+			if (ticks >= 20)
+				stop();
+		}
+	}
+
+	Timer {
+		id: pollTimer
+
+		interval: 2500
+		repeat: true
+		running: root.bare && root.bars.length > 0
+
+		onTriggered: root.queryDaemon()
 	}
 
 	Process {
@@ -282,57 +198,7 @@ Item {
 	}
 
 	Process {
-		id: scanRun
-
-		stdout: StdioCollector {
-			onStreamFinished: root.handleList(text)
-		}
-	}
-
-	Process {
-		id: sampleRun
-
-		stdout: StdioCollector {
-			onStreamFinished: {
-				const ink = BarInkLib.parseInk(text);
-
-				if (ink !== "") {
-					const next = Object.assign({}, root.wallInks);
-
-					next[root.job.key] = ink;
-					root.wallInks = next;
-					root.persistPending = true;
-				}
-
-				if (root.jobs.length === 0 && root.persistPending)
-					root.persist();
-
-				root.pumpJob();
-			}
-		}
-	}
-
-	Process {
 		id: stateWrite
-	}
-
-	FileView {
-		id: settingsFile
-
-		path: root.settingsPath
-		blockLoading: true
-		printErrors: false
-		watchChanges: true
-
-		onLoaded: {
-			const text = settingsFile.text();
-
-			root.wall = Wallpaper.wallpaperFromText(text) || "";
-			root.wallDir = Wallpaper.dirFromText(text) || Config.wallpaperDir;
-			scanTimer.restart();
-		}
-
-		onFileChanged: settingsFile.reload()
 	}
 
 	FileView {
@@ -347,12 +213,24 @@ Item {
 				const state = JSON.parse(stateFile.text());
 
 				root.wantsBare = state.bare === true;
-				root.wallInks = state.wallInks || {};
 				root.savedBand = state.band || 0;
 			} catch (e) {
 				root.wantsBare = false;
 			}
 		}
+	}
+
+	FileView {
+		id: settingsFile
+
+		path: root.settingsPath
+		blockLoading: true
+		printErrors: false
+		watchChanges: true
+
+		onLoaded: queryTimer.restart()
+
+		onFileChanged: settingsFile.reload()
 	}
 
 	Component.onCompleted: {
