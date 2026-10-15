@@ -811,10 +811,10 @@ PanelWindow {
 
 		anchors.centerIn: parent
 
-		width: root.windows ? windowsGrid.width + card.inset * 2
+		width: root.windows ? windowsGrid.implicitWidth + card.inset * 2
 		      : root.isClipboard ? Config.launcherWidth * 2 + Config.launcherGap + card.inset * 2
 		      : Config.launcherWidth
-		height: root.windows ? windowsGrid.height + windowName.height + Config.windowsLabelGap + card.inset * 2 : column.implicitHeight + card.inset * 2
+		height: root.windows ? windowsGrid.implicitHeight + card.inset * 2 : column.implicitHeight + card.inset * 2
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
 		opacity: root.shown ? 1 : 0
@@ -1161,81 +1161,16 @@ PanelWindow {
 			}
 		}
 
-		Item {
+		WindowSwitcher {
 			id: windowsGrid
 
-			readonly property real cell: Config.windowsGridCell
-			readonly property int count: root.results.length
-			readonly property real freeWidth: (root.screen ? root.screen.width : root.width) - Config.windowsRowMargin
-			readonly property int columns: Math.max(1, Math.min(count, Math.floor(freeWidth / cell)))
-			readonly property int index: root.winCurrent
-			readonly property real emptyWidth: count === 0 ? emptyText.implicitWidth : 0
-
 			visible: root.windows
-			width: Math.max(columns * cell, emptyWidth)
-			height: Math.ceil(Math.max(count, 1) / columns) * cell
-			clip: true
-
-			Highlight {
-				fillParent: false
-				active: windowsGrid.count > 0
-				x: (windowsGrid.index % windowsGrid.columns) * windowsGrid.cell + (windowsGrid.cell - Config.windowsHighlightSize) / 2
-				y: Math.floor(windowsGrid.index / windowsGrid.columns) * windowsGrid.cell + (windowsGrid.cell - Config.windowsHighlightSize) / 2
-				width: Config.windowsHighlightSize
-				height: Config.windowsHighlightSize
-			}
-
-			Repeater {
-				model: root.windows ? root.results : []
-
-				delegate: Item {
-					id: iconCell
-
-					required property var modelData
-					required property int index
-
-					readonly property string icon: modelData.appId !== undefined && modelData.appId !== "" ? AppIcons.iconOf(modelData.appId) : ""
-					x: (index % windowsGrid.columns) * windowsGrid.cell
-					y: Math.floor(index / windowsGrid.columns) * windowsGrid.cell
-					width: windowsGrid.cell
-					height: windowsGrid.cell
-
-					AppIcon {
-						anchors.centerIn: parent
-						implicitSize: Config.windowsIconSize
-						visible: iconCell.icon !== ""
-						source: iconCell.icon
-					}
-
-				}
-			}
-
-			Text {
-				id: emptyText
-
-				anchors.centerIn: parent
-				visible: windowsGrid.count === 0
-				font.family: Config.fontFamily
-				font.pixelSize: Config.launcherFontSize
-				color: Config.muted
-				text: root.emptyText()
-			}
-		}
-
-		Text {
-			id: windowName
-
-			visible: root.windows
-			width: Math.min(implicitWidth, windowsGrid.width)
-			x: Util.clamp(windowsGrid.index * windowsGrid.cell + (windowsGrid.cell - width) / 2, 0, windowsGrid.width - width)
-			anchors.top: windowsGrid.bottom
-			anchors.topMargin: Config.windowsLabelGap
-			horizontalAlignment: Text.AlignHCenter
-			elide: Text.ElideRight
-			font.family: Config.fontFamily
-			font.pixelSize: Config.windowsTitleSize
-			color: Config.foreground
-			text: root.winName
+			results: root.results
+			entries: root.windowEntries()
+			index: root.winCurrent
+			title: root.winName
+			emptyMessage: root.emptyText()
+			available: root.screen ? root.screen.width : root.width
 		}
 	}
 }
