@@ -103,7 +103,7 @@ Row {
 
 			visible: root.ids.indexOf(ws.workspaceId) >= 0
 
-			readonly property bool boxed: ws.active && (BarInk.bare || (root.bar !== null && root.bar.layout.transparent === true))
+			readonly property bool boxed: ws.active
 			readonly property color labelColor: ws.boxed ? Qt.rgba(1 - root.ink.r, 1 - root.ink.g, 1 - root.ink.b, 1) : root.ink
 
 			implicitWidth: ws.workspaceId >= 10 ? label.implicitWidth + 8 : root.slotWidth
