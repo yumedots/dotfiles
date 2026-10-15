@@ -285,6 +285,41 @@ ShellRoot {
 		}
 	}
 
+	property var watchedScripts: []
+
+	function scriptFiles(text) {
+		return text.split("\n").map(function (line) {
+			return line.trim().split(" ").pop();
+		}).filter(function (name) {
+			return name.endsWith(".js");
+		});
+	}
+
+	FileView {
+		id: moduleList
+
+		path: Quickshell.shellDir + "/qmldir"
+		preload: true
+		watchChanges: true
+
+		onFileChanged: Quickshell.reload(false)
+		onLoaded: shellRoot.watchedScripts = shellRoot.scriptFiles(moduleList.text())
+	}
+
+	Instantiator {
+		model: shellRoot.watchedScripts
+
+		delegate: FileView {
+			required property string modelData
+
+			path: Quickshell.shellDir + "/" + modelData
+			watchChanges: true
+			printErrors: false
+
+			onFileChanged: Quickshell.reload(false)
+		}
+	}
+
 	Connections {
 		target: Hyprland
 
