@@ -21,7 +21,7 @@ Item {
 	readonly property int fadeMs: Config.wallpaperTransitionMs
 	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
 	readonly property string settingsPath: Quickshell.shellDir + "/cache/settings.lua"
-	readonly property string inkBin: "awww"
+	readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR")
 
 	function key(bar) {
 		return bar && bar.screen ? bar.screen.name : "";
@@ -43,7 +43,6 @@ Item {
 		root.bareBars = bar !== null ? [bar] : [];
 		root.bare = true;
 		root.persist();
-		root.queryDaemon();
 	}
 
 	function toggleAll(all) {
@@ -55,7 +54,6 @@ Item {
 		root.bareBars = (all || []).slice();
 		root.bare = true;
 		root.persist();
-		root.queryDaemon();
 	}
 
 	function ensure(bar) {
@@ -64,13 +62,11 @@ Item {
 
 		root.bareBars = root.bareBars.concat([bar]);
 		root.bare = true;
-		queryTimer.restart();
 	}
 
 	function register(bar) {
 		if (bar && root.bars.indexOf(bar) < 0) {
 			root.bars = root.bars.concat([bar]);
-			queryTimer.restart();
 		}
 	}
 
@@ -104,44 +100,22 @@ Item {
 		return Math.ceil(px) || root.savedBand;
 	}
 
-	function queryDaemon() {
-		queryRun.running = false;
-		queryRun.command = [root.inkBin, "query"];
-		queryRun.running = true;
-	}
+	function setInk(name, text) {
+		const color = text === "white" ? "#ffffff" : text === "black" ? "#000000" : "";
 
-	function handleQuery(text) {
+		if (color === "" || root.inks[name] === color)
+			return;
+
 		const next = Object.assign({}, root.inks);
-		let changed = false;
 
-		for (let i = 0; i < root.bars.length; i++) {
-			const bar = root.bars[i];
-
-			if (!bar.screen)
-				continue;
-
-			const color = BarInkLib.queryColor(text, bar.screen.name);
-
-			if (color !== "" && color !== next[bar.screen.name]) {
-				next[bar.screen.name] = color;
-				changed = true;
-			}
-		}
-
-		if (changed) {
-			root.fade();
-			root.inks = next;
-		}
+		next[name] = color;
+		root.fade();
+		root.inks = next;
 	}
 
 	function fade() {
 		root.fading = true;
 		fadeTimer.restart();
-	}
-
-	function follow() {
-		followTimer.ticks = 0;
-		followTimer.restart();
 	}
 
 	Timer {
@@ -154,46 +128,18 @@ Item {
 		onTriggered: root.fading = false
 	}
 
-	Timer {
-		id: queryTimer
+	Instantiator {
+		model: root.bars
 
-		interval: 300
-		repeat: false
+		delegate: FileView {
+			required property var modelData
 
-		onTriggered: root.queryDaemon()
-	}
+			path: modelData.screen ? root.runtimeDir + "/awww-ink-" + modelData.screen.name : ""
+			watchChanges: true
+			printErrors: false
 
-	Timer {
-		id: followTimer
-
-		property int ticks: 0
-
-		interval: 100
-		repeat: true
-
-		onTriggered: {
-			root.queryDaemon();
-			ticks++;
-			if (ticks >= 20)
-				stop();
-		}
-	}
-
-	Timer {
-		id: pollTimer
-
-		interval: 2500
-		repeat: true
-		running: root.bare && root.bars.length > 0
-
-		onTriggered: root.queryDaemon()
-	}
-
-	Process {
-		id: queryRun
-
-		stdout: StdioCollector {
-			onStreamFinished: root.handleQuery(text)
+			onFileChanged: reload()
+			onLoaded: root.setInk(modelData.screen.name, text().trim())
 		}
 	}
 
@@ -227,8 +173,6 @@ Item {
 		blockLoading: true
 		printErrors: false
 		watchChanges: true
-
-		onLoaded: queryTimer.restart()
 
 		onFileChanged: settingsFile.reload()
 	}

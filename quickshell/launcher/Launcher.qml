@@ -613,7 +613,6 @@ PanelWindow {
 			Quickshell.execDetached(["xdg-open", entry.path]);
 		else if (entry.kind === "wallpaper") {
 			Quickshell.execDetached(Wallpaper.applyCommand(entry.path, Config, BarInk.bandPx()));
-			BarInk.follow();
 			root.saveWallpaper(entry.path);
 		}
 
