@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs
 
 Item {
@@ -10,6 +11,7 @@ Item {
 	property var entries: Apps.desktopEntries(DesktopEntries.applications.values)
 	property var icons: ({})
 	property var resolved: ({})
+	readonly property string cachePath: Quickshell.shellDir + "/cache/icons.txt"
 
 	function entryOf(appId) {
 		return Apps.lookupApp(root.entries, appId);
@@ -68,10 +70,23 @@ Item {
 	Request {
 		id: iconScan
 
-		command: ["sh", "-c", "for dir in \"$HOME/.local/share\" $(echo \"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\" | tr ':' ' '); do find \"$dir/icons/breeze\" \"$dir/icons/hicolor\" \"$dir/pixmaps\" -mindepth 1 -maxdepth 3 \\( -type f -o -type l \\) \\( -name '*.png' -o -name '*.svg' -o -name '*.xpm' \\) 2>/dev/null; done"]
+		command: ["sh", "-c", "for dir in \"$HOME/.local/share\" $(echo \"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\" | tr ':' ' '); do find \"$dir/icons/breeze\" \"$dir/icons/hicolor\" \"$dir/pixmaps\" -mindepth 1 -maxdepth 3 \\( -type f -o -type l \\) \\( -name '*.png' -o -name '*.svg' -o -name '*.xpm' \\) 2>/dev/null; done | tee " + Shell.shellQuote(root.cachePath)]
 
 		onDone: function (text) {
 			root.icons = Apps.iconFiles(text);
+		}
+	}
+
+	FileView {
+		id: iconCache
+
+		path: root.cachePath
+		preload: true
+		printErrors: false
+
+		onLoaded: {
+			if (Object.keys(root.icons).length === 0)
+				root.icons = Apps.iconFiles(iconCache.text());
 		}
 	}
 }
