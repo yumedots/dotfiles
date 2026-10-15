@@ -205,12 +205,6 @@ Item {
 			}
 		}
 
-		Rectangle {
-			width: parent.width
-			height: Config.mediaSeparator
-			color: Config.mediaSeparatorColor
-		}
-
 		Item {
 			id: times
 

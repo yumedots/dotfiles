@@ -159,8 +159,6 @@ const mediaButtonGap = 18;
 const mediaTextGap = 8;
 const mediaLineGap = 2;
 const mediaTickMs = 1000;
-const mediaSeparator = 1;
-const mediaSeparatorColor = dim;
 const mediaEmpty = "Nothing playing";
 
 const volumeBase = "#ffffff";
