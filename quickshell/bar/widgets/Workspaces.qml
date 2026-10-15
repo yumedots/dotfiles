@@ -64,23 +64,74 @@ Row {
 		onTriggered: root.settle()
 	}
 
+	TextMetrics {
+		id: digitMetrics
+
+		font.family: Config.fontFamily
+		font.pixelSize: Settings.fontSize
+		text: "8"
+	}
+
+	TextMetrics {
+		id: sampleMetrics
+
+		font.family: Config.fontFamily
+		font.pixelSize: Settings.fontSize
+		text: Config.valueSample
+	}
+
+	readonly property real slotWidth: digitMetrics.advanceWidth + 8
+	readonly property real slotHeight: sampleMetrics.tightBoundingRect.height + 4
+
 	Repeater {
 		model: root.pool
 
-		delegate: BarText {
+		delegate: Item {
 			id: ws
 
 			required property int index
 
 			readonly property int workspaceId: index + 1
+			readonly property bool active: root.focusedId === ws.workspaceId
 
 			visible: root.ids.indexOf(ws.workspaceId) >= 0
-			bar: root.bar
-			text: "" + ws.workspaceId
-			padding: Config.workspacePadding
-			color: BarInk.pick(root.bar, "workspaces", root.focusedId === ws.workspaceId ? Config.workspaceActive : Config.workspaceInactive)
+			property var bar: root.bar
 
-			onActivate: function () { root.focusWorkspace(ws.workspaceId); }
+			readonly property color activeBg: BarInk.pick(root.bar, "workspaces", Config.workspaceActive)
+			readonly property color activeFg: ("" + activeBg).indexOf("black") >= 0 ? "#ffffff" : Config.surface
+			readonly property color inactiveFg: BarInk.pick(root.bar, "workspaces", Config.foreground)
+
+			implicitWidth: ws.workspaceId >= 10 ? label.implicitWidth + 8 : root.slotWidth
+			implicitHeight: sampleMetrics.tightBoundingRect.height
+
+			Rectangle {
+				id: selector
+
+				width: ws.implicitWidth
+				height: root.slotHeight
+				radius: 4
+				color: ws.active ? ws.activeBg : "transparent"
+
+				x: 0
+				y: (sampleMetrics.tightBoundingRect.height - root.slotHeight) / 2
+
+				Text {
+					id: label
+
+					anchors.centerIn: parent
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: ws.active ? ws.activeFg : ws.inactiveFg
+					text: "" + ws.workspaceId
+				}
+			}
+
+			MouseArea {
+				anchors.fill: parent
+				anchors.margins: -Config.barHitPadding
+
+				onClicked: root.focusWorkspace(ws.workspaceId)
+			}
 		}
 	}
 }
