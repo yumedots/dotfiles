@@ -77,7 +77,7 @@ Row {
 			Behavior on color {
 				enabled: BarInk.fading
 				ColorAnimation {
-					duration: Config.barFadeMs
+					duration: BarInk.fadeMs
 				}
 			}
 		}
@@ -128,7 +128,7 @@ Row {
 				Behavior on colorizationColor {
 					enabled: BarInk.fading
 					ColorAnimation {
-						duration: Config.barFadeMs
+						duration: BarInk.fadeMs
 					}
 				}
 			}
