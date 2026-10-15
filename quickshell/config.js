@@ -31,7 +31,7 @@ const tooltipCloseSize = 14;
 const tooltipCloseInset = 6;
 const iconClose = "\uf00d";
 const spacing = 12;
-const barStatSpacing = 10;
+const barStatSpacing = 16;
 
 const iconCpu = "\uf2db";
 const iconMemory = "\uefc5";
