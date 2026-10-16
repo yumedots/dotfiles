@@ -145,6 +145,7 @@ PanelWindow {
 		root.pendingFocus = "";
 		root.group = "";
 		root.forced = "";
+		list.currentIndex = 0;
 		Hyprland.refreshToplevels();
 		root.shown = true;
 		root.winIndex = root.windows ? 1 : 0;
@@ -621,6 +622,8 @@ PanelWindow {
 	}
 
 	onModeChanged: {
+		list.currentIndex = 0;
+
 		if (root.mode === "clipboard") {
 			clipSourcesFile.reload();
 			clipsList.running = true;
