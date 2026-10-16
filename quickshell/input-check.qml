@@ -62,6 +62,7 @@ QtObject {
 			results: ["window"],
 			windowColumns: 3,
 			closeRequested: () => seen = "close",
+			close: () => seen = "close",
 			move: (n) => seen = "move" + n,
 			open: () => seen = "open",
 			back: () => seen = "back",
@@ -83,6 +84,8 @@ QtObject {
 			current: "process",
 			killRequested: () => seen = "kill",
 			togglePlay: () => seen = "play",
+			applyCurrent: () => seen = "apply",
+			columns: 3,
 			previous: () => seen = "previous",
 			next: () => seen = "next"
 		};
@@ -179,6 +182,26 @@ QtObject {
 		seen = "";
 		Input.github(root.key("r", 0), stub);
 		root.assert(seen === "refresh", "r refreshes the github grid");
+
+		seen = "";
+		Input.wallpaper(escape, stub);
+		root.assert(seen === "close", "the wallpaper picker closes on escape");
+
+		seen = "";
+		Input.wallpaper(right, stub);
+		root.assert(seen === "move1", "right walks the wallpaper shelf by one tile");
+
+		seen = "";
+		Input.wallpaper(k, stub);
+		root.assert(seen === "move" + -stub.columns, "up walks the shelf by a row");
+
+		seen = "";
+		Input.wallpaper(root.key("", Qt.Key_Return), stub);
+		root.assert(seen === "apply", "return paints the highlighted wallpaper");
+
+		seen = "";
+		Input.wallpaper(root.key("q", Qt.Key_Q), stub);
+		root.assert(seen === "", "the picker leaves other keys alone");
 
 		seen = "";
 		Input.media(root.key("", Qt.Key_Space), stub);

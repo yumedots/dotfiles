@@ -145,6 +145,18 @@ QtObject {
 		});
 	}
 
+	function wallpaper(event, target) {
+		return root.act(event, {
+			escape: () => target.close(),
+			accept: () => target.applyCurrent(),
+			space: () => target.applyCurrent(),
+			left: () => target.move(-1),
+			right: () => target.move(1),
+			up: () => target.move(-target.columns),
+			down: () => target.move(target.columns)
+		});
+	}
+
 	function picker(event, target) {
 		return root.act(event, {
 			escape: () => target.closePicker(),

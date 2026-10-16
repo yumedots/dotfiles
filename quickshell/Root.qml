@@ -8,6 +8,7 @@ import qs.ui
 import qs.services
 import "bar"
 import "launcher"
+import "wallpaper"
 
 ShellRoot {
 	id: shellRoot
@@ -65,9 +66,16 @@ ShellRoot {
 			Handoff.run(shellRoot.closeWidgetsUnderLauncher);
 	}
 
-	function closeWidgets() {
+	function closeBarPopups() {
 		if (bars.instances.length > 0)
 			bars.instances[0].closePopups(null);
+	}
+
+	function closeWidgets() {
+		if (wallpaperWindow.shown)
+			wallpaperWindow.close();
+
+		shellRoot.closeBarPopups();
 	}
 
 	function closeWidgetsUnderLauncher() {
@@ -104,6 +112,20 @@ ShellRoot {
 
 		if (launcherWindow.shown)
 			Handoff.run(shellRoot.closeLauncherUnderWidget);
+	}
+
+	function wallpaper() {
+		if (shellRoot.isLauncher) {
+			shellRoot.toMain("wallpaper");
+			return;
+		}
+
+		if (wallpaperWindow.shown)
+			return;
+
+		wallpaperWindow.open();
+		shellRoot.closeBarPopups();
+		Handoff.run(shellRoot.closeLauncherUnderWidget);
 	}
 
 	function trayGroup() {
@@ -283,6 +305,10 @@ ShellRoot {
 		function tray() {
 			shellRoot.trayGroup();
 		}
+
+		function wallpaper() {
+			shellRoot.wallpaper();
+		}
 	}
 
 	property var watchedScripts: []
@@ -359,5 +385,10 @@ ShellRoot {
 	Launcher {
 		id: launcherWindow
 		alwaysMapped: shellRoot.isLauncher
+	}
+
+	WallpaperPicker {
+		id: wallpaperWindow
+		active: !shellRoot.isLauncher
 	}
 }
