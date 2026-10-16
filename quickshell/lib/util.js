@@ -31,6 +31,24 @@ function scrollIntoView(contentY, height, contentHeight, top, bottom) {
 	return clamp(next, 0, max);
 }
 
+function pointerMoved(state, at, step = 0) {
+	const prev = state;
+
+	if (!prev || prev.seen !== true)
+		return { seen: true, x: at.x, y: at.y, engaged: false, moved: false };
+
+	const dx = at.x - prev.x;
+	const dy = at.y - prev.y;
+
+	if (dx === 0 && dy === 0)
+		return { seen: true, x: prev.x, y: prev.y, engaged: prev.engaged === true, moved: false };
+
+	if (prev.engaged === true || step <= 0 || dx * dx + dy * dy >= step * step)
+		return { seen: true, x: at.x, y: at.y, engaged: true, moved: true };
+
+	return { seen: true, x: prev.x, y: prev.y, engaged: false, moved: false };
+}
+
 function wrap(index, delta, count) {
 	if (count <= 0)
 		return 0;

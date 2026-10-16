@@ -20,6 +20,7 @@ PanelWindow {
 	property var saved: []
 	property string group: ""
 	property string forced: ""
+	property var pointer: null
 	property var pending: null
 	property var wallpapers: []
 	property string wallpaperDir: ""
@@ -145,6 +146,7 @@ PanelWindow {
 		root.pendingFocus = "";
 		root.group = "";
 		root.forced = "";
+		root.pointer = null;
 		list.currentIndex = 0;
 		Hyprland.refreshToplevels();
 		root.shown = true;
@@ -1100,19 +1102,16 @@ PanelWindow {
 								text: Config.launcherIconPin
 							}
 							HoverHandler {
-								property point origin: Qt.point(0, 0)
-
 								onPointChanged: {
 									if (!hovered)
 										return;
 
-									const at = point.scenePosition;
+									const next = Util.pointerMoved(root.pointer, point.scenePosition, Config.launcherRowHeight);
 
-									if (at.x === origin.x && at.y === origin.y)
-										return;
+									root.pointer = next;
 
-									origin = Qt.point(at.x, at.y);
-									list.currentIndex = row.index;
+									if (next.moved)
+										list.currentIndex = row.index;
 								}
 							}
 

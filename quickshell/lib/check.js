@@ -1181,6 +1181,21 @@ assert(wrap(0, -1, 3) === 2 && wrap(-4, 0, 3) === 2, "wrapping backwards wraps t
 assert(wrap(0, 5, 3) === 2 && wrap(2, -5, 3) === 0, "a step longer than the list still lands inside it");
 assert(wrap(3, 1, 0) === 0, "wrapping an empty list lands on zero, not nan");
 
+assert(pointerMoved(null, { x: 5, y: 9 }).moved === false, "a fresh pointer state only records where the pointer is");
+assert(pointerMoved({ seen: true, x: 5, y: 9, engaged: false, moved: false }, { x: 5, y: 9 }).moved === false, "a pointer that sits where it already was does not pick a row");
+assert(pointerMoved({ seen: true, x: 5, y: 9 }, { x: 5, y: 40 }).moved === true, "a pointer that moved picks the row under it");
+assert(pointerMoved(pointerMoved(null, { x: 5, y: 9 }), { x: 5, y: 9 }).moved === false, "the row a list appears under is not picked until the pointer moves, got one that did");
+assert(pointerMoved(pointerMoved(null, { x: 5, y: 9 }), { x: 6, y: 9 }).moved === true, "the same pointer state picks again once it does move");
+
+assert(pointerMoved(null, { x: 5, y: 9 }, 28).moved === false, "a pointer state with a travel limit still only records where the pointer is");
+assert(pointerMoved(pointerMoved(null, { x: 5, y: 9 }, 28), { x: 9, y: 14 }, 28).moved === false, "a nudge shorter than a row does not take the list over");
+assert(pointerMoved(pointerMoved(null, { x: 5, y: 9 }, 28), { x: 5, y: 40 }, 28).moved === true, "a pointer that travels a whole row picks the row under it");
+
+const engaged = pointerMoved(pointerMoved(null, { x: 5, y: 9 }, 28), { x: 5, y: 40 }, 28);
+
+assert(pointerMoved(engaged, { x: 7, y: 42 }, 28).moved === true, "once the pointer has the list it keeps picking as it moves");
+assert(pointerMoved(engaged, { x: 5, y: 40 }, 28).moved === false, "the same pointer state does not pick twice for one position");
+
 assert(curl("https://x/y?a=1", 20).join(" ") === "sh -c curl -s -m 20 'https://x/y?a=1'", "a fetch is one curl with its own timeout, got " + curl("https://x/y?a=1", 20).join(" "));
 assert(curl("https://x/y").join(" ").indexOf("-m 15") > 0, "a fetch with no timeout gets the default one");
 assert(curl("https://x/it's")[2].indexOf("'\\''") > 0, "a quote in a url cannot break out of the command");
