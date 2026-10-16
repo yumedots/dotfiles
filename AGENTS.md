@@ -6,6 +6,7 @@ NEVER commit or run any git write command until the user explicitly says commit 
 When the user asks to commit, commit in small coherent blocks, never one big commit: stage whatever files each change touches
 When the user asks to commit, commit messages are one line only, no description and no footer, matching the style of the existing commits
 NEVER install ANYTHING without telling the user first — packages, skills, MCP servers, plugins, everything. Say what is missing and why it is needed, then let the user choose exactly: (1) give root and install it now, (2) do not install, try another way, (3) do not install, I will do it myself. No install happens unless the user picks option 1.
+No on-screen instructions or shortcut hints in widgets: never render "press X", key lists, hints, or counters. The UI is discovered by using it.
 
 
 # Ponytail, lazy senior dev mode
