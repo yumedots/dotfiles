@@ -100,7 +100,7 @@ function appEntries(entries, ignore, aliases) {
 			kind: "app",
 			appId: id,
 			name: folded.names[id] || entry.name,
-			keywords: [id].concat(entry.exec ? [entry.exec] : []),
+			keywords: [id],
 			exec: entry.exec,
 			execLine: entry.execLine,
 			terminal: entry.terminal

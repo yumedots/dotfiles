@@ -526,6 +526,12 @@ assert(appEntries({ avahi: { name: "Avahi", exec: "avahi" } }, ["avahi"]).length
 assert(appEntries({ keep: { name: "Keep", exec: "keep" } }, ["avahi"]).length === 1, "only the ignored ids are skipped");
 assert(appEntries({ firefox: { name: "Firefox", exec: "firefox", execLine: "firefox --new-window" } })[0].execLine === "firefox --new-window", "the exec line reaches the launcher entry");
 
+const steamApps = appEntries({ steam: { name: "Steam", exec: "steam" }, factorio: { name: "Factorio", exec: "steam" } }, [], {});
+const steamHits = rankEntries(steamApps, "steam", [], {});
+
+assert(steamHits.length === 1 && steamHits[0].appId === "steam", "a game launched through steam answers to its own name, not the launcher's command");
+assert(rankEntries(steamApps, "factorio", [], {})[0].appId === "factorio", "the game is still found by its own name");
+
 });
 
 section("cpu", function () {
