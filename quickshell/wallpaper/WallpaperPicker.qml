@@ -11,6 +11,7 @@ PanelWindow {
 
 	property bool shown: false
 	property bool active: true
+	property bool alwaysMapped: false
 
 	property string wallpaperDir: ""
 	property string activeWallpaper: ""
@@ -53,7 +54,7 @@ PanelWindow {
 	WlrLayershell.keyboardFocus: root.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 	WlrLayershell.focusable: true
 
-	visible: root.shown || card.opacity > 0
+	visible: root.alwaysMapped || root.shown || card.opacity > 0
 
 	Region {
 		id: emptyRegion
@@ -416,8 +417,8 @@ PanelWindow {
 								anchors.right: parent.right
 								anchors.bottom: parent.bottom
 								visible: cell.applied
-								width: mark.implicitWidth + 8
-								height: mark.implicitHeight + 8
+								width: Math.max(mark.implicitWidth, mark.implicitHeight) + 8
+								height: Math.max(mark.implicitWidth, mark.implicitHeight) + 8
 								color: Config.surface
 
 								Text {

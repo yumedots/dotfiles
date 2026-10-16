@@ -390,5 +390,6 @@ ShellRoot {
 	WallpaperPicker {
 		id: wallpaperWindow
 		active: !shellRoot.isLauncher
+		alwaysMapped: !shellRoot.isLauncher
 	}
 }
