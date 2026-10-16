@@ -323,8 +323,6 @@ function results(mode, search, state) {
 		return state.files;
 	if (mode === "clipboard")
 		return state.clips;
-	if (mode === "wallpaper")
-		return rankEntries(state.wallpapers || [], search, state.pins, state.usage);
 	if (mode === "calc")
 		return state.calc === null ? [] : [state.calc];
 	if (mode === "windows")
