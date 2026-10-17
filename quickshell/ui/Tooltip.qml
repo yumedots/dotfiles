@@ -90,7 +90,7 @@ PanelWindow {
 
 	WlrLayershell.layer: WlrLayer.Overlay
 	WlrLayershell.namespace: "tooltip"
-	WlrLayershell.keyboardFocus: root.wantsKeyboard && root.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+	WlrLayershell.keyboardFocus: root.wantsKeyboard && root.shown ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
 	Connections {
 		target: Hyprland
@@ -143,13 +143,17 @@ PanelWindow {
 	}
 
 	function close() {
-		if (root.slideExit && root.shown) {
-			slideAnim.from = card.slideOffset;
-			slideAnim.to = root.slideX - root.cardX;
-			slideAnim.restart();
-		}
+		const slide = root.slideExit && root.shown;
+		const from = card.slideOffset;
+		const to = root.slideX - root.cardX;
 
 		root.shown = false;
+
+		if (slide) {
+			slideAnim.from = from;
+			slideAnim.to = to;
+			slideAnim.restart();
+		}
 	}
 
 	function toggle() {
