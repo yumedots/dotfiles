@@ -46,8 +46,6 @@ assert(lookupApp(entries, "") === null, "empty names return null");
 
 assert(commandEntries([{ name: "lock", command: "hyprlock", keywords: ["l"] }])[0].id === "cmd:lock", "a command entry is keyed by its name");
 assert(commandEntries([{ name: "lock", command: "hyprlock" }])[0].keywords.length === 0, "a command with no keywords still gets a keyword list");
-assert(actionEntries([{ name: "shutdown", command: "systemctl poweroff", glyph: "G" }])[0].id === "act:shutdown", "an action entry is keyed by its name");
-assert(actionEntries([{ name: "shutdown", command: "x", glyph: "G" }])[0].keywords.join(",") === "power,session", "every action stays findable as power or session");
 assert(clipEntries([{ id: "42", text: "hello" }])[0].clipId === "42", "a clip entry keeps the id cliphist decodes by");
 assert(clipEntries([{ id: "42", text: "hello" }])[0].id === "clip:42", "and is keyed apart from apps and files");
 assert(clipEntries([{ id: "42", text: "hello" }])[0].image === false, "text previews are not images");
@@ -147,8 +145,8 @@ assert(glyphOf({ kind: "mode" }, modeConfig) === "" && glyphOf(null, modeConfig)
 assert(rememberable({ kind: "saved" }) && rememberable({ kind: "app" }) && !rememberable({ kind: "mode" }) && !rememberable({ kind: "group" }), "usage counts what gets launched, not what navigates");
 
 const everything = all(modeConfig, appEntries(footApps, [], {}), saved);
-assert(everything.length === 2 + 1 + saved.length + 1 + 1 + 4, "every source contributes its entries once");
-assert(everything[0].kind === "mode" && everything[1].kind === "mode" && everything[2].kind === "group" && everything[5].kind === "saved" && everything[6].kind === "command" && everything[7].kind === "action" && everything[8].kind === "app", "and in the order modes, groups, saved, commands, actions, apps");
+assert(everything.length === 2 + 1 + saved.length + 1 + 4, "every source contributes its entries once");
+assert(everything[0].kind === "mode" && everything[1].kind === "mode" && everything[2].kind === "group" && everything[5].kind === "saved" && everything[6].kind === "command" && everything[7].kind === "app", "and in the order modes, groups, saved, commands, apps");
 
 const homeState = {
 	files: [],
@@ -1408,9 +1406,10 @@ section("figure", function () {
 	assert(figurePoints({ width: 20, height: 20, exponent: 2, morph: 0 }).join() === figurePoints({ width: 20, height: 20, exponent: 2, morph: 0 }).join(), "the same spec draws the same figure twice");
 	assert(figurePoints({ width: 0, height: 0 }).every(function (value) { return value === 0; }), "a figure with no size stays at the origin");
 	assert(figurePoints({ width: 8, height: 8, morph: -3, scallop: 9 }).every(isFinite), "a wild morph still draws a real figure");
-	assert(figurePreset("nonsense").exponent === 4, "an unknown figure name falls back to the squircle");
-	assert(figurePreset("gear").exponent === 2, "a gear has a round body");
-	assert(figurePreset("circle").exponent === 2, "a known figure name survives");
+	assert(figureShape(0).exponent === 4 && figureShape(99).exponent === 4, "a version with no shape of its own falls back to the squircle");
+	assert(figureShape(2).exponent === 2 && figureShape(2).lobes === 9, "version two is a round gear");
+	assert(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (version) { return JSON.stringify(figureShape(version)); })).size === 10, "every version draws a figure of its own");
+	assert([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].every(function (version) { const shape = figureShape(version); return figurePoints({ width: 20, height: 20, exponent: shape.exponent, lobes: shape.lobes, scallop: shape.scallop, morph: 1 }).every(isFinite); }), "every version draws a real figure");
 });
 
 console.log("check ok (" + ran + " assertions" + (filter === "" ? "" : ", filter " + filter) + ")");

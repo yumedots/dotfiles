@@ -126,8 +126,34 @@ Row {
 			required property int index
 
 			readonly property int workspaceId: index + 1
+			readonly property int version: root.slotVersions[ws.workspaceId] || 1
 			readonly property bool active: root.focusedSlot === ws.workspaceId
-			readonly property bool versioned: (root.slotVersions[ws.workspaceId] || 1) > 1
+			readonly property bool versioned: ws.version > 1
+			property real reform: 0
+
+			onVersionChanged: reformSequence.restart()
+
+			Component.onCompleted: ws.reform = ws.versioned ? 1 : 0
+
+			SequentialAnimation {
+				id: reformSequence
+
+				NumberAnimation {
+					target: ws
+					property: "reform"
+					to: 0
+					duration: ws.versioned ? Config.workspaceMorphMs / 3 : Config.workspaceMorphMs
+					easing.type: ws.versioned ? Easing.OutCubic : Easing.OutBack
+				}
+
+				NumberAnimation {
+					target: ws
+					property: "reform"
+					to: ws.versioned ? 1 : 0
+					duration: ws.versioned ? Config.workspaceMorphMs : 0
+					easing.type: Easing.OutBack
+				}
+			}
 
 			visible: root.ids.indexOf(ws.workspaceId) >= 0
 
@@ -145,20 +171,13 @@ Row {
 
 				width: label.implicitWidth + ws.figurePadX * 2
 				height: sampleMetrics.tightBoundingRect.height + ws.figurePadY * 2
-				figure: ws.versioned ? "gear" : "squircle"
-				morph: ws.versioned ? 1 : 0
+				version: ws.version
+				morph: ws.reform
 				color: root.ink
 				visible: ws.marked
 
 				x: (ws.implicitWidth - selector.width) / 2
 				y: (sampleMetrics.tightBoundingRect.height - selector.height) / 2
-
-				Behavior on morph {
-					NumberAnimation {
-						duration: Config.workspaceMorphMs
-						easing.type: Easing.OutBack
-					}
-				}
 
 				Behavior on exponent {
 					NumberAnimation {

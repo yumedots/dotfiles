@@ -1,16 +1,22 @@
 .pragma library
 
-const figurePresets = {
-	squircle: { exponent: 4 },
-	circle: { exponent: 2 },
-	gear: { exponent: 2 },
-	square: { exponent: 8 }
-};
+const figureShapes = [
+	{ exponent: 4 },
+	{ exponent: 2, lobes: 9, scallop: 0.16 },
+	{ exponent: 2, lobes: 3, scallop: 0.28 },
+	{ exponent: 2, lobes: 4, scallop: 0.28 },
+	{ exponent: 2, lobes: 5, scallop: 0.45 },
+	{ exponent: 8, scallop: 0 },
+	{ exponent: 1.4, scallop: 0 },
+	{ exponent: 8, lobes: 4, scallop: 0.45 },
+	{ exponent: 1, scallop: 0 },
+	{ exponent: 8, lobes: 8, scallop: 0.12 }
+];
 
 const coarseSteps = 512;
 
-function figurePreset(name) {
-	return figurePresets[name] || figurePresets.squircle;
+function figureShape(version) {
+	return figureShapes[Math.round(version) - 1] || figureShapes[0];
 }
 
 function outline(width, height, exponent, steps) {
