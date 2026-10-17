@@ -1412,7 +1412,7 @@ section("figure", function () {
 	const flats = gear.filter(function (radius) { return Math.abs(radius - tip) < 0.001; }).length;
 	const cuts = gear.filter(function (radius) { return Math.abs(radius - root) < 0.001; }).length;
 
-	assert(flats > 200 && cuts > 200, "a gear cuts flat tips and flat roots");
+	assert(flats < 40 && cuts < 40, "a round scallop never flattens into a flat-toothed gear");
 	assert(figurePoints({ width: 20, height: 20, exponent: 2, lobes: 8, scallop: 0.25, morph: 1, samples: 800 }).every(isFinite), "a dense figure stays finite");
 	assert(Math.min.apply(null, lobes) < Math.min.apply(null, radiiOf(circle)) * 0.9, "a morphed figure is cut in at the valleys");
 	assert(figurePoints({ width: 20, height: 20, exponent: 2, morph: 0 }).join() === figurePoints({ width: 20, height: 20, exponent: 2, morph: 0 }).join(), "the same spec draws the same figure twice");

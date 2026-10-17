@@ -90,7 +90,6 @@ Row {
 	}
 
 	readonly property real slotWidth: digitMetrics.advanceWidth + 8
-	readonly property real slotHeight: sampleMetrics.tightBoundingRect.height + 4
 
 	Repeater {
 		model: root.pool
@@ -108,6 +107,8 @@ Row {
 
 			readonly property bool boxed: ws.active
 			readonly property color labelColor: ws.boxed ? Qt.rgba(1 - root.ink.r, 1 - root.ink.g, 1 - root.ink.b, 1) : root.ink
+			readonly property real figurePadX: ws.versioned ? 8 : 4
+			readonly property real figurePadY: ws.versioned ? 6 : 2
 
 			implicitWidth: Math.max(root.slotWidth, label.implicitWidth + 8)
 			implicitHeight: sampleMetrics.tightBoundingRect.height
@@ -115,15 +116,15 @@ Row {
 			Figures {
 				id: selector
 
-				width: label.implicitWidth + 8
-				height: root.slotHeight
+				width: label.implicitWidth + ws.figurePadX * 2
+				height: sampleMetrics.tightBoundingRect.height + ws.figurePadY * 2
 				figure: ws.versioned ? "gear" : "squircle"
 				morph: ws.versioned ? 1 : 0
 				color: root.ink
 				visible: ws.boxed
 
 				x: (ws.implicitWidth - selector.width) / 2
-				y: (sampleMetrics.tightBoundingRect.height - root.slotHeight) / 2
+				y: (sampleMetrics.tightBoundingRect.height - selector.height) / 2
 
 				Behavior on morph {
 					NumberAnimation {
