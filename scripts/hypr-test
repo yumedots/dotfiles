@@ -86,7 +86,11 @@ cmd_start() {
 	git -C "$REPO" worktree add --detach "$WT" HEAD >/dev/null 2>&1 || fail "git worktree add failed"
 	rsync -a --exclude .git "$REPO/" "$WT/"
 	pkill -f "$WT/quickshell/shell.qml" 2>/dev/null || true
-	hyprctl eval '_G.HYPRTEST_RULE = hl.window_rule({name="hyprtest-hide", match={class="aquamarine"}, float=true, move="9999 0", no_focus=true, no_anim=true})' >/dev/null || fail "cannot register hide rule on real session"
+	local rule='name="hyprtest-hide", match={class="aquamarine"}, float=true, move="9999 0", no_focus=true, no_anim=true'
+	if [ "${HYPR_TEST_VISIBLE:-}" = 1 ]; then
+		rule='name="hyprtest-show", match={class="aquamarine"}, float=true, move="40 40", no_initial_focus=true, no_anim=true'
+	fi
+	hyprctl eval "_G.HYPRTEST_RULE = hl.window_rule({$rule})" >/dev/null || fail "cannot register window rule on real session"
 	setsid env -u HYPRLAND_INSTANCE_SIGNATURE XDG_CONFIG_HOME="$WT" Hyprland </dev/null >>"$RUN/hyprland.log" 2>&1 &
 	local hp=$!
 	local sig="" sock="" line="" i
@@ -145,6 +149,9 @@ cmd_start() {
 		"$hp" "$qpid" "$qid" "$sig" "$sock" "$WT" "$out" "$apid" >"$STATE"
 	echo "started: hyprland pid $hp, quickshell $qid pid $qpid, output $out"
 	echo "worktree: $WT"
+	if [ "${HYPR_TEST_VISIBLE:-}" = 1 ]; then
+		echo "visible: nested window floats at 40 40 — click it, then your own keyboard drives the nested session"
+	fi
 }
 
 cmd_shot() {
