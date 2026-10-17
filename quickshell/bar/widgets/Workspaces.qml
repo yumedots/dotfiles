@@ -14,16 +14,29 @@ Row {
 	readonly property int highest: root.ids.length > 0 ? root.ids[root.ids.length - 1] : 0
 	readonly property int pool: Math.max(root.persistentIds.length, root.highest)
 	property var ids: []
-	readonly property string focusedName: Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.name : ""
-	readonly property var versionMatch: /^v(\d+)\.(\d+)$/.exec(root.focusedName)
-	readonly property int focusedVersion: root.versionMatch ? Number(root.versionMatch[2]) : 1
-	readonly property int focusedSlot: root.versionMatch ? Number(root.versionMatch[1]) : (Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1)
+	readonly property var focused: {
+		const workspace = Hyprland.focusedWorkspace;
+		const name = workspace ? (workspace.name || "") : "";
+		const match = /^v(\d+)\.(\d+)$/.exec(name);
+
+		return {
+			name: name,
+			match: match,
+			slot: match ? Number(match[1]) : (workspace ? workspace.id : -1),
+			version: match ? Number(match[2]) : 1
+		};
+	}
+	readonly property string focusedName: root.focused.name
+	readonly property var versionMatch: root.focused.match
+	readonly property int focusedVersion: root.focused.version
+	readonly property int focusedSlot: root.focused.slot
 	property var rememberedVersions: ({})
 	readonly property var slotVersions: {
 		const versions = Object.assign({}, root.rememberedVersions);
+		const live = root.focused;
 
-		if (root.versionMatch)
-			versions[root.focusedSlot] = root.focusedVersion;
+		if (live.name !== "")
+			versions[live.slot] = live.version;
 
 		return versions;
 	}
@@ -67,6 +80,7 @@ Row {
 
 	function rememberVersions() {
 		const versions = Object.assign({}, root.rememberedVersions);
+		const live = root.focused;
 
 		Hyprland.workspaces.values.forEach(function (w) {
 			const match = /^v(\d+)\.(\d+)$/.exec(w.name || "");
@@ -76,8 +90,8 @@ Row {
 				versions[slot] = Number(match[2]);
 		});
 
-		if (root.focusedName !== "")
-			versions[root.focusedSlot] = root.focusedVersion;
+		if (live.name !== "")
+			versions[live.slot] = live.version;
 
 		root.rememberedVersions = versions;
 	}
@@ -87,9 +101,13 @@ Row {
 		root.rememberVersions();
 	}
 
-	onLiveStateChanged: {
+	onLiveStateChanged: root.recheck()
+
+	onFocusedNameChanged: root.recheck()
+
+	function recheck() {
 		debounce.restart();
-		root.rememberVersions();
+		remember.restart();
 	}
 
 	Timer {
@@ -98,6 +116,14 @@ Row {
 		interval: 7
 
 		onTriggered: root.settle()
+	}
+
+	Timer {
+		id: remember
+
+		interval: 40
+
+		onTriggered: root.rememberVersions()
 	}
 
 	TextMetrics {
