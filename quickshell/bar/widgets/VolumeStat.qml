@@ -58,11 +58,11 @@ BarStat {
 		target: root.sink ? root.sink.audio : null
 
 		function onVolumeChanged() {
-			root.pingVolume();
+			if (target) root.pingVolume();
 		}
 
 		function onMutedChanged() {
-			root.pingVolume();
+			if (target) root.pingVolume();
 		}
 	}
 
