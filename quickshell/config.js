@@ -198,13 +198,15 @@ const launcherIconApps = "\u{f0c9}";
 const launcherIconWallpaper = "\u{f0e09}";
 const launcherIconProcess = "\u{f0874}";
 const launcherIconFallback = "\u{f2d0}";
+const launcherIconPower = "\u{f011}";
 const launcherModes = [
 	{ mode: "clipboard", name: "Clipboard", mark: "", glyph: launcherIconClipboard, keywords: ["copy", "paste"] },
 	{ mode: "wallpaper", name: "Wallpaper", mark: "~", glyph: launcherIconWallpaper, keywords: ["wallpaper", "background", "desktop"] },
 	{ mode: "procs", name: "Processes", mark: "%", glyph: launcherIconProcess, keywords: ["top", "atop", "cpu", "processes", "monitor", "kill"] }
 ];
 const launcherGroups = [
-	{ id: "apps", name: "Apps", glyph: launcherIconApps, keywords: ["programs", "applications"] }
+	{ id: "apps", name: "Apps", glyph: launcherIconApps, keywords: ["programs", "applications"] },
+	{ id: "power", name: "Power", glyph: launcherIconPower, keywords: ["power", "session", "shutdown", "logout", "reboot", "suspend", "sleep"] }
 ];
 const launcherAppAliases = { foot: ["foot", "footclient", "foot-server"] };
 
@@ -240,12 +242,17 @@ const windowsLabelGap = 2;
 const windowStepMs = 80;
 const windowsIconSize = 76;
 const windowsTitleSize = 11;
-const launcherActions = [
+const powerActions = [
 	{ name: "Suspend", command: "systemctl suspend", glyph: "\u{f04b2}" },
 	{ name: "Log out", command: "hyprctl dispatch 'hl.dsp.exit()'", glyph: "\uea6e" },
 	{ name: "Reboot", command: "systemctl reboot", glyph: "\u{ead2}" },
 	{ name: "Shut down", command: "systemctl poweroff", glyph: "\u{f011}" }
 ];
+
+const powerCellSize = 96;
+const powerIconSize = 48;
+const powerHighlightSize = 80;
+const powerLabelSize = 12;
 
 const calendarCellWidth = 34;
 const calendarCellHeight = 26;
