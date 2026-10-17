@@ -1,5 +1,6 @@
 local programs = require("programs")
 local actions = require("actions")
+local versions = require("versions")
 local mainMod = "SUPER"
 local launcherConfig = "$HOME/.config/quickshell/launcherShell.qml"
 
@@ -223,7 +224,11 @@ for i = 1, 10 do
     local key = i % 10
     hl.bind(mainMod .. " + " .. key,         gotoWorkspace(i))
     hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i, follow = false }))
+    hl.bind("ALT + SHIFT + " .. key,         function() versions.jump(i) end)
 end
+
+hl.bind("ALT + SHIFT + mouse_down", function() versions.step(1) end)
+hl.bind("ALT + SHIFT + mouse_up",   function() versions.step(-1) end)
 
 hl.bind(mainMod .. " + RETURN", hl.dsp.exec_cmd(programs.terminal))
 hl.bind(mainMod .. " + W", hl.dsp.window.close(), { repeating = true })
