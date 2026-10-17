@@ -72,9 +72,6 @@ Item {
 		root.placeFocus = true;
 		root.placeEditing = true;
 		root.query = root.place;
-		placeInput.forceActiveFocus();
-		placeInput.selectAll();
-		Qt.callLater(placeInput.selectAll);
 	}
 
 	function stopEdit() {
@@ -143,33 +140,19 @@ Item {
 			id: placeRow
 
 			width: card.width
-			height: root.placeEditing ? placeInput.implicitHeight : placeText.implicitHeight
+			height: placeText.implicitHeight
 
-			readonly property bool hot: !root.placeEditing && (root.placeFocus || placeHit.containsMouse)
-
-			Highlight {
-				active: placeRow.hot
-			}
-
-			MouseArea {
-				id: placeHit
-
-				anchors.fill: parent
-				hoverEnabled: true
-				visible: !root.placeEditing
-
-				onClicked: root.startEdit()
-			}
 
 			Row {
 				id: placeText
 
-				visible: !root.placeEditing
 				width: card.width - Config.weatherCardPlacePad
 				spacing: Config.weatherCardGap
 				clip: true
 
 				Repeater {
+					id: placeRepeater
+
 					model: Weather.places
 
 					Row {
@@ -177,7 +160,7 @@ Item {
 
 						readonly property var slot: Weather.slot(index)
 						readonly property bool current: index === Weather.index
-						readonly property color ink: current ? Config.foreground : (placeRow.hot ? Config.launcherHighlightText : Config.muted)
+						readonly property color ink: entry.current || hover.hovered ? Config.foreground : Config.muted
 
 						spacing: Config.weatherCardHeaderGap
 
@@ -190,6 +173,8 @@ Item {
 						}
 
 						Column {
+							id: nameColumn
+
 							anchors.verticalCenter: parent.verticalCenter
 							spacing: -2
 
@@ -223,14 +208,94 @@ Item {
 								text: entry.slot ? entry.slot.description : ""
 							}
 
-							Text {
-								font.family: Config.fontFamily
-								font.pixelSize: Config.weatherCardPlaceSize
-								color: entry.ink
+							Item {
+								id: nameLine
+
 								width: Config.weatherCardRowTextWidth
-								elide: Text.ElideRight
-								text: (modelData || "").split(",")[0].trim()
+								height: nameText.implicitHeight
+
+								Text {
+									id: nameText
+
+									anchors.fill: parent
+									visible: !(entry.current && root.placeEditing)
+									font.family: Config.fontFamily
+									font.pixelSize: Config.weatherCardPlaceSize
+									color: entry.ink
+									elide: Text.ElideRight
+									text: (modelData || "").split(",")[0].trim()
+								}
+
+								Text {
+									id: queryMeasure
+
+									visible: false
+									font.family: Config.fontFamily
+									font.pixelSize: Config.weatherCardPlaceSize
+									text: root.query
+								}
+
+								Text {
+									id: ghost
+
+									visible: entry.current && root.hasGhost
+									x: queryMeasure.implicitWidth
+									width: Math.max(0, nameLine.width - queryMeasure.implicitWidth)
+									elide: Text.ElideRight
+									anchors.verticalCenter: parent.verticalCenter
+
+									font.family: Config.fontFamily
+									font.pixelSize: Config.weatherCardPlaceSize
+									color: Config.muted
+									text: root.ghost
+								}
+
+								TextInput {
+									id: nameInput
+
+									anchors.fill: parent
+									visible: entry.current && root.placeEditing
+									focus: entry.current && root.placeEditing
+									clip: true
+									selectByMouse: false
+
+									font.family: Config.fontFamily
+									font.pixelSize: Config.weatherCardPlaceSize
+									color: Config.foreground
+									selectionColor: Config.launcherHighlight
+									selectedTextColor: Config.launcherHighlightText
+									text: root.query
+
+									onTextEdited: {
+										root.query = nameInput.text;
+										root.syncSuggest();
+									}
+									onActiveFocusChanged: if (activeFocus) selectAll()
+
+									Keys.onPressed: function (event) {
+										if (Input.cancel(event)) {
+											root.stopEdit();
+											event.accepted = true;
+											return;
+										}
+
+										if (Input.accept(event)) {
+											root.commitPlace();
+											event.accepted = true;
+											return;
+										}
+
+										if (event.key === Qt.Key_Tab) {
+											root.completeGhost();
+											event.accepted = true;
+										}
+									}
+								}
 							}
+						}
+
+						HoverHandler {
+							id: hover
 						}
 
 						TapHandler {
@@ -238,72 +303,6 @@ Item {
 						}
 					}
 				}
-			}
-
-			TextInput {
-				id: placeInput
-
-				visible: root.placeEditing
-				width: card.width - Config.weatherCardPlacePad
-				clip: true
-				selectByMouse: false
-				focus: root.placeEditing
-
-				font.family: Config.fontFamily
-				font.pixelSize: Config.weatherCardPlaceSize
-				color: Config.foreground
-				selectionColor: Config.launcherHighlight
-				selectedTextColor: Config.launcherHighlightText
-				text: root.query
-
-				onTextEdited: {
-					root.query = placeInput.text;
-					root.syncSuggest();
-				}
-				onActiveFocusChanged: if (activeFocus) selectAll()
-
-				Keys.onPressed: function (event) {
-					if (Input.cancel(event)) {
-						root.stopEdit();
-						event.accepted = true;
-						return;
-					}
-
-					if (Input.accept(event)) {
-						root.commitPlace();
-						event.accepted = true;
-						return;
-					}
-
-					if (event.key === Qt.Key_Tab) {
-						root.completeGhost();
-						event.accepted = true;
-					}
-				}
-			}
-
-			Text {
-				id: queryMeasure
-
-				visible: false
-				font.family: Config.fontFamily
-				font.pixelSize: Config.weatherCardPlaceSize
-				text: root.query
-			}
-
-			Text {
-				id: ghost
-
-				visible: root.hasGhost
-				x: queryMeasure.implicitWidth
-				width: Math.max(0, card.width - Config.weatherCardPlacePad - queryMeasure.implicitWidth)
-				elide: Text.ElideRight
-				anchors.verticalCenter: placeInput.verticalCenter
-
-				font.family: Config.fontFamily
-				font.pixelSize: Config.weatherCardPlaceSize
-				color: Config.muted
-				text: root.ghost
 			}
 		}
 	}
