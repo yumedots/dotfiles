@@ -46,6 +46,7 @@ PanelWindow {
 	readonly property string home: Quickshell.env("HOME")
 	readonly property string terminalConfig: Config.launcherTerminalConfig.replace("~", root.home)
 	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
+	property var versions: ({})
 	readonly property var appEntries: Entries.appEntries(AppIcons.entries, Config.launcherIgnoreApps, Config.launcherAppAliases)
 	readonly property var results: root.mode === "procs"
 		? Entries.procEntries(System.filterProcesses(root.procRows, Config.psIgnore, root.search, Config.launcherMaxResults))
@@ -197,22 +198,19 @@ PanelWindow {
 	}
 
 	function windowEntries() {
-		const currentWs = Hyprland.focusedWorkspace;
 		const all = Apps.realWindows(Hyprland.toplevels.values ? Hyprland.toplevels.values : []);
-		if (!currentWs)
-			return all;
-
-		const currentId = String(currentWs.id);
-		const currentName = currentWs.name || "";
-		const filtered = all.filter(function (toplevel) {
+		const values = all.filter(function (toplevel) {
 			const info = toplevel.lastIpcObject;
 			if (!info || !info.workspace) return false;
-			const wsId = String(info.workspace.id);
-			const wsName = info.workspace.name || "";
-			return wsId === currentId || wsName === currentName;
-		});
 
-		const values = filtered.length > 0 ? filtered : all;
+			const match = String(info.workspace.name || "").match(/^v?(\d+)(?:\.(\d+))?$/);
+			if (!match) return false;
+
+			const slot = parseInt(match[1], 10);
+			const version = match[2] ? parseInt(match[2], 10) : 1;
+
+			return version === (root.versions[slot] || 1);
+		});
 
 		return values.map(function (toplevel) {
 			const info = toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
@@ -569,12 +567,20 @@ PanelWindow {
 			Quickshell.execDetached(Apps.launchCommand(entry, entry.appId, root.terminal));
 		else if (entry.kind === "window") {
 			const ws = entry.workspace;
-			if (ws) {
-				Hyprland.dispatch(Hyprland.usingLua
-					? "hl.dsp.focus({ workspace = " + ws.id + " })"
-					: "workspace " + ws.id);
+			const name = ws && ws.name ? String(ws.name) : "";
+			const addr = entry.address.indexOf("0x") === 0 ? entry.address : "0x" + entry.address;
+			const match = name.match(/^v?(\d+)(?:\.(\d+))?$/);
+
+			if (match && Hyprland.usingLua) {
+				const slot = parseInt(match[1], 10);
+				const version = match[2] ? parseInt(match[2], 10) : 1;
+				const code = "require(\"versions\").visit(" + slot + "," + version + "); hl.dispatch(hl.dsp.focus({window = \"address:" + addr + "\"}))";
+				Quickshell.execDetached(["sh", "-c", "hyprctl eval '" + code + "'"]);
+			} else if (match) {
+				Quickshell.execDetached(["sh", "-c", "hyprctl dispatch focuswindow address:" + addr]);
+			} else {
+				root.pendingFocus = entry.address;
 			}
-			root.pendingFocus = entry.address;
 		}
 		else if (entry.kind === "command" || entry.kind === "action" || entry.kind === "saved")
 			Quickshell.execDetached(["sh", "-c", entry.command]);
@@ -673,6 +679,29 @@ PanelWindow {
 		repeat: true
 		triggeredOnStart: true
 		onTriggered: procList.reload()
+	}
+
+	FileView {
+		id: versionsFile
+
+		path: Quickshell.shellDir + "/cache/versions.json"
+		preload: true
+		watchChanges: true
+		printErrors: false
+
+		onFileChanged: versionsFile.reload()
+		onLoaded: {
+			const text = versionsFile.text();
+
+			if (text === "")
+				return;
+
+			try {
+				root.versions = JSON.parse(text);
+			} catch (e) {
+				root.versions = ({});
+			}
+		}
 	}
 
 	FileView {
