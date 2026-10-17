@@ -122,19 +122,6 @@ function commandEntries(items) {
 	});
 }
 
-function actionEntries(items) {
-	return (items || []).map(function (item) {
-		return {
-			id: "act:" + item.name,
-			kind: "action",
-			name: item.name,
-			keywords: ["power", "session"],
-			command: item.command,
-			glyph: item.glyph
-		};
-	});
-}
-
 function clipEntries(list, sources) {
 	return (list || []).map(function (entry) {
 		const appId = sources && entry.id ? sources[entry.id] || "" : "";
@@ -246,6 +233,5 @@ function all(config, apps, saved) {
 		.concat(groupEntries(config.launcherGroups))
 		.concat(saved || [])
 		.concat(commandEntries(config.launcherCommands))
-		.concat(actionEntries(config.launcherActions))
 		.concat(apps || []);
 }
