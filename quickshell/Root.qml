@@ -44,6 +44,15 @@ ShellRoot {
 			Handoff.run(shellRoot.closeWidgetsUnderLauncher);
 	}
 
+	function clipboard() {
+		if (!shellRoot.isLauncher) {
+			shellRoot.toLauncher("clipboard");
+			return;
+		}
+
+		launcherWindow.openClipboard();
+	}
+
 	function windowSwitcher() {
 		if (!shellRoot.isLauncher) {
 			shellRoot.toLauncher("windows");
@@ -189,14 +198,14 @@ ShellRoot {
 	}
 
 	Instantiator {
-		model: shellRoot.isLauncher ? [] : [["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"], ["bareBar", "bareBar"]]
+		model: shellRoot.isLauncher ? [] : [["clipboard", "clipboard"], ["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"], ["bareBar", "bareBar"]]
 
 		delegate: GlobalShortcut {
 			required property var modelData
 
 			name: modelData[0]
 
-			onPressed: shellRoot.widgetAction(modelData[1])
+			onPressed: modelData[1] === "clipboard" ? shellRoot.clipboard() : shellRoot.widgetAction(modelData[1])
 		}
 	}
 
@@ -217,6 +226,10 @@ ShellRoot {
 
 		function launcher() {
 			shellRoot.launcher();
+		}
+
+		function clipboard() {
+			shellRoot.clipboard();
 		}
 
 		function windows() {

@@ -3,6 +3,7 @@ import QtQuick
 import qs
 import Quickshell
 import Quickshell.Io
+import "launcher"
 
 Root {
 	role: "launcher"
@@ -22,6 +23,8 @@ Root {
 			launcher();
 		else if (action === "windows")
 			windowSwitcher();
+		else if (action === "clipboard")
+			clipboard();
 
 		if (action)
 			Quickshell.execDetached(["rm", wake.path]);

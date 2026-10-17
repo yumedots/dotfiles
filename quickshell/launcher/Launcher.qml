@@ -130,11 +130,14 @@ PanelWindow {
 		procList.running = true;
 	}
 
-	function open() {
+	function open(mode) {
+		if (mode !== undefined)
+			root.windows = false;
+
 		root.query = "";
 		root.pendingFocus = "";
 		root.group = "";
-		root.forced = "";
+		root.forced = mode || "";
 		root.pointer = null;
 		list.currentIndex = 0;
 		Hyprland.refreshToplevels();
@@ -149,6 +152,10 @@ PanelWindow {
 	function openWindows() {
 		root.windows = true;
 		root.open();
+	}
+
+	function openClipboard() {
+		root.open("clipboard");
 	}
 
 	function close() {
@@ -268,7 +275,7 @@ PanelWindow {
 		}
 
 		if (Input.cancel(event)) {
-		if (root.group !== "" || root.forced !== "") {
+		if (root.group !== "") {
 			root.leaveGroup();
 				event.accepted = true;
 				return;
