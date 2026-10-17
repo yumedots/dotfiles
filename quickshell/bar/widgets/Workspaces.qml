@@ -70,9 +70,10 @@ Row {
 
 		Hyprland.workspaces.values.forEach(function (w) {
 			const match = /^v(\d+)\.(\d+)$/.exec(w.name || "");
+			const slot = match ? Number(match[1]) : -1;
 
-			if (match)
-				versions[Number(match[1])] = Number(match[2]);
+			if (slot > 0 && versions[slot] === undefined)
+				versions[slot] = Number(match[2]);
 		});
 
 		if (root.focusedName !== "")
