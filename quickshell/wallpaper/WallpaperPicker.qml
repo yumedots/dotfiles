@@ -65,11 +65,14 @@ PanelWindow {
 
 	Component.onCompleted: root.reload()
 
-	onCurrentIndexChanged: root.reveal()
-
 	onWallpapersChanged: {
 		if (root.wallpapers.length > 0)
-			preloader.preloadAll();
+			preloader.preloadAround(root.currentIndex);
+	}
+
+	onCurrentIndexChanged: {
+		root.reveal();
+		preloader.preloadAround(root.currentIndex);
 	}
 
 	function reveal() {
@@ -178,19 +181,31 @@ PanelWindow {
 	Item {
 		id: preloader
 
-		visible: false
+		enabled: false
+		opacity: 0
 
-		function preloadAll() {
-			for (var i = 0; i < root.wallpapers.length; i++) {
-				Qt.createQmlObject('
-					import QtQuick;
-					Image {
-						source: "file://" + root.wallpapers[' + i + '].path;
-						sourceSize.width: ' + root.loaderWidth + ';
-						cache: true;
-						asynchronous: true;
-					}
-				', preloader, "preload_" + i);
+		property var preloadComponents: []
+
+		function preloadAround(index) {
+			for (var i = 0; i < preloadComponents.length; i++) {
+				preloadComponents[i].destroy();
+			}
+			preloadComponents = [];
+
+			for (var offset = -3; offset <= 3; offset++) {
+				var idx = index + offset;
+				if (idx >= 0 && idx < root.wallpapers.length) {
+					var comp = Qt.createQmlObject('
+						import QtQuick;
+						Image {
+							source: "file://" + root.wallpapers[' + idx + '].path;
+							sourceSize.width: ' + root.loaderWidth + ';
+							cache: true;
+							asynchronous: true;
+						}
+					', preloader, "preload_" + idx);
+					preloadComponents.push(comp);
+				}
 			}
 		}
 	}
@@ -272,7 +287,7 @@ PanelWindow {
 						anchors.fill: parent
 						fillMode: Image.PreserveAspectCrop
 						cache: true
-						asynchronous: false
+						asynchronous: true
 						retainWhileLoading: true
 						sourceSize.width: root.loaderWidth
 						source: root.held === null ? "" : "file://" + root.held.preview
