@@ -197,7 +197,22 @@ PanelWindow {
 	}
 
 	function windowEntries() {
-		const values = Apps.realWindows(Hyprland.toplevels.values ? Hyprland.toplevels.values : []);
+		const currentWs = Hyprland.focusedWorkspace;
+		const all = Apps.realWindows(Hyprland.toplevels.values ? Hyprland.toplevels.values : []);
+		if (!currentWs)
+			return all;
+
+		const currentId = String(currentWs.id);
+		const currentName = currentWs.name || "";
+		const filtered = all.filter(function (toplevel) {
+			const info = toplevel.lastIpcObject;
+			if (!info || !info.workspace) return false;
+			const wsId = String(info.workspace.id);
+			const wsName = info.workspace.name || "";
+			return wsId === currentId || wsName === currentName;
+		});
+
+		const values = filtered.length > 0 ? filtered : all;
 
 		return values.map(function (toplevel) {
 			const info = toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
@@ -211,6 +226,7 @@ PanelWindow {
 				appId: appId,
 				keywords: [candidates.className],
 				address: toplevel.address,
+				workspace: info.workspace,
 				focus: info.focusHistoryID === undefined ? 999 : info.focusHistoryID
 			};
 		}).sort(function (a, b) {
@@ -551,8 +567,15 @@ PanelWindow {
 
 		if (entry.kind === "app")
 			Quickshell.execDetached(Apps.launchCommand(entry, entry.appId, root.terminal));
-		else if (entry.kind === "window")
+		else if (entry.kind === "window") {
+			const ws = entry.workspace;
+			if (ws) {
+				Hyprland.dispatch(Hyprland.usingLua
+					? "hl.dsp.focus({ workspace = " + ws.id + " })"
+					: "workspace " + ws.id);
+			}
 			root.pendingFocus = entry.address;
+		}
 		else if (entry.kind === "command" || entry.kind === "action" || entry.kind === "saved")
 			Quickshell.execDetached(["sh", "-c", entry.command]);
 		else if (entry.kind === "calc")

@@ -285,8 +285,22 @@ hl.bind(mainMod .. " + ALT + down",  moveOrSplit("down"))
 
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.workspace.toggle_special("magic"))
 
-hl.bind(mainMod .. " + mouse_down", gotoWorkspace("+1"))
-hl.bind(mainMod .. " + mouse_up",   gotoWorkspace("-1"))
+hl.bind(mainMod .. " + mouse_down", function()
+    local ws = hl.get_active_workspace()
+    local slot = ws and ws.name and versions.slotOf(ws.name)
+    if slot then
+        local next = slot % 10 + 1
+        gotoWorkspace(next)()
+    end
+end)
+hl.bind(mainMod .. " + mouse_up", function()
+    local ws = hl.get_active_workspace()
+    local slot = ws and ws.name and versions.slotOf(ws.name)
+    if slot then
+        local prev = (slot - 2) % 10 + 1
+        gotoWorkspace(prev)()
+    end
+end)
 
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
