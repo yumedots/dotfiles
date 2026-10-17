@@ -127,6 +127,7 @@ PanelWindow {
 		usageFile.running = true;
 		terminalFile.running = true;
 		savedFile.running = true;
+		procList.running = true;
 	}
 
 	function open() {
@@ -870,6 +871,15 @@ PanelWindow {
 							readonly property string clipIcon: row.modelData.kind === "clip" && row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : ""
 							readonly property string icon: rowIcon.clipIcon !== "" ? rowIcon.clipIcon : (row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : "")
 
+							Text {
+								anchors.centerIn: parent
+								font.family: Config.fontFamily
+								font.pixelSize: 18
+								color: row.active ? Config.launcherHighlightText : Config.foreground
+								text: root.rowGlyph(row.modelData)
+								z: 1
+							}
+
 							AppIcon {
 								id: rowIconImage
 
@@ -877,16 +887,8 @@ PanelWindow {
 								implicitSize: Config.launcherIconSize
 								visible: rowIcon.icon !== ""
 								source: rowIcon.icon
+								z: 2
 							}
-
-								Text {
-									anchors.centerIn: parent
-									visible: !rowIconImage.visible
-									font.family: Config.fontFamily
-									font.pixelSize: Config.launcherIconSize
-									color: row.active ? Config.launcherHighlightText : Config.foreground
-									text: root.rowGlyph(row.modelData)
-								}
 							}
 
 							Text {
@@ -905,8 +907,8 @@ PanelWindow {
 							Text {
 								id: rowUsage
 
-								anchors.right: rowPin.left
-								anchors.rightMargin: Config.launcherTextGap
+								anchors.right: parent.right
+								anchors.rightMargin: Config.launcherPadding
 								anchors.verticalCenter: parent.verticalCenter
 								width: visible ? implicitWidth : 0
 								visible: row.modelData.kind === "proc"
@@ -919,8 +921,8 @@ PanelWindow {
 							Text {
 								id: rowPin
 
-								anchors.right: parent.right
-								anchors.rightMargin: Config.launcherPadding
+								anchors.right: rowUsage.left
+								anchors.rightMargin: Config.launcherTextGap
 								anchors.verticalCenter: parent.verticalCenter
 								visible: row.pinned
 								font.family: Config.fontFamily
