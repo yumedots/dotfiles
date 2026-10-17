@@ -34,32 +34,6 @@ function supported(path) {
 	return extensions.indexOf(text.substring(text.lastIndexOf("."))) >= 0;
 }
 
-function thumbName(path) {
-	const text = String(path);
-	const base = text.substring(text.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_");
-	let hash = 5381;
-
-	for (let i = 0; i < text.length; i++)
-		hash = (hash * 33 + text.charCodeAt(i)) >>> 0;
-
-	return hash.toString(16) + "-" + base + ".jpg";
-}
-
-function thumbPath(path, dir) {
-	return String(dir) + "/" + thumbName(path);
-}
-
-function thumbsFromText(text) {
-	const names = {};
-
-	String(text === undefined || text === null ? "" : text).split("\n").forEach(function (line) {
-		if (line.trim() !== "")
-			names[line.trim()] = true;
-	});
-
-	return names;
-}
-
 function entries(text) {
 	return String(text === undefined || text === null ? "" : text)
 		.split("\n")

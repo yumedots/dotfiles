@@ -1038,17 +1038,7 @@ assert(listed.length === 3, "only images make it into the list, got " + listed.l
 assert(listed[0].id === "wall:/a/one.jpg" && listed[0].kind === "wallpaper" && listed[0].path === "/a/one.jpg", "an image becomes a wallpaper entry with its path");
 assert(entries("").length === 0 && entries(null).length === 0, "no listing means no wallpapers");
 
-const thumbs = thumbsFromText("abc-one.jpg\n\n  def-two.jpg  \n");
-const cached = entries("/a/one.jpg", "/cache", thumbs);
-
-assert(cached[0].preview === "/a/one.jpg", "a picture with no thumbnail of its own is previewed as itself");
-assert(thumbPath("/a/b one.jpg", "/cache") === "/cache/" + thumbName("/a/b one.jpg"), "a thumbnail sits in the cache under its own name");
-assert(/^[0-9a-f]+-[\w-]+\.jpg$/.test(thumbName("/a/b one.jpg")), "a thumbnail name is a hash, the base name and jpg, got " + thumbName("/a/b one.jpg"));
-assert(thumbName("/a/one.jpg") !== thumbName("/b/one.jpg"), "two folders can hold the same file name without sharing a thumbnail");
-
-const listedThumbs = thumbsFromText(thumbName("/a/one.jpg") + "\n" + thumbName("/a/two.PNG"));
-
-assert(entries("/a/one.jpg\n/a/two.PNG", "/cache", listedThumbs).every(function (entry) { return entry.preview !== entry.path; }), "a listed thumbnail is previewed instead of the picture");
+assert(listed.every(function (entry) { return entry.preview === entry.path; }), "a picture is previewed as itself");
 
 const switching = applyCommand("/a/one.jpg", { wallpaperTransition: "fade", wallpaperTransitionMs: 400, wallpaperTransitionFps: 60 });
 
