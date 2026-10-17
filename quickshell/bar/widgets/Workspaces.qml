@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell.Hyprland
 import qs
 import qs.services
+import qs.ui
 
 Row {
 	id: root
@@ -13,7 +14,10 @@ Row {
 	readonly property int highest: root.ids.length > 0 ? root.ids[root.ids.length - 1] : 0
 	readonly property int pool: Math.max(root.persistentIds.length, root.highest)
 	property var ids: []
-	property int focusedId: -1
+	readonly property string focusedName: Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.name : ""
+	readonly property var versionMatch: /^v(\d+)\.(\d+)$/.exec(root.focusedName)
+	readonly property int focusedVersion: root.versionMatch ? Number(root.versionMatch[2]) : 1
+	readonly property int focusedSlot: root.versionMatch ? Number(root.versionMatch[1]) : (Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1)
 	property color ink: BarInk.pick(root.bar, "workspaces", Config.foreground)
 
 	Behavior on ink {
@@ -40,8 +44,7 @@ Row {
 		if (!count)
 			return;
 
-		const focused = Hyprland.focusedWorkspace;
-		const index = root.ids.indexOf(focused ? focused.id : root.focusedId);
+		const index = root.ids.indexOf(root.focusedSlot);
 
 		root.focusWorkspace(root.ids[(index + step + count) % count]);
 	}
@@ -57,7 +60,6 @@ Row {
 		if (!root.same(next))
 			root.ids = next;
 
-		root.focusedId = Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1;
 	}
 
 	Component.onCompleted: root.settle()
@@ -99,27 +101,36 @@ Row {
 			required property int index
 
 			readonly property int workspaceId: index + 1
-			readonly property bool active: root.focusedId === ws.workspaceId
+			readonly property bool active: root.focusedSlot === ws.workspaceId
+			readonly property bool versioned: ws.active && root.focusedVersion > 1
 
 			visible: root.ids.indexOf(ws.workspaceId) >= 0
 
 			readonly property bool boxed: ws.active
 			readonly property color labelColor: ws.boxed ? Qt.rgba(1 - root.ink.r, 1 - root.ink.g, 1 - root.ink.b, 1) : root.ink
 
-			implicitWidth: ws.workspaceId >= 10 ? label.implicitWidth + 8 : root.slotWidth
+			implicitWidth: Math.max(root.slotWidth, label.implicitWidth + 8)
 			implicitHeight: sampleMetrics.tightBoundingRect.height
 
-			Rectangle {
+			Figures {
 				id: selector
 
-				width: ws.implicitWidth
+				width: label.implicitWidth + 8
 				height: root.slotHeight
-				radius: 4
+				figure: "squircle"
+				morph: ws.versioned ? 1 : 0
 				color: root.ink
 				visible: ws.boxed
 
-				x: 0
+				x: (ws.implicitWidth - selector.width) / 2
 				y: (sampleMetrics.tightBoundingRect.height - root.slotHeight) / 2
+
+				Behavior on morph {
+					NumberAnimation {
+						duration: Config.workspaceMorphMs
+						easing.type: Easing.OutBack
+					}
+				}
 			}
 
 			Text {

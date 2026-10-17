@@ -14,6 +14,9 @@ const monoMid = "#9a9a9a";
 const monoSoft = "#6f6f6f";
 
 const workspaceSpacing = 6;
+const workspaceMorphMs = 320;
+const figureLobes = 6;
+const figureScallop = 0.2;
 
 const fontFamily = "GoogleSansCode Nerd Font";
 const fontSize = 12;

@@ -1378,4 +1378,40 @@ assert(brailleMasks([100000, 100000], 100000, 1, "down")[0] === 0xff, "a full ce
 assert(brailleMasks([0, 100000, 0, 0, 0, 50000], 100000, 6, "up").length === 6, "masks come back one per cell");
 });
 
+section("figure", function () {
+	function radiiOf(points) {
+		const list = [];
+
+		for (let i = 0; i < points.length; i += 2)
+			list.push(Math.hypot(points[i] - 10, points[i + 1] - 10));
+
+		return list;
+	}
+
+	const circle = figurePoints({ width: 20, height: 20, exponent: 2, morph: 0 });
+	const squircle = figurePoints({ width: 20, height: 20, exponent: 4, morph: 0 });
+	const lobes = radiiOf(figurePoints({ width: 20, height: 20, exponent: 2, lobes: 8, scallop: 0.25, morph: 1 }));
+	let valleys = 0;
+
+	for (let i = 0; i < lobes.length; i++) {
+		const previous = lobes[(i - 1 + lobes.length) % lobes.length];
+		const next = lobes[(i + 1) % lobes.length];
+
+		if (lobes[i] < previous && lobes[i] <= next)
+			valleys += 1;
+	}
+
+	assert(circle.length === 8 * 12 * 2, "a figure comes back as flat x,y pairs");
+	assert(radiiOf(circle).every(function (radius) { return Math.abs(radius - 10) < 0.001; }), "a circle figure keeps every point on the radius");
+	assert(Math.hypot(squircle[16] - 10, squircle[17] - 10) > 10, "a squircle reaches further towards the corner than a circle");
+	assert(squircle[0] === 10 && squircle[1] === 0, "a squircle still touches the top edge");
+	assert(valleys === 8, "eight lobes cut eight valleys");
+	assert(Math.min.apply(null, lobes) < Math.min.apply(null, radiiOf(circle)) * 0.9, "a morphed figure is cut in at the valleys");
+	assert(figurePoints({ width: 20, height: 20, exponent: 2, morph: 0 }).join() === figurePoints({ width: 20, height: 20, exponent: 2, morph: 0 }).join(), "the same spec draws the same figure twice");
+	assert(figurePoints({ width: 0, height: 0 }).every(function (value) { return value === 0; }), "a figure with no size stays at the origin");
+	assert(figurePoints({ width: 8, height: 8, morph: -3, scallop: 9 }).every(isFinite), "a wild morph still draws a real figure");
+	assert(figurePreset("nonsense").exponent === 4, "an unknown figure name falls back to the squircle");
+	assert(figurePreset("circle").exponent === 2, "a known figure name survives");
+});
+
 console.log("check ok (" + ran + " assertions" + (filter === "" ? "" : ", filter " + filter) + ")");
