@@ -244,12 +244,11 @@ hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
 
 local resizeStep = 40
 
-hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.resize({ x = resizeStep, y = 0, relative = true }),  { repeating = true })
-hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.resize({ x = -resizeStep, y = 0, relative = true }), { repeating = true })
-hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.resize({ x = 0, y = resizeStep, relative = true }),  { repeating = true })
-hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.resize({ x = 0, y = -resizeStep, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + CTRL + ALT + right", hl.dsp.window.resize({ x = resizeStep, y = 0, relative = true }),  { repeating = true })
+hl.bind(mainMod .. " + CTRL + ALT + left",  hl.dsp.window.resize({ x = -resizeStep, y = 0, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + CTRL + ALT + up",    hl.dsp.window.resize({ x = 0, y = resizeStep, relative = true }),  { repeating = true })
+hl.bind(mainMod .. " + CTRL + ALT + down",  hl.dsp.window.resize({ x = 0, y = -resizeStep, relative = true }), { repeating = true })
 
-hl.bind(mainMod .. " + D", hl.dsp.global("quickshell:media"))
 hl.bind(mainMod .. " + Z", hl.dsp.global("quickshell:cpu"))
 hl.bind(mainMod .. " + X", hl.dsp.global("quickshell:memory"))
 hl.bind(mainMod .. " + C", hl.dsp.global("quickshell:volume"))
@@ -270,10 +269,10 @@ hl.bind(mainMod .. " + right", focusOrSwitch("right"))
 hl.bind(mainMod .. " + up",    focusOrSwitch("up"))
 hl.bind(mainMod .. " + down",  focusOrSwitch("down"))
 
-hl.bind(mainMod .. " + CTRL + left",  hl.dsp.window.move({ direction = "left" }))
-hl.bind(mainMod .. " + CTRL + right", hl.dsp.window.move({ direction = "right" }))
-hl.bind(mainMod .. " + CTRL + up",    moveOrSplit("up"))
-hl.bind(mainMod .. " + CTRL + down",  moveOrSplit("down"))
+hl.bind(mainMod .. " + ALT + left",  hl.dsp.window.move({ direction = "left" }))
+hl.bind(mainMod .. " + ALT + right", hl.dsp.window.move({ direction = "right" }))
+hl.bind(mainMod .. " + ALT + up",    moveOrSplit("up"))
+hl.bind(mainMod .. " + ALT + down",  moveOrSplit("down"))
 
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.workspace.toggle_special("magic"))
 
