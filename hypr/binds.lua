@@ -270,10 +270,10 @@ hl.bind(mainMod .. " + right", focusOrSwitch("right"))
 hl.bind(mainMod .. " + up",    focusOrSwitch("up"))
 hl.bind(mainMod .. " + down",  focusOrSwitch("down"))
 
-hl.bind(mainMod .. " + ALT + left",  hl.dsp.window.move({ direction = "left" }))
-hl.bind(mainMod .. " + ALT + right", hl.dsp.window.move({ direction = "right" }))
-hl.bind(mainMod .. " + ALT + up",    moveOrSplit("up"))
-hl.bind(mainMod .. " + ALT + down",  moveOrSplit("down"))
+hl.bind(mainMod .. " + CTRL + left",  hl.dsp.window.move({ direction = "left" }))
+hl.bind(mainMod .. " + CTRL + right", hl.dsp.window.move({ direction = "right" }))
+hl.bind(mainMod .. " + CTRL + up",    moveOrSplit("up"))
+hl.bind(mainMod .. " + CTRL + down",  moveOrSplit("down"))
 
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.workspace.toggle_special("magic"))
 
