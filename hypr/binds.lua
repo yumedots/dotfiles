@@ -236,6 +236,8 @@ end
 
 hl.bind("ALT + SHIFT + mouse_down", function() versions.step(1) end)
 hl.bind("ALT + SHIFT + mouse_up",   function() versions.step(-1) end)
+hl.bind("ALT + mouse_down",         function() versions.step(1) end)
+hl.bind("ALT + mouse_up",           function() versions.step(-1) end)
 
 hl.bind(mainMod .. " + RETURN", hl.dsp.exec_cmd(programs.terminal))
 hl.bind(mainMod .. " + W", hl.dsp.window.close(), { repeating = true })
