@@ -16,7 +16,7 @@ Item {
 
 	readonly property bool ready: Weather.temp !== ""
 	readonly property var temp: Forecast.splitTemp(Weather.temp)
-	readonly property string place: Weather.location !== "" ? Weather.location : Weather.place
+	readonly property string place: (Weather.location !== "" ? Weather.location : Weather.place).split(",")[0].trim()
 	readonly property string status: root.ready ? Weather.description : (Weather.status !== "" ? Weather.status : "Loading")
 	readonly property var match: root.bestMatch()
 	readonly property bool hasGhost: root.placeEditing && root.match !== null && root.ghost !== ""
@@ -122,6 +122,13 @@ Item {
 			root.placeFocus = true;
 		else if (event.key === Qt.Key_Up)
 			root.placeFocus = false;
+		else if (!root.placeEditing && Input.direction(event) === "right") {
+			Weather.shift(1);
+			event.accepted = true;
+		} else if (!root.placeEditing && Input.direction(event) === "left") {
+			Weather.shift(-1);
+			event.accepted = true;
+		}
 	}
 
 	Column {
@@ -132,63 +139,11 @@ Item {
 		width: Config.weatherCardWidth
 		spacing: Config.weatherCardGap
 
-		Row {
-			id: header
-
-			width: card.width
-			spacing: Config.weatherCardHeaderGap
-
-			Text {
-				id: glyph
-
-				anchors.verticalCenter: parent.verticalCenter
-				font.family: Config.fontFamily
-				font.pixelSize: Config.weatherCardGlyphSize
-				color: Config.foreground
-				text: root.ready ? Weather.icon : Config.weatherLoadingIcon
-			}
-
-			Column {
-				id: info
-
-				anchors.verticalCenter: parent.verticalCenter
-				spacing: -2
-
-				Row {
-					spacing: 0
-
-					Text {
-						font.family: Config.fontFamily
-						font.pixelSize: Config.weatherCardTempSize
-						color: Config.foreground
-						text: root.ready ? root.temp.value : "--"
-					}
-
-					Text {
-						anchors.bottom: parent.bottom
-						anchors.bottomMargin: Config.weatherCardUnitLift
-						visible: root.ready && root.temp.unit !== ""
-						font.family: Config.fontFamily
-						font.pixelSize: Config.weatherCardUnitSize
-						color: Config.muted
-						text: root.temp.unit
-					}
-				}
-
-				Text {
-					font.family: Config.fontFamily
-					font.pixelSize: Config.weatherCardNameSize
-					color: Config.foreground
-					text: root.status
-				}
-			}
-		}
-
 		Item {
 			id: placeRow
 
 			width: card.width
-			height: Math.max(placeText.implicitHeight, placeInput.implicitHeight)
+			height: root.placeEditing ? placeInput.implicitHeight : placeText.implicitHeight
 
 			readonly property bool hot: !root.placeEditing && (root.placeFocus || placeHit.containsMouse)
 
@@ -196,17 +151,93 @@ Item {
 				active: placeRow.hot
 			}
 
-			Text {
+			MouseArea {
+				id: placeHit
+
+				anchors.fill: parent
+				hoverEnabled: true
+				visible: !root.placeEditing
+
+				onClicked: root.startEdit()
+			}
+
+			Row {
 				id: placeText
 
 				visible: !root.placeEditing
 				width: card.width - Config.weatherCardPlacePad
-				elide: Text.ElideRight
+				spacing: Config.weatherCardGap
+				clip: true
 
-				font.family: Config.fontFamily
-				font.pixelSize: Config.weatherCardPlaceSize
-				color: placeRow.hot ? Config.launcherHighlightText : Config.muted
-				text: root.place
+				Repeater {
+					model: Weather.places
+
+					Row {
+						id: entry
+
+						readonly property var slot: Weather.slot(index)
+						readonly property bool current: index === Weather.index
+						readonly property color ink: current ? Config.foreground : (placeRow.hot ? Config.launcherHighlightText : Config.muted)
+
+						spacing: Config.weatherCardHeaderGap
+
+						Text {
+							anchors.verticalCenter: parent.verticalCenter
+							font.family: Config.fontFamily
+							font.pixelSize: Config.weatherCardRowGlyphSize
+							color: entry.ink
+							text: entry.slot ? entry.slot.icon : Config.weatherLoadingIcon
+						}
+
+						Column {
+							anchors.verticalCenter: parent.verticalCenter
+							spacing: -2
+
+							Row {
+								spacing: 0
+
+								Text {
+									font.family: Config.fontFamily
+									font.pixelSize: Config.weatherCardRowTempSize
+									color: entry.ink
+									text: entry.slot && entry.slot.temp !== "" ? Forecast.splitTemp(entry.slot.temp).value : "--"
+								}
+
+								Text {
+									anchors.bottom: parent.bottom
+									anchors.bottomMargin: Config.weatherCardUnitLift
+									visible: entry.slot && entry.slot.temp !== ""
+									font.family: Config.fontFamily
+									font.pixelSize: Config.weatherCardRowUnitSize
+									color: entry.ink
+									text: entry.slot ? Forecast.splitTemp(entry.slot.temp).unit : ""
+								}
+							}
+
+							Text {
+								font.family: Config.fontFamily
+								font.pixelSize: Config.weatherCardPlaceSize
+								color: entry.ink
+								width: Config.weatherCardRowTextWidth
+								elide: Text.ElideRight
+								text: entry.slot ? entry.slot.description : ""
+							}
+
+							Text {
+								font.family: Config.fontFamily
+								font.pixelSize: Config.weatherCardPlaceSize
+								color: entry.ink
+								width: Config.weatherCardRowTextWidth
+								elide: Text.ElideRight
+								text: (modelData || "").split(",")[0].trim()
+							}
+						}
+
+						TapHandler {
+							onTapped: current ? root.startEdit() : Weather.shift(index - Weather.index)
+						}
+					}
+				}
 			}
 
 			TextInput {
@@ -273,16 +304,6 @@ Item {
 				font.pixelSize: Config.weatherCardPlaceSize
 				color: Config.muted
 				text: root.ghost
-			}
-
-			MouseArea {
-				id: placeHit
-
-				anchors.fill: parent
-				hoverEnabled: true
-				visible: !root.placeEditing
-
-				onClicked: root.startEdit()
 			}
 		}
 	}
