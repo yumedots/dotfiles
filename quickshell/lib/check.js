@@ -1397,7 +1397,7 @@ section("figure", function () {
 		const previous = lobes[(i - 1 + lobes.length) % lobes.length];
 		const next = lobes[(i + 1) % lobes.length];
 
-		if (lobes[i] < previous && lobes[i] <= next)
+		if (lobes[i] < previous - 1e-3 && lobes[i] <= next + 1e-3)
 			valleys += 1;
 	}
 
@@ -1406,11 +1406,20 @@ section("figure", function () {
 	assert(Math.hypot(squircle[16] - 10, squircle[17] - 10) > 10, "a squircle reaches further towards the corner than a circle");
 	assert(squircle[0] === 10 && squircle[1] === 0, "a squircle still touches the top edge");
 	assert(valleys === 8, "eight lobes cut eight valleys");
+	const gear = radiiOf(figurePoints({ width: 20, height: 20, exponent: 2, lobes: 8, scallop: 0.25, morph: 1, samples: 800 }));
+	const tip = Math.max.apply(null, gear);
+	const root = Math.min.apply(null, gear);
+	const flats = gear.filter(function (radius) { return Math.abs(radius - tip) < 0.001; }).length;
+	const cuts = gear.filter(function (radius) { return Math.abs(radius - root) < 0.001; }).length;
+
+	assert(flats > 200 && cuts > 200, "a gear cuts flat tips and flat roots");
+	assert(figurePoints({ width: 20, height: 20, exponent: 2, lobes: 8, scallop: 0.25, morph: 1, samples: 800 }).every(isFinite), "a dense figure stays finite");
 	assert(Math.min.apply(null, lobes) < Math.min.apply(null, radiiOf(circle)) * 0.9, "a morphed figure is cut in at the valleys");
 	assert(figurePoints({ width: 20, height: 20, exponent: 2, morph: 0 }).join() === figurePoints({ width: 20, height: 20, exponent: 2, morph: 0 }).join(), "the same spec draws the same figure twice");
 	assert(figurePoints({ width: 0, height: 0 }).every(function (value) { return value === 0; }), "a figure with no size stays at the origin");
 	assert(figurePoints({ width: 8, height: 8, morph: -3, scallop: 9 }).every(isFinite), "a wild morph still draws a real figure");
 	assert(figurePreset("nonsense").exponent === 4, "an unknown figure name falls back to the squircle");
+	assert(figurePreset("gear").exponent === 2, "a gear has a round body");
 	assert(figurePreset("circle").exponent === 2, "a known figure name survives");
 });
 

@@ -3,6 +3,7 @@
 const figurePresets = {
 	squircle: { exponent: 4 },
 	circle: { exponent: 2 },
+	gear: { exponent: 2 },
 	square: { exponent: 8 }
 };
 
@@ -37,6 +38,7 @@ function figurePoints(spec) {
 	const lobes = Math.max(1, Math.round(spec.lobes || 8));
 	const scallop = Math.min(0.9, Math.max(0, spec.scallop === undefined ? 0.16 : spec.scallop));
 	const morph = Math.max(0, spec.morph === undefined ? 0 : spec.morph);
+	const flank = Math.min(0.24, Math.max(0.02, spec.flank === undefined ? 0.1 : spec.flank));
 	const samples = Math.max(lobes * 3, Math.round(spec.samples || lobes * 12));
 	const cx = width / 2;
 	const cy = height / 2;
@@ -62,11 +64,17 @@ function figurePoints(spec) {
 
 		const span = lengths[segment + 1] - lengths[segment];
 		const part = span > 0 ? (at - lengths[segment]) / span : 0;
-		const wave = 1 - depth * (0.5 - 0.5 * Math.cos(lobes * (i / samples) * Math.PI * 2));
-		const x = base[2 * segment] + (base[2 * (segment + 1)] - base[2 * segment]) * part;
+		const from = 2 * segment;
+		const to = 2 * ((segment + 1) % coarseSteps);
+		const phase = ((i / samples) * lobes + 0.5) % 1;
+		const away = Math.abs(phase - 0.5);
+		const tooth = away <= 0.2 ? 1 : away <= 0.2 + flank ? 1 - (away - 0.2) / flank : 0;
+		const wave = 1 - depth * tooth;
+		const x = base[from] + (base[to] - base[from]) * part;
+		const y = base[from + 1] + (base[to + 1] - base[from + 1]) * part;
 
 		points.push(cx + (x - cx) * wave);
-		points.push(cy + (base[2 * segment + 1] + (base[2 * (segment + 1) + 1] - base[2 * segment + 1]) * part - cy) * wave);
+		points.push(cy + (y - cy) * wave);
 	}
 
 	return points;
