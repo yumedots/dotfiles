@@ -296,7 +296,7 @@ const weatherIcon = "\u{f0f2f}";
 const weatherLoadingIcon = "\u{f18f6}";
 const weatherBase = "#7cc4f0";
 const weatherBaseMono = foreground;
-const weatherCardWidth = 430;
+const weatherCardWidth = 422;
 const weatherCardPadding = 12;
 const weatherCardGap = 12;
 const weatherCardHeaderGap = 10;
@@ -310,7 +310,7 @@ const weatherCardPlacePad = 8;
 const weatherCardRowGlyphSize = 34;
 const weatherCardRowTempSize = 26;
 const weatherCardRowUnitSize = 13;
-const weatherCardRowTextWidth = 92;
+const weatherCardRowTextWidth = 86;
 const weatherCardSearchDebounce = 60;
 const weatherCodes = {
 	0: { name: "Clear", glyph: "\u{f0599}" },

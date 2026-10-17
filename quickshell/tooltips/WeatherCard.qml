@@ -13,6 +13,8 @@ Item {
 	property bool placeFocus: false
 	property bool placeEditing: false
 	property string query: ""
+	property bool selectQuery: false
+	property int queryStamp: 0
 
 	readonly property bool ready: Weather.temp !== ""
 	readonly property var temp: Forecast.splitTemp(Weather.temp)
@@ -68,10 +70,16 @@ Item {
 		weatherSearch.restart();
 	}
 
-	function startEdit() {
+	function pushQuery(select) {
+		root.selectQuery = select;
+		root.queryStamp = root.queryStamp + 1;
+	}
+
+	function startEdit(value) {
 		root.placeFocus = true;
 		root.placeEditing = true;
-		root.query = root.place;
+		root.query = value !== undefined && value !== "" ? value : root.place;
+		root.pushQuery(true);
 	}
 
 	function stopEdit() {
@@ -83,8 +91,11 @@ Item {
 	}
 
 	function completeGhost() {
-		if (root.hasGhost)
-			root.query = String(root.match.name);
+		if (!root.hasGhost)
+			return;
+
+		root.query = String(root.match.name);
+		root.pushQuery(false);
 	}
 
 	function commitPlace() {
@@ -167,6 +178,8 @@ Item {
 						Text {
 							anchors.verticalCenter: parent.verticalCenter
 							font.family: Config.fontFamily
+							width: Config.weatherCardRowGlyphSize
+							horizontalAlignment: Text.AlignLeft
 							font.pixelSize: Config.weatherCardRowGlyphSize
 							color: entry.ink
 							text: entry.slot ? entry.slot.icon : Config.weatherLoadingIcon
@@ -174,12 +187,14 @@ Item {
 
 						Column {
 							id: nameColumn
+							width: Config.weatherCardRowTextWidth
 
 							anchors.verticalCenter: parent.verticalCenter
 							spacing: -2
 
 							Row {
 								spacing: 0
+								width: Config.weatherCardRowTextWidth
 
 								Text {
 									font.family: Config.fontFamily
@@ -205,7 +220,7 @@ Item {
 								color: entry.ink
 								width: Config.weatherCardRowTextWidth
 								elide: Text.ElideRight
-								text: entry.slot ? entry.slot.description : ""
+								text: entry.slot && entry.slot.description !== "" ? entry.slot.description : " "
 							}
 
 							Item {
@@ -291,6 +306,23 @@ Item {
 										}
 									}
 								}
+
+								Connections {
+									target: root
+
+									function onQueryStampChanged() {
+										if (!entry.current)
+											return;
+
+										nameInput.text = root.query;
+
+										if (root.selectQuery) {
+											root.selectQuery = false;
+											nameInput.selectAll();
+										} else
+											nameInput.cursorPosition = nameInput.text.length;
+									}
+								}
 							}
 						}
 
@@ -299,7 +331,12 @@ Item {
 						}
 
 						TapHandler {
-							onTapped: current ? root.startEdit() : Weather.shift(index - Weather.index)
+							onTapped: {
+								if (!current)
+									Weather.shift(index - Weather.index);
+
+								root.startEdit((modelData || "").split(",")[0].trim());
+							}
 						}
 					}
 				}
