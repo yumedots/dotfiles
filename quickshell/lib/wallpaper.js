@@ -60,15 +60,13 @@ function thumbsFromText(text) {
 	return names;
 }
 
-function entries(text, dir, thumbs) {
+function entries(text) {
 	return String(text === undefined || text === null ? "" : text)
 		.split("\n")
 		.map(function (line) { return line.trim(); })
 		.filter(function (line) { return line !== "" && supported(line); })
 		.map(function (path) {
-			const thumb = dir && thumbs && thumbs[thumbName(path)] ? thumbPath(path, dir) : path;
-
-			return { id: "wall:" + path, kind: "wallpaper", name: nameOf(path), keywords: [], path: path, preview: thumb };
+			return { id: "wall:" + path, kind: "wallpaper", name: nameOf(path), keywords: [], path: path, preview: path };
 		});
 }
 

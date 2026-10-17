@@ -18,12 +18,10 @@ PanelWindow {
 	property string listing: ""
 	property var wallpapers: []
 	property int currentIndex: 0
-	property bool refreshing: false
 	property var pointer: null
 
 	readonly property string home: Quickshell.env("HOME")
 	readonly property string settingsPath: Quickshell.shellDir + "/cache/settings.lua"
-	readonly property string thumbDir: Quickshell.shellDir + "/cache/wallpapers"
 	readonly property var held: root.currentIndex >= 0 && root.currentIndex < root.wallpapers.length ? root.wallpapers[root.currentIndex] : null
 	readonly property string shotPath: root.held === null ? "" : root.held.path
 	readonly property int columns: Math.max(1, Config.wallpaperColumns)
@@ -68,6 +66,11 @@ PanelWindow {
 	Component.onCompleted: root.reload()
 
 	onCurrentIndexChanged: root.reveal()
+
+	onWallpapersChanged: {
+		if (root.wallpapers.length > 0)
+			preloader.preloadAll();
+	}
 
 	function reveal() {
 		if (root.currentIndex >= 0 && grid.count > 0)
@@ -147,28 +150,6 @@ PanelWindow {
 		Quickshell.execDetached(Shell.writeCommand(path, text));
 	}
 
-	function thumbCommand(missing) {
-		const size = root.heroWidth + "x" + root.heroHeight;
-		const jobs = missing.map(function (entry) {
-			return "magick " + Shell.shellQuote(entry.path) + " -resize " + size + "^ -gravity center -extent " + size
-				+ " -quality " + Config.wallpaperThumbQuality + " " + Shell.shellQuote(Wallpaper.thumbPath(entry.path, root.thumbDir));
-		});
-
-		return ["sh", "-c", "mkdir -p " + Shell.shellQuote(root.thumbDir)
-			+ " && printf '%s\\n' " + jobs.map(Shell.shellQuote).join(" ")
-			+ " | xargs -d '\\n' -P " + Config.wallpaperThumbJobs + " -I JOB sh -c JOB 2>/dev/null"];
-	}
-
-	function buildThumbs() {
-		const missing = root.wallpapers.filter(function (entry) { return entry.preview === entry.path; });
-
-		if (missing.length === 0)
-			return;
-
-		thumbsJob.command = root.thumbCommand(missing);
-		thumbsJob.running = true;
-	}
-
 	Request {
 		id: settingsFile
 
@@ -190,37 +171,27 @@ PanelWindow {
 		onDone: function (text) {
 			root.listing = text;
 			root.wallpapers = Wallpaper.entries(text);
-			thumbsFile.command = ["sh", "-c", "mkdir -p " + Shell.shellQuote(root.thumbDir) + " && ls " + Shell.shellQuote(root.thumbDir)];
-			thumbsFile.running = true;
-		}
-	}
-
-	Request {
-		id: thumbsFile
-
-		command: ["sh", "-c", "true"]
-
-		onDone: function (text) {
-			root.wallpapers = Wallpaper.entries(root.listing, root.thumbDir, Wallpaper.thumbsFromText(text));
-
-			if (root.refreshing) {
-				root.refreshing = false;
-				return;
-			}
-
 			root.selectActive();
-			root.buildThumbs();
 		}
 	}
 
-	Request {
-		id: thumbsJob
+	Item {
+		id: preloader
 
-		command: ["sh", "-c", "true"]
+		visible: false
 
-		onDone: function () {
-			root.refreshing = true;
-			thumbsFile.running = true;
+		function preloadAll() {
+			for (var i = 0; i < root.wallpapers.length; i++) {
+				Qt.createQmlObject('
+					import QtQuick;
+					Image {
+						source: "file://" + root.wallpapers[' + i + '].path;
+						sourceSize.width: ' + root.loaderWidth + ';
+						cache: true;
+						asynchronous: true;
+					}
+				', preloader, "preload_" + i);
+			}
 		}
 	}
 
@@ -301,18 +272,10 @@ PanelWindow {
 						anchors.fill: parent
 						fillMode: Image.PreserveAspectCrop
 						cache: true
-						asynchronous: true
+						asynchronous: false
 						retainWhileLoading: true
-						opacity: status === Image.Ready ? 1 : 0
 						sourceSize.width: root.loaderWidth
-						source: root.shotPath === "" ? "" : "file://" + root.shotPath
-
-						Behavior on opacity {
-							NumberAnimation {
-								duration: Config.wallpaperFadeMs
-								easing.type: Easing.OutCubic
-							}
-						}
+						source: root.held === null ? "" : "file://" + root.held.preview
 					}
 
 					Text {
