@@ -18,38 +18,43 @@ Item {
 	readonly property var temp: Forecast.splitTemp(Weather.temp)
 	readonly property string place: Weather.location !== "" ? Weather.location : Weather.place
 	readonly property string status: root.ready ? Weather.description : (Weather.status !== "" ? Weather.status : "Loading")
-	readonly property var rows: [
-		{ label: "Feels like", value: Weather.feels },
-		{ label: "Wind", value: Weather.wind },
-		{ label: "Humidity", value: Weather.humidity }
-	]
+	readonly property var match: root.bestMatch()
+	readonly property bool hasGhost: root.placeEditing && root.match !== null && root.ghost !== ""
+	readonly property string ghost: root.ghostText()
+	readonly property bool ghostFits: root.hasGhost && queryMetrics.advanceWidth + ghostMetrics.advanceWidth <= Config.weatherCardWidth
 
 	implicitWidth: Config.weatherCardWidth + Config.weatherCardPadding * 2
 	implicitHeight: card.implicitHeight + Config.weatherCardPadding * 2
 
-	readonly property real rowStep: suggestProto.implicitHeight + Config.weatherCardSuggestGap
-	readonly property int suggestShown: Math.min(suggestList.count, Config.weatherCardSuggestRows)
+	function bestMatch() {
+		const rows = Weather.suggestions;
 
-	function nearestIndex(rows) {
-		if (rows.length === 0)
-			return -1;
-
-		if (Weather.lat === 0 && Weather.lon === 0)
-			return 0;
+		if (rows.length === 0 || root.query.trim() === "")
+			return null;
 
 		let best = 0;
-		let bestD = Forecast.geoDistance(Weather.lat, Weather.lon, rows[0].lat, rows[0].lon);
 
-		for (let i = 1; i < rows.length; i++) {
-			const d = Forecast.geoDistance(Weather.lat, Weather.lon, rows[i].lat, rows[i].lon);
+		if (Weather.lat !== 0 || Weather.lon !== 0) {
+			let bestD = Forecast.geoDistance(Weather.lat, Weather.lon, rows[0].lat, rows[0].lon);
 
-			if (d < bestD) {
-				best = i;
-				bestD = d;
+			for (let i = 1; i < rows.length; i++) {
+				const d = Forecast.geoDistance(Weather.lat, Weather.lon, rows[i].lat, rows[i].lon);
+
+				if (d < bestD) {
+					best = i;
+					bestD = d;
+				}
 			}
 		}
 
-		return best;
+		return rows[best];
+	}
+
+	function ghostText() {
+		const typed = root.query.trim().toLowerCase();
+		const label = root.match ? String(root.match.label) : "";
+
+		return label.toLowerCase().indexOf(typed) === 0 ? label.slice(typed.length) : "";
 	}
 
 	function startEdit() {
@@ -65,14 +70,17 @@ Item {
 		root.placeEditing = false;
 		root.placeFocus = false;
 		root.query = "";
-		suggestList.reset();
 		Weather.search("");
 		root.forceActiveFocus();
 	}
 
+	function completeGhost() {
+		if (root.match)
+			root.query = root.match.label;
+	}
+
 	function commitPlace() {
-		const row = suggestList.current;
-		const label = row ? row.label : root.query.trim();
+		const label = root.query.trim();
 
 		root.stopEdit();
 
@@ -93,7 +101,7 @@ Item {
 			return;
 		}
 
-		if (Input.accept(event)) {
+		if (Input.accept(event) && !root.placeEditing) {
 			root.startEdit();
 			event.accepted = true;
 			return;
@@ -209,7 +217,6 @@ Item {
 					root.query = placeInput.text;
 					weatherSearch.restart();
 				}
-				onAccepted: root.commitPlace()
 				onActiveFocusChanged: if (activeFocus) selectAll()
 
 				Keys.onPressed: function (event) {
@@ -219,9 +226,46 @@ Item {
 						return;
 					}
 
-					if (event.key === Qt.Key_Down || event.key === Qt.Key_Up)
-						suggestList.handleKey(event);
+					if (Input.accept(event)) {
+						root.commitPlace();
+						event.accepted = true;
+						return;
+					}
+
+					if (event.key === Qt.Key_Tab) {
+						root.completeGhost();
+						event.accepted = true;
+					}
 				}
+			}
+
+			TextMetrics {
+				id: queryMetrics
+
+				font.family: Config.fontFamily
+				font.pixelSize: Config.weatherCardPlaceSize
+				text: root.query
+			}
+
+			TextMetrics {
+				id: ghostMetrics
+
+				font.family: Config.fontFamily
+				font.pixelSize: Config.weatherCardPlaceSize
+				text: root.ghost
+			}
+
+			Text {
+				id: ghost
+
+				visible: root.ghostFits
+				x: queryMetrics.advanceWidth
+				anchors.verticalCenter: placeInput.verticalCenter
+
+				font.family: Config.fontFamily
+				font.pixelSize: Config.weatherCardPlaceSize
+				color: Config.muted
+				text: root.ghost
 			}
 
 			MouseArea {
@@ -233,95 +277,6 @@ Item {
 
 				onClicked: root.startEdit()
 			}
-		}
-
-		Item {
-			id: suggestBox
-
-			visible: root.placeEditing && root.suggestShown > 0
-			width: card.width
-			height: root.suggestShown > 0 ? root.suggestShown * root.rowStep - Config.weatherCardSuggestGap : 0
-
-			Selector {
-				id: suggestList
-
-				width: parent.width
-				visibleRows: Config.weatherCardSuggestRows
-				rowHeight: suggestProto.implicitHeight
-				rowSpacing: Config.weatherCardSuggestGap
-				model: Weather.suggestions
-
-				delegate: Text {
-					required property var modelData
-
-					width: ListView.view.rowWidth
-					height: ListView.view.rowHeight
-					elide: Text.ElideRight
-
-					font.family: Config.fontFamily
-					font.pixelSize: Config.weatherCardSuggestSize
-					color: ListView.isCurrentItem ? Config.launcherHighlightText : Config.foreground
-					text: modelData.label
-				}
-			}
-		}
-
-		Rectangle {
-			visible: root.ready
-
-			width: card.width
-			height: Config.weatherCardDivider
-			color: Config.weatherCardDividerColor
-		}
-
-		Column {
-			width: card.width
-			spacing: Config.weatherCardRowGap
-
-			Repeater {
-				model: root.rows
-
-				delegate: Row {
-					required property var modelData
-
-					width: card.width
-
-					Text {
-						width: Config.weatherCardLabelWidth
-						font.family: Config.fontFamily
-						font.pixelSize: Config.weatherCardRowSize
-						color: Config.muted
-						text: modelData.label
-					}
-
-					Text {
-						width: card.width - Config.weatherCardLabelWidth
-						horizontalAlignment: Text.AlignRight
-						font.family: Config.fontFamily
-						font.pixelSize: Config.weatherCardRowSize
-						color: Config.foreground
-						text: modelData.value
-					}
-				}
-			}
-		}
-	}
-
-	Text {
-		id: suggestProto
-
-		visible: false
-		font.family: Config.fontFamily
-		font.pixelSize: Config.weatherCardSuggestSize
-		text: "0"
-	}
-
-	Connections {
-		target: Weather
-
-		function onSuggestionsChanged() {
-			suggestList.currentIndex = root.nearestIndex(Weather.suggestions);
-			suggestList.reset();
 		}
 	}
 

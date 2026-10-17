@@ -304,15 +304,7 @@ const weatherCardUnitSize = 16;
 const weatherCardUnitLift = 4;
 const weatherCardNameSize = 13;
 const weatherCardPlaceSize = 11;
-const weatherCardRowSize = 11;
-const weatherCardRowGap = 6;
-const weatherCardLabelWidth = 72;
-const weatherCardDivider = 1;
-const weatherCardDividerColor = muted;
 const weatherCardSearchDebounce = 200;
-const weatherCardSuggestRows = 5;
-const weatherCardSuggestGap = 4;
-const weatherCardSuggestSize = 11;
 const weatherCodes = {
 	0: { name: "Clear", glyph: "\u{f0599}" },
 	1: { name: "Mainly clear", glyph: "\u{f0595}" },
