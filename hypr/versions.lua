@@ -1,5 +1,6 @@
 local versions = 10
 local namedPrefix = "name:v"
+local sticky = {}
 
 local function slotOf(name)
 	local slot = tonumber(name or "")
@@ -42,6 +43,7 @@ local function jump(version)
 		return
 	end
 
+	sticky[slot] = version
 	hl.dispatch(hl.dsp.focus({ workspace = target(slot, version) }))
 end
 
@@ -53,11 +55,51 @@ local function step(delta)
 	end
 end
 
+local function nameOf(workspace)
+	if type(workspace) == "string" then
+		return workspace
+	end
+
+	if type(workspace) == "number" then
+		return tostring(workspace)
+	end
+
+	if workspace then
+		return workspace.name and tostring(workspace.name)
+	end
+
+	return nil
+end
+
+local function landing(workspace)
+	local slot, version = slotOf(nameOf(workspace))
+
+	if not slot then
+		return
+	end
+
+	if version > 1 then
+		sticky[slot] = version
+		return
+	end
+
+	local wanted = sticky[slot] or 1
+
+	if wanted > 1 then
+		hl.dispatch(hl.dsp.focus({ workspace = target(slot, wanted) }))
+	end
+end
+
+if hl.on then
+	hl.on("workspace.active", landing)
+end
+
 return {
 	versions = versions,
 	slotOf = slotOf,
 	target = target,
 	wrap = wrap,
 	jump = jump,
-	step = step
+	step = step,
+	landing = landing
 }

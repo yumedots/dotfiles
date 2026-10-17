@@ -1,13 +1,17 @@
 local dispatched = {}
+local events = {}
 local state = { name = "4" }
 
 hl = {
     get_active_workspace = function () return { name = state.name } end,
     dispatch = function (dispatcher) dispatched[#dispatched + 1] = dispatcher.workspace end,
     dsp = { focus = function (selector) return selector end },
+    on = function (event, callback) events[event] = callback end,
 }
 
 local versions = dofile("hypr/versions.lua")
+
+assert(type(events["workspace.active"]) == "function", "versions listen for the workspace you land on")
 
 local function last()
     return dispatched[#dispatched]
@@ -52,6 +56,29 @@ local count = #dispatched
 versions.jump(5)
 versions.step(1)
 assert(#dispatched == count, "a workspace of its own has no versions")
+
+state.name = "v6.3"
+local calls = #dispatched
+versions.landing({ name = "v6.3", id = -1 })
+assert(#dispatched == calls, "a versioned landing only remembers the version it holds")
+
+state.name = "6"
+calls = #dispatched
+versions.landing("6")
+assert(#dispatched == calls + 1 and last() == "name:v6.3", "returning to a slot lands on the version it held")
+
+state.name = "v6.3"
+versions.jump(1)
+assert(last() == 6, "jumping to the base version lands on the base workspace")
+
+state.name = "6"
+calls = #dispatched
+versions.landing("6")
+assert(#dispatched == calls, "the base version picked by hand is not yanked back")
+
+calls = #dispatched
+versions.landing("8")
+assert(#dispatched == calls, "a slot that never held a version stays on the base one")
 
 for _, target in ipairs(dispatched) do
     assert(target ~= "special:magic", "versions never touch an unrelated workspace")
