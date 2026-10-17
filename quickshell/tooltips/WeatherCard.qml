@@ -57,6 +57,23 @@ Item {
 		return label.toLowerCase().indexOf(typed) === 0 ? label.slice(typed.length) : "";
 	}
 
+	function syncSuggest() {
+		const typed = root.query.trim().toLowerCase();
+		const label = root.match ? String(root.match.label).toLowerCase() : "";
+
+		if (typed === "") {
+			if (Weather.suggestions.length > 0)
+				Weather.search("");
+
+			return;
+		}
+
+		if (label.indexOf(typed) === 0)
+			return;
+
+		weatherSearch.restart();
+	}
+
 	function startEdit() {
 		root.placeFocus = true;
 		root.placeEditing = true;
@@ -215,7 +232,7 @@ Item {
 
 				onTextEdited: {
 					root.query = placeInput.text;
-					weatherSearch.restart();
+					root.syncSuggest();
 				}
 				onActiveFocusChanged: if (activeFocus) selectAll()
 
