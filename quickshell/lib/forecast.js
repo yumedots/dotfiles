@@ -50,6 +50,35 @@ function parseWeatherGeo(text, region) {
 	};
 }
 
+function weatherSuggestUrl(query) {
+	return "https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(String(query || "").trim()) + "&count=8&language=en&format=json";
+}
+
+function parseWeatherSuggestions(text) {
+	let data = null;
+
+	try {
+		data = JSON.parse(text);
+	} catch (error) {
+		data = null;
+	}
+
+	return ((data && data.results) || []).map(function (row) {
+		return {
+			label: [row.name, row.admin1, row.country].filter(function (part) { return part; }).join(", "),
+			lat: row.latitude,
+			lon: row.longitude
+		};
+	});
+}
+
+function geoDistance(lat, lon, lat2, lon2) {
+	const dx = (lon2 - lon) * Math.cos((lat + lat2) * Math.PI / 360);
+	const dy = lat2 - lat;
+
+	return dx * dx + dy * dy;
+}
+
 function parseCoords(text) {
 	const match = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(String(text || ""));
 

@@ -1,7 +1,6 @@
 import QtQuick
 import Quickshell
 import qs.ui
-import qs.services
 import qs
 
 Item {
@@ -24,15 +23,10 @@ Item {
 	readonly property real gridLeft: Config.calendarMeterColumn + Config.calendarColumnGap * 2 + Config.calendarSeparator
 	readonly property string monthText: Qt.formatDate(new Date(root.cursor.getFullYear(), root.cursor.getMonth(), 1), "MMMM")
 	readonly property string yearText: String(root.cursor.getFullYear())
-	readonly property bool hasWeather: Weather.temp !== ""
-	readonly property string weatherName: Weather.description
-	readonly property string weatherPlace: Weather.location === "" ? Weather.description : Weather.location
-	readonly property var weatherTemp: Forecast.splitTemp(Weather.temp)
 	readonly property real mondayInk: (Config.calendarCellWidth - weekdayMetrics.width) / 2 + weekdayMetrics.tightBoundingRect.x
 	readonly property real titleX: root.gridLeft + root.mondayInk - monthMetrics.tightBoundingRect.x
 	readonly property real gridTop: Config.calendarCellHeight + calendar.spacing
 	readonly property real meterTop: root.gridTop + Math.max(0, Config.calendarRows - root.meters.length) * Config.calendarCellHeight
-	readonly property real placeTop: (Config.calendarCellHeight - weatherPlace.height) / 2
 
 	implicitWidth: card.implicitWidth + Config.calendarPadding * 2
 	implicitHeight: card.implicitHeight + Config.calendarPadding * 2
@@ -100,7 +94,7 @@ Item {
 					id: titleRow
 
 					width: boxColumn.width
-					height: Math.max(title.height, weatherNow.height, arrows.height)
+					height: Math.max(title.height, arrows.height)
 
 					Row {
 						id: title
@@ -125,52 +119,6 @@ Item {
 							font.pixelSize: Config.calendarMonthSize
 							color: Config.calendarBase
 							text: root.yearText
-						}
-					}
-
-					Row {
-						id: weatherNow
-
-						x: 0
-						anchors.verticalCenter: parent.verticalCenter
-						spacing: Config.calendarWeatherGap
-
-						Text {
-							font.family: Config.fontFamily
-							font.pixelSize: Config.calendarWeatherSize
-							color: root.hasWeather ? Config.foreground : Config.muted
-							text: root.hasWeather ? Weather.icon : Config.weatherLoadingIcon
-						}
-
-						Row {
-							visible: root.hasWeather
-							spacing: 0
-
-							Text {
-								font.family: Config.fontFamily
-								font.pixelSize: Config.calendarMonthSize
-								color: Config.foreground
-								text: root.weatherTemp.value
-							}
-
-							Text {
-								visible: root.weatherTemp.unit !== ""
-								font.family: Config.fontFamily
-								font.pixelSize: Config.calendarWeatherUnitSize
-								color: Config.foreground
-								text: root.weatherTemp.unit
-							}
-						}
-
-						Text {
-							visible: root.hasWeather && root.weatherName !== ""
-
-							width: Math.min(implicitWidth, Config.calendarWeatherNameWidth)
-							elide: Text.ElideRight
-							font.family: Config.fontFamily
-							font.pixelSize: Config.calendarWeatherNameSize
-							color: Config.foreground
-							text: root.weatherName
 						}
 					}
 
@@ -275,25 +223,6 @@ Item {
 								color: Config.foreground
 							}
 						}
-					}
-				}
-
-				Item {
-					id: placeRow
-
-					width: meterColumn.width
-					height: weatherPlace.height
-					y: root.placeTop
-
-					Text {
-						id: weatherPlace
-
-						x: 0
-						visible: root.weatherPlace !== ""
-						font.family: Config.fontFamily
-						font.pixelSize: Config.calendarWeekdaySize
-						color: Config.foreground
-						text: root.weatherPlace
 					}
 				}
 			}

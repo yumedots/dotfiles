@@ -23,6 +23,7 @@ Item {
 	property bool loading: false
 	property string status: ""
 	property string tracked: ""
+	property var suggestions: []
 
 	readonly property string dir: Quickshell.shellDir + "/cache/weather"
 	readonly property string placeFile: root.dir + "/place"
@@ -98,8 +99,33 @@ Item {
 		geocode.running = true;
 	}
 
-	function observe() {
-		if (Config.weatherStationCount <= 0 || root.placeFailed)
+	function search(query) {
+		const text = String(query || "").trim();
+
+		if (text === "") {
+			root.suggestions = [];
+			return;
+		}
+
+		suggest.command = Shell.curl(Forecast.weatherSuggestUrl(text));
+		suggest.running = true;
+	}
+
+	function choose(label) {
+		if (label === "")
+			return;
+
+		root.tracked = label;
+		root.stations = [];
+		root.placeFailed = false;
+		root.suggestions = [];
+		root.loading = false;
+		placeWrite.command = Shell.writeCommand(root.placeFile, label);
+		placeWrite.running = true;
+		root.refresh(true);
+	}
+
+	function observe() {		if (Config.weatherStationCount <= 0 || root.placeFailed)
 			return;
 
 		if (root.stations.length > 0) {
@@ -143,6 +169,8 @@ Item {
 			if (root.place !== root.wanted) {
 				root.stations = [];
 				root.placeFailed = false;
+				root.lat = 0;
+				root.lon = 0;
 			}
 
 			if (!stale && root.temp !== "" && root.place === root.wanted) {
@@ -203,6 +231,18 @@ Item {
 			root.save();
 			root.observe();
 		}
+	}
+
+	Request {
+		id: suggest
+
+		onDone: function (text) {
+			root.suggestions = Forecast.parseWeatherSuggestions(text);
+		}
+	}
+
+	Request {
+		id: placeWrite
 	}
 
 	Request {

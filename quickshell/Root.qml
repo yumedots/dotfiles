@@ -207,7 +207,7 @@ ShellRoot {
 	}
 
 	Instantiator {
-		model: shellRoot.isLauncher ? [] : [["clipboard", "clipboard"], ["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"], ["bareBar", "bareBar"]]
+		model: shellRoot.isLauncher ? [] : [["clipboard", "clipboard"], ["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["weather", "weather"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"], ["bareBar", "bareBar"]]
 
 		delegate: GlobalShortcut {
 			required property var modelData
@@ -268,6 +268,10 @@ ShellRoot {
 
 		function calendar() {
 			shellRoot.openWidget("clock", true);
+		}
+
+		function weather() {
+			shellRoot.openWidget("weather", true);
 		}
 
 		function notifications() {

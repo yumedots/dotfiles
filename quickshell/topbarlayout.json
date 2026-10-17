@@ -10,7 +10,8 @@
 			],
 			"center": [
 				{ "id": "notify" },
-				{ "id": "clock" }
+				{ "id": "clock" },
+				{ "id": "weather" }
 			],
 			"right": [
 				{ "id": "tray" },

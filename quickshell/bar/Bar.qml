@@ -45,6 +45,7 @@ PanelWindow {
 	function componentFor(id) {
 		if (id === "workspaces") return workspacesComponent;
 		if (id === "clock") return clockComponent;
+		if (id === "weather") return weatherComponent;
 		if (id === "notify") return notifyComponent;
 		if (id === "github") return githubComponent;
 		if (id === "tray") return trayComponent;
@@ -202,6 +203,7 @@ PanelWindow {
 
 	Component { id: workspacesComponent; Workspaces {} }
 	Component { id: clockComponent; Clock {} }
+	Component { id: weatherComponent; WeatherStat {} }
 	Component { id: notifyComponent; NotifyStat {} }
 	Component { id: githubComponent; ContribStat {} }
 	Component { id: trayComponent; Tray {} }
