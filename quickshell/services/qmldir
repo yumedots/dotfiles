@@ -6,3 +6,4 @@ singleton BarInk 1.0 BarInk.qml
 singleton Notifications 1.0 Notifications.qml
 singleton Github 1.0 Github.qml
 singleton Weather 1.0 Weather.qml
+WeatherSlot 1.0 WeatherSlot.qml

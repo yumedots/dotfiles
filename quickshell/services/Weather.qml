@@ -17,20 +17,27 @@ Item {
 	property real lat: 0
 	property real lon: 0
 	property int code: -1
+	property int primaryCode: -1
 	property var stations: []
 	property bool placeFailed: false
 	property real fetched: 0
 	property bool loading: false
 	property string status: ""
-	property string tracked: ""
+	property var places: []
+	property int index: 0
 	property var suggestions: []
 
 	readonly property string dir: Quickshell.shellDir + "/cache/weather"
 	readonly property string placeFile: root.dir + "/place"
+	readonly property string tracked: root.places[root.index] || ""
 	readonly property string wanted: root.tracked !== "" ? root.tracked : Config.weatherLocation
 	readonly property string cacheFile: root.dir + "/current.json"
 	readonly property var codeInfo: Forecast.weatherCodeInfo(root.code, Config.weatherCodes, Config.weatherIcon)
 	readonly property string icon: root.codeInfo.glyph
+	readonly property var primaryInfo: Forecast.weatherCodeInfo(root.primaryCode, Config.weatherCodes, Config.weatherIcon)
+	readonly property string primaryIcon: root.primaryInfo.glyph
+
+	onCodeChanged: if (root.index === 0) root.primaryCode = root.code
 
 	function adopt(cached) {
 		root.description = cached.description || "";
@@ -75,6 +82,23 @@ Item {
 	}
 
 	function locate() {
+		if (root.wanted === "") {
+			root.loading = false;
+			root.status = "no location";
+			root.description = "";
+			root.place = "";
+			root.location = "";
+			root.temp = "";
+			root.feels = "";
+			root.wind = "";
+			root.humidity = "";
+			root.stations = [];
+			root.code = -1;
+			root.lat = 0;
+			root.lon = 0;
+			return;
+		}
+
 		const fixed = Forecast.parseCoords(Config.weatherCoords);
 
 		if (fixed) {
@@ -111,17 +135,66 @@ Item {
 		suggest.running = true;
 	}
 
+	function slot(at) {
+		return slotRepeater.itemAt(at);
+	}
+
+	function slots() {
+		const rows = root.places.slice();
+
+		while (rows.length < Config.weatherPlaceCount)
+			rows.push("");
+
+		return rows.slice(0, Config.weatherPlaceCount);
+	}
+
+	function store() {
+		placeWrite.command = Shell.writeCommand(root.placeFile, root.slots().join("\n"));
+		placeWrite.running = true;
+	}
+
+	function load(text) {
+		const rows = String(text || "").split("\n").map(function (row) { return row.trim(); });
+
+		while (rows.length < Config.weatherPlaceCount)
+			rows.push("");
+
+		for (let i = 1; i < Config.weatherPlaceCount; i++)
+			rows[i] = rows[i] !== "" ? rows[i] : (Config.weatherPlaceDefaults[i - 1] || "");
+
+		root.places = rows.slice(0, Config.weatherPlaceCount);
+		root.index = 0;
+	}
+
 	function choose(label) {
 		if (label === "")
 			return;
 
-		root.tracked = label;
+		const rows = root.slots();
+
+		rows[root.index] = label;
+		root.places = rows;
 		root.stations = [];
 		root.placeFailed = false;
 		root.suggestions = [];
 		root.loading = false;
-		placeWrite.command = Shell.writeCommand(root.placeFile, label);
-		placeWrite.running = true;
+		root.store();
+		root.refresh(true);
+	}
+
+	function shift(step) {
+		const count = Config.weatherPlaceCount;
+		const next = ((root.index + step) % count + count) % count;
+
+		if (next === root.index)
+			return;
+
+		root.index = next;
+		root.stations = [];
+		root.placeFailed = false;
+		root.loading = false;
+		root.lat = 0;
+		root.lon = 0;
 		root.refresh(true);
 	}
 
@@ -138,6 +211,16 @@ Item {
 
 	Component.onCompleted: placeRead.running = true
 
+	Repeater {
+		id: slotRepeater
+
+		model: Config.weatherPlaceCount
+
+		WeatherSlot {
+			place: root.slots()[index] || ""
+		}
+	}
+
 	Timer {
 		interval: Config.weatherRefreshMs
 		running: true
@@ -152,7 +235,7 @@ Item {
 		command: Shell.readCommand(root.placeFile)
 
 		onDone: function (text) {
-			root.tracked = text.trim();
+			root.load(text);
 			root.refresh(false);
 		}
 	}
