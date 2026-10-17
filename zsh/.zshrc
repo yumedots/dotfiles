@@ -111,3 +111,6 @@ source $ZSH/oh-my-zsh.sh
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
 export BROWSER="helium-browser"
+
+# opencode
+export PATH=/home/gabriel/.opencode/bin:$PATH
