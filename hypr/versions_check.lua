@@ -80,6 +80,25 @@ calls = #dispatched
 versions.landing("8")
 assert(#dispatched == calls, "a slot that never held a version stays on the base one")
 
+state.name = "v8.5"
+calls = #dispatched
+versions.visit(8, 5)
+assert(#dispatched == calls + 1 and last() == "name:v8.5", "visiting a version focuses it")
+
+state.name = "8"
+calls = #dispatched
+versions.landing("8")
+assert(last() == "name:v8.5", "a visited slot returns to the version it was visited on")
+
+calls = #dispatched
+versions.visit(8, 1)
+assert(last() == 8, "visiting the base version lands on the plain workspace")
+
+state.name = "8"
+calls = #dispatched
+versions.landing("8")
+assert(#dispatched == calls, "the visited base version is not yanked back")
+
 for _, target in ipairs(dispatched) do
     assert(target ~= "special:magic", "versions never touch an unrelated workspace")
 end

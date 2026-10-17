@@ -2,6 +2,24 @@ local versions = 10
 local namedPrefix = "name:v"
 local sticky = {}
 
+local function save()
+	local base = os.getenv("XDG_CONFIG_HOME") or ((os.getenv("HOME") or "") .. "/.config")
+	local parts = {}
+
+	for slot, version in pairs(sticky) do
+		if version > 1 then
+			parts[#parts + 1] = '"' .. slot .. '":' .. version
+		end
+	end
+
+	local handle = io.open(base .. "/quickshell/cache/versions.json", "w")
+
+	if handle then
+		handle:write("{" .. table.concat(parts, ",") .. "}")
+		handle:close()
+	end
+end
+
 local function slotOf(name)
 	local slot = tonumber(name or "")
 
@@ -44,6 +62,7 @@ local function jump(version)
 	end
 
 	sticky[slot] = version
+	save()
 	hl.dispatch(hl.dsp.focus({ workspace = target(slot, version) }))
 end
 
@@ -80,6 +99,7 @@ local function landing(workspace)
 
 	if version > 1 then
 		sticky[slot] = version
+		save()
 		return
 	end
 
@@ -90,9 +110,21 @@ local function landing(workspace)
 	end
 end
 
+local function visit(slot, version)
+	if not slot or version < 1 or version > versions then
+		return
+	end
+
+	sticky[slot] = version
+	save()
+	hl.dispatch(hl.dsp.focus({ workspace = target(slot, version) }))
+end
+
 if hl.on then
 	hl.on("workspace.active", landing)
 end
+
+save()
 
 return {
 	versions = versions,
@@ -101,5 +133,6 @@ return {
 	wrap = wrap,
 	jump = jump,
 	step = step,
-	landing = landing
+	landing = landing,
+	visit = visit
 }
