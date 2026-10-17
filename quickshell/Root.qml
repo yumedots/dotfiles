@@ -137,6 +137,15 @@ ShellRoot {
 		Handoff.run(shellRoot.closeLauncherUnderWidget);
 	}
 
+	function powerMenu() {
+		if (powerMenuWindow.shown)
+			return;
+
+		powerMenuWindow.open();
+		shellRoot.closeBarPopups();
+		Handoff.run(shellRoot.closeLauncherUnderWidget);
+	}
+
 	function trayGroup() {
 		if (bars.instances.length === 0)
 			return;
@@ -186,14 +195,14 @@ ShellRoot {
 	}
 
 	Instantiator {
-		model: shellRoot.isLauncher ? [["launcher", "launcher"], ["windows", "windows"]] : []
+		model: shellRoot.isLauncher ? [["launcher", "launcher"], ["windows", "windows"], ["powerMenu", "powerMenu"]] : []
 
 		delegate: GlobalShortcut {
 			required property var modelData
 
 			name: modelData[0]
 
-			onPressed: modelData[1] === "launcher" ? shellRoot.launcher() : shellRoot.windowSwitcher()
+			onPressed: modelData[1] === "launcher" ? shellRoot.launcher() : (modelData[1] === "windows" ? shellRoot.windowSwitcher() : shellRoot.powerMenu())
 		}
 	}
 
@@ -315,6 +324,10 @@ ShellRoot {
 			shellRoot.openWidget("power", true);
 		}
 
+		function powerMenu() {
+			shellRoot.powerMenu();
+		}
+
 		function tray() {
 			shellRoot.trayGroup();
 		}
@@ -398,11 +411,17 @@ ShellRoot {
 	Launcher {
 		id: launcherWindow
 		alwaysMapped: shellRoot.isLauncher
+		onPowerRequested: shellRoot.powerMenu()
 	}
 
 	WallpaperPicker {
 		id: wallpaperWindow
 		active: !shellRoot.isLauncher
 		alwaysMapped: !shellRoot.isLauncher
+	}
+
+	PowerMenu {
+		id: powerMenuWindow
+		alwaysMapped: true
 	}
 }

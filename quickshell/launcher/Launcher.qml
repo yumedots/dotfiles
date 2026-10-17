@@ -10,6 +10,8 @@ import qs.services
 PanelWindow {
 	id: root
 
+	signal powerRequested()
+
 	property bool shown: false
 	property string query: ""
 	property var pins: []
@@ -385,6 +387,11 @@ PanelWindow {
 		Quickshell.execDetached(["quickshell", "ipc", "call", "shell", "wallpaper"]);
 	}
 
+	function openPowerMenu() {
+		root.close();
+		root.powerRequested();
+	}
+
 	function remember(entry) {
 		if (!Entries.rememberable(entry))
 			return;
@@ -527,6 +534,11 @@ PanelWindow {
 		}
 
 		if (entry.kind === "group") {
+			if (entry.group === "power") {
+				root.openPowerMenu();
+				return;
+			}
+
 			root.group = entry.group;
 			root.query = "";
 			field.clear();

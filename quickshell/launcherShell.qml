@@ -25,6 +25,8 @@ Root {
 			windowSwitcher();
 		else if (action === "clipboard")
 			clipboard();
+		else if (action === "powerMenu")
+			powerMenu();
 
 		if (action)
 			Quickshell.execDetached(["rm", wake.path]);
