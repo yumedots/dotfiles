@@ -5,10 +5,17 @@ REPO=$(cd "$(dirname "$0")/.." && pwd)
 RUN="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr-test"
 INST="$RUN/instances"
 QLOG_DIR="/run/user/$(id -u)/quickshell/by-id"
+WT_BASE="${HYPR_TEST_WT_BASE:-${XDG_CACHE_HOME:-$HOME/.cache}/hypr-test}"
+MIN_FREE_MB="${HYPR_TEST_MIN_FREE_MB:-1024}"
+MAX_SHOTS="${HYPR_TEST_MAX_SHOTS:-40}"
+OWNER="${HYPR_TEST_OWNER:-$USER}"
 
 usage() {
-	echo "usage: hypr-test [--id <id>] start|shot|run <cmd> [args...]|stop|list" >&2
-	echo "  or set HYPR_TEST_ID=<id>; with neither, the single live instance is used" >&2
+	echo "usage: hypr-test [--id <id>] start|shot|run <cmd> [args...]|stop|list|gc [--all]" >&2
+	echo "  or set HYPR_TEST_ID=<id>; with neither, a single live instance is used" >&2
+	echo "  instances are owned by \$HYPR_TEST_OWNER (default: $OWNER); another owner's instance needs HYPR_TEST_FORCE=1" >&2
+	echo "  HYPR_TEST_WT_BASE=<dir> worktree root (default: $WT_BASE)" >&2
+	echo "  HYPR_TEST_MIN_FREE_MB=<mb> free space required to start (default: $MIN_FREE_MB)" >&2
 	exit 1
 }
 
@@ -20,9 +27,9 @@ fail() {
 qslog() {
 	local f
 	if [ -n "${QS_ID:-}" ]; then
-		f="$QLOG_DIR/$QS_ID/log.log"
+		f=$(ls -t "$QLOG_DIR/$QS_ID"/log.qslog "$QLOG_DIR/$QS_ID"/log.log 2>/dev/null | head -1 || true)
 	else
-		f=$(ls -t "$QLOG_DIR"/*/log.log 2>/dev/null | head -1 || true)
+		f=$(ls -t "$QLOG_DIR"/*/log.qslog "$QLOG_DIR"/*/log.log 2>/dev/null | head -1 || true)
 	fi
 	if [ -n "$f" ] && [ -f "$f" ]; then
 		echo "--- quickshell log: $f ---" >&2
@@ -53,6 +60,43 @@ each_id() {
 	done
 }
 
+field() {
+	sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1
+}
+
+owner_of() {
+	field "$1" OWNER
+}
+
+owns() {
+	local state=$1 o
+	[ "${HYPR_TEST_FORCE:-}" = 1 ] && return 0
+	[ -f "$state" ] || return 0
+	o=$(owner_of "$state")
+	[ -z "$o" ] && return 0
+	[ "$o" = "$OWNER" ]
+}
+
+lock() {
+	mkdir -p "$RUN"
+	exec 9>"$RUN/.lock"
+	flock -w 20 9 || fail "another hypr-test run holds the lock ($RUN/.lock); try again later"
+}
+
+free_mb() {
+	mkdir -p "$1" 2>/dev/null || return 0
+	df -Pm "$1" 2>/dev/null | awk 'NR==2 {print $4}'
+}
+
+need_space() {
+	local dir=$1 mb
+	mb=$(free_mb "$dir")
+	[ -n "$mb" ] || return 0
+	if [ "$mb" -lt "$MIN_FREE_MB" ]; then
+		fail "only ${mb}MB free on $dir, need ${MIN_FREE_MB}MB (hypr-test gc, or lower HYPR_TEST_MIN_FREE_MB)"
+	fi
+}
+
 resolve_id() {
 	if [ -n "${HYPR_TEST_ID:-}" ]; then
 		echo "$HYPR_TEST_ID"
@@ -79,6 +123,7 @@ load() {
 	[ -f "$STATE" ] || fail "instance '$HYPR_TEST_ID' has no state"
 	. "$STATE"
 	SHOTS="$(inst_dir "$HYPR_TEST_ID")/shots"
+	live "$STATE" || fail "instance '$HYPR_TEST_ID' is dead (hypr-test gc, or hypr-test start)"
 }
 
 hypr_pid_by_sig() {
@@ -112,33 +157,64 @@ print(m[0]["name"]) if m else None' 2>/dev/null || true
 
 teardown_wt() {
 	local wt="${1:-}"
+	[ -n "$wt" ] || return 0
 	git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || rm -rf "$wt"
 	git -C "$REPO" worktree prune
 }
 
+kill_instance() {
+	local state=$1 hp
+	[ -f "$state" ] || return 0
+	(
+		. "$state"
+		hp=$(hypr_pid_by_sig "${SIG:-}")
+		[ -n "${QS_PID:-}" ] && kill "$QS_PID" 2>/dev/null || true
+		[ -n "${AWWW_PID:-}" ] && kill "$AWWW_PID" 2>/dev/null || true
+		[ -n "$hp" ] && kill "$hp" 2>/dev/null || true
+		if [ -n "${WORKTREE:-}" ]; then
+			pkill -f "$WORKTREE/quickshell/shell.qml" 2>/dev/null || true
+		fi
+		sleep 1
+		[ -n "$hp" ] && kill -9 "$hp" 2>/dev/null || true
+		if [ -n "${WORKTREE:-}" ]; then
+			pkill -9 -f "$WORKTREE/quickshell/shell.qml" 2>/dev/null || true
+		fi
+	) || true
+}
+
 abort_start() {
 	local hp="${1:-}" wt="$2" msg="$3"
-	pkill -f "$wt/quickshell/shell.qml" 2>/dev/null || true
+	if [ -n "$wt" ]; then
+		pkill -f "$wt/quickshell/shell.qml" 2>/dev/null || true
+	fi
 	[ -n "$hp" ] && kill "$hp" 2>/dev/null || true
 	teardown_wt "$wt"
 	fail "$msg"
 }
 
+prune_shots() {
+	local shots=$1
+	ls -1t "$shots"/*.png 2>/dev/null | tail -n +$((MAX_SHOTS + 1)) | xargs -r rm -f
+}
+
 cmd_start() {
+	lock
 	local id="${HYPR_TEST_ID:-$(date +%s)-$$}"
 	local dir="$INST/$id"
 	local state="$dir/state"
-	local wt="$dir/worktree"
+	local wt="$WT_BASE/$id"
 	local shots="$dir/shots"
 
 	if [ -f "$state" ]; then
 		. "$state"
 		if [ -n "${QS_PID:-}" ] && kill -0 "$QS_PID" 2>/dev/null; then
-			fail "instance '$id' already running"
+			fail "instance '$id' already running (owner ${OWNER:-unknown})"
 		fi
 	fi
 
-	mkdir -p "$INST" "$shots"
+	need_space "$RUN"
+	need_space "$WT_BASE"
+	mkdir -p "$INST" "$shots" "$WT_BASE"
 	rm -rf "$wt"
 	git -C "$REPO" worktree prune
 	git -C "$REPO" worktree add --detach "$wt" HEAD >/dev/null 2>&1 || fail "git worktree add failed"
@@ -155,11 +231,10 @@ cmd_start() {
 	if [ "${HYPR_TEST_VISIBLE:-}" = 1 ]; then
 		rule="name=\"hyprtest-show-$id\", match={class=\"aquamarine\"}, float=true, move=\"40 40\", no_initial_focus=true, no_anim=true"
 	fi
-	if ! hyprctl eval "_G.HYPRTEST_RULE_$lid = hl.window_rule({$rule})" >/dev/null; then
-		teardown_wt "$wt"
-		fail "cannot register window rule on real session"
+	if ! hyprctl eval "_G.HYPRTEST_RULE_$lid = hl.window_rule({$rule})" >/dev/null 2>&1; then
+		echo "hypr-test: warning: no live session to hide the nested window in; it will show up" >&2
 	fi
-	setsid env -u HYPRLAND_INSTANCE_SIGNATURE XDG_CONFIG_HOME="$wt" Hyprland </dev/null >>"$dir/hyprland.log" 2>&1 &
+	setsid env -u HYPRLAND_INSTANCE_SIGNATURE XDG_CONFIG_HOME="$wt" Hyprland </dev/null >>"$dir/hyprland.log" 2>&1 9>&- &
 	local hp=$!
 	local sig="" sock="" line="" i
 	for i in $(seq 1 40); do
@@ -176,7 +251,7 @@ cmd_start() {
 		tail -n 40 "$dir/hyprland.log" >&2
 		abort_start "$hp" "$wt" "nested Hyprland did not start"
 	fi
-	setsid env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" XDG_CONFIG_HOME="$wt" quickshell -n -p "$wt/quickshell/shell.qml" </dev/null >>"$dir/quickshell.log" 2>&1 &
+	setsid env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" XDG_CONFIG_HOME="$wt" quickshell -n -p "$wt/quickshell/shell.qml" </dev/null >>"$dir/quickshell.log" 2>&1 9>&- &
 	local qid="" qpid="" out=""
 	for i in $(seq 1 40); do
 		line=$(qs list --all -j 2>/dev/null | qs_instance "$wt/quickshell/shell.qml" || true)
@@ -200,7 +275,7 @@ cmd_start() {
 		sleep 0.5
 	done
 	[ -n "$out" ] || out=WAYLAND-1
-	setsid env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" XDG_CONFIG_HOME="$wt" awww-daemon </dev/null >>"$dir/awww.log" 2>&1 &
+	setsid env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" XDG_CONFIG_HOME="$wt" awww-daemon </dev/null >>"$dir/awww.log" 2>&1 9>&- &
 	local apid=$!
 	for i in $(seq 1 20); do
 		env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" awww query >/dev/null 2>&1 && break
@@ -214,9 +289,9 @@ cmd_start() {
 			env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" awww query 2>/dev/null | grep -qF "$wall" && break
 		done
 	fi
-	printf 'ID=%s\nHYPR_PID=%s\nQS_PID=%s\nQS_ID=%s\nSIG=%s\nSOCK=%s\nWORKTREE=%s\nOUTPUT=%s\nAWWW_PID=%s\n' \
-		"$id" "$hp" "$qpid" "$qid" "$sig" "$sock" "$wt" "$out" "$apid" >"$state"
-	echo "started: id $id, hyprland pid $hp, quickshell $qid pid $qpid, output $out"
+	printf 'ID=%s\nOWNER=%s\nSTARTED=%s\nHYPR_PID=%s\nQS_PID=%s\nQS_ID=%s\nSIG=%s\nSOCK=%s\nWORKTREE=%s\nOUTPUT=%s\nAWWW_PID=%s\n' \
+		"$id" "$OWNER" "$(date +%s)" "$hp" "$qpid" "$qid" "$sig" "$sock" "$wt" "$out" "$apid" >"$state"
+	echo "started: id $id, hyprland pid $hp, quickshell $qid pid $qpid, output $out, owner $OWNER"
 	echo "worktree: $wt"
 	echo "use it: HYPR_TEST_ID=$id scripts/hypr-test shot"
 	if [ "${HYPR_TEST_VISIBLE:-}" = 1 ]; then
@@ -232,6 +307,7 @@ cmd_shot() {
 		qslog
 		fail "grim failed for output $OUTPUT"
 	fi
+	prune_shots "$SHOTS"
 	echo "$f"
 }
 
@@ -242,22 +318,20 @@ cmd_run() {
 }
 
 cmd_stop() {
+	lock
 	HYPR_TEST_ID=$(resolve_id)
 	STATE=$(state_of "$HYPR_TEST_ID")
 	local dir
 	dir=$(inst_dir "$HYPR_TEST_ID")
 	if [ -f "$STATE" ]; then
-		. "$STATE"
-		local hp
-		hp=$(hypr_pid_by_sig "${SIG:-}")
-		pkill -f "$WORKTREE/quickshell/shell.qml" 2>/dev/null || true
-		[ -n "${AWWW_PID:-}" ] && kill "$AWWW_PID" 2>/dev/null || true
-		[ -n "$hp" ] && kill "$hp" 2>/dev/null || true
-		sleep 1
-		[ -n "$hp" ] && kill -9 "$hp" 2>/dev/null || true
-		pkill -9 -f "$WORKTREE/quickshell/shell.qml" 2>/dev/null || true
+		if ! owns "$STATE"; then
+			fail "instance '$HYPR_TEST_ID' belongs to owner $(owner_of "$STATE") (HYPR_TEST_FORCE=1 to stop it anyway)"
+		fi
+		local wt
+		wt=$(field "$STATE" WORKTREE)
+		kill_instance "$STATE"
 		rm -f "$STATE"
-		teardown_wt "$WORKTREE"
+		teardown_wt "$wt"
 	fi
 	if [ "$HYPR_TEST_ID" != legacy ]; then
 		rm -rf "$dir"
@@ -265,14 +339,54 @@ cmd_stop() {
 	echo "stopped $HYPR_TEST_ID"
 }
 
-cmd_list() {
-	local id
+cmd_gc() {
+	lock
+	local all="${1:-}" id state dir wt o killed=0 orphans=0 hp w
+	for d in "$WT_BASE"/*/; do
+		[ -d "$d" ] || continue
+		wt=${d%/}
+		id=$(basename "$wt")
+		[ -f "$(state_of "$id")" ] && continue
+		git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || rm -rf "$wt"
+		echo "gc worktree $id"
+		orphans=$((orphans + 1))
+	done
 	while read -r id; do
-		if live "$(state_of "$id")"; then echo "$id running"; else echo "$id dead"; fi
+		dir=$(inst_dir "$id")
+		state="$dir/state"
+		o=$(owner_of "$state")
+		if ! owns "$state"; then
+			echo "$id kept (owner ${o:-unknown})"
+			continue
+		fi
+		if live "$state"; then
+			[ "$all" = --all ] || { echo "$id running"; continue; }
+		fi
+		wt=$(field "$state" WORKTREE)
+		kill_instance "$state"
+		teardown_wt "$wt"
+		rm -rf "$dir"
+		echo "gc $id"
+		killed=$((killed + 1))
+	done < <(each_id)
+	git -C "$REPO" worktree prune
+	echo "gc done: $killed instance(s), $orphans worktree(s); free $(free_mb "$RUN")MB on $RUN, $(free_mb "$WT_BASE")MB on $WT_BASE"
+}
+
+cmd_list() {
+	local id state age o wt now
+	now=$(date +%s)
+	while read -r id; do
+		state=$(state_of "$id")
+		o=$(owner_of "$state")
+		age=$((now - $(field "$state" STARTED 2>/dev/null || echo "$now")))
+		wt=$(field "$state" WORKTREE)
+		if live "$state"; then echo "$id running owner=${o:-?} age=${age}s wt=$wt"; else echo "$id dead owner=${o:-?} age=${age}s"; fi
 	done < <(each_id)
 	if [ -f "$RUN/state" ]; then
-		if live "$RUN/state"; then echo "legacy running"; else echo "legacy dead"; fi
+		if live "$RUN/state"; then echo "legacy running owner=$(owner_of "$RUN/state")"; else echo "legacy dead"; fi
 	fi
+	echo "free: $(free_mb "$RUN")MB on $RUN, $(free_mb "$WT_BASE")MB on $WT_BASE"
 }
 
 if [ "${1:-}" = "--id" ]; then
@@ -287,5 +401,6 @@ case "${1:-}" in
 	run) shift; cmd_run "$@" ;;
 	stop) shift; cmd_stop ;;
 	list) shift; cmd_list ;;
+	gc) shift; cmd_gc "${1:-}" ;;
 	*) usage ;;
 esac
