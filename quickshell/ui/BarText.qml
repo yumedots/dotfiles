@@ -14,6 +14,8 @@ Item {
 	property var onActivate
 	property bool popupKeyboard: true
 	property bool popupAlignRight: false
+	property bool popupCentered: false
+	property bool popupAlwaysCentered: false
 	property real popupPadding: -1
 	property alias popupContent: popupWindow.contentSource
 
@@ -52,6 +54,8 @@ Item {
 		contentPadding: root.popupPadding
 		wantsKeyboard: root.popupKeyboard
 		alignRight: root.popupAlignRight
+		centered: root.popupCentered
+		alwaysCentered: root.popupAlwaysCentered
 	}
 
 	TextMetrics {

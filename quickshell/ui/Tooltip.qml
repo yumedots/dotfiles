@@ -19,6 +19,7 @@ PanelWindow {
 	property bool slideExit: false
 	property bool alignRight: false
 	property bool centered: false
+	property bool alwaysCentered: false
 	readonly property bool fullscreen: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
 	property bool closable: true
 	property real contentPadding: -1
@@ -59,8 +60,8 @@ PanelWindow {
 		? Util.clamp(Config.popupY, 0, root.restY)
 		: root.posBottom ? root.restY - Config.gapsOut
 			: Config.gapsOut
-	readonly property real cardX: root.fullscreen && root.centered
-		? Util.snap(root.floatX, root.scale)
+	readonly property real cardX: (root.fullscreen || root.alwaysCentered) && root.centered
+		? Util.snap(root.alwaysCentered ? (root.screenWidth - root.cardWidth) / 2 : root.floatX, root.scale)
 		: Util.snap(root.alignRight
 			? root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight
 			: root.outerMargin + Config.tooltipGap + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
@@ -117,7 +118,7 @@ PanelWindow {
 	}
 
 	function open() {
-		const fresh = root.slideExit && !root.shown;
+		const fresh = root.slideExit && !root.shown && !root.alwaysCentered;
 
 		root.refreshAnchor();
 		root.shown = true;
@@ -143,7 +144,7 @@ PanelWindow {
 	}
 
 	function close() {
-		const slide = root.slideExit && root.shown;
+		const slide = root.slideExit && root.shown && !root.alwaysCentered;
 		const from = card.slideOffset;
 		const to = root.slideX - root.cardX;
 
@@ -258,7 +259,7 @@ PanelWindow {
 		Text {
 			id: closeButton
 
-			visible: root.closable && !root.centered
+			visible: root.closable && (!root.centered || root.alwaysCentered)
 			anchors.right: parent.right
 			anchors.top: parent.top
 			anchors.margins: Config.tooltipCloseInset

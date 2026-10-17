@@ -34,6 +34,7 @@ Item {
 	property bool popupSlide: false
 	property bool popupAlignRight: false
 	property bool popupCentered: false
+	property bool popupAlwaysCentered: false
 	property real popupBorderWidth: -1
 	property real popupPadding: -1
 	property alias popupContent: popupWindow.contentSource
@@ -88,6 +89,7 @@ Item {
 		slideExit: root.popupSlide
 		alignRight: root.popupAlignRight
 		centered: root.popupCentered
+		alwaysCentered: root.popupAlwaysCentered
 		closable: root.popupClosable
 		borderWidth: root.popupBorderWidth
 	}

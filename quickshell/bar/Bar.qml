@@ -61,6 +61,14 @@ PanelWindow {
 		return null;
 	}
 
+	function isCenterSlot(id) {
+		const center = bar.layout.center;
+
+		return center !== undefined && center !== null && center.some(function (entry) {
+			return entry && entry.id === id;
+		});
+	}
+
 	function register(id, item) {
 		const next = Object.assign({}, bar.widgets);
 
@@ -237,6 +245,11 @@ PanelWindow {
 					item.mode = modelData.mode;
 				if (item.bar !== undefined)
 					item.bar = bar;
+				if (item.popupCentered !== undefined && bar.isCenterSlot(modelData.id)) {
+					item.popupCentered = true;
+					if (item.popupAlwaysCentered !== undefined)
+						item.popupAlwaysCentered = true;
+				}
 				bar.register(modelData.id, item);
 			}
 
