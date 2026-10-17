@@ -16,6 +16,7 @@ SignalBars 1.0 SignalBars.qml
 SpeedGauge 1.0 SpeedGauge.qml
 StepBar 1.0 StepBar.qml
 Highlight 1.0 Highlight.qml
+IconRow 1.0 IconRow.qml
 Figures 1.0 Figures.qml
 singleton Handoff 1.0 Handoff.qml
 singleton Input 1.0 Input.qml
