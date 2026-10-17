@@ -14,20 +14,6 @@ local function switcherOpen()
     return false
 end
 
-local function closeWidgetsCommand()
-    local command = ""
-
-    if hl.get_layers({ namespace = "launcher" })[1] then
-        command = command .. "qs ipc -p " .. launcherConfig .. " call shell killPopupsLocal 2>/dev/null; "
-    end
-
-    if hl.get_layers({ namespace = "tooltip" })[1] then
-        command = command .. "qs ipc call shell closeBarPopups 2>/dev/null; "
-    end
-
-    return command
-end
-
 local pidFile = (os.getenv("XDG_RUNTIME_DIR") or "/run/user/1000") .. "/qs-launcher.pid"
 
 local function pidFromFile()
@@ -92,16 +78,7 @@ end
 
 local function gotoWorkspace(workspace)
     return function()
-        local close = closeWidgetsCommand()
-
-        if close == "" then
-            hl.dispatch(hl.dsp.focus({ workspace = workspace }))
-            return
-        end
-
-        local target = type(workspace) == "number" and tostring(workspace) or "\"" .. workspace .. "\""
-
-        hl.exec_cmd(close .. "hyprctl dispatch 'hl.dsp.focus({workspace = " .. target .. "})'")
+        hl.dispatch(hl.dsp.focus({ workspace = workspace }))
     end
 end
 
