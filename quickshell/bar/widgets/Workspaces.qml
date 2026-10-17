@@ -117,7 +117,7 @@ Row {
 
 				width: label.implicitWidth + 8
 				height: root.slotHeight
-				figure: "squircle"
+				figure: ws.versioned ? "gear" : "squircle"
 				morph: ws.versioned ? 1 : 0
 				color: root.ink
 				visible: ws.boxed
@@ -129,6 +129,13 @@ Row {
 					NumberAnimation {
 						duration: Config.workspaceMorphMs
 						easing.type: Easing.OutBack
+					}
+				}
+
+				Behavior on exponent {
+					NumberAnimation {
+						duration: Config.workspaceMorphMs
+						easing.type: Easing.OutCubic
 					}
 				}
 			}

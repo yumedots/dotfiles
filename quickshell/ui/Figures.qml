@@ -7,6 +7,7 @@ Shape {
 
 	property string figure: "squircle"
 	property real morph: 0
+	property real exponent: root.preset.exponent
 	property int lobes: Config.figureLobes
 	property real scallop: Config.figureScallop
 	property color color: Config.foreground
@@ -17,7 +18,7 @@ Shape {
 	readonly property var outline: Figure.figurePoints({
 		width: root.width,
 		height: root.height,
-		exponent: root.preset.exponent,
+		exponent: root.exponent,
 		lobes: root.lobes,
 		scallop: root.scallop,
 		morph: root.morph
