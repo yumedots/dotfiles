@@ -18,14 +18,17 @@ Row {
 	readonly property var versionMatch: /^v(\d+)\.(\d+)$/.exec(root.focusedName)
 	readonly property int focusedVersion: root.versionMatch ? Number(root.versionMatch[2]) : 1
 	readonly property int focusedSlot: root.versionMatch ? Number(root.versionMatch[1]) : (Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1)
-	property color ink: BarInk.pick(root.bar, "workspaces", Config.foreground)
+	property var rememberedVersions: ({})
+	readonly property var slotVersions: {
+		const versions = Object.assign({}, root.rememberedVersions);
 
-	Behavior on ink {
-		enabled: BarInk.fading
-		ColorAnimation {
-			duration: BarInk.fadeMs
-		}
+		if (root.versionMatch)
+			versions[root.focusedSlot] = root.focusedVersion;
+
+		return versions;
 	}
+
+	property color ink: BarInk.pick(root.bar, "workspaces", Config.foreground)
 
 	readonly property string liveState: {
 		const workspaces = Hyprland.workspaces.values;
@@ -62,8 +65,31 @@ Row {
 
 	}
 
-	Component.onCompleted: root.settle()
-	onLiveStateChanged: debounce.restart()
+	function rememberVersions() {
+		const versions = Object.assign({}, root.rememberedVersions);
+
+		Hyprland.workspaces.values.forEach(function (w) {
+			const match = /^v(\d+)\.(\d+)$/.exec(w.name || "");
+
+			if (match)
+				versions[Number(match[1])] = Number(match[2]);
+		});
+
+		if (root.focusedName !== "")
+			versions[root.focusedSlot] = root.focusedVersion;
+
+		root.rememberedVersions = versions;
+	}
+
+	Component.onCompleted: {
+		root.settle();
+		root.rememberVersions();
+	}
+
+	onLiveStateChanged: {
+		debounce.restart();
+		root.rememberVersions();
+	}
 
 	Timer {
 		id: debounce
@@ -101,12 +127,13 @@ Row {
 
 			readonly property int workspaceId: index + 1
 			readonly property bool active: root.focusedSlot === ws.workspaceId
-			readonly property bool versioned: ws.active && root.focusedVersion > 1
+			readonly property bool versioned: (root.slotVersions[ws.workspaceId] || 1) > 1
 
 			visible: root.ids.indexOf(ws.workspaceId) >= 0
 
 			readonly property bool boxed: ws.active
-			readonly property color labelColor: ws.boxed ? Qt.rgba(1 - root.ink.r, 1 - root.ink.g, 1 - root.ink.b, 1) : root.ink
+			readonly property bool marked: ws.boxed || ws.versioned
+			readonly property color labelColor: ws.marked ? Qt.rgba(1 - root.ink.r, 1 - root.ink.g, 1 - root.ink.b, 1) : root.ink
 			readonly property real figurePadX: ws.versioned ? 8 : 4
 			readonly property real figurePadY: ws.versioned ? 6 : 2
 
@@ -121,7 +148,7 @@ Row {
 				figure: ws.versioned ? "gear" : "squircle"
 				morph: ws.versioned ? 1 : 0
 				color: root.ink
-				visible: ws.boxed
+				visible: ws.marked
 
 				x: (ws.implicitWidth - selector.width) / 2
 				y: (sampleMetrics.tightBoundingRect.height - selector.height) / 2
