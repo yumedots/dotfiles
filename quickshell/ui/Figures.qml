@@ -5,22 +5,21 @@ import qs
 Shape {
 	id: root
 
-	property string figure: "squircle"
+	property int version: 1
 	property real morph: 0
-	property real exponent: root.preset.exponent
-	property int lobes: Config.figureLobes
-	property real scallop: Config.figureScallop
+	property real exponent: root.shape.exponent
 	property color color: Config.foreground
 
 	preferredRendererType: Shape.CurveRenderer
+	asynchronous: false
 
-	readonly property var preset: Figure.figurePreset(root.figure)
+	readonly property var shape: Figure.figureShape(root.version)
 	readonly property var outline: Figure.figurePoints({
 		width: root.width,
 		height: root.height,
 		exponent: root.exponent,
-		lobes: root.lobes,
-		scallop: root.scallop,
+		lobes: root.shape.lobes === undefined ? Config.figureLobes : root.shape.lobes,
+		scallop: root.shape.scallop === undefined ? Config.figureScallop : root.shape.scallop,
 		morph: root.morph
 	})
 
