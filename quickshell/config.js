@@ -304,6 +304,7 @@ const weatherCardUnitSize = 16;
 const weatherCardUnitLift = 4;
 const weatherCardNameSize = 13;
 const weatherCardPlaceSize = 11;
+const weatherCardPlacePad = 8;
 const weatherCardSearchDebounce = 60;
 const weatherCodes = {
 	0: { name: "Clear", glyph: "\u{f0599}" },

@@ -21,7 +21,6 @@ Item {
 	readonly property var match: root.bestMatch()
 	readonly property bool hasGhost: root.placeEditing && root.match !== null && root.ghost !== ""
 	readonly property string ghost: root.ghostText()
-	readonly property bool ghostFits: root.hasGhost && queryMetrics.advanceWidth + ghostMetrics.advanceWidth <= Config.weatherCardWidth
 
 	implicitWidth: Config.weatherCardWidth + Config.weatherCardPadding * 2
 	implicitHeight: card.implicitHeight + Config.weatherCardPadding * 2
@@ -32,29 +31,24 @@ Item {
 		if (rows.length === 0 || root.query.trim() === "")
 			return null;
 
-		let best = 0;
+		const typed = root.query.trim().toLowerCase();
 
-		if (Weather.lat !== 0 || Weather.lon !== 0) {
-			let bestD = Forecast.geoDistance(Weather.lat, Weather.lon, rows[0].lat, rows[0].lon);
-
-			for (let i = 1; i < rows.length; i++) {
-				const d = Forecast.geoDistance(Weather.lat, Weather.lon, rows[i].lat, rows[i].lon);
-
-				if (d < bestD) {
-					best = i;
-					bestD = d;
-				}
-			}
+		for (let i = 0; i < rows.length; i++) {
+			if (String(rows[i].label).toLowerCase().indexOf(typed) === 0)
+				return rows[i];
 		}
 
-		return rows[best];
+		return rows[0];
 	}
 
 	function ghostText() {
-		const typed = root.query.trim().toLowerCase();
-		const label = root.match ? String(root.match.label) : "";
+		const typed = root.query;
+		const name = root.match ? String(root.match.name) : "";
 
-		return label.toLowerCase().indexOf(typed) === 0 ? label.slice(typed.length) : "";
+		if (typed === "")
+			return "";
+
+		return name.toLowerCase().indexOf(typed.toLowerCase()) === 0 ? name.slice(typed.length) : "";
 	}
 
 	function syncSuggest() {
@@ -92,8 +86,8 @@ Item {
 	}
 
 	function completeGhost() {
-		if (root.match)
-			root.query = root.match.label;
+		if (root.hasGhost)
+			root.query = String(root.match.name);
 	}
 
 	function commitPlace() {
@@ -206,7 +200,7 @@ Item {
 				id: placeText
 
 				visible: !root.placeEditing
-				width: card.width
+				width: card.width - Config.weatherCardPlacePad
 				elide: Text.ElideRight
 
 				font.family: Config.fontFamily
@@ -219,7 +213,8 @@ Item {
 				id: placeInput
 
 				visible: root.placeEditing
-				width: card.width
+				width: card.width - Config.weatherCardPlacePad
+				clip: true
 				selectByMouse: false
 				focus: root.placeEditing
 
@@ -256,27 +251,22 @@ Item {
 				}
 			}
 
-			TextMetrics {
-				id: queryMetrics
+			Text {
+				id: queryMeasure
 
+				visible: false
 				font.family: Config.fontFamily
 				font.pixelSize: Config.weatherCardPlaceSize
 				text: root.query
 			}
 
-			TextMetrics {
-				id: ghostMetrics
-
-				font.family: Config.fontFamily
-				font.pixelSize: Config.weatherCardPlaceSize
-				text: root.ghost
-			}
-
 			Text {
 				id: ghost
 
-				visible: root.ghostFits
-				x: queryMetrics.advanceWidth
+				visible: root.hasGhost
+				x: queryMeasure.implicitWidth
+				width: Math.max(0, card.width - Config.weatherCardPlacePad - queryMeasure.implicitWidth)
+				elide: Text.ElideRight
 				anchors.verticalCenter: placeInput.verticalCenter
 
 				font.family: Config.fontFamily
@@ -303,4 +293,5 @@ Item {
 		interval: Config.weatherCardSearchDebounce
 		onTriggered: Weather.search(root.query)
 	}
+
 }
