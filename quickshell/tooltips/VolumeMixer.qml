@@ -60,15 +60,6 @@ Item {
 		onTriggered: { Hyprland.refreshToplevels(); root.bumpIcons(); }
 	}
 
-	Connections {
-		target: Hyprland
-
-		function onToplevelsChanged() {
-			root.bumpIcons();
-			refreshTimer.restart();
-		}
-	}
-
 	readonly property real channelsMaxWidth: Config.mixerVisibleChannels * Config.mixerChannelWidth + (Config.mixerVisibleChannels - 1) * Config.mixerChannelGap
 	readonly property real idleWidth: Config.mixerIdleChannels * Config.mixerChannelWidth + (Config.mixerIdleChannels - 1) * Config.mixerChannelGap
 	readonly property real contentWidth: Math.max(root.showApps ? apps.implicitWidth : 0, root.idleWidth)
