@@ -51,7 +51,7 @@ function parseWeatherGeo(text, region) {
 }
 
 function weatherSuggestUrl(query) {
-	return "https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(String(query || "").trim()) + "&count=8&language=en&format=json";
+	return "https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(String(query || "").trim()) + "&count=20&language=en&format=json";
 }
 
 function parseWeatherSuggestions(text) {
@@ -63,20 +63,21 @@ function parseWeatherSuggestions(text) {
 		data = null;
 	}
 
-	return ((data && data.results) || []).map(function (row) {
-		return {
-			label: [row.name, row.admin1, row.country].filter(function (part) { return part; }).join(", "),
-			lat: row.latitude,
-			lon: row.longitude
-		};
-	});
-}
+	const rows = ((data && data.results) || [])
+		.filter(function (row) { return String(row.feature_code || "").indexOf("PPL") === 0; })
+		.map(function (row) {
+			return {
+				name: row.name,
+				label: [row.name, row.admin1, row.country].filter(function (part) { return part; }).join(", "),
+				lat: row.latitude,
+				lon: row.longitude,
+				population: Number(row.population) || 0
+			};
+		});
 
-function geoDistance(lat, lon, lat2, lon2) {
-	const dx = (lon2 - lon) * Math.cos((lat + lat2) * Math.PI / 360);
-	const dy = lat2 - lat;
+	rows.sort(function (a, b) { return b.population - a.population; });
 
-	return dx * dx + dy * dy;
+	return rows;
 }
 
 function parseCoords(text) {
