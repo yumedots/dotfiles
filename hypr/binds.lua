@@ -224,6 +224,13 @@ for i = 1, 10 do
     local key = i % 10
     hl.bind(mainMod .. " + " .. key,         gotoWorkspace(i))
     hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i, follow = false }))
+    hl.bind("CTRL + ALT + " .. key,         function()
+        local ws = hl.get_active_workspace()
+        local slot = ws and ws.name and versions.slotOf(ws.name)
+        if slot then
+            hl.dispatch(hl.dsp.window.move({ workspace = versions.target(slot, i), follow = false }))
+        end
+    end)
     hl.bind("ALT + SHIFT + " .. key,         function() versions.jump(i) end)
 end
 
