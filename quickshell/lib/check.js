@@ -798,6 +798,14 @@ assert(parseWeatherGeo(JSON.stringify({ results: [{ name: "Springfield", admin1:
 assert(parseCoords("39.78,-89.65").lat === 39.78 && parseCoords(" 12 , -3.5 ").lon === -3.5, "coordinates in the config skip the lookup");
 assert(parseCoords("Springfield, IL") === null && parseCoords("") === null, "a place name is not a coordinate pair");
 
+const known = coordsWith({}, " Miami ", 25.77, -80.19);
+
+assert(coordsFor(known, "miami").lat === 25.77 && coordsFor(known, "MIAMI").lon === -80.19, "a place keeps the coordinates it was looked up at, whatever its case or padding");
+assert(coordsFor({}, "Miami").lat === 0 && coordsFor({}, "Miami").lon === 0, "a place nobody looked up has no coordinates and gets geocoded");
+assert(coordsFor(coordsWith(known, "Lutz", 28.15, -82.46), "Miami").lat === 25.77, "caching one place keeps the ones already known");
+assert(Object.keys(coordsWith(known, "  ", 1, 2)).length === 1, "a nameless place is never cached");
+assert(Object.keys(coordsWith(known, "Miami", 0, 0)).length === 1, "a lookup that came back without coordinates is not cached");
+
 assert(weatherGeoUrl("Springfield, IL").indexOf("name=Springfield") > 0, "only the city part of the config goes into the lookup");
 assert(weatherGeoUrl("Springfield, IL").indexOf("count=8") > 0, "the lookup asks for enough candidates to find the right region");
 assert(weatherForecastUrl(1, 2).indexOf("latitude=1&longitude=2") > 0, "the forecast is asked for the resolved coordinates");

@@ -100,11 +100,12 @@ Item {
 
 	function commitPlace() {
 		const label = root.query.trim();
+		const exact = root.match !== null && String(root.match.name).toLowerCase() === label.toLowerCase();
 
 		root.stopEdit();
 
 		if (label !== "")
-			Weather.choose(label);
+			Weather.choose(label, exact ? root.match.lat : 0, exact ? root.match.lon : 0);
 	}
 
 	Keys.onPressed: function (event) {

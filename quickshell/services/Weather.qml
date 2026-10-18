@@ -26,6 +26,7 @@ Item {
 	property var places: []
 	property int index: 0
 	property var suggestions: []
+	property var coords: ({})
 
 	readonly property string dir: Quickshell.shellDir + "/cache/weather"
 	readonly property string placeFile: root.dir + "/place"
@@ -74,7 +75,7 @@ Item {
 	}
 
 	function refresh(force) {
-		if (root.loading)
+		if (root.loading || root.index !== 0)
 			return;
 
 		root.loading = true;
@@ -139,6 +140,10 @@ Item {
 		return slotRepeater.itemAt(at);
 	}
 
+	function rememberCoords(place, lat, lon) {
+		root.coords = Forecast.coordsWith(root.coords, place, lat, lon);
+	}
+
 	function slots() {
 		const rows = root.places.slice();
 
@@ -166,7 +171,7 @@ Item {
 		root.index = 0;
 	}
 
-	function choose(label) {
+	function choose(label, lat, lon) {
 		if (label === "")
 			return;
 
@@ -174,10 +179,13 @@ Item {
 
 		rows[root.index] = label;
 		root.places = rows;
+		root.rememberCoords(label, lat, lon);
 		root.stations = [];
 		root.placeFailed = false;
 		root.suggestions = [];
 		root.loading = false;
+		root.place = label;
+		root.location = label;
 		root.store();
 		root.refresh(true);
 	}
@@ -189,12 +197,16 @@ Item {
 		if (next === root.index)
 			return;
 
+		const target = root.places[next] || Config.weatherLocation;
+
 		root.index = next;
 		root.stations = [];
 		root.placeFailed = false;
 		root.loading = false;
 		root.lat = 0;
 		root.lon = 0;
+		root.place = target;
+		root.location = target;
 		root.refresh(true);
 	}
 
@@ -218,6 +230,7 @@ Item {
 
 		WeatherSlot {
 			place: root.slots()[index] || ""
+			known: root.coords
 		}
 	}
 
@@ -282,6 +295,7 @@ Item {
 
 			root.lat = found.lat;
 			root.lon = found.lon;
+			root.rememberCoords(root.wanted, found.lat, found.lon);
 			root.place = root.wanted;
 			root.location = found.place;
 			fetch.running = true;

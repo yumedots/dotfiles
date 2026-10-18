@@ -6,6 +6,7 @@ Item {
 	id: root
 
 	property string place: ""
+	property var known: ({})
 	property int code: -1
 	property string temp: ""
 
@@ -19,6 +20,14 @@ Item {
 	function refresh() {
 		if (root.place === "")
 			return;
+
+		const spot = Forecast.coordsFor(root.known, root.place);
+
+		if (spot.lat !== 0 && spot.lon !== 0) {
+			fetch.command = Shell.curl(Forecast.weatherForecastUrl(spot.lat, spot.lon));
+			fetch.running = true;
+			return;
+		}
 
 		geo.command = Shell.curl(Forecast.weatherGeoUrl(root.place));
 		geo.running = true;
@@ -38,6 +47,7 @@ Item {
 
 			fetch.command = Shell.curl(Forecast.weatherForecastUrl(found.lat, found.lon));
 			fetch.running = true;
+			Weather.rememberCoords(root.place, found.lat, found.lon);
 		}
 	}
 

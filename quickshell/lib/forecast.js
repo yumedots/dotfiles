@@ -86,6 +86,24 @@ function parseCoords(text) {
 	return match ? { lat: parseFloat(match[1]), lon: parseFloat(match[2]) } : null;
 }
 
+function coordsWith(map, place, lat, lon) {
+	const key = String(place || "").trim().toLowerCase();
+
+	if (key === "" || !lat || !lon)
+		return map;
+
+	const next = Object.assign({}, map);
+
+	next[key] = { lat: lat, lon: lon };
+	return next;
+}
+
+function coordsFor(map, place) {
+	const row = (map || {})[String(place || "").trim().toLowerCase()];
+
+	return row ? row : { lat: 0, lon: 0 };
+}
+
 function weatherForecastUrl(lat, lon) {
 	return "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon
 		+ "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,precipitation"
