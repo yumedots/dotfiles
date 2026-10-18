@@ -7,6 +7,7 @@ Item {
 
 	property string place: ""
 	property var known: ({})
+	property bool primary: false
 	property int code: -1
 	property string temp: ""
 
@@ -16,6 +17,7 @@ Item {
 
 	onPlaceChanged: root.refresh()
 	Component.onCompleted: root.refresh()
+	onCodeChanged: if (root.primary) Weather.primaryCode = root.code
 
 	function refresh() {
 		if (root.place === "")

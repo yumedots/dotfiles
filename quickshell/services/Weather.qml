@@ -38,8 +38,6 @@ Item {
 	readonly property var primaryInfo: Forecast.weatherCodeInfo(root.primaryCode, Config.weatherCodes, Config.weatherIcon)
 	readonly property string primaryIcon: root.primaryInfo.glyph
 
-	onCodeChanged: if (root.index === 0) root.primaryCode = root.code
-
 	function adopt(cached) {
 		root.description = cached.description || "";
 		root.location = cached.location || "";
@@ -231,6 +229,7 @@ Item {
 		WeatherSlot {
 			place: root.slots()[index] || ""
 			known: root.coords
+			primary: index === 0
 		}
 	}
 
