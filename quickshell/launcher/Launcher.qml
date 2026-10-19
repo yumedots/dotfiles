@@ -943,6 +943,7 @@ PanelWindow {
 							readonly property string icon: rowIcon.clipIcon !== "" ? rowIcon.clipIcon : (row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : "")
 
 							Text {
+								visible: rowIcon.icon === "" || rowIconImage.status === Image.Error
 								anchors.centerIn: parent
 								font.family: Config.fontFamily
 								font.pixelSize: 18
