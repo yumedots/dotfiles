@@ -1,3 +1,6 @@
 [submodule "zsh/custom/themes/minimal"]
 	path = zsh/custom/themes/minimal
 	url = https://github.com/subnixr/minimal
+[submodule "pi-dotfiles"]
+	path = pi-dotfiles
+	url = https://github.com/yumedots/pi-dotfiles.git
