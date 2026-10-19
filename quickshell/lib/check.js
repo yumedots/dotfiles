@@ -1218,6 +1218,15 @@ assert(writeCommand("/home/g/cache/contrib.json", "X")[2]
 assert(readJson('{"days": [1]}', {}).days.length === 1, "a good cache file parses");
 assert(readJson("not json", null) === null && readJson("", "fb") === "fb", "a corrupt or empty cache file falls back instead of throwing");
 
+assert(popupSide(false, false, false, false) === "anchor", "a popup with nothing asked of it stays anchored");
+assert(popupSide(false, true, true, false) === "center", "a widget in the middle of the bar opens centred");
+assert(popupSide(false, true, true, true) === "center", "and stays centred in fullscreen");
+assert(popupSide(false, true, false, true) === "float", "a floating popup follows the configured spot in fullscreen");
+assert(popupSide(false, true, false, false) === "anchor", "and is anchored to its widget otherwise");
+assert(popupSide(true, false, false, false) === "right", "a right aligned popup sits on the right");
+assert(popupSide(true, true, true, false) === "right", "right alignment beats the centre");
+assert(popupSide(true, true, true, true) === "right", "and beats it in fullscreen too");
+
 });
 
 section("power", function () {

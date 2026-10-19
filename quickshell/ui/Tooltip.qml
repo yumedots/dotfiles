@@ -21,6 +21,9 @@ PanelWindow {
 	property bool centered: false
 	property bool alwaysCentered: false
 	readonly property bool fullscreen: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
+	readonly property string side: Util.popupSide(root.alignRight, root.centered, root.alwaysCentered, root.fullscreen)
+	readonly property bool centeredSide: root.centered && root.side !== "right"
+	readonly property bool pinnedSide: root.alwaysCentered && root.side !== "right"
 	property bool closable: true
 	property real contentPadding: -1
 	property Component contentSource: null
@@ -60,11 +63,11 @@ PanelWindow {
 		? Util.clamp(Config.popupY, 0, root.restY)
 		: root.posBottom ? root.restY - Config.gapsOut
 			: Config.gapsOut
-	readonly property real cardX: (root.fullscreen || root.alwaysCentered) && root.centered
-		? Util.snap(root.alwaysCentered ? (root.screenWidth - root.cardWidth) / 2 : root.floatX, root.scale)
-		: Util.snap(root.alignRight
-			? root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight
-			: root.outerMargin + Config.tooltipGap + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
+	readonly property real cardX: root.side === "right"
+		? Util.snap(root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight, root.scale)
+		: Util.snap(root.side === "center" ? (root.screenWidth - root.cardWidth) / 2
+			: root.side === "float" ? root.floatX
+				: root.outerMargin + Config.tooltipGap + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
 	readonly property real cardY: root.fullscreen
 		? Math.round(root.floatY)
 		: root.atBottom
@@ -118,7 +121,7 @@ PanelWindow {
 	}
 
 	function open() {
-		const fresh = root.slideExit && !root.shown && !root.alwaysCentered;
+		const fresh = root.slideExit && !root.shown && !root.pinnedSide;
 
 		root.refreshAnchor();
 		root.shown = true;
@@ -144,7 +147,7 @@ PanelWindow {
 	}
 
 	function close() {
-		const slide = root.slideExit && root.shown && !root.alwaysCentered;
+		const slide = root.slideExit && root.shown && !root.pinnedSide;
 		const from = card.slideOffset;
 		const to = root.slideX - root.cardX;
 
@@ -205,7 +208,7 @@ PanelWindow {
 		readonly property bool sliding: slideAnim.running
 
 		x: root.cardLeft + card.slideOffset
-		y: root.fullscreen && root.centered && !root.shown ? (root.slideBelow ? root.screenHeight : -root.cardHeight) : root.cardTop
+		y: root.fullscreen && root.centeredSide && !root.shown ? (root.slideBelow ? root.screenHeight : -root.cardHeight) : root.cardTop
 		width: root.cardWidth
 		height: root.cardHeight
 		opacity: root.shown || (root.slideExit && sliding) ? 1 : 0
@@ -259,7 +262,7 @@ PanelWindow {
 		Text {
 			id: closeButton
 
-			visible: root.closable && (!root.centered || root.alwaysCentered)
+			visible: root.closable && (!root.centeredSide || root.pinnedSide)
 			anchors.right: parent.right
 			anchors.top: parent.top
 			anchors.margins: Config.tooltipCloseInset

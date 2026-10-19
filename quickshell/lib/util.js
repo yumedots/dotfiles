@@ -20,6 +20,19 @@ function pick(mono, color, monoColor) {
 	return mono ? monoColor : color;
 }
 
+function popupSide(alignRight, centered, alwaysCentered, fullscreen) {
+	if (alignRight)
+		return "right";
+
+	if (!centered)
+		return "anchor";
+
+	if (alwaysCentered)
+		return "center";
+
+	return fullscreen ? "float" : "anchor";
+}
+
 function filledCells(pct, cells) {
 	return clamp(Math.round((pct / 100) * cells), 0, cells);
 }
