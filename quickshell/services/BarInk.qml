@@ -40,6 +40,7 @@ Item {
 			return;
 		}
 
+		root.fade();
 		root.bareBars = bar !== null ? [bar] : [];
 		root.bare = true;
 		root.persist();
@@ -51,6 +52,7 @@ Item {
 			return;
 		}
 
+		root.fade();
 		root.bareBars = (all || []).slice();
 		root.bare = true;
 		root.persist();
