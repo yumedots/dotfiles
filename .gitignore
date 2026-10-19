@@ -3,8 +3,8 @@ QtProject.conf
 baloofileinformationrc
 dconf
 dolphinrc
-gh
 micro/backups
+gh
 micro/buffers
 mozilla/firefox
 psd
@@ -46,3 +46,4 @@ NNF_FULLVERSION
 AmethystModManager
 faugus-launcher
 zed/
+herdr/
