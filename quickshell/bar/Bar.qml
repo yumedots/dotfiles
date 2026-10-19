@@ -275,6 +275,12 @@ PanelWindow {
 		padding: Config.barInset
 		borderWidth: Config.barBorderWidth
 		backgroundColor: BarInk.bare ? "transparent" : Config.surfaceTranslucent
+
+		Behavior on backgroundColor {
+			ColorAnimation {
+				duration: Config.barFadeMs
+			}
+		}
 	}
 
 	MouseArea {
