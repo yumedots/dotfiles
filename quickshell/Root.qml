@@ -7,6 +7,7 @@ import qs
 import qs.ui
 import qs.services
 import "bar"
+import "agent"
 import "launcher"
 import "wallpaper"
 
@@ -16,6 +17,10 @@ ShellRoot {
 	property string role: "main"
 	property double hyprBootAt: Date.now()
 	readonly property bool isLauncher: role === "launcher"
+
+	// The agent window, opened by the keybind.
+	property bool agentWindowOpen: false
+	property string agentWindowTarget: ""
 
 	function toLauncher(fn, arg) {
 		const cmd = ["quickshell", "ipc", "-p", Quickshell.env("HOME") + "/.config/quickshell/launcherShell.qml", "call", "shell", fn];
@@ -328,6 +333,14 @@ ShellRoot {
 			shellRoot.openWidget("agent", true);
 		}
 
+		// Opens the agent as a window, the way the launcher opens as one.
+		function agentWindow() {
+			shellRoot.agentWindowOpen = !shellRoot.agentWindowOpen;
+			shellRoot.agentWindowTarget = OpenCode.targetSession;
+		}
+
+
+
 		function power() {
 			shellRoot.openWidget("power", true);
 		}
@@ -413,6 +426,7 @@ ShellRoot {
 
 		Bar {
 			onWidgetActivated: Handoff.run(shellRoot.closeLauncherUnderWidget)
+
 		}
 	}
 
@@ -432,4 +446,33 @@ ShellRoot {
 		id: powerMenuWindow
 		alwaysMapped: true
 	}
+
+	// The agent as a window, for when the panel in the bar is not enough.
+	AgentWindow {
+		id: agentWindow
+
+		shown: shellRoot.agentWindowOpen
+		target: shellRoot.agentWindowTarget
+	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
