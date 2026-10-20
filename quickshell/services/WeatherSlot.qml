@@ -35,6 +35,11 @@ Item {
 		geo.running = true;
 	}
 
+	function fail() {
+		retry.interval = Math.min(retry.interval * 2, Config.weatherRefreshMs);
+		retry.restart();
+	}
+
 	Request {
 		id: geo
 
@@ -44,6 +49,7 @@ Item {
 			if (!found) {
 				root.code = -1;
 				root.temp = "";
+				root.fail();
 				return;
 			}
 
@@ -59,11 +65,15 @@ Item {
 		onDone: function (text) {
 			const parsed = Forecast.parseWeatherCurrent(text);
 
-			if (parsed === null)
+			if (parsed === null) {
+				root.fail();
 				return;
+			}
 
 			root.code = Forecast.weatherCodeFor(parsed.code, parsed.precip);
 			root.temp = parsed.temp;
+			retry.stop();
+			retry.interval = Config.weatherRetryMs;
 		}
 	}
 
@@ -71,6 +81,13 @@ Item {
 		interval: Config.weatherRefreshMs
 		running: root.place !== ""
 		repeat: true
+		onTriggered: root.refresh()
+	}
+
+	Timer {
+		id: retry
+
+		interval: Config.weatherRetryMs
 		onTriggered: root.refresh()
 	}
 }

@@ -16,10 +16,7 @@ Item {
 	property bool selectQuery: false
 	property int queryStamp: 0
 
-	readonly property bool ready: Weather.temp !== ""
-	readonly property var temp: Forecast.splitTemp(Weather.temp)
-	readonly property string place: (Weather.location !== "" ? Weather.location : Weather.place).split(",")[0].trim()
-	readonly property string status: root.ready ? Weather.description : (Weather.status !== "" ? Weather.status : "Loading")
+	readonly property string place: String(Weather.places[Weather.index] || "").split(",")[0].trim()
 	readonly property var match: root.bestMatch()
 	readonly property bool hasGhost: root.placeEditing && root.match !== null && root.ghost !== ""
 	readonly property string ghost: root.ghostText()

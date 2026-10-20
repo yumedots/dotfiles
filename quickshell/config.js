@@ -291,6 +291,7 @@ const weatherPlaceCount = 3;
 const weatherPlaceDefaults = ["San Francisco", "Miami"];
 const weatherStationCount = 3;
 const weatherRefreshMs = 120000;
+const weatherRetryMs = 5000;
 const weatherCacheMs = 120000;
 const weatherIcon = "\u{f0f2f}";
 const weatherLoadingIcon = "\u{f18f6}";
