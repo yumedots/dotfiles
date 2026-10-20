@@ -56,20 +56,57 @@ Item {
 	readonly property real bodyHeight: root.size * 0.86
 
 	// The body leans a little toward the cursor.
-	readonly property real leanX: root.lookX * root.size * 0.05
-	readonly property real leanY: root.lookY * root.size * 0.03
+	readonly property real leanX: root.eyeX * root.size * 0.05
+	readonly property real leanY: root.eyeY * root.size * 0.03
+
+	// The spikes turn while the agent is working.
+	property real spin: 0
+
+	readonly property bool spinning: root.state === "working" && !root.paused
+
+	RotationAnimation on spin {
+		from: 0
+		to: 360
+		duration: 2600
+		running: root.spinning
+		loops: Animation.Infinite
+	}
 
 	// The eyes only look around when they are told to.
 	readonly property real lookX: root.followCursor ? root.gazeX : 0
 	readonly property real lookY: root.followCursor ? root.gazeY : 0
 
-	// The eyes are spaced so they never merge, at any size.
-	readonly property real eyeSpacing: root.size * 0.24
-	readonly property real eyeRadius: root.size * 0.15
+	// The eyes glide toward where the pointer is instead of jumping there.
+	property real eyeX: 0
+	property real eyeY: 0
+
+	Behavior on eyeX {
+		enabled: !root.paused
+		NumberAnimation {
+			duration: 260
+			easing.type: Easing.OutCubic
+		}
+	}
+
+	Behavior on eyeY {
+		enabled: !root.paused
+		NumberAnimation {
+			duration: 260
+			easing.type: Easing.OutCubic
+		}
+	}
+
+	onLookXChanged: root.eyeX = root.lookX
+	onLookYChanged: root.eyeY = root.lookY
+
+	// The eyes are spaced so they never merge, at any size, and stay well
+	// inside the body even when they look to the side.
+	readonly property real eyeSpacing: root.size * 0.235
+	readonly property real eyeRadius: root.size * 0.13
 	readonly property real eyeLift: root.size * 0.04
 
 	// How far the eyes travel toward the cursor.
-	readonly property real eyeTravel: root.size * 0.06
+	readonly property real eyeTravel: root.size * 0.05
 
 	// The eye sockets, in body-local coordinates. They are holes in the body,
 	// and they slide toward the cursor so the face looks where the pointer is.
@@ -77,19 +114,29 @@ Item {
 	// eye into a line.
 	readonly property var sockets: {
 		const squish = Math.max(0.08, Math.min(1, root.openness * root.blink));
-		const cy = root.bodyHeight / 2 - root.eyeLift + root.lookY * root.eyeTravel;
-		const shift = root.lookX * root.eyeTravel;
+		const cy = root.bodyHeight / 2 - root.eyeLift + root.eyeY * root.eyeTravel;
+		const shift = root.eyeX * root.eyeTravel;
 
-		return [
-			{ x: root.bodyWidth / 2 - root.eyeSpacing + shift, y: cy, radiusX: root.eyeRadius, radiusY: root.eyeRadius * squish },
-			{ x: root.bodyWidth / 2 + root.eyeSpacing + shift, y: cy, radiusX: root.eyeRadius, radiusY: root.eyeRadius * squish },
+		// A closed eye is a short line, not a wide flat slot, so it stays inside
+		// the body and reads as a shut eye rather than a scratch.
+		const radiusX = root.eyeRadius * (0.55 + 0.45 * squish);
+
+		const wanted = [
+			{ x: root.bodyWidth / 2 - root.eyeSpacing + shift, y: cy, radiusX: radiusX, radiusY: root.eyeRadius * squish },
+			{ x: root.bodyWidth / 2 + root.eyeSpacing + shift, y: cy, radiusX: radiusX, radiusY: root.eyeRadius * squish },
 		];
+
+		// An eye that runs past the edge of the body would turn inside out, so
+		// the sockets are pulled back until they fit. Both shrink the same
+		// amount, so the eyes stay the same size.
+		return Agent.clipSockets(root.body, wanted);
 	}
 
 	onStateChanged: {
 		root.fromState = root.lastState;
 		root.lastState = root.state;
 		root.morph = 0;
+		root.spin = 0;
 		morphAnimation.restart();
 	}
 
@@ -160,7 +207,9 @@ Item {
 		}
 	}
 
-	readonly property var outline: {
+	// The body outline, before it is turned. The eyes are placed against this,
+	// so they stay level while the spikes turn.
+	readonly property var body: {
 		const spec = root.shapes[root.fromState] || root.shapes.idle;
 		const from = Agent.shapePoints({
 			width: root.bodyWidth,
@@ -183,6 +232,12 @@ Item {
 		return Agent.blendPoints(from, to, root.morph);
 	}
 
+	readonly property var outline: {
+		// The spikes turn while the agent works. The outline is turned on its
+		// own so the eyes stay level and still read as eyes.
+		return Agent.rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.spin);
+	}
+
 	// The icon is drawn in body-local space, so it moves with the body.
 	Item {
 		id: body
@@ -192,11 +247,14 @@ Item {
 		width: root.bodyWidth
 		height: root.bodyHeight
 
-		rotation: root.lookX * 4
+		rotation: root.eyeX * 4
 
 		scale: root.breathe
 		transformOrigin: Item.Center
 
+		// The body and the eyes are one path, so the eyes are holes in the
+		// body. The outline is turned on its own, so the spikes spin while the
+		// eyes stay level and still read as eyes.
 		DynamicIcon {
 			anchors.fill: parent
 

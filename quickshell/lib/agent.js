@@ -55,6 +55,31 @@ function blendPoints(from, to, progress) {
 	return points;
 }
 
+// Turns a set of points around a centre.
+//
+// The body and the eyes are one path, so the eyes are holes in the body. That
+// means the whole body has to turn for the spikes to spin, and the eyes would
+// turn with it. Rotating the points instead turns the outline on its own, and
+// the eyes stay where they are.
+function rotatePoints(points, cx, cy, angle) {
+	if (!angle)
+		return points;
+
+	const cos = Math.cos(angle);
+	const sin = Math.sin(angle);
+	const out = new Array(points.length);
+
+	for (let i = 0; i < points.length; i += 2) {
+		const x = points[i] - cx;
+		const y = points[i + 1] - cy;
+
+		out[i] = cx + x * cos - y * sin;
+		out[i + 1] = cy + x * sin + y * cos;
+	}
+
+	return out;
+}
+
 // Circle outline, used for the pupil.
 function circlePoints(cx, cy, radius, samples) {
 	const count = Math.max(12, Math.round(samples || 24));
@@ -80,6 +105,68 @@ function ellipsePoints(cx, cy, radiusX, radiusY, samples) {
 	}
 
 	return points;
+}
+
+// Keeps an eye socket inside the body outline.
+//
+// The body and the eyes are one path, filled with the odd-even rule, so an eye
+// that runs past the edge of the body turns the part outside it inside out. The
+// socket is pulled back until it fits, which keeps the eye a hole.
+//
+// Both sockets are scaled by the same amount, so the two eyes stay the same
+// size even when one of them sits close to the edge.
+function clipSockets(outline, sockets) {
+	const count = outline.length / 2;
+
+	const inside = function (socket, factor) {
+		const rx = socket.radiusX * factor;
+		const ry = socket.radiusY * factor;
+
+		for (let i = 0; i < 24; i++) {
+			const angle = (i / 24) * TWO_PI;
+			const x = socket.x + Math.cos(angle) * rx;
+			const y = socket.y + Math.sin(angle) * ry;
+
+			let insidePoint = false;
+
+			for (let j = 0, k = count - 1; j < count; k = j++) {
+				const xi = outline[2 * j];
+				const yi = outline[2 * j + 1];
+				const xk = outline[2 * k];
+				const yk = outline[2 * k + 1];
+
+				if ((yi > y) !== (yk > y) && x < (xk - xi) * (y - yi) / (yk - yi) + xi)
+					insidePoint = !insidePoint;
+			}
+
+			if (!insidePoint)
+				return false;
+		}
+
+		return true;
+	};
+
+	// Find the largest scale that fits every socket.
+	let low = 0;
+	let high = 1;
+
+	for (let i = 0; i < 12; i++) {
+		const mid = (low + high) / 2;
+
+		if (sockets.every(function (socket) { return inside(socket, mid); }))
+			low = mid;
+		else
+			high = mid;
+	}
+
+	return sockets.map(function (socket) {
+		return {
+			x: socket.x,
+			y: socket.y,
+			radiusX: socket.radiusX * low,
+			radiusY: socket.radiusY * low
+		};
+	});
 }
 
 // The session the input line sends to: the agent that is working wins, or
