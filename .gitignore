@@ -15,6 +15,7 @@ go
 net.imput.helium
 mimeapps.list
 quickshell/cache
+hypr/plugins/agent-cursor/agent-cursor.bin
 zsh/.zcompdump-*
 zsh/.zsh_history
 chromium
