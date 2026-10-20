@@ -13,9 +13,21 @@ Item {
 
 	property var source: null
 
-	// The session the panel sends to. It is locked when the panel opens, so a
-	// message never slips into another session while it is being written.
-	property string target: ""
+	// The session the panel sends to.
+	//
+	// The panel locks onto a session when it opens, so a message never slips
+	// into another session while it is being written. The server sends its list
+	// of sessions a moment after the shell starts, so the lock waits for a
+	// session to turn up instead of settling on nothing.
+	//
+	// A session the user picks in the list wins over the lock.
+	property string injectedTarget: ""
+	property string chosenTarget: ""
+	property string lockedTarget: ""
+
+	readonly property string target: root.chosenTarget !== ""
+		? root.chosenTarget
+		: (root.lockedTarget !== "" ? root.lockedTarget : OpenCode.targetSession)
 
 	signal closeRequested()
 
@@ -65,11 +77,33 @@ Item {
 	// first content item when it opens, which would take the focus back, so the
 	// field claims it again until it holds.
 	Component.onCompleted: {
-		root.target = OpenCode.targetSession;
+		root.lockTarget();
 
 		Qt.callLater(field.startTyping);
 
 		focusTimer.restart();
+	}
+
+	// The lock takes the session the panel was opened for. When the panel is
+	// given one, that one is used.
+	function lockTarget() {
+		if (root.injectedTarget !== "") {
+			root.lockedTarget = root.injectedTarget;
+			return;
+		}
+
+		if (root.lockedTarget === "")
+			root.lockedTarget = OpenCode.targetSession;
+	}
+
+	// The server sends its sessions a moment after the shell starts, so the
+	// lock waits for one to turn up.
+	Connections {
+		target: OpenCode
+
+		function onTargetSessionChanged() {
+			root.lockTarget();
+		}
 	}
 
 	Timer {
@@ -172,7 +206,7 @@ Item {
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
 				color: Config.muted
-				text: OpenCode.detail
+				text: OpenCode.detailText
 			}
 
 			Text {
@@ -198,13 +232,35 @@ Item {
 			}
 
 			Text {
-				width: parent.width
+				width: column.width
 				visible: !OpenCode.connected
 
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
 				color: Config.red
 				text: "OpenCode offline"
+			}
+		}
+
+		// The sessions, with the ones that have work in them first.
+		AgentSessions {
+			id: sessions
+
+			width: column.width
+
+			active: OpenCode.activeSessions
+			inactive: OpenCode.inactiveSessions
+			target: root.target
+			modelName: OpenCode.modelName(root.target)
+			models: OpenCode.serverModels
+			modelError: OpenCode.modelError
+
+			onSessionChosen: function (id) {
+				root.chosenTarget = id;
+			}
+
+			onModelChosen: function (id, model) {
+				OpenCode.setModel(id, model);
 			}
 		}
 
