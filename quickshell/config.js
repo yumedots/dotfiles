@@ -491,3 +491,16 @@ const networkScanIcon = "\uf021";
 const networkWifiIcons = ["\u{f08bc}", "\u{f08bd}", "\u{f08be}", "\u{f08bf}"];
 const networkLanIcon = "\u{f0200}";
 const networkLockIcon = "\uf023";
+
+const agentFaceSize = 96;
+const agentBarFaceSize = 15;
+const agentMorphMs = 420;
+const agentInputHeight = 30;
+const agentInputGlyph = "\uf075";
+const agentPanelWidth = 260;
+const agentPanelPadding = 12;
+const agentIdleText = "Idle";
+const agentWorkingText = "Working";
+const agentBlockedText = "Needs attention";
+const agentErrorText = "Error";
+const agentPanelTitle = "Agent";

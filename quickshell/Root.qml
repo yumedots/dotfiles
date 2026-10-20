@@ -324,6 +324,10 @@ ShellRoot {
 			shellRoot.openWidget("display", true);
 		}
 
+		function agent() {
+			shellRoot.openWidget("agent", true);
+		}
+
 		function power() {
 			shellRoot.openWidget("power", true);
 		}

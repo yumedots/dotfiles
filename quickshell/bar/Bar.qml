@@ -56,6 +56,7 @@ PanelWindow {
 		if (id === "volume") return volumeComponent;
 		if (id === "power") return powerComponent;
 		if (id === "display") return displayComponent;
+		if (id === "agent") return agentComponent;
 		if (id === "spacer") return spacerComponent;
 
 		return null;
@@ -222,6 +223,7 @@ PanelWindow {
 	Component { id: volumeComponent; VolumeStat {} }
 	Component { id: powerComponent; PowerStat {} }
 	Component { id: displayComponent; DisplayStat {} }
+	Component { id: agentComponent; AgentStat {} }
 	Component { id: spacerComponent; Spacer {} }
 
 	Component {
