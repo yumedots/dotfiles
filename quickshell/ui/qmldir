@@ -19,6 +19,7 @@ Highlight 1.0 Highlight.qml
 IconRow 1.0 IconRow.qml
 Figures 1.0 Figures.qml
 AgentFace 1.0 AgentFace.qml
+BarIcon 1.0 BarIcon.qml
 DynamicIcon 1.0 DynamicIcon.qml
 singleton Handoff 1.0 Handoff.qml
 singleton Input 1.0 Input.qml

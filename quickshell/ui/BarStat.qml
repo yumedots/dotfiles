@@ -149,26 +149,30 @@ Item {
 			}
 		}
 
-		Loader {
+		BarIcon {
 			id: iconSlot
 
-			active: root.iconComponent !== null
-			sourceComponent: root.iconComponent
+			visible: root.iconComponent !== null
 			x: 0
-			y: 0 - root.iconLift
-			width: root.iconBreadth
-			height: root.contentHeight
+			width: content.width
+			height: content.height
 
-			property color ink: root.inkColor
+			component: root.iconComponent
+			drawnSize: root.iconWidth
+			ink: root.inkColor
+			lift: root.iconLift
+
+			inkAbove: root.inkAbove
+			inkBelow: root.inkBelow
 		}
 
 		Text {
 			id: labelValue
 
 			visible: !root.iconMode
-			x: labelIcon.width
+			x: root.iconComponent === null ? labelIcon.width : root.iconWidth
 			y: root.inkAbove - root.valueAscent
-			width: Math.max(labelValue.implicitWidth, content.width - labelIcon.width)
+			width: Math.max(labelValue.implicitWidth, content.width - (root.iconComponent === null ? labelIcon.width : root.iconWidth))
 			horizontalAlignment: Text.AlignHCenter
 			font.family: Config.fontFamily
 			font.pixelSize: Settings.fontSize
