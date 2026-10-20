@@ -265,17 +265,15 @@ hl.bind(mainMod .. " + SHIFT + S", hl.dsp.workspace.toggle_special("magic"))
 hl.bind(mainMod .. " + mouse_down", function()
     local ws = hl.get_active_workspace()
     local slot = ws and ws.name and versions.slotOf(ws.name)
-    if slot then
-        local next = slot % 10 + 1
-        gotoWorkspace(next)()
+    if slot and slot < 10 then
+        gotoWorkspace(slot + 1)()
     end
 end)
 hl.bind(mainMod .. " + mouse_up", function()
     local ws = hl.get_active_workspace()
     local slot = ws and ws.name and versions.slotOf(ws.name)
-    if slot then
-        local prev = (slot - 2) % 10 + 1
-        gotoWorkspace(prev)()
+    if slot and slot > 1 then
+        gotoWorkspace(slot - 1)()
     end
 end)
 
