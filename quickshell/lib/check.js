@@ -1429,4 +1429,14 @@ section("figure", function () {
 	assert([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].every(function (version) { const shape = figureShape(version); return figurePoints({ width: 20, height: 20, exponent: shape.exponent, lobes: shape.lobes, scallop: shape.scallop, morph: 1 }).every(isFinite); }), "every version draws a real figure");
 });
 
+section("agent", function () {
+	assert(pickTarget({}) === "", "no session means no target");
+	assert(pickTarget({ a: { updated: 10 } }) === "a", "a lone session is the target");
+	assert(pickTarget({ a: { updated: 10 }, b: { updated: 20 } }) === "b", "the session touched last wins when nothing works");
+	assert(pickTarget({ a: { updated: 30, status: "busy" }, b: { updated: 20 } }) === "a", "a working agent wins over a quiet one");
+	assert(pickTarget({ a: { updated: 10, status: "busy" }, b: { updated: 20, status: "retry" } }) === "b", "between working agents the one touched last wins");
+	assert(pickTarget({ a: { updated: 10, status: "idle" }, b: { updated: 0 } }) === "a", "a session that was only listed never wins");
+	assert(pickTarget({ a: { status: "busy" } }) === "a", "a session without a stamp is still a target");
+});
+
 console.log("check ok (" + ran + " assertions" + (filter === "" ? "" : ", filter " + filter) + ")");
