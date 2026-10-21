@@ -14,8 +14,8 @@
 				{ "id": "weather" }
 			],
 			"right": [
-				{ "id": "agent" },
 				{ "id": "tray" },
+				{ "id": "agent" },
 				{ "id": "media" },
 				{ "id": "network" },
 				{ "id": "volume" },
