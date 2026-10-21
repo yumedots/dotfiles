@@ -25,6 +25,7 @@ const iconSize = 10;
 const trayIconSize = 15;
 const trayIconGap = 10;
 const trayGroupSize = 15;
+const trayChevronBoost = 1;
 const trayMenuWidth = 120;
 const trayMenuPadding = 6;
 const trayMenuRowHeight = 18;
@@ -37,6 +38,7 @@ const spacing = 12;
 const barStatSpacing = 16;
 
 const iconCpu = "\uf2db";
+const iconChevron = "\uf053";
 const iconMemory = "\uefc5";
 const iconBell = "\uf0f3";
 const iconDown = "\uf078";

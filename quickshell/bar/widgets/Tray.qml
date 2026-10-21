@@ -73,9 +73,9 @@ Row {
 		Text {
 			anchors.centerIn: parent
 			font.family: Config.fontFamily
-			font.pixelSize: Config.trayGroupSize
+			font.pixelSize: Settings.iconSize + Config.trayChevronBoost
 			color: BarInk.pick(root.bar, "tray", Config.foreground)
-			text: Config.iconPrev
+			text: Config.iconChevron
 			rotation: root.expanded ? 180 : 0
 
 			Behavior on color {
