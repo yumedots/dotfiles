@@ -30,17 +30,30 @@ QtObject {
 	}
 
 	// The title of any session, so a panel can show the one it locked onto.
+	//
+	// A session that is only listed by the server has no live state, so the
+	// listing is used when there is none.
 	function titleOf(id) {
 		const session = root.sessions[id] || {};
 
-		return session.title || "";
+		if (session.title)
+			return session.title;
+
+		const listed = root.findListed(id);
+
+		return listed ? listed.title : "";
 	}
 
 	// The directory a session works in.
 	function directoryOf(id) {
 		const session = root.sessions[id] || {};
 
-		return session.directory || "";
+		if (session.directory)
+			return session.directory;
+
+		const listed = root.findListed(id);
+
+		return listed ? listed.directory : "";
 	}
 
 	// The model of a session, as the server reports it.

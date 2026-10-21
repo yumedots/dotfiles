@@ -26,6 +26,11 @@ Item {
 	property color bodyColor: Config.foreground
 	property color eyeColor: Config.surface
 
+	// When true the body is drawn hollow, as an outline, instead of a solid
+	// shape. The topbar draws its icons as thin outlines, so the face matches
+	// them there instead of sitting in the bar as a heavy filled blob.
+	property bool hollow: false
+
 	property real size: Config.agentFaceSize
 	property bool paused: false
 
@@ -131,6 +136,12 @@ Item {
 		// amount, so the eyes stay the same size.
 		return Agent.clipSockets(root.body, wanted);
 	}
+
+	// The eyes, as paths. They are holes in the body when it is solid, and
+	// dots of their own when it is hollow.
+	readonly property var eyePaths: root.sockets.map(function (socket) {
+		return Agent.ellipsePoints(socket.x, socket.y, socket.radiusX, socket.radiusY, 40);
+	})
 
 	onStateChanged: {
 		root.fromState = root.lastState;
@@ -259,10 +270,22 @@ Item {
 			anchors.fill: parent
 
 			ink: root.bodyColor
+			outline: root.hollow
 
-			subpaths: [root.outline].concat(root.sockets.map(function (socket) {
-				return Agent.ellipsePoints(socket.x, socket.y, socket.radiusX, socket.radiusY, 40);
-			}))
+			subpaths: root.hollow
+				? [root.outline]
+				: [root.outline].concat(root.eyePaths)
+		}
+
+		// A hollow face has no body to punch the eyes out of, so they are
+		// drawn as solid dots on their own.
+		DynamicIcon {
+			anchors.fill: parent
+
+			visible: root.hollow
+			ink: root.bodyColor
+
+			subpaths: root.eyePaths
 		}
 	}
 }

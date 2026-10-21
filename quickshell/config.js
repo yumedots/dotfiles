@@ -494,7 +494,6 @@ const networkLanIcon = "\u{f0200}";
 const networkLockIcon = "\uf023";
 
 const agentFaceSize = 96;
-const agentBarFaceSize = 15;
 const agentMorphMs = 420;
 const agentInputHeight = 30;
 const agentInputGlyph = "\uf075";

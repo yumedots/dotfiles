@@ -35,6 +35,7 @@ Item {
 	property bool popupAlignRight: false
 	property bool popupCentered: false
 	property bool popupAlwaysCentered: false
+	property bool popupCenterScreen: false
 	property real popupBorderWidth: -1
 	property real popupPadding: -1
 	property alias popupContent: popupWindow.contentSource
@@ -74,6 +75,24 @@ Item {
 	readonly property real inkBelow: Math.max(iconsMetrics.tightBoundingRect.y + iconsMetrics.tightBoundingRect.height, root.valueBelow)
 	readonly property real baselineLift: 0
 
+	// The ink box of the icon font, measured from the baseline the glyphs sit
+	// on. A drawn icon has no baseline of its own, so it is measured against
+	// the glyphs it shares the bar with.
+	readonly property real iconsInkAbove: -iconsMetrics.tightBoundingRect.y
+	readonly property real iconsInkBelow: iconsMetrics.tightBoundingRect.y + iconsMetrics.tightBoundingRect.height
+
+	// The height of the glyph ink, which is the height a drawn icon takes.
+	readonly property real iconInkHeight: root.iconsInkAbove + root.iconsInkBelow
+
+	// The baseline of the icon glyphs, in the content item's coordinates.
+	//
+	// The glyph text is placed so that its baseline lands here, which is the
+	// same line for every icon in the bar, drawn or not.
+	readonly property real iconBaseline: root.inkAbove - root.iconLift
+
+	// The centre of the glyph ink, which is where a drawn icon belongs.
+	readonly property real iconInkCentre: root.iconBaseline - root.iconsInkAbove + root.iconInkHeight / 2
+
 	implicitWidth: root.iconMode ? Math.ceil(root.iconBreadth + root.gap) : Config.lineLength + root.gap
 	readonly property real contentHeight: Math.round(root.inkAbove + root.inkBelow)
 	implicitHeight: root.contentHeight + (root.showBar ? Math.ceil(Config.barThickness) : 0)
@@ -90,6 +109,7 @@ Item {
 		alignRight: root.popupAlignRight
 		centered: root.popupCentered
 		alwaysCentered: root.popupAlwaysCentered
+		centerScreen: root.popupCenterScreen
 		closable: root.popupClosable
 		borderWidth: root.popupBorderWidth
 	}
@@ -100,6 +120,8 @@ Item {
 		font.pixelSize: root.iconSize
 		text: Config.iconCpu + Config.iconMemory + Config.iconVolumeLow + Config.iconVolumeMid + Config.iconVolumeHigh + Config.iconBatteryFull + Config.iconBatteryHigh + Config.iconBatteryMid + Config.iconBatteryLow + Config.iconBatteryAlert + Config.iconBatteryCharge + Config.iconPowerPlug
 	}
+
+	Component.onCompleted: console.log("DBG metrics iconSize=", root.iconSize, "inkAbove=", root.inkAbove, "inkBelow=", root.inkBelow, "baseline=", root.iconBaseline, "iconsInkAbove=", root.iconsInkAbove, "iconsInkBelow=", root.iconsInkBelow, "inkCentre=", root.iconInkCentre, "inkHeight=", root.iconInkHeight);
 
 	TextMetrics {
 		id: iconMetrics
@@ -164,6 +186,7 @@ Item {
 
 			inkAbove: root.inkAbove
 			inkBelow: root.inkBelow
+			inkCentre: root.iconInkCentre
 		}
 
 		Text {

@@ -17,7 +17,21 @@ BarStat {
 
 	mode: "icon"
 	showBar: false
-	iconWidth: Config.agentBarFaceSize
+
+	// The face has no bar under it, so the stat is shorter than the others.
+	// The row is aligned by the bottom, so the face would sit lower than the
+	// glyphs beside it. Lifting it by the thickness of the bar puts it back on
+	// the same line.
+	readonly property real baselineLift: Math.ceil(Config.barThickness)
+
+	// The face is drawn as an outline, the way the other icons in the bar are
+	// drawn, and it is given the same height as their ink, so it sits in the
+	// bar like one of them instead of as a solid blob beside them.
+	//
+	// The body of the face is smaller than the slot it is drawn in, and the
+	// outline around it is a pixel wide, so the slot is made larger to make up
+	// for both.
+	iconWidth: (root.iconInkHeight - 1) / 0.86
 
 	iconComponent: Component {
 		AgentFace {
@@ -31,6 +45,9 @@ BarStat {
 
 			// The bar icon keeps its eyes still. The panel face tracks the cursor.
 			followCursor: false
+
+			// The bar draws thin outlines, so the face is hollow here.
+			hollow: true
 
 			bodyColor: ink
 			eyeColor: Config.surface

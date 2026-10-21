@@ -17,6 +17,10 @@ Row {
 	readonly property var items: SystemTray.items.values ? SystemTray.items.values : []
 	readonly property real baselineLift: Math.ceil(Config.barThickness)
 
+	// The bar gives every widget a slot whether it has anything to show or
+	// not, so a widget that is empty says so and the slot is taken away.
+	readonly property bool wanted: root.items.length > 0
+
 	readonly property real lineHeight: ink.tightBoundingRect.height
 
 	visible: root.items.length > 0

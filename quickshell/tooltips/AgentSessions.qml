@@ -38,6 +38,12 @@ Item {
 	// How much room the directory takes on the right.
 	readonly property real directoryWidth: 74
 
+	// The colour of a row, which is brighter when the row is the one the
+	// panel is talking to.
+	function rowColor(modelData, base) {
+		return modelData.id === root.target ? Config.foreground : base;
+	}
+
 	implicitWidth: Config.agentPanelWidth
 	implicitHeight: (root.shownActive.length + root.shownInactive.length) * root.rowHeight
 		+ (root.models.length > 0 ? root.rowHeight + 6 : 0)
@@ -61,6 +67,17 @@ Item {
 
 				readonly property bool isTarget: modelData.id === root.target
 
+				// The row the panel is talking to is marked, so it is clear
+				// which session a message will go to.
+				Rectangle {
+					visible: parent.isTarget
+					anchors.fill: parent
+					anchors.leftMargin: -4
+					anchors.rightMargin: -4
+					radius: 3
+					color: Config.launcherHighlight
+				}
+
 				Text {
 					id: glyph
 
@@ -72,7 +89,7 @@ Item {
 
 					font.family: Config.fontFamily
 					font.pixelSize: root.glyphSize
-					color: modelData.question ? Config.red : (modelData.failed ? Config.red : Config.foreground)
+					color: modelData.question ? Config.red : (modelData.failed ? Config.red : (parent.isTarget ? Config.foreground : Config.muted))
 					text: modelData.question ? Config.agentIconQuestion : (modelData.failed ? Config.agentIconClose : Config.agentIconWorking)
 				}
 
@@ -86,7 +103,7 @@ Item {
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
-					color: Config.foreground
+					color: parent.isTarget ? Config.foreground : Config.muted
 					text: modelData.title || modelData.id
 				}
 
@@ -101,7 +118,7 @@ Item {
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
-					color: Config.muted
+					color: parent.isTarget ? Config.muted : Config.dim
 					text: modelData.directory ? modelData.directory.split("/").pop() : ""
 				}
 
@@ -124,6 +141,17 @@ Item {
 
 				readonly property bool isTarget: modelData.id === root.target
 
+				// The row the panel is talking to is marked, so it is clear
+				// which session a message will go to.
+				Rectangle {
+					visible: parent.isTarget
+					anchors.fill: parent
+					anchors.leftMargin: -4
+					anchors.rightMargin: -4
+					radius: 3
+					color: Config.launcherHighlight
+				}
+
 				Text {
 					id: glyph
 
@@ -135,7 +163,7 @@ Item {
 
 					font.family: Config.fontFamily
 					font.pixelSize: root.glyphSize
-					color: Config.dim
+					color: parent.isTarget ? Config.foreground : Config.dim
 					text: Config.agentIconDone
 				}
 
@@ -149,7 +177,7 @@ Item {
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
-					color: Config.dim
+					color: parent.isTarget ? Config.foreground : Config.dim
 					text: modelData.title || modelData.id
 				}
 
@@ -164,7 +192,7 @@ Item {
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
-					color: Config.dim
+					color: parent.isTarget ? Config.muted : Config.dim
 					text: modelData.directory ? modelData.directory.split("/").pop() : ""
 				}
 

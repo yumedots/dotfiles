@@ -73,6 +73,16 @@ Item {
 	implicitWidth: Config.agentPanelWidth + 2 * Config.agentPanelPadding
 	implicitHeight: column.implicitHeight + Config.agentPanelPadding * 2
 
+	// The width of the content, which follows the panel when the panel is
+	// given one, so a window around it can be resized.
+	readonly property real contentWidth: root.width > 0
+		? Math.max(Config.agentPanelWidth, root.width - 2 * Config.agentPanelPadding)
+		: Config.agentPanelWidth
+
+	// The height of the content, which a window around the panel takes for
+	// its own height.
+	readonly property real contentHeight: column.implicitHeight
+
 	// The field takes the focus, so keystrokes land in it. The popup focuses its
 	// first content item when it opens, which would take the focus back, so the
 	// field claims it again until it holds.
@@ -146,7 +156,7 @@ Item {
 
 		x: Config.agentPanelPadding
 		y: Config.agentPanelPadding
-		width: Config.agentPanelWidth
+		width: root.contentWidth
 		spacing: Config.agentPanelPadding
 
 		Item {

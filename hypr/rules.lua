@@ -33,3 +33,13 @@ hl.window_rule({
     move  = "20 monitor_h-120",
     float = true,
 })
+
+-- The agent window opens at the size of its content, floating, so it can be
+-- moved and resized like any other window.
+hl.window_rule({
+    name  = "agent-window",
+    match = { class = "org.quickshell", title = "^Agent$" },
+
+    size  = "320 620",
+    float = true,
+})

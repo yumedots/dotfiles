@@ -188,8 +188,17 @@ ShellRoot {
 			shellRoot.speedtest();
 		else if (id === "bareBar")
 			shellRoot.bareBar();
+		else if (id === "agentWindow")
+			shellRoot.agentWindow();
 		else
 			shellRoot.openWidget(id, true);
+	}
+
+	// Opens the agent as a window of its own, so it can be moved, resized
+	// and closed like any other window.
+	function agentWindow() {
+		shellRoot.agentWindowOpen = !shellRoot.agentWindowOpen;
+		shellRoot.agentWindowTarget = OpenCode.targetSession;
 	}
 
 	function media(action) {
@@ -212,7 +221,7 @@ ShellRoot {
 	}
 
 	Instantiator {
-		model: shellRoot.isLauncher ? [] : [["clipboard", "clipboard"], ["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["weather", "weather"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"], ["bareBar", "bareBar"]]
+		model: shellRoot.isLauncher ? [] : [["clipboard", "clipboard"], ["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["weather", "weather"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"], ["bareBar", "bareBar"], ["agentWindow", "agentWindow"]]
 
 		delegate: GlobalShortcut {
 			required property var modelData
@@ -335,8 +344,7 @@ ShellRoot {
 
 		// Opens the agent as a window, the way the launcher opens as one.
 		function agentWindow() {
-			shellRoot.agentWindowOpen = !shellRoot.agentWindowOpen;
-			shellRoot.agentWindowTarget = OpenCode.targetSession;
+			shellRoot.agentWindow();
 		}
 
 

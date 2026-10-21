@@ -30,9 +30,9 @@ Item {
 	property real inkAbove: 0
 	property real inkBelow: 0
 
-	// The centre of the line of text, which is where a drawn icon sits so it
-	// lines up with the glyphs beside it.
-	readonly property real lineCentre: (root.inkAbove + root.inkBelow) / 2
+	// The centre of the glyph ink the icon is drawn against. A drawn icon has
+	// no baseline of its own, so it is centred on the glyphs beside it.
+	property real inkCentre: 0
 
 	Loader {
 		id: slot
@@ -43,7 +43,7 @@ Item {
 		// The icon is centred on the line of text, so it lines up with the
 		// glyphs next to it.
 		x: 0
-		y: root.lineCentre - root.drawnSize / 2 - root.lift
+		y: root.inkCentre - root.drawnSize / 2 - root.lift
 
 		width: root.drawnSize
 		height: root.drawnSize

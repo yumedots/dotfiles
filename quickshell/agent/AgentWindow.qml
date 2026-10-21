@@ -9,94 +9,126 @@ import "../tooltips"
 
 // The agent as a window.
 //
-// The topbar widget opens a small panel; this is the same panel on its own,
-// filling the screen. The keybind switches between the two.
-PanelWindow {
+// The topbar widget opens a small panel; this is the same panel on its own, in
+// a real window that the compositor manages, so it can be moved, resized,
+// raised and closed like any other window.
+FloatingWindow {
 	id: root
 
 	property bool shown: false
-	property bool alwaysMapped: true
 	property string target: ""
 
-	anchors.top: true
-	anchors.left: true
-	anchors.bottom: true
-	anchors.right: true
+	title: "Agent"
+	visible: root.shown
 
-	implicitWidth: root.screen ? root.screen.width : 1
-	implicitHeight: root.screen ? root.screen.height : 1
+	// The width of the panel, which is the width of the content plus the
+	// padding around it.
+	readonly property real panelWidth: Config.agentPanelWidth + 2 * Config.agentPanelPadding
 
-	exclusiveZone: -1
-	color: "transparent"
+	// The height of the bar along the top, which drags the window around.
+	readonly property real titleHeight: 28
 
-	WlrLayershell.layer: WlrLayer.Overlay
-	WlrLayershell.namespace: "agentwindow"
-	WlrLayershell.keyboardFocus: root.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
-	WlrLayershell.focusable: true
+	// The window is made at the size of its content, because the compositor
+	// keeps the size a window is made with.
+	implicitWidth: root.panelWidth
+	implicitHeight: 620
 
-	// The window is always mapped, the way the launcher is, so it can be shown
-	// without waiting for a surface. When it is hidden it lets the clicks
-	// through.
-	visible: root.alwaysMapped || root.shown || card.opacity > 0
+	minimumSize: Qt.size(320, 420)
+	maximumSize: Qt.size(1200, 2000)
 
-	Region {
-		id: emptyRegion
+	color: Config.surfaceTranslucent
 
-		width: 0
-		height: 0
-	}
+	// The panel fills the window, so it grows and shrinks with it.
+	AgentPanel {
+		id: agentPanel
 
-	mask: root.shown ? null : emptyRegion
-
-	// Clicking the background closes the window.
-	MouseArea {
 		anchors.fill: parent
-		onClicked: root.shown = false
+		anchors.topMargin: root.titleHeight
+
+		source: null
+		injectedTarget: root.target
+
+		onCloseRequested: root.shown = false;
 	}
 
-	// The card is the panel itself, so it fades with the window.
+	// A bar along the top, which drags the window around.
 	Item {
-		id: card
+		id: titleBar
 
-		anchors.centerIn: parent
-		width: winCard.width
-		height: winCard.height
-
-		opacity: root.shown ? 1 : 0
-
-		Behavior on opacity {
-			NumberAnimation {
-				duration: Config.popupFadeMs
-				easing.type: Easing.InOutCubic
-			}
-		}
+		anchors.top: parent.top
+		anchors.left: parent.left
+		anchors.right: parent.right
+		height: root.titleHeight
 
 		Rectangle {
 			anchors.fill: parent
-			radius: 8
 			color: Config.surfaceTranslucent
-			border.width: 1
-			border.color: Config.dim
 		}
 
-		Item {
-			id: winCard
+		Text {
+			anchors.left: parent.left
+			anchors.leftMargin: Config.agentPanelPadding
+			anchors.verticalCenter: parent.verticalCenter
 
-			width: panel.implicitWidth
-			height: panel.implicitHeight
+			font.family: Config.fontFamily
+			font.pixelSize: Settings.fontSize
+			color: Config.muted
+			text: root.title
+		}
 
-			AgentPanel {
-				id: panel
+		MouseArea {
+			anchors.fill: parent
 
-				x: 0
-				y: 0
-
-				source: null
-				injectedTarget: root.target
-
-				onCloseRequested: root.shown = false
+			onPressed: function (mouse) {
+				root.startSystemMove();
 			}
 		}
 	}
-}
 
+	// A grip on the edge of the window, to resize it by dragging.
+	MouseArea {
+		id: east
+
+		anchors.right: parent.right
+		anchors.top: parent.top
+		anchors.bottom: parent.bottom
+		width: 6
+
+		cursorShape: Qt.SizeHorCursor
+
+		onPressed: function (mouse) {
+			root.startSystemResize(Qt.RightEdge);
+		}
+	}
+
+	MouseArea {
+		id: south
+
+		anchors.bottom: parent.bottom
+		anchors.left: parent.left
+		anchors.right: parent.right
+		height: 6
+
+		cursorShape: Qt.SizeVerCursor
+
+		onPressed: function (mouse) {
+			root.startSystemResize(Qt.BottomEdge);
+		}
+	}
+
+	// A grip in the corner, to resize it in both directions at once.
+	MouseArea {
+		id: corner
+
+		anchors.right: parent.right
+		anchors.bottom: parent.bottom
+		width: 14
+		height: 14
+
+		cursorShape: Qt.SizeBDiagCursor
+
+		onPressed: function (mouse) {
+			root.startSystemResize(Qt.RightEdge | Qt.BottomEdge);
+		}
+	}
+}
