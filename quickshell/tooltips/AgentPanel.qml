@@ -69,6 +69,17 @@ Item {
 	// showing a reset time that has already gone by.
 	property real now: Date.now()
 
+	// The message the agent is asking about, and the one that was put away.
+	// A new message comes back on its own.
+	property string detail: OpenCode.detailText
+	property string dismissedDetail: ""
+
+	readonly property bool detailHidden: root.detail !== "" && root.dismissedDetail === root.detail;
+
+	function dismissDetail() {
+		root.dismissedDetail = root.detail;
+	}
+
 	Timer {
 		interval: 30000
 		repeat: true
@@ -281,16 +292,48 @@ Item {
 				}
 
 				// The detail always holds its place, so the work below it
-				// does not jump when a message comes and goes.
-				Text {
+				// does not jump when a message comes and goes. The cross
+				// puts the message away.
+				Item {
 					width: parent.width
-					horizontalAlignment: Text.AlignHCenter
-					elide: Text.ElideRight
+					height: root.rowHeight
 
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize
-					color: Config.muted
-					text: OpenCode.detailText
+					Row {
+						anchors.horizontalCenter: parent.horizontalCenter
+						anchors.verticalCenter: parent.verticalCenter
+
+						spacing: 6
+
+						Text {
+							width: Math.min(implicitWidth, parent.parent.width - 40)
+							visible: !root.detailHidden
+
+							elide: Text.ElideRight
+
+							font.family: Config.fontFamily
+							font.pixelSize: Settings.fontSize
+							color: Config.muted
+							text: root.detail
+						}
+
+						Text {
+							visible: !root.detailHidden
+
+							font.family: Config.fontFamily
+							font.pixelSize: Settings.fontSize
+							color: dismissDetailHit.containsMouse ? Config.foreground : Config.muted
+							text: Config.iconClose
+
+							MouseArea {
+								id: dismissDetailHit
+
+								anchors.fill: parent
+								anchors.margins: -4
+
+								onClicked: root.dismissDetail()
+							}
+						}
+					}
 				}
 			}
 
@@ -427,27 +470,13 @@ Item {
 								text: modelData.title
 							}
 
-							Text {
-								id: limitReset
-
-								anchors.left: limitLabel.right
-								anchors.leftMargin: 8
-								anchors.verticalCenter: parent.verticalCenter
-								width: 40
-
-								font.family: Config.fontFamily
-								font.pixelSize: Settings.fontSize
-								color: Config.muted
-								text: root.countdown(modelData.resetsAt)
-							}
-
 							StepBar {
 								id: limitMeter
 
-								anchors.left: limitReset.right
+								anchors.left: limitLabel.right
 								anchors.right: limitValue.left
 								anchors.leftMargin: 8
-								anchors.rightMargin: 8
+								anchors.rightMargin: 10
 								anchors.verticalCenter: parent.verticalCenter
 
 								level: modelData.percent / 100
@@ -458,7 +487,8 @@ Item {
 							Text {
 								id: limitValue
 
-								anchors.right: parent.right
+								anchors.right: limitReset.left
+								anchors.rightMargin: 10
 								anchors.verticalCenter: parent.verticalCenter
 								width: 36
 
@@ -468,6 +498,21 @@ Item {
 								font.pixelSize: Settings.fontSize
 								color: limitRow.alarming ? Config.red : Config.muted
 								text: Math.round(modelData.percent) + "%"
+							}
+
+							Text {
+								id: limitReset
+
+								anchors.right: parent.right
+								anchors.verticalCenter: parent.verticalCenter
+								width: 40
+
+								horizontalAlignment: Text.AlignRight
+
+								font.family: Config.fontFamily
+								font.pixelSize: Settings.fontSize
+								color: Config.muted
+								text: root.countdown(modelData.resetsAt)
 							}
 						}
 					}
