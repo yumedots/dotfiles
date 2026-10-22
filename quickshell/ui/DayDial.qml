@@ -66,7 +66,7 @@ Item {
 
 			ctx.reset();
 
-			const steps = 120;
+			const steps = 240;
 			const outer = dial.ringR + Config.calendarDialRingWidth / 2;
 			const inner = dial.ringR - Config.calendarDialRingWidth / 2;
 			const overlap = 0.004;
