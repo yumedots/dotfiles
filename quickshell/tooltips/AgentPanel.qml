@@ -78,7 +78,8 @@ Item {
 		onTriggered: root.now = Date.now()
 	}
 
-	// How long until a window of the allowance resets, as a short phrase.
+	// How long until a window of the allowance resets. One measure at a time:
+	// the days when there are days, the hours when there are not.
 	function countdown(text) {
 		const at = Date.parse(String(text || ""));
 
@@ -91,15 +92,16 @@ Item {
 			return "now";
 
 		const days = Math.floor(minutes / 1440);
-		const hours = Math.floor((minutes % 1440) / 60);
 
 		if (days > 0)
-			return days + "d " + hours + "h";
+			return days + "d";
+
+		const hours = Math.floor(minutes / 60);
 
 		if (hours > 0)
-			return hours + "h " + (minutes % 60) + "m";
+			return hours + "h";
 
-		return (minutes % 60) + "m";
+		return minutes + "m";
 	}
 
 	Row {
@@ -142,68 +144,17 @@ Item {
 				spacing: 2
 				model: OpenCode.doneSessions
 
-				delegate: Item {
+				delegate: AgentRow {
 					required property var modelData
 
 					width: doneList.width - 8
 					height: root.rowHeight
 
-					// The figure that says the work is over.
-					Text {
-						id: doneFigure
+					kind: "done"
+					title: modelData.title
+					dismissable: true
 
-						x: 0
-						y: 0
-						width: 12
-						height: root.rowHeight
-						verticalAlignment: Text.AlignVCenter
-						horizontalAlignment: Text.AlignHCenter
-
-						font.family: Config.fontFamily
-						font.pixelSize: Settings.fontSize
-						color: Config.muted
-						text: Config.agentIconDone
-					}
-
-					Text {
-						anchors.left: doneFigure.right
-						anchors.leftMargin: 8
-						anchors.right: dismiss.left
-						anchors.rightMargin: 6
-						anchors.verticalCenter: parent.verticalCenter
-
-						elide: Text.ElideRight
-
-						font.family: Config.fontFamily
-						font.pixelSize: Settings.fontSize
-						color: Config.muted
-						text: modelData.title
-					}
-
-					// The cross that takes the finished work off the list.
-					Text {
-						id: dismiss
-
-						anchors.right: parent.right
-						anchors.verticalCenter: parent.verticalCenter
-						width: 14
-
-						horizontalAlignment: Text.AlignHCenter
-
-						font.family: Config.fontFamily
-						font.pixelSize: Settings.fontSize
-						color: dismissHit.containsMouse ? Config.foreground : Config.muted
-						text: Config.iconClose
-
-						MouseArea {
-							id: dismissHit
-
-							anchors.fill: parent
-							anchors.margins: -4
-
-							onClicked: OpenCode.dismiss(modelData.id)
-						}
-					}
+					onDismissed: OpenCode.dismiss(modelData.id)
 				}
 			}
 
@@ -340,74 +291,15 @@ Item {
 				spacing: 2
 				model: OpenCode.working
 
-				delegate: Item {
+				delegate: AgentRow {
 					required property var modelData
 
 					width: workList.width - 8
 					height: root.rowHeight
 
-					// The figure that says what the session is doing: a
-					// braille spinner while it works, a question mark when it
-					// asks something, and a cross when it failed.
-					Braille {
-						id: figure
-
-						x: 0
-						y: 1
-						width: 12
-						height: root.rowHeight - 2
-
-						running: modelData.working
-						visible: modelData.working
-						ink: modelData.failed || modelData.question ? Config.red : Config.foreground
-					}
-
-					Text {
-						x: figure.x
-						y: 0
-						width: 12
-						height: root.rowHeight
-						visible: !modelData.working
-						verticalAlignment: Text.AlignVCenter
-						horizontalAlignment: Text.AlignHCenter
-
-						font.family: Config.fontFamily
-						font.pixelSize: Settings.fontSize
-						color: Config.red
-						text: modelData.question ? Config.agentIconQuestion : Config.agentIconClose
-					}
-
-					// The mark of the provider that is doing the work.
-					Image {
-						id: mark
-
-						x: 16
-						y: 1
-						width: 15
-						height: 15
-						visible: modelData.icon !== ""
-
-						source: modelData.icon !== ""
-							? "file://" + Quickshell.shellDir + "/assets/providers/" + modelData.icon + ".svg?v=3"
-							: ""
-						sourceSize.width: Math.round(15 * root.dpr)
-						sourceSize.height: Math.round(15 * root.dpr)
-						fillMode: Image.PreserveAspectFit
-					}
-
-					Text {
-						anchors.left: mark.visible ? mark.right : figure.right
-						anchors.leftMargin: mark.visible ? 6 : 8
-						anchors.right: parent.right
-						anchors.verticalCenter: parent.verticalCenter
-
-						elide: Text.ElideRight
-
-						font.family: Config.fontFamily
-						font.pixelSize: Settings.fontSize
-						color: modelData.failed || modelData.question ? Config.red : Config.foreground
-						text: modelData.title
-					}
+					kind: modelData.working ? "working" : (modelData.question ? "question" : "failed")
+					icon: modelData.icon
+					title: modelData.title
 				}
 			}
 
@@ -518,29 +410,12 @@ Item {
 							}
 
 							Text {
-								id: limitValue
-
-								anchors.left: limitLabel.right
-								anchors.leftMargin: 4
-								anchors.verticalCenter: parent.verticalCenter
-								width: 32
-
-								horizontalAlignment: Text.AlignRight
-
-								font.family: Config.fontFamily
-								font.pixelSize: Settings.fontSize
-								color: limitRow.alarming ? Config.red : Config.muted
-								text: Math.round(modelData.percent) + "%"
-							}
-
-							Text {
 								id: limitReset
 
-								anchors.right: parent.right
+								anchors.left: limitLabel.right
+								anchors.leftMargin: 8
 								anchors.verticalCenter: parent.verticalCenter
-								width: 48
-
-								horizontalAlignment: Text.AlignRight
+								width: 40
 
 								font.family: Config.fontFamily
 								font.pixelSize: Settings.fontSize
@@ -551,8 +426,8 @@ Item {
 							StepBar {
 								id: limitMeter
 
-								anchors.left: limitValue.right
-								anchors.right: limitReset.left
+								anchors.left: limitReset.right
+								anchors.right: limitValue.left
 								anchors.leftMargin: 8
 								anchors.rightMargin: 8
 								anchors.verticalCenter: parent.verticalCenter
@@ -560,6 +435,21 @@ Item {
 								level: modelData.percent / 100
 								ink: limitRow.alarming ? Config.red : Config.foreground
 								track: Config.dim
+							}
+
+							Text {
+								id: limitValue
+
+								anchors.right: parent.right
+								anchors.verticalCenter: parent.verticalCenter
+								width: 32
+
+								horizontalAlignment: Text.AlignRight
+
+								font.family: Config.fontFamily
+								font.pixelSize: Settings.fontSize
+								color: limitRow.alarming ? Config.red : Config.muted
+								text: Math.round(modelData.percent) + "%"
 							}
 						}
 					}
