@@ -1,4 +1,4 @@
-# Agent widget — v1 plan
+# Agent widget — plan
 
 Target: Quickshell topbar widget driven by OpenCode v2 server state, tracking the
 Hyprland cursor, living in `~/.config/quickshell`.
@@ -8,15 +8,17 @@ Hyprland cursor, living in `~/.config/quickshell`.
 | Area | Decision |
 | --- | --- |
 | Placement | A topbar widget, built with the house primitives (`qs` module, `ui/`, `services/`, `lib/`, `Bar.qml` wiring). Clicking it opens a panel |
+| Panel | Display only. No input line, no session list, no model switcher, no separate window — the agent is talked to in the terminal it runs in |
+| Panel size | The panel keeps one size, so the popup it lives in never resizes while it is open. A popup that resizes while it is open crashes quickshell |
 | Cursor behavior | The topbar icon keeps its eyes still and blinks; the panel face follows the cursor and blinks |
 | Cursor source | Hyprland C++ plugin (`mouseMove` event → FIFO → widget) |
 | OpenCode link | Direct SSE to the OpenCode v2 server (`/api/event`), basic auth from `service.json` |
-| Session scope | Aggregate across all sessions on the server |
-| Input | The panel has an input line under the face, focused on open, Enter sends |
-| Send target | The session the panel sends to is the most recently touched one, falling back to the newest session on the server |
+| Session scope | Aggregate across all sessions on the server. The sessions the server says are running right now (`/api/session/active`) each get a row, so several sessions working at once are all visible |
+| Marks | The provider of a session gets its own svg (`assets/providers`), white, drawn at the size of the screen |
 | Notification | `notify-send` → the quickshell notification daemon already running on this box |
-| Visual | House `Figure` primitive shapes; eyes are holes in the body; no third-party assets |
-| v1 scope | State machine, cursor gaze, finish notification, type-and-send, idle animation, click-through |
+| Subscription | The credential the CLI keeps in the server is used against the plan's own endpoint, which answers with the windows of what is left of the allowance |
+| Visual | House `Figure` primitive shapes; the body is solid and the eyes are holes in it; no third-party assets |
+| Spin | One speed for the bar icon and the panel face (`Config.agentSpinMs`), slow enough to read |
 
 ## Verified primitives (measured on this machine)
 
@@ -25,7 +27,9 @@ Hyprland cursor, living in `~/.config/quickshell`.
 - `GET /api/event` is SSE (`data: {...}` lines, 15 s heartbeat). Public events confirmed live:
   `session.status`, `session.execution.started|succeeded|failed|interrupted`, `permission.asked|replied`,
   `form.created|replied`, `session.inbox.*`, `session.viewed`, `session.created|renamed`.
-- `POST /api/session/:id/prompt` `{text}` works (probed on a throwaway session).
+- `GET /api/credential` hands over the OAuth credential the CLI is signed in with.
+- `GET https://opencode.ai/zen/go/v1/usage` with that credential as a bearer token answers with
+  `rolling`, `weekly`, and `monthly` windows, each with a percent and a reset time.
 - Quickshell 0.3.2 / Qt 6.12. `Quickshell.Io.Process` + `SplitParser` streams SSE lines correctly
   (live probe ran; frames parsed).
 - `Quickshell.Io.FileView` reads `service.json`; `watchChanges` catches service restarts.
@@ -44,8 +48,6 @@ Hyprland cursor, living in `~/.config/quickshell`.
   `ShapePath` — path elements are not items.
 - `Window.window` gives the window, and `Window.window.contentItem` maps items into window
   coordinates. `QSWindow` is not reachable as an attached property.
-- `SearchField` takes the key press before the input's own accept, so a panel that needs Enter
-  has to act on the key itself.
 - `Quickshell.Io.StdioCollector` signals `streamFinished` with no argument; the output is on its
   `text` property.
 
@@ -66,13 +68,14 @@ by shape, using the workspace indicator's own version table.
 - `lib/agent.js` — body outline (continuous lobes, morphable), eye socket geometry, gaze math,
   cursor FIFO path.
 - `services/Cursor.qml` — reads the plugin FIFO, exposes `x`/`y`.
-- `services/OpenCode.qml` — service.json auth, SSE stream, per-session state, aggregate state,
-  prompt sending, finish notification.
+- `services/OpenCode.qml` — service.json auth, SSE stream, per-session state, aggregate state, the
+  sessions that are running right now, the finish notification, the subscription windows.
+- `assets/providers/` — the marks of the providers, one svg each.
 - `ui/DynamicIcon.qml` — the primitive for animated vector icons: one path from any number of
   closed subpaths, odd-even holes, morphable.
 - `ui/AgentFace.qml` — the face: body shape, blinking eyes, lean.
 - `bar/widgets/AgentStat.qml` — the topbar widget: the face as a bar icon, eyes still.
-- `tooltips/AgentPanel.qml` — the panel: the face at full size, the state, the input line.
+- `tooltips/AgentPanel.qml` — the panel: the face at full size, the state, the work, the plan.
 - `config.js` — `agent*` constants.
 - `qmldir` files — register the new module entries.
 - `Bar.qml` + `topbarlayout.json` — the widget slot.
@@ -93,3 +96,6 @@ by shape, using the workspace indicator's own version table.
   dropping is harmless.
 - SSE is live-only (no replay); a server restart needs a reconnect, handled by watching
   `service.json` and restarting the curl process.
+- The subscription is read with the OAuth credential the server keeps. When that credential is
+  refreshed the server hands over the fresh one, but a plan that is not the Go plan has no
+  windows to show and the panel says so.

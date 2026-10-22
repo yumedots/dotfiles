@@ -80,19 +80,6 @@ function rotatePoints(points, cx, cy, angle) {
 	return out;
 }
 
-// Circle outline, used for the pupil.
-function circlePoints(cx, cy, radius, samples) {
-	const count = Math.max(12, Math.round(samples || 24));
-	const points = [];
-
-	for (let i = 0; i < count; i++) {
-		const angle = (i / count) * TWO_PI;
-		points.push(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
-	}
-
-	return points;
-}
-
 // Ellipse outline, used for the eye sockets. A socket squashes vertically as
 // the eye closes, so a blink flattens the eye into a line.
 function ellipsePoints(cx, cy, radiusX, radiusY, samples) {
@@ -167,35 +154,6 @@ function clipSockets(outline, sockets) {
 			radiusY: socket.radiusY * low
 		};
 	});
-}
-
-// The session the input line sends to: the agent that is working wins, or
-// else the one that was touched last. A session that was only listed is not
-// activity, so it never beats a session that was.
-function pickTarget(sessions) {
-	const ids = Object.keys(sessions || {});
-	let best = "";
-	let bestStamp = -1;
-	let working = "";
-	let workingStamp = -1;
-
-	for (let i = 0; i < ids.length; i++) {
-		const id = ids[i];
-		const session = sessions[id] || {};
-		const stamp = session.updated || 0;
-
-		if (stamp > bestStamp) {
-			bestStamp = stamp;
-			best = id;
-		}
-
-		if ((session.status === "busy" || session.status === "retry") && stamp > workingStamp) {
-			workingStamp = stamp;
-			working = id;
-		}
-	}
-
-	return working || best;
 }
 
 // The path of the fifo the cursor plugin writes to.

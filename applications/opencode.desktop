@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=OpenCode
+GenericName=AI coding agent
+Comment=Run the OpenCode agent in a terminal
+Exec=opencode
+Icon=opencode
+Terminal=true
+Categories=Development;Utility;
+StartupNotify=false

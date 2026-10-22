@@ -21,9 +21,6 @@ Shape {
 	// coordinates.
 	property var subpaths: []
 
-	// When true, the icon is drawn hollow: only the outline is stroked.
-	property bool outline: false
-
 	preferredRendererType: Shape.CurveRenderer
 	asynchronous: false
 
@@ -52,8 +49,8 @@ Shape {
 	ShapePath {
 		// The fill rule is left at its default, which is odd-even, so a subpath
 		// drawn inside another one punches a hole through it.
-		strokeColor: root.outline ? root.ink : "transparent"
-		fillColor: root.outline ? "transparent" : root.ink
+		strokeColor: "transparent"
+		fillColor: root.ink
 		strokeWidth: 1
 
 		PathSvg {

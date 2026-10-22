@@ -20,7 +20,7 @@ eval(fs.readdirSync(__dirname).filter(function (name) { return name.endsWith(".j
 }).join("\n"));
 
 const Config = new Function(fs.readFileSync(__dirname + "/../config.js", "utf8").replace(".pragma library", "")
-	+ "\nreturn { weatherCodes: weatherCodes, weatherCoords: weatherCoords, weatherIcon: weatherIcon, weatherLoadingIcon: weatherLoadingIcon, weatherLocation: weatherLocation, weatherStationCount: weatherStationCount, networkSpeedBytes: networkSpeedBytes };")();
+	+ "\nreturn { weatherCodes: weatherCodes, weatherCoords: weatherCoords, weatherIcon: weatherIcon, weatherLoadingIcon: weatherLoadingIcon, weatherLocation: weatherLocation, weatherStationCount: weatherStationCount, networkSpeedBytes: networkSpeedBytes, notifyScale: notifyScale, notifyWidth: notifyWidth, notifySlot: notifySlot, notifyRowHeight: notifyRowHeight, notifyAppFontSize: notifyAppFontSize };")();
 
 section("apps", function () {
 const entries = desktopEntries([
@@ -327,6 +327,11 @@ assert(Object.keys(iconFiles("")).length === 0, "an empty icon listing yields no
 assert(iconLookup(iconFiles("/usr/share/pixmaps/Alacritty.svg"), "alacritty") === "/usr/share/pixmaps/Alacritty.svg", "icon lookup matches case-insensitively");
 assert(iconLookup(iconFiles("/usr/share/pixmaps/Alacritty.svg"), "Alacritty") === "/usr/share/pixmaps/Alacritty.svg", "icon lookup keeps exact matches first");
 assert(iconLookup(iconFiles("/usr/share/pixmaps/Alacritty.svg"), "nope") === "", "an unknown icon resolves to nothing");
+assert(cleanName("Alacritty.desktop") === "Alacritty", "a desktop entry name loses its suffix");
+assert(cleanName("  Alacritty  ") === "Alacritty", "a name is trimmed");
+assert(cleanName("") === "", "an empty name stays empty");
+assert(iconNames(["Alacritty.desktop", "alacritty", "", null]).join(",") === "Alacritty", "the names are cleaned and the repeats dropped");
+assert(iconNames(["discord", "steam"]).join(",") === "discord,steam", "the names keep the order they came in");
 assert(cleanExec("code-insiders %F") === "code-insiders", "field codes are stripped");
 assert(cleanExec("env GDK_BACKEND=x11 firefox %u") === "env GDK_BACKEND=x11 firefox", "an env wrapper stays, only the field code goes");
 assert(cleanExec("app 100%%") === "app 100%", "an escaped percent survives");
@@ -1349,6 +1354,10 @@ const up = speedUpCommand("https://speed.cloudflare.com/__up", 500);
 assert(up[0] === "sh" && up[2].indexOf("speed_upload") < 0, "the upload test is a quiet shell pipe the sampling loop can watch");
 
 assert(megaBits(125000).toFixed(1) === "1.0", "a byte rate converts to megabits per second");
+assert(Config.notifyWidth === Math.round(280 * Config.notifyScale), "the notification width follows the size");
+assert(Config.notifySlot === Math.round(22 * Config.notifyScale), "the notification icon follows the size");
+assert(Config.notifyRowHeight === Math.round(38 * Config.notifyScale), "the notification row follows the size");
+assert(Config.notifyAppFontSize === Math.round(11 * Config.notifyScale), "the notification text follows the size");
 assert(megaBits(0) === 0 && megaBits(null) === 0, "no traffic reads as zero megabits");
 assert(speedText(125000) === "1", "a megabit reads as a whole number");
 assert(speedText(12500000) === "100", "triple digit speeds stay whole numbers");
@@ -1430,13 +1439,31 @@ section("figure", function () {
 });
 
 section("agent", function () {
-	assert(pickTarget({}) === "", "no session means no target");
-	assert(pickTarget({ a: { updated: 10 } }) === "a", "a lone session is the target");
-	assert(pickTarget({ a: { updated: 10 }, b: { updated: 20 } }) === "b", "the session touched last wins when nothing works");
-	assert(pickTarget({ a: { updated: 30, status: "busy" }, b: { updated: 20 } }) === "a", "a working agent wins over a quiet one");
-	assert(pickTarget({ a: { updated: 10, status: "busy" }, b: { updated: 20, status: "retry" } }) === "b", "between working agents the one touched last wins");
-	assert(pickTarget({ a: { updated: 10, status: "idle" }, b: { updated: 0 } }) === "a", "a session that was only listed never wins");
-	assert(pickTarget({ a: { status: "busy" } }) === "a", "a session without a stamp is still a target");
+	const body = shapePoints({ width: 40, height: 40, exponent: 2, lobes: 1, scallop: 0 });
+
+	assert(body.length > 0 && body.every(isFinite), "the body draws real points");
+
+	const spiked = shapePoints({ width: 40, height: 40, exponent: 2, lobes: 9, scallop: 0.16 });
+	const blended = blendPoints(body, spiked, 0.5);
+
+	assert(blended.length === body.length && blended.every(isFinite), "two bodies blend into one outline");
+
+	const turned = rotatePoints(body, 20, 20, Math.PI / 2);
+
+	assert(turned.length === body.length && turned.every(isFinite), "the outline turns on its own");
+
+	const sockets = clipSockets(body, [
+		{ x: 20, y: 20, radiusX: 4, radiusY: 4 },
+		{ x: 60, y: 20, radiusX: 4, radiusY: 4 },
+	]);
+
+	assert(sockets.length === 2, "both eye sockets come back");
+	assert(sockets[0].radiusX < 4, "a socket that runs past the body is pulled back");
+	assert(sockets[0].radiusX === sockets[1].radiusX, "both sockets stay the same size");
+
+	const eye = ellipsePoints(20, 20, 3, 2, 24);
+
+	assert(eye.length === 48 && eye.every(isFinite), "an eye is an ellipse of points");
 });
 
 console.log("check ok (" + ran + " assertions" + (filter === "" ? "" : ", filter " + filter) + ")");

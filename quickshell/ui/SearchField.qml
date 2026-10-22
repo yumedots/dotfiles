@@ -21,7 +21,6 @@ Rectangle {
 	signal keyPressed(var event)
 
 	readonly property bool hint: !root.typing && root.hintKey !== "" && input.text === ""
-	readonly property bool focused: input.activeFocus
 	readonly property real slot: root.glyphSlot > 0 ? root.glyphSlot : icon.implicitWidth
 	readonly property real lineHeight: Math.round(root.size * 1.6)
 

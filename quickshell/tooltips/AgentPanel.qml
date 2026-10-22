@@ -1,35 +1,22 @@
 import QtQuick
+import Quickshell
 import qs
 import qs.services
 import qs.ui
 
-// The agent panel: the face at full size, the state of the agent, and an input
-// line to send it a message.
+// The agent panel: the face at full size, the state of the agent, the work
+// that is going on, and the plan the agent runs on.
 //
-// The field takes focus as soon as the panel opens, so a message can be typed
-// straight away.
+// The panel keeps one size, so the popup it lives in never changes size
+// while it is open.
 Item {
 	id: root
 
 	property var source: null
 
-	// The session the panel sends to.
-	//
-	// The panel locks onto a session when it opens, so a message never slips
-	// into another session while it is being written. The server sends its list
-	// of sessions a moment after the shell starts, so the lock waits for a
-	// session to turn up instead of settling on nothing.
-	//
-	// A session the user picks in the list wins over the lock.
-	property string injectedTarget: ""
-	property string chosenTarget: ""
-	property string lockedTarget: ""
-
-	readonly property string target: root.chosenTarget !== ""
-		? root.chosenTarget
-		: (root.lockedTarget !== "" ? root.lockedTarget : OpenCode.targetSession)
-
-	signal closeRequested()
+	// The marks are drawn at the size of the screen, so a small svg stays
+	// sharp instead of being scaled up from a small raster.
+	readonly property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
 
 	readonly property string state: OpenCode.state
 	readonly property string stateText: root.state === "working"
@@ -70,257 +57,522 @@ Item {
 		return Util.clamp((Cursor.y - root.faceCenter.y) / Config.agentFaceSize, -1, 1);
 	}
 
+	// The height of one row of work.
+	readonly property real rowHeight: Settings.fontSize + 6
+
+	// The braille spinner, which turns while a session works.
+	readonly property var braille: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+	// The frame of the spinner. Every row starts at its own frame, so the
+	// spinners do not turn in lockstep.
+	property int spinFrame: 0
+
 	implicitWidth: Config.agentPanelWidth + 2 * Config.agentPanelPadding
-	implicitHeight: column.implicitHeight + Config.agentPanelPadding * 2
+	implicitHeight: Config.agentPanelHeight + 2 * Config.agentPanelPadding
 
-	// The width of the content, which follows the panel when the panel is
-	// given one, so a window around it can be resized.
-	readonly property real contentWidth: root.width > 0
-		? Math.max(Config.agentPanelWidth, root.width - 2 * Config.agentPanelPadding)
-		: Config.agentPanelWidth
+	clip: true
 
-	// The height of the content, which a window around the panel takes for
-	// its own height.
-	readonly property real contentHeight: column.implicitHeight
-
-	// The field takes the focus, so keystrokes land in it. The popup focuses its
-	// first content item when it opens, which would take the focus back, so the
-	// field claims it again until it holds.
-	Component.onCompleted: {
-		root.lockTarget();
-
-		Qt.callLater(field.startTyping);
-
-		focusTimer.restart();
-	}
-
-	// The lock takes the session the panel was opened for. When the panel is
-	// given one, that one is used.
-	function lockTarget() {
-		if (root.injectedTarget !== "") {
-			root.lockedTarget = root.injectedTarget;
-			return;
-		}
-
-		if (root.lockedTarget === "")
-			root.lockedTarget = OpenCode.targetSession;
-	}
-
-	// The server sends its sessions a moment after the shell starts, so the
-	// lock waits for one to turn up.
-	Connections {
-		target: OpenCode
-
-		function onTargetSessionChanged() {
-			root.lockTarget();
-		}
-	}
+	// The clock the countdowns read, so a panel that sits open does not keep
+	// showing a reset time that has already gone by.
+	property real now: Date.now()
 
 	Timer {
-		id: focusTimer
-
-		interval: 30
+		interval: 30000
 		repeat: true
-		running: false
+		running: true
+		triggeredOnStart: true
 
-		onTriggered: {
-			if (field.focused) {
-				focusTimer.stop();
-				return;
-			}
+		onTriggered: root.now = Date.now()
+	}
 
-			if (!field.typing)
-				field.startTyping();
+	// The spinner turns while a session works.
+	Timer {
+		interval: 90
+		repeat: true
+		running: true
+		triggeredOnStart: true
 
-			field.focusInput();
+		onTriggered: root.spinFrame = (root.spinFrame + 1) % 10
+	}
+
+	// How long until a window of the allowance resets, as a short phrase.
+	function countdown(text) {
+		const at = Date.parse(String(text || ""));
+
+		if (!isFinite(at))
+			return "";
+
+		const minutes = Math.floor((at - root.now) / 60000);
+
+		if (minutes <= 0)
+			return "now";
+
+		const days = Math.floor(minutes / 1440);
+		const hours = Math.floor((minutes % 1440) / 60);
+
+		if (days > 0)
+			return days + "d " + hours + "h";
+
+		if (hours > 0)
+			return hours + "h " + (minutes % 60) + "m";
+
+		return (minutes % 60) + "m";
+	}
+
+	// The face.
+	Item {
+		id: faceBox
+
+		anchors.top: parent.top
+		anchors.topMargin: Config.agentPanelPadding
+		anchors.horizontalCenter: parent.horizontalCenter
+
+		width: Config.agentFaceSize
+		height: Config.agentFaceSize
+
+		AgentFace {
+			anchors.fill: parent
+
+			size: Config.agentFaceSize
+			state: root.state
+			followCursor: true
+			gazeX: root.gazeX
+			gazeY: root.gazeY
+
+			bodyColor: Config.foreground
+			eyeColor: Config.surface
 		}
 	}
 
-	function send() {
-		OpenCode.send(field.text, root.target);
-	}
-
-	// The field is only cleared once the server took the message, so a failed
-	// send keeps the text.
-	Connections {
-		target: OpenCode
-
-		function onSent(text) {
-			if (String(field.text || "").trim() === text)
-				field.clear();
-		}
-	}
-
+	// The state of the agent, and what it is asking about.
 	Column {
-		id: column
+		id: stateBox
 
-		x: Config.agentPanelPadding
-		y: Config.agentPanelPadding
-		width: root.contentWidth
-		spacing: Config.agentPanelPadding
+		anchors.top: faceBox.bottom
+		anchors.topMargin: Config.agentPanelPadding
+		anchors.left: parent.left
+		anchors.right: parent.right
+		anchors.leftMargin: Config.agentPanelPadding
+		anchors.rightMargin: Config.agentPanelPadding
 
-		Item {
-			width: column.width
-			height: Config.agentFaceSize
+		spacing: 2
 
-			// A Column positions its children, so the face is placed by x
-			// rather than by an anchor, which a Column would ignore.
-			AgentFace {
-				id: face
+		Text {
+			width: parent.width
+			elide: Text.ElideRight
 
-				x: (parent.width - width) / 2
-				y: 0
-				width: Config.agentFaceSize
-				height: Config.agentFaceSize
-
-				size: Config.agentFaceSize
-				state: root.state
-				followCursor: true
-				gazeX: root.gazeX
-				gazeY: root.gazeY
-
-				bodyColor: Config.foreground
-				eyeColor: Config.surface
-			}
+			font.family: Config.fontFamily
+			font.pixelSize: Settings.fontSize
+			color: Config.foreground
+			text: Config.agentPanelTitle
 		}
 
-		Column {
-			width: column.width
-			spacing: 2
+		Text {
+			width: parent.width
+			elide: Text.ElideRight
+
+			font.family: Config.fontFamily
+			font.pixelSize: Settings.fontSize
+			color: root.state === "error" ? Config.red : Config.muted
+			text: OpenCode.connected ? root.stateText : "OpenCode offline"
+		}
+
+		Text {
+			width: parent.width
+			visible: text !== ""
+			elide: Text.ElideRight
+
+			font.family: Config.fontFamily
+			font.pixelSize: Settings.fontSize
+			color: Config.muted
+			text: OpenCode.detailText
+		}
+	}
+
+	// The plan the agent runs on, and how much of it is left.
+	Column {
+		id: planBox
+
+		anchors.bottom: parent.bottom
+		anchors.bottomMargin: Config.agentPanelPadding
+		anchors.left: parent.left
+		anchors.right: parent.right
+		anchors.leftMargin: Config.agentPanelPadding
+		anchors.rightMargin: Config.agentPanelPadding
+
+		spacing: 6
+
+		Text {
+			width: parent.width
+
+			font.family: Config.fontFamily
+			font.pixelSize: Settings.fontSize
+			color: Config.muted
+			text: Config.agentPlanTitle
+		}
+
+		// The mark of the plan, with its name.
+		Row {
+			visible: OpenCode.limits.length > 0
+			spacing: 6
+
+			Image {
+				width: 15
+				height: 15
+
+				source: "file://" + Quickshell.shellDir + "/assets/providers/" + Config.agentPlanIcon + ".svg"
+				sourceSize.width: Math.round(15 * root.dpr)
+				sourceSize.height: Math.round(15 * root.dpr)
+				fillMode: Image.PreserveAspectFit
+			}
 
 			Text {
-				width: parent.width
-				elide: Text.ElideRight
-
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
 				color: Config.foreground
-				text: Config.agentPanelTitle
-			}
-
-			Text {
-				width: parent.width
-				elide: Text.ElideRight
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: root.state === "error" ? Config.red : Config.muted
-				text: root.stateText
-			}
-
-			Text {
-				width: parent.width
-				visible: text !== ""
-				elide: Text.ElideRight
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: Config.muted
-				text: OpenCode.detailText
-			}
-
-			Text {
-				width: parent.width
-				visible: text !== ""
-				elide: Text.ElideRight
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: Config.muted
-				text: OpenCode.titleOf(root.target)
-			}
-
-			Text {
-				width: column.width
-				visible: text !== ""
-				elide: Text.ElideRight
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: Config.red
-				text: OpenCode.sendError
-			}
-
-			Text {
-				width: column.width
-				visible: !OpenCode.connected
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: Config.red
-				text: "OpenCode offline"
+				text: Config.agentPlanName
 			}
 		}
 
-		// The sessions, with the ones that have work in them first.
-		AgentSessions {
-			id: sessions
+		Repeater {
+			model: OpenCode.limits
 
-			width: column.width
+			delegate: Item {
+				id: limitRow
 
-			active: OpenCode.activeSessions
-			inactive: OpenCode.inactiveSessions
-			target: root.target
-			modelName: OpenCode.modelName(root.target)
-			models: OpenCode.serverModels
-			modelError: OpenCode.modelError
+				required property var modelData
 
-			onSessionChosen: function (id) {
-				root.chosenTarget = id;
-			}
+				width: parent.width
+				height: Math.max(limitLabel.implicitHeight, limitReset.implicitHeight)
 
-			onModelChosen: function (id, model) {
-				OpenCode.setModel(id, model);
+				readonly property bool alarming: modelData.percent >= 90
+
+				// The label and the numbers are fixed columns, so every bar
+				// starts and ends in the same place. The percentage sits
+				// before the bar, so the bar is read as the rest.
+				Text {
+					id: limitLabel
+
+					anchors.left: parent.left
+					anchors.verticalCenter: parent.verticalCenter
+					width: 60
+
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: Config.foreground
+					text: modelData.title
+				}
+
+				Text {
+					id: limitValue
+
+					anchors.left: limitLabel.right
+					anchors.verticalCenter: parent.verticalCenter
+					width: 34
+
+					horizontalAlignment: Text.AlignRight
+
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: limitRow.alarming ? Config.red : Config.muted
+					text: Math.round(modelData.percent) + "%"
+				}
+
+				StepBar {
+					id: limitMeter
+
+					anchors.left: limitValue.right
+					anchors.right: limitReset.left
+					anchors.leftMargin: 8
+					anchors.rightMargin: 10
+					anchors.verticalCenter: parent.verticalCenter
+
+					level: modelData.percent / 100
+					ink: limitRow.alarming ? Config.red : Config.foreground
+					track: Config.dim
+				}
+
+				Text {
+					id: limitReset
+
+					anchors.right: parent.right
+					anchors.verticalCenter: parent.verticalCenter
+					width: 54
+
+					horizontalAlignment: Text.AlignRight
+
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: Config.muted
+					text: root.countdown(modelData.resetsAt)
+				}
 			}
 		}
 
-		SearchField {
-			id: field
+		Text {
+			width: parent.width
+			visible: OpenCode.limits.length === 0 && OpenCode.usageError !== ""
+			elide: Text.ElideRight
 
-			width: column.width
-			boxHeight: Config.agentInputHeight
-
-			glyph: Config.agentInputGlyph
-			hintKey: ""
-			size: Settings.fontSize
-			boxColor: Config.launcherHighlight
-
-			onAccepted: root.send()
-
-			onKeyPressed: function (event) {
-				// The input's key handler runs before its own accept, so the
-				// send is triggered here rather than on accepted.
-				if (Input.accept(event)) {
-					root.send();
-					event.accepted = true;
-					return;
-				}
-
-				// Only the escape key is handled here. Anything else is left
-				// alone so the input keeps receiving it.
-				if (Input.cancel(event)) {
-					field.typing = false;
-					field.clear();
-					root.closeRequested();
-					event.accepted = true;
-				}
-			}
+			font.family: Config.fontFamily
+			font.pixelSize: Settings.fontSize
+			color: Config.muted
+			text: OpenCode.usageError
 		}
 	}
 
-	Keys.onPressed: function (event) {
-		// The field holds the focus, so this only runs when it does not.
-		if (Input.cancel(event)) {
-			field.typing = false;
-			field.clear();
-			root.closeRequested();
-			event.accepted = true;
-			return;
+	// The work: what is going on now, and what is done.
+	//
+	// The side picks which of the two is shown, so the finished work does not
+	// push the work that is going on around.
+	Item {
+		id: workBox
+
+		visible: OpenCode.working.length > 0 || OpenCode.doneSessions.length > 0
+
+		anchors.top: stateBox.bottom
+		anchors.topMargin: Config.agentPanelPadding
+		anchors.bottom: planBox.top
+		anchors.bottomMargin: Config.agentPanelPadding
+		anchors.left: parent.left
+		anchors.right: parent.right
+		anchors.leftMargin: Config.agentPanelPadding
+		anchors.rightMargin: Config.agentPanelPadding
+
+		// The side that picks between the work and the finished work.
+		Selector {
+			id: sections
+
+			anchors.left: parent.left
+			anchors.top: parent.top
+			anchors.bottom: parent.bottom
+
+			width: 52
+			visibleRows: 2
+			rowHeight: root.rowHeight
+			rowSpacing: 2
+
+			model: [{ label: Config.agentWorkTitle, count: OpenCode.working.length }, { label: Config.agentDoneTitle, count: OpenCode.doneSessions.length }]
+			currentIndex: 0
+
+			delegate: Item {
+				id: section
+
+				required property var modelData
+				required property int index
+
+				width: ListView.view.rowWidth
+				height: ListView.view.rowHeight
+
+				Highlight {
+					active: sections.currentIndex === section.index
+				}
+
+				Text {
+					anchors.verticalCenter: parent.verticalCenter
+					width: parent.width
+
+					elide: Text.ElideRight
+
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: sections.currentIndex === section.index ? Config.foreground : Config.muted
+					text: section.modelData.label
+				}
+
+				Text {
+					anchors.right: parent.right
+					anchors.verticalCenter: parent.verticalCenter
+
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: Config.muted
+					text: section.modelData.count
+				}
+
+				MouseArea {
+					anchors.fill: parent
+
+					onClicked: sections.currentIndex = section.index
+				}
+			}
 		}
 
-		if (!field.typing) {
-			field.startTyping();
-			event.accepted = true;
+		// The line that splits the side from the work.
+		Rectangle {
+			anchors.left: sections.right
+			anchors.leftMargin: 4
+			anchors.top: parent.top
+			anchors.bottom: parent.bottom
+
+			width: 1
+			color: Config.dim
+		}
+
+		Item {
+			anchors.left: sections.right
+			anchors.leftMargin: 10
+			anchors.right: parent.right
+			anchors.top: parent.top
+			anchors.bottom: parent.bottom
+
+			// The work that is going on.
+			ListView {
+				id: workList
+
+				anchors.fill: parent
+				anchors.rightMargin: 8
+				clip: true
+				spacing: 2
+				model: OpenCode.working
+				visible: sections.currentIndex === 0
+
+				delegate: Item {
+					id: workRow
+
+					required property var modelData
+					required property int index
+
+					width: workList.width
+					height: root.rowHeight
+
+					// The figure that says what the session is doing: a
+					// braille spinner while it works, a question mark when it
+					// asks something, and a cross when it failed.
+					Text {
+						id: figure
+
+						x: 0
+						y: 0
+						width: 12
+						height: root.rowHeight
+						verticalAlignment: Text.AlignVCenter
+						horizontalAlignment: Text.AlignHCenter
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: modelData.failed || modelData.question ? Config.red : Config.foreground
+						text: modelData.question
+							? Config.agentIconQuestion
+							: (modelData.failed ? Config.agentIconClose : root.braille[(root.spinFrame + workRow.index) % 10])
+					}
+
+					// The mark of the provider that is doing the work.
+					Image {
+						id: mark
+
+						x: figure.width + 4
+						y: 1
+						width: 15
+						height: 15
+						visible: modelData.icon !== ""
+
+						source: modelData.icon !== ""
+							? "file://" + Quickshell.shellDir + "/assets/providers/" + modelData.icon + ".svg"
+							: ""
+						sourceSize.width: Math.round(15 * root.dpr)
+						sourceSize.height: Math.round(15 * root.dpr)
+						fillMode: Image.PreserveAspectFit
+					}
+
+					Text {
+						anchors.left: mark.visible ? mark.right : figure.right
+						anchors.leftMargin: mark.visible ? 6 : 8
+						anchors.right: parent.right
+						anchors.verticalCenter: parent.verticalCenter
+
+						elide: Text.ElideRight
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: modelData.failed || modelData.question ? Config.red : Config.foreground
+						text: modelData.title
+					}
+				}
+			}
+
+			// The work that is done.
+			ListView {
+				id: doneList
+
+				anchors.fill: parent
+				anchors.rightMargin: 8
+				clip: true
+				spacing: 2
+				model: OpenCode.doneSessions
+				visible: sections.currentIndex === 1
+
+				delegate: Item {
+					required property var modelData
+
+					width: doneList.width
+					height: root.rowHeight
+
+					// The figure that says the work is over.
+					Text {
+						id: doneFigure
+
+						x: 0
+						y: 0
+						width: 12
+						height: root.rowHeight
+						verticalAlignment: Text.AlignVCenter
+						horizontalAlignment: Text.AlignHCenter
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: Config.muted
+						text: Config.agentIconDone
+					}
+
+					Text {
+						anchors.left: doneFigure.right
+						anchors.leftMargin: 8
+						anchors.right: dismiss.left
+						anchors.rightMargin: 6
+						anchors.verticalCenter: parent.verticalCenter
+
+						elide: Text.ElideRight
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: Config.muted
+						text: modelData.title
+					}
+
+					// The cross that takes the finished work off the list.
+					Text {
+						id: dismiss
+
+						anchors.right: parent.right
+						anchors.verticalCenter: parent.verticalCenter
+						width: 14
+
+						horizontalAlignment: Text.AlignHCenter
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: dismissHit.containsMouse ? Config.foreground : Config.muted
+						text: Config.iconClose
+
+						MouseArea {
+							id: dismissHit
+
+							anchors.fill: parent
+							anchors.margins: -4
+
+							onClicked: OpenCode.dismiss(modelData.id)
+						}
+					}
+				}
+			}
+
+			// The thumb of the list, which only shows when there is more work
+			// than fits.
+			Scrollbar {
+				view: sections.currentIndex === 1 ? doneList : workList
+				offset: 4
+			}
 		}
 	}
 }

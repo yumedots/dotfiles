@@ -26,11 +26,6 @@ Item {
 	property color bodyColor: Config.foreground
 	property color eyeColor: Config.surface
 
-	// When true the body is drawn hollow, as an outline, instead of a solid
-	// shape. The topbar draws its icons as thin outlines, so the face matches
-	// them there instead of sitting in the bar as a heavy filled blob.
-	property bool hollow: false
-
 	property real size: Config.agentFaceSize
 	property bool paused: false
 
@@ -72,7 +67,7 @@ Item {
 	RotationAnimation on spin {
 		from: 0
 		to: 360
-		duration: 2600
+		duration: Config.agentSpinMs
 		running: root.spinning
 		loops: Animation.Infinite
 	}
@@ -118,7 +113,9 @@ Item {
 	// The socket squashes vertically as the eye closes, so a blink flattens the
 	// eye into a line.
 	readonly property var sockets: {
-		const squish = Math.max(0.08, Math.min(1, root.openness * root.blink));
+		// A closed eye keeps a little thickness, so it reads as a shut eye
+		// instead of a scratch.
+		const squish = Math.max(0.2, Math.min(1, root.openness * root.blink));
 		const cy = root.bodyHeight / 2 - root.eyeLift + root.eyeY * root.eyeTravel;
 		const shift = root.eyeX * root.eyeTravel;
 
@@ -137,8 +134,7 @@ Item {
 		return Agent.clipSockets(root.body, wanted);
 	}
 
-	// The eyes, as paths. They are holes in the body when it is solid, and
-	// dots of their own when it is hollow.
+	// The eyes, as paths. They are holes in the body.
 	readonly property var eyePaths: root.sockets.map(function (socket) {
 		return Agent.ellipsePoints(socket.x, socket.y, socket.radiusX, socket.radiusY, 40);
 	})
@@ -270,22 +266,8 @@ Item {
 			anchors.fill: parent
 
 			ink: root.bodyColor
-			outline: root.hollow
 
-			subpaths: root.hollow
-				? [root.outline]
-				: [root.outline].concat(root.eyePaths)
-		}
-
-		// A hollow face has no body to punch the eyes out of, so they are
-		// drawn as solid dots on their own.
-		DynamicIcon {
-			anchors.fill: parent
-
-			visible: root.hollow
-			ink: root.bodyColor
-
-			subpaths: root.eyePaths
+			subpaths: [root.outline].concat(root.eyePaths)
 		}
 	}
 }
