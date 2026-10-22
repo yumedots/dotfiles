@@ -217,59 +217,73 @@ Item {
 			}
 		}
 
-		Column {
-			id: meters
+		Row {
+			id: band
 
 			width: card.width
-			spacing: Config.calendarMeterGap
+			spacing: Config.calendarGap
 
-			Repeater {
-				model: root.meters
+			DayDial {
+				id: dial
 
-				delegate: Item {
-					required property var modelData
-					required property int index
+				moment: root.today
+				anchors.verticalCenter: parent.verticalCenter
+			}
 
-					width: meters.width
-					height: Config.calendarMeterRow
+			Column {
+				id: meters
 
-					Text {
-						id: meterLabel
+				width: band.width - Config.calendarDialSize - Config.calendarGap
+				spacing: Config.calendarMeterGap
 
-						anchors.verticalCenter: parent.verticalCenter
-						width: Config.calendarMeterLabelWidth
-						font.family: Config.fontFamily
-						font.pixelSize: Config.calendarMeterLabelSize
-						color: Config.foreground
-						text: modelData.icon + " " + modelData.label
-					}
+				Repeater {
+					model: root.meters
 
-					Text {
-						id: meterValue
+					delegate: Item {
+						required property var modelData
+						required property int index
 
-						anchors.right: parent.right
-						anchors.verticalCenter: parent.verticalCenter
-						width: Config.calendarMeterValueWidth
-						horizontalAlignment: Text.AlignRight
-						font.family: Config.fontFamily
-						font.pixelSize: Config.calendarMeterValueSize
-						color: Config.foreground
-						text: modelData.pct + "%"
-					}
+						width: meters.width
+						height: Config.calendarMeterRow
 
-					Rectangle {
-						id: meterTrack
+						Text {
+							id: meterLabel
 
-						anchors.left: meterLabel.right
-						anchors.right: meterValue.left
-						anchors.verticalCenter: parent.verticalCenter
-						height: Config.calendarMeterHeight
-						color: Config.calendarTrack
+							anchors.verticalCenter: parent.verticalCenter
+							width: Config.calendarMeterLabelWidth
+							font.family: Config.fontFamily
+							font.pixelSize: Config.calendarMeterLabelSize
+							color: Config.foreground
+							text: modelData.icon + " " + modelData.label
+						}
+
+						Text {
+							id: meterValue
+
+							anchors.right: parent.right
+							anchors.verticalCenter: parent.verticalCenter
+							width: Config.calendarMeterValueWidth
+							horizontalAlignment: Text.AlignRight
+							font.family: Config.fontFamily
+							font.pixelSize: Config.calendarMeterValueSize
+							color: Config.foreground
+							text: modelData.pct + "%"
+						}
 
 						Rectangle {
-							width: Math.round(parent.width * modelData.pct / 100)
-							height: parent.height
-							color: Config.foreground
+							id: meterTrack
+
+							anchors.left: meterLabel.right
+							anchors.right: meterValue.left
+							anchors.verticalCenter: parent.verticalCenter
+							height: Config.calendarMeterHeight
+							color: Config.calendarTrack
+
+							Rectangle {
+								width: Math.round(parent.width * modelData.pct / 100)
+								height: parent.height
+								color: Config.foreground
+							}
 						}
 					}
 				}
