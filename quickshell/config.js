@@ -521,18 +521,21 @@ const agentFaceSize = 96;
 const agentMorphMs = 420;
 const agentSpinMs = 120000;
 const agentBarSpinMs = 6000;
-const agentPanelWidth = 742;
-const agentPanelHeight = 390;
 const agentDoneWidth = 230;
 const agentColumnWidth = 230;
 const agentPlanWidth = 240;
+// The width of the panel: the three columns, the two lines between them and
+// the gaps around them.
+const agentPanelWidth = agentDoneWidth + agentColumnWidth + agentPlanWidth + 2 + 40;
+// The height of the panel. The work list takes what is left of it, which is
+// a whole number of rows.
+const agentPanelHeight = 398;
 const agentPanelPadding = 12;
 const agentIdleText = "Idle";
 const agentWorkingText = "Working";
 const agentBlockedText = "a session needs attention";
 const agentErrorText = "Error";
 const agentPanelTitle = "Agent";
-const agentWorkTitle = "Work";
 const agentDoneTitle = "Done";
 const agentIconQuestion = "?";
 const agentIconDone = "\ue29a";

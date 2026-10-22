@@ -235,9 +235,13 @@ Item {
 				anchors.topMargin: Config.agentPanelPadding
 				anchors.horizontalCenter: parent.horizontalCenter
 
+				width: Config.agentColumnWidth
 				spacing: 2
 
 				Text {
+					width: parent.width
+					horizontalAlignment: Text.AlignHCenter
+
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
 					color: Config.foreground
@@ -245,27 +249,41 @@ Item {
 				}
 
 				// The state, with the spinner that turns while the agent is
-				// working.
-				Row {
-					spacing: 5
+				// working. It sits in a box of its own, because a column
+				// puts its children on the left.
+				Item {
+					id: stateRow
 
-					Braille {
-						visible: root.state === "working"
-						running: root.state === "working"
-						ink: Config.muted
-					}
+					width: parent.width
+					height: stateContent.implicitHeight
 
-					Text {
-						font.family: Config.fontFamily
-						font.pixelSize: Settings.fontSize
-						color: root.state === "error" ? Config.red : Config.muted
-						text: OpenCode.connected ? root.stateText : "OpenCode offline"
+					Row {
+						id: stateContent
+
+						anchors.horizontalCenter: parent.horizontalCenter
+						anchors.verticalCenter: parent.verticalCenter
+
+						spacing: 5
+
+						Braille {
+							visible: root.state === "working"
+							running: root.state === "working"
+							ink: Config.muted
+						}
+
+						Text {
+							font.family: Config.fontFamily
+							font.pixelSize: Settings.fontSize
+							color: root.state === "error" ? Config.red : Config.muted
+							text: OpenCode.connected ? root.stateText : "OpenCode offline"
+						}
 					}
 				}
 
+				// The detail always holds its place, so the work below it
+				// does not jump when a message comes and goes.
 				Text {
 					width: parent.width
-					visible: text !== ""
 					horizontalAlignment: Text.AlignHCenter
 					elide: Text.ElideRight
 
@@ -442,7 +460,7 @@ Item {
 
 								anchors.right: parent.right
 								anchors.verticalCenter: parent.verticalCenter
-								width: 32
+								width: 36
 
 								horizontalAlignment: Text.AlignRight
 
@@ -471,7 +489,7 @@ Item {
 			// than fits.
 			Scrollbar {
 				view: planFlick
-				offset: 4
+				offset: -4
 			}
 		}
 	}

@@ -155,7 +155,18 @@ QtObject {
 			return b.updated - a.updated;
 		});
 
-		return rows;
+		// Only the last few failures are kept, so a pile of them cannot push
+		// the work that is going on out of the list.
+		let failed = 0;
+
+		return rows.filter(function (row) {
+			if (!row.failed)
+				return true;
+
+			failed += 1;
+
+			return failed <= 3;
+		});
 	}
 
 	// The title of a session, so a row can say what it is working on.
