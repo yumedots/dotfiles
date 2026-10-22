@@ -354,15 +354,19 @@ const weatherCodes = {
 };
 
 const notifyBase = foreground;
-const notifyWidth = 280;
-const notifyPadding = 12;
+// The size of a notification. 1 is the house size, 1.5 is the roomy one.
+const notifyScale = 1.25;
+// The width of a notification, scaled the same way. It stays fixed so the
+// toast does not change size with its text.
+const notifyWidth = Math.round(280 * notifyScale);
+const notifyPadding = Math.round(12 * notifyScale);
 const notifyPaddingY = 0;
-const notifyRowHeight = 38;
-const notifyRowPadding = 4;
-const notifySlot = 30;
-const notifySlotGap = 10;
-const notifyBellSize = 28;
-const notifyAppFontSize = 11;
+const notifyRowHeight = Math.round(38 * notifyScale);
+const notifyRowPadding = Math.round(2 * notifyScale);
+const notifySlot = Math.round(22 * notifyScale);
+const notifySlotGap = Math.round(10 * notifyScale);
+const notifyBellSize = Math.round(20 * notifyScale);
+const notifyAppFontSize = Math.round(11 * notifyScale);
 const notifyVisibleRows = 5;
 const notifyHistory = 50;
 const notifyGoneOpacity = 0.55;
