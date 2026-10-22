@@ -63,12 +63,6 @@ Item {
 	}
 
 	Keys.onPressed: function (event) {
-		if (event.text === "v") {
-			dial.toggle();
-			event.accepted = true;
-			return;
-		}
-
 		Input.calendar(event, root);
 	}
 

@@ -5,30 +5,16 @@ import qs
 Item {
 	id: dial
 
-	property int variant: Config.calendarDialVariant
 	property date moment: new Date()
-	property color dayInk: Config.foreground
-	property color nightInk: Config.calendarDialTrack
-	property color sunInk: Config.calendarDialSun
-	property color moonInk: Config.calendarDialMoon
 
-	readonly property bool arc: dial.variant === 2
-	readonly property color markInk: dial.arc ? Config.foreground : (dial.daylight ? dial.sunInk : dial.moonInk)
 	readonly property real hours: dial.moment.getHours() + dial.moment.getMinutes() / 60
 	readonly property real cx: dial.width / 2
-	readonly property real cy: dial.arc ? dial.ringR + Config.calendarDialRingWidth / 2 : dial.height / 2
+	readonly property real cy: dial.ringR + Config.calendarDialRingWidth / 2
 	readonly property real ringR: dial.width / 2 - Config.calendarDialRingWidth / 2 - 2
 	readonly property bool daylight: dial.hours >= Config.calendarDialDayStart && dial.hours < Config.calendarDialDayEnd
 
-	function toggle() {
-		dial.variant = dial.variant === 2 ? 1 : 2;
-	}
-
 	function angleOf(hour) {
-		if (dial.arc)
-			return (180 - hour * 7.5) * Math.PI / 180;
-
-		return (hour - 12) * 15 * Math.PI / 180;
+		return (180 - hour * 7.5) * Math.PI / 180;
 	}
 
 	function onRing(hour) {
@@ -37,19 +23,6 @@ Item {
 
 	function ringY(hour) {
 		return dial.cy - Math.sin(dial.angleOf(hour)) * dial.ringR;
-	}
-
-	function arcPoints(from, to) {
-		const out = [];
-		const steps = 72;
-
-		for (let i = 0; i <= steps; i++) {
-			const a = (from + (to - from) * i / steps) * Math.PI / 180;
-
-			out.push(Qt.point(dial.cx + Math.cos(a) * dial.ringR, dial.cy - Math.sin(a) * dial.ringR));
-		}
-
-		return out;
 	}
 
 	function bandPoints() {
@@ -74,44 +47,12 @@ Item {
 	}
 
 	implicitWidth: Config.calendarDialSize
-	implicitHeight: dial.arc ? dial.cy + 26 : Config.calendarDialSize
-
-	Shape {
-		id: ring
-
-		anchors.fill: parent
-		visible: !dial.arc
-		preferredRendererType: Shape.CurveRenderer
-		asynchronous: false
-
-		ShapePath {
-			strokeColor: dial.dayInk
-			fillColor: "transparent"
-			strokeWidth: Config.calendarDialRingWidth
-			capStyle: ShapePath.RoundCap
-
-			PathPolyline {
-				path: dial.arcPoints(0, 180)
-			}
-		}
-
-		ShapePath {
-			strokeColor: dial.nightInk
-			fillColor: "transparent"
-			strokeWidth: Config.calendarDialRingWidth
-			capStyle: ShapePath.RoundCap
-
-			PathPolyline {
-				path: dial.arcPoints(180, 360)
-			}
-		}
-	}
+	implicitHeight: dial.cy + Config.calendarDialRingWidth
 
 	Shape {
 		id: band
 
 		anchors.fill: parent
-		visible: dial.arc
 		preferredRendererType: Shape.CurveRenderer
 		asynchronous: false
 
@@ -169,7 +110,7 @@ Item {
 		y: dial.ringY(dial.hours) - sunMetrics.tightBoundingRect.height / 2
 		font.family: Config.fontFamily
 		font.pixelSize: Config.calendarDialGlyphSize
-		color: dial.markInk
+		color: Config.foreground
 		text: Config.calendarIconSun
 	}
 
@@ -181,21 +122,7 @@ Item {
 		y: dial.ringY(dial.hours) - moonMetrics.tightBoundingRect.height / 2 - Config.calendarDialMoonLift
 		font.family: Config.fontFamily
 		font.pixelSize: Config.calendarDialGlyphSize
-		color: dial.markInk
-		text: Config.calendarIconMoon
-	}
-
-	Text {
-		id: readout
-
-		anchors.horizontalCenter: parent.horizontalCenter
-		y: dial.cy + (dial.arc ? 4 : -8)
-		width: parent.width
-		horizontalAlignment: Text.AlignHCenter
-
-		font.family: Config.fontFamily
-		font.pixelSize: Config.calendarDialValueSize
 		color: Config.foreground
-		text: Qt.formatTime(dial.moment, "HH:mm")
+		text: Config.calendarIconMoon
 	}
 }
