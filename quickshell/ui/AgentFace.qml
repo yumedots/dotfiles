@@ -77,7 +77,7 @@ Item {
 	RotationAnimation on spin {
 		from: 0
 		to: 360
-		duration: Config.agentSpinMs
+		duration: root.small ? Config.agentBarSpinMs : Config.agentSpinMs
 		running: root.spinning
 		loops: Animation.Infinite
 	}
@@ -249,10 +249,22 @@ Item {
 		return Agent.blendPoints(from, to, root.morph);
 	}
 
-	// The outline of the body. The spikes turn as the whole body turns, so
-	// the outline itself never changes and the path is not rebuilt while the
-	// face is turning.
-	readonly property var outline: root.body
+	// The step the spikes turn in, in degrees. The step is too small to see,
+	// but it keeps the path from being rebuilt on every frame.
+	readonly property real turnStep: root.small ? 3 : 0.5
+
+	// The turn of the spikes, in degrees, rounded to the step.
+	readonly property real turn: Math.round(root.spin / root.turnStep) * root.turnStep
+
+	// The outline of the body, with the spikes turned on it. The eyes are
+	// holes in the body, so the body is turned on its own and the eyes stay
+	// where they are.
+	readonly property var outline: {
+		if (!root.live)
+			return root.body;
+
+		return Agent.rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.turn);
+	}
 
 	// The icon is drawn in body-local space, so it moves with the body.
 	Item {
@@ -269,24 +281,14 @@ Item {
 		scale: root.breathe
 		transformOrigin: Item.Center
 
-		// The spikes turn as the whole body turns, which the graphics card
-		// does for free, so a turning face costs nothing to draw.
-		Item {
-			id: spinner
-
+		// The body and the eyes are one path, so the eyes are holes in the
+		// body.
+		DynamicIcon {
 			anchors.fill: parent
 
-			rotation: root.live ? root.spin : 0
+			ink: root.bodyColor
 
-			// The body and the eyes are one path, so the eyes are holes in
-			// the body.
-			DynamicIcon {
-				anchors.fill: parent
-
-				ink: root.bodyColor
-
-				subpaths: root.paintEyes ? [root.outline] : [root.outline].concat(root.eyePaths)
-			}
+			subpaths: root.paintEyes ? [root.outline] : [root.outline].concat(root.eyePaths)
 		}
 
 		// A face that is drawn on a flat background paints its eyes in that

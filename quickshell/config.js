@@ -520,6 +520,7 @@ const networkLockIcon = "\uf023";
 const agentFaceSize = 96;
 const agentMorphMs = 420;
 const agentSpinMs = 120000;
+const agentBarSpinMs = 6000;
 const agentPanelWidth = 742;
 const agentPanelHeight = 390;
 const agentDoneWidth = 230;

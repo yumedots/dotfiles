@@ -20,7 +20,7 @@ eval(fs.readdirSync(__dirname).filter(function (name) { return name.endsWith(".j
 }).join("\n"));
 
 const Config = new Function(fs.readFileSync(__dirname + "/../config.js", "utf8").replace(".pragma library", "")
-	+ "\nreturn { weatherCodes: weatherCodes, weatherCoords: weatherCoords, weatherIcon: weatherIcon, weatherLoadingIcon: weatherLoadingIcon, weatherLocation: weatherLocation, weatherStationCount: weatherStationCount, networkSpeedBytes: networkSpeedBytes, notifyScale: notifyScale, notifyWidth: notifyWidth, notifySlot: notifySlot, notifyRowHeight: notifyRowHeight, notifyAppFontSize: notifyAppFontSize };")();
+	+ "\nreturn { weatherActionSize: weatherActionSize, weatherCardGap: weatherCardGap, weatherCardHeaderGap: weatherCardHeaderGap, weatherCardPadding: weatherCardPadding, weatherCardWidth: weatherCardWidth, weatherCodes: weatherCodes, weatherCoords: weatherCoords, weatherDayGap: weatherDayGap, weatherDayGlyphSize: weatherDayGlyphSize, weatherDayLabelSize: weatherDayLabelSize, weatherDayTempSize: weatherDayTempSize, weatherDays: weatherDays, weatherHeroGlyphSize: weatherHeroGlyphSize, weatherHeroLabelSize: weatherHeroLabelSize, weatherHeroTempSize: weatherHeroTempSize, weatherHeroUnitSize: weatherHeroUnitSize, weatherHeroUnitTop: weatherHeroUnitTop, weatherHeroValueSize: weatherHeroValueSize, weatherIcon: weatherIcon, weatherLoadingIcon: weatherLoadingIcon, weatherLocation: weatherLocation, weatherPlaceSize: weatherPlaceSize, weatherSeparator: weatherSeparator, weatherSeparatorColor: weatherSeparatorColor, weatherStationCount: weatherStationCount, weatherTempUnit: weatherTempUnit, weatherWindUnit: weatherWindUnit, networkSpeedBytes: networkSpeedBytes, notifyScale: notifyScale, notifyWidth: notifyWidth, notifySlot: notifySlot, notifyRowHeight: notifyRowHeight, notifyAppFontSize: notifyAppFontSize };")();
 
 section("apps", function () {
 const entries = desktopEntries([
@@ -816,16 +816,73 @@ assert(weatherGeoUrl("Springfield, IL").indexOf("name=Springfield") > 0, "only t
 assert(weatherGeoUrl("Springfield, IL").indexOf("count=8") > 0, "the lookup asks for enough candidates to find the right region");
 assert(weatherForecastUrl(1, 2).indexOf("latitude=1&longitude=2") > 0, "the forecast is asked for the resolved coordinates");
 assert(weatherForecastUrl(1, 2).indexOf("weather_code") > 0, "the forecast asks for the condition code");
+assert(weatherForecastUrl(1, 2, "celsius", "kmh", 7).indexOf("temperature_unit=celsius") > 0, "the forecast asks for the temperature unit the panel is drawn in");
+assert(weatherForecastUrl(1, 2, "celsius", "kmh", 7).indexOf("wind_speed_unit=kmh") > 0, "and for the wind unit that goes with it");
+assert(weatherForecastUrl(1, 2, "celsius", "kmh", 7).indexOf("forecast_days=7") > 0, "and for the week of days the panel shows");
+assert(weatherForecastUrl(1, 2).indexOf("temperature_unit=celsius") > 0 && weatherForecastUrl(1, 2).indexOf("wind_speed_unit=kmh") > 0 && weatherForecastUrl(1, 2).indexOf("forecast_days=7") > 0, "with nothing asked for it is celsius and kmh for seven days");
+assert(weatherForecastUrl(1, 2).indexOf("daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,wind_speed_10m_max,relative_humidity_2m_mean") > 0, "the forecast asks for the daily block the panel draws");
+assert(Config.weatherTempUnit === "celsius" && Config.weatherWindUnit === "kmh", "the config reads in celsius and kmh");
+assert(Config.weatherDays === 7, "the config asks for a week of days");
 
 const current = parseWeatherCurrent(JSON.stringify({
-	current_units: { temperature_2m: "°F", wind_speed_10m: "mp/h" },
+	current_units: { temperature_2m: "°F", wind_speed_10m: "mph" },
 	current: { temperature_2m: 77.4, apparent_temperature: 86.2, relative_humidity_2m: 89, wind_speed_10m: 3.5, weather_code: 63, precipitation: 1.2 }
 }));
 
 assert(current.code === 63 && current.precip === 1.2 && current.temp === "77°F", "the open meteo response becomes the temperature");
-assert(current.feels === "86°F" && current.wind === "4mph" && current.humidity === "89%", "feels, wind and humidity come out of the same response");
+assert(current.feels === "86°F" && current.wind === "4 mph" && current.humidity === "89%", "feels, wind and humidity come out of the same response");
+assert(parseWeatherCurrent(JSON.stringify({
+	current_units: { temperature_2m: "°C", wind_speed_10m: "km/h" },
+	current: { temperature_2m: 18.6, apparent_temperature: 17.9, relative_humidity_2m: 74, wind_speed_10m: 9.4, weather_code: 3 }
+})).wind === "9 km/h", "the wind unit comes out of the response, so a metric reading reads in km/h");
+assert(parseWeatherCurrent(JSON.stringify({
+	current_units: { temperature_2m: "°F", wind_speed_10m: "mph" },
+	current: { temperature_2m: 70, apparent_temperature: 70, relative_humidity_2m: 50, wind_speed_10m: 9.4, weather_code: 0 }
+})).wind === "9 mph", "and an imperial reading reads in mph");
 assert(parseWeatherCurrent("{}") === null && parseWeatherCurrent("nope") === null, "a response with no current block is no weather");
 assert(parseWeatherCurrent(JSON.stringify({ current: { temperature_2m: 70, apparent_temperature: 70, relative_humidity_2m: 50, wind_speed_10m: 1, weather_code: 0 } })).precip === 0, "no precipitation field reads as dry");
+assert(parseWeatherCurrent(JSON.stringify({ current: { temperature_2m: 70, apparent_temperature: 70, relative_humidity_2m: 50, wind_speed_10m: 1, weather_code: 0 } })).wind === "1 km/h", "a response with no units reads the wind in km/h");
+
+assert(weatherDayLabel("2026-10-21") === "WED", "a date names its weekday");
+assert(weatherDayLabel("2026-10-22") === "THU" && weatherDayLabel("2026-10-25") === "SUN", "and it does so for every day of the week");
+assert(weatherDayLabel("junk") === "" && weatherDayLabel("") === "", "a date nobody can read has no weekday");
+
+const dailyPayload = JSON.stringify({
+	daily_units: { temperature_2m_max: "°C", wind_speed_10m_max: "km/h" },
+	daily: {
+		time: ["2026-10-21", "2026-10-22"],
+		weather_code: [3, 61.4],
+		temperature_2m_max: [20.4, 18],
+		temperature_2m_min: [6.2, 5.6],
+		apparent_temperature_max: [19.1, 17],
+		wind_speed_10m_max: [9.4, 14.6],
+		relative_humidity_2m_mean: [74.2, 80]
+	}
+});
+
+const days = parseWeatherDaily(dailyPayload);
+
+assert(days.length === 2, "the daily block becomes one row per day");
+assert(days[0].date === "2026-10-21" && days[0].day === "WED", "a row keeps its date and names the weekday");
+assert(days[1].date === "2026-10-22" && days[1].day === "THU", "and so does the next one");
+assert(days[0].code === 3 && days[1].code === 61, "the condition code comes back rounded");
+assert(days[0].tempMax === "20°C" && days[0].tempMin === "6°C", "the high and the low are rounded and carry the unit");
+assert(days[1].tempMax === "18°C" && days[1].tempMin === "6°C", "and so is the next day");
+assert(days[0].feels === "19°C", "the apparent temperature is the apparent high");
+assert(days[0].wind === "9 km/h" && days[1].wind === "15 km/h", "the wind is the daily maximum with its unit");
+assert(days[0].humidity === "74%" && days[1].humidity === "80%", "the humidity is the daily mean");
+assert(parseWeatherDaily(JSON.stringify({
+	current_units: { temperature_2m: "°C", wind_speed_10m: "km/h" },
+	daily: { time: ["2026-10-21"], weather_code: [0], temperature_2m_max: [20], temperature_2m_min: [6], apparent_temperature_max: [19], wind_speed_10m_max: [9], relative_humidity_2m_mean: [74] }
+}))[0].tempMax === "20°C", "without daily units the current units are the fallback");
+assert(parseWeatherDaily(JSON.stringify({
+	daily: { time: ["2026-10-21"], weather_code: [0], temperature_2m_max: [20], temperature_2m_min: [6], apparent_temperature_max: [19], wind_speed_10m_max: [9], relative_humidity_2m_mean: [74] }
+}))[0].wind === "9 km/h", "and with no units at all it is celsius and km/h");
+assert(parseWeatherDaily(JSON.stringify({ current: {} })).length === 0, "a response with no daily block has no days");
+assert(parseWeatherDaily("nope").length === 0, "a broken response has no days");
+assert(parseWeatherDaily(JSON.stringify({
+	daily: { time: ["2026-10-21", "2026-10-22"], weather_code: [0, 1], temperature_2m_max: [20], temperature_2m_min: [6, 5], apparent_temperature_max: [19, 18], wind_speed_10m_max: [9, 10], relative_humidity_2m_mean: [74, 80] }
+})).length === 0, "a response with fewer numbers than dates has no days");
 
 assert(weatherCodeFor(3, 0) === 3, "overcast and dry stays overcast");
 assert(weatherCodeFor(3, 0.4) === 61, "overcast and wet is rain, whatever the model code says");
