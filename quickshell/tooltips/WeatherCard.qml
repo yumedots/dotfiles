@@ -12,6 +12,7 @@ Item {
 
 	property bool editing: false
 	property bool adding: false
+	property bool held: false
 	property string query: ""
 	property bool selectQuery: false
 	property int queryStamp: 0
@@ -28,6 +29,7 @@ Item {
 	readonly property string ghost: root.ghostText()
 	readonly property bool hasGhost: root.editing && root.match !== null && root.ghost !== ""
 	readonly property var suggestionRows: root.matchingRows()
+	readonly property bool headerShown: root.editing || root.held || heroHover.hovered || headerHover.hovered
 	readonly property int dayCount: root.rows.length > 0 ? Math.min(root.rows.length, 7) : 7
 	readonly property real dayTextWidth: dayTempMetrics.width * 1.04 + 2
 	readonly property real dayCellWidth: Math.max(1, Math.min(
@@ -42,6 +44,11 @@ Item {
 
 	implicitWidth: Config.weatherCardWidth + Config.weatherCardPadding * 2
 	implicitHeight: card.implicitHeight + Config.weatherCardPadding * 2
+
+	onPlaceNameChanged: {
+		root.held = true;
+		holdTimer.restart();
+	}
 
 	function bestMatch() {
 		const rows = Weather.suggestions || [];
@@ -303,6 +310,17 @@ Item {
 
 			width: card.width
 			height: placeMetrics.height
+			opacity: root.headerShown ? 1 : 0
+
+			Behavior on opacity {
+				NumberAnimation {
+					duration: Config.popupFadeMs
+				}
+			}
+
+			HoverHandler {
+				id: headerHover
+			}
 
 			Text {
 				id: leftArrow
@@ -322,6 +340,7 @@ Item {
 					anchors.fill: parent
 					anchors.margins: -4
 					hoverEnabled: true
+					enabled: root.headerShown
 					onClicked: Weather.shift(-1)
 				}
 			}
@@ -347,6 +366,7 @@ Item {
 					anchors.fill: parent
 					anchors.margins: -4
 					hoverEnabled: true
+					enabled: root.headerShown
 					onClicked: root.startEdit(root.placeName)
 				}
 			}
@@ -370,6 +390,7 @@ Item {
 					anchors.fill: parent
 					anchors.margins: -4
 					hoverEnabled: true
+					enabled: root.headerShown
 					onClicked: Weather.shift(1)
 				}
 			}
@@ -392,6 +413,7 @@ Item {
 					anchors.fill: parent
 					anchors.margins: -4
 					hoverEnabled: true
+					enabled: root.headerShown
 					onClicked: root.startEdit("", true)
 				}
 			}
@@ -491,6 +513,10 @@ Item {
 
 			width: card.width
 			height: tempBox.height
+
+			HoverHandler {
+				id: heroHover
+			}
 
 			Text {
 				id: heroGlyph
@@ -785,5 +811,12 @@ Item {
 
 		interval: Config.weatherCardSearchDebounce
 		onTriggered: Weather.search(root.query)
+	}
+
+	Timer {
+		id: holdTimer
+
+		interval: 1800
+		onTriggered: root.held = false
 	}
 }
