@@ -59,6 +59,39 @@ function iconLookup(files, name) {
 	return "";
 }
 
+// Apps name themselves in every shape there is: "alacritty", "Alacritty",
+// "Alacritty.desktop". The desktop suffix is the one that has to go, the
+// rest is matched case insensitively.
+function cleanName(name) {
+	const value = String(name === undefined || name === null ? "" : name).trim();
+
+	if (value.endsWith(".desktop"))
+		return value.slice(0, value.length - 8);
+
+	return value;
+}
+
+// The names an icon is looked up under, the app itself first.
+function iconNames(names) {
+	const out = [];
+
+	(names || []).forEach(function (name) {
+		const value = cleanName(name);
+
+		if (!value)
+			return;
+
+		const seen = out.some(function (other) {
+			return other.toLowerCase() === value.toLowerCase();
+		});
+
+		if (!seen)
+			out.push(value);
+	});
+
+	return out;
+}
+
 function cleanExec(value) {
 	return String(value === undefined || value === null ? "" : value)
 		.replace(/%[uUfFiIcCkK]/g, "")

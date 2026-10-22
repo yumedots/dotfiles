@@ -39,6 +39,11 @@ QtObject {
 	function rowOf(notification) {
 		root.nextId += 1;
 
+		const hints = notification.hints || {};
+		const senderPid = Number(hints["sender-pid"] || 0);
+
+		AppIcons.walkPid(senderPid);
+
 		return {
 			id: root.nextId,
 			appName: notification.appName || "",
@@ -47,6 +52,7 @@ QtObject {
 			image: notification.image || "",
 			icon: notification.appIcon || "",
 			desktopEntry: notification.desktopEntry || "",
+			senderPid: senderPid,
 			urgent: notification.urgency === NotificationUrgency.Critical,
 			gone: false,
 			notification: notification

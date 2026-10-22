@@ -27,16 +27,9 @@ Item {
 		? 1000
 		: Math.max(1, Math.floor((Config.notifyRowHeight - root.pad * 2 - titleMetrics.implicitHeight - lines.spacing) / bodyMetrics.implicitHeight))
 	readonly property bool more: root.expandable && !root.expanded && measure.lineCount > root.bodyLines
-
 	implicitHeight: root.expanded ? Math.max(root.cardHeight, lines.implicitHeight + root.pad * 2) : Config.notifyRowHeight
 	clip: true
 	opacity: root.entry && root.entry.gone === true ? Config.notifyGoneOpacity : 1
-
-	onEntryChanged: {
-		if (timerLine.visible)
-			timerAnim.restart();
-	}
-
 
 	function pictureOf() {
 		if (!root.entry)
@@ -60,7 +53,12 @@ Item {
 		if (file.indexOf("/") === 0)
 			return file;
 
-		return AppIcons.iconOf(root.entry.desktopEntry, [file, root.entry.appName]);
+		const named = AppIcons.iconOf(root.entry.desktopEntry, [file, root.entry.appName]);
+
+		if (named !== "")
+			return named;
+
+		return AppIcons.iconOfPid(root.entry.senderPid);
 	}
 
 	Highlight {
@@ -84,7 +82,7 @@ Item {
 		anchors.left: parent.left
 		anchors.leftMargin: root.inset
 		anchors.top: parent.top
-		anchors.topMargin: root.pad
+		anchors.topMargin: root.pad + Math.max(0, (Config.notifyRowHeight - root.pad * 2 - Config.notifySlot) / 2)
 		width: Config.notifySlot
 		height: Config.notifySlot
 		color: "transparent"
@@ -123,10 +121,12 @@ Item {
 		spacing: 2
 
 		Text {
+			id: headline
+
 			width: lines.width
 			elide: Text.ElideRight
 			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
+			font.pixelSize: Math.round(Settings.fontSize * Config.notifyScale)
 			color: root.ink
 			text: root.headline
 		}
@@ -153,7 +153,7 @@ Item {
 		anchors.verticalCenter: lines.verticalCenter
 		visible: root.more
 		font.family: Config.fontFamily
-		font.pixelSize: Settings.fontSize
+		font.pixelSize: Math.round(Settings.fontSize * Config.notifyScale)
 		color: root.ink
 		text: Config.iconRight
 	}
@@ -163,7 +163,7 @@ Item {
 
 		visible: false
 		font.family: Config.fontFamily
-		font.pixelSize: Settings.fontSize
+		font.pixelSize: Math.round(Settings.fontSize * Config.notifyScale)
 		text: "0"
 	}
 
@@ -185,33 +185,5 @@ Item {
 		font.family: Config.fontFamily
 		font.pixelSize: Config.notifyAppFontSize
 		text: root.message
-	}
-
-	Rectangle {
-		id: timerLine
-
-		anchors.left: parent.left
-		anchors.bottom: parent.bottom
-		width: root.width
-		height: 1
-		color: Config.foreground
-		visible: root.single && !root.urgent && !root.closing
-
-		transform: Scale {
-			id: timerScale
-
-			origin.x: 0
-		}
-
-		NumberAnimation {
-			id: timerAnim
-
-			target: timerScale
-			property: "xScale"
-			from: 1
-			to: 0
-			duration: root.entry && root.entry.expireTimeout > 0 ? root.entry.expireTimeout : Config.notifyTimeout
-			running: timerLine.visible
-		}
 	}
 }
