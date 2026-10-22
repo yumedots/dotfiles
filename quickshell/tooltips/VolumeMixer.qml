@@ -18,7 +18,6 @@ Item {
 	property var runningInput: []
 	property bool hasInput: false
 	property string picker: ""
-	property int page: 0
 	property int targetIndex: 0
 	property int pickerIndex: 0
 
@@ -60,14 +59,8 @@ Item {
 		onTriggered: { Hyprland.refreshToplevels(); root.bumpIcons(); }
 	}
 
-	readonly property real channelsMaxWidth: Config.mixerVisibleChannels * Config.mixerChannelWidth + (Config.mixerVisibleChannels - 1) * Config.mixerChannelGap
-	readonly property real idleWidth: Config.mixerIdleChannels * Config.mixerChannelWidth + (Config.mixerIdleChannels - 1) * Config.mixerChannelGap
-	readonly property real contentWidth: Math.max(root.showApps ? apps.implicitWidth : 0, root.idleWidth)
-	readonly property real pageStep: Config.mixerVisibleChannels * (Config.mixerChannelWidth + Config.mixerChannelGap)
-	readonly property bool pageable: content.implicitWidth > root.channelsMaxWidth
-	readonly property int lastPage: Util.pageCount(content.implicitWidth, root.channelsMaxWidth, root.pageStep) - 1
+	readonly property real contentWidth: Config.mixerWidth
 	readonly property var devices: root.picker === "" ? [] : root.sortedDevices(root.picker === "input")
-	readonly property real offset: Util.pageOffset(root.page, content.implicitWidth, root.channelsMaxWidth, root.pageStep)
 	readonly property bool hasApps: System.anyStreamVisible(root.nodes, root.runningOutput, Config.mixerOnlyPlaying, root.held)
 	readonly property bool recording: root.runningInput.length > 0
 	readonly property var steps: Array(Config.mixerStepCount).fill(1)
@@ -75,20 +68,19 @@ Item {
 	implicitWidth: root.contentWidth + Config.mixerPadding * 2
 	implicitHeight: body.implicitHeight + Config.mixerPadding * 2
 
-	onLastPageChanged: root.page = Math.min(root.page, root.lastPage)
 	onPickerChanged: {
 		root.pickerIndex = 0;
 	}
 
 	readonly property var targetNodes: {
-		const list = System.streamNodes(root.nodes, root.runningOutput, Config.mixerOnlyPlaying);
+		const list = [];
 
 		if (root.sink)
 			list.push(root.sink);
 		if (root.hasInput && root.source)
 			list.push(root.source);
 
-		return list;
+		return list.concat(System.streamNodes(root.nodes, root.runningOutput, Config.mixerOnlyPlaying));
 	}
 
 	property bool keyboard: false
@@ -267,10 +259,8 @@ Item {
 		readonly property real level: Util.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(channel.level * Config.mixerStepCount) - 1
 
-		implicitWidth: Config.mixerChannelWidth
-		implicitHeight: stack.implicitHeight
-		width: implicitWidth
-		height: implicitHeight
+		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
+		implicitHeight: height
 
 		Highlight {
 			id: hl
@@ -287,72 +277,82 @@ Item {
 			}
 		}
 
-		Column {
-			id: stack
+		TextMetrics {
+			id: sample
 
-			width: parent.width
-			spacing: Config.mixerChannelGap
+			font.family: Config.fontFamily
+			font.pixelSize: Settings.fontSize
+			text: "100%"
+		}
 
-			Item {
-				id: fader
+		Item {
+			id: iconSlot
 
-				width: parent.width
-				height: Config.mixerFaderHeight
+			anchors.left: parent.left
+			anchors.verticalCenter: parent.verticalCenter
+			width: Config.mixerDeviceIconSize
+			height: Config.mixerDeviceIconSize
 
-				StepBar {
-					anchors.horizontalCenter: parent.horizontalCenter
-					anchors.top: parent.top
-					anchors.bottom: parent.bottom
-					width: Config.mixerFaderThickness
-					vertical: true
-					model: root.steps
-					selected: channel.step
-					level: root.shift ? channel.level : -1
-					ink: channel.muted ? Config.muted : Config.foreground
-				}
-
-				MouseArea {
-					anchors.fill: parent
-					anchors.leftMargin: -Config.mixerHitPad
-					anchors.rightMargin: -Config.mixerHitPad
-					preventStealing: true
-
-					onPressed: (mouse) => root.dragFader(channel.node, mouse.y, fader.height, true, mouse.modifiers)
-					onPositionChanged: (mouse) => root.dragFader(channel.node, mouse.y, fader.height, true, mouse.modifiers)
-				}
+			AppIcon {
+				anchors.centerIn: parent
+				implicitSize: Config.mixerIconSize
+				visible: channel.iconSource !== ""
+				opacity: channel.muted ? 0.45 : 1
+				source: channel.iconSource
 			}
 
 			Text {
-				width: parent.width
-				horizontalAlignment: Text.AlignHCenter
+				anchors.centerIn: parent
+				visible: channel.iconSource === ""
 				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: channel.muted && !hl.active ? Config.muted : hl.ink
-				text: channel.percent + "%"
+				font.pixelSize: Config.mixerIconSize
+				color: channel.muted ? Config.muted : Config.foreground
+				text: channel.glyph
+			}
+		}
+
+		Text {
+			id: linePercent
+
+			anchors.right: parent.right
+			anchors.verticalCenter: parent.verticalCenter
+			width: sample.width
+			horizontalAlignment: Text.AlignRight
+			font.family: Config.fontFamily
+			font.pixelSize: Settings.fontSize
+			color: channel.muted && !hl.active ? Config.muted : hl.ink
+			text: channel.percent + "%"
+		}
+
+		Item {
+			id: lineFader
+
+			anchors.left: iconSlot.right
+			anchors.leftMargin: Config.mixerListGap
+			anchors.right: linePercent.left
+			anchors.rightMargin: Config.mixerListGap
+			anchors.verticalCenter: parent.verticalCenter
+			height: parent.height
+
+			StepBar {
+				anchors.verticalCenter: parent.verticalCenter
+				anchors.left: parent.left
+				anchors.right: parent.right
+				height: Config.mixerFaderThickness
+				model: root.steps
+				selected: channel.step
+				level: root.shift ? channel.level : -1
+				ink: channel.muted ? Config.muted : Config.foreground
 			}
 
-			Item {
-				id: badge
+			MouseArea {
+				anchors.fill: parent
+				anchors.topMargin: -Config.mixerHitPad
+				anchors.bottomMargin: -Config.mixerHitPad
+				preventStealing: true
 
-				width: parent.width
-				height: Config.mixerIconSize
-
-				AppIcon {
-					anchors.centerIn: parent
-					implicitSize: Config.mixerIconSize
-					visible: channel.iconSource !== ""
-					opacity: channel.muted ? 0.45 : 1
-					source: channel.iconSource
-				}
-
-				Text {
-					anchors.centerIn: parent
-					visible: channel.iconSource === ""
-					font.family: Config.fontFamily
-					font.pixelSize: Config.mixerIconSize
-					color: channel.muted ? Config.muted : Config.foreground
-					text: channel.glyph
-				}
+				onPressed: (mouse) => root.dragFader(channel.node, mouse.x, lineFader.width, false, mouse.modifiers)
+				onPositionChanged: (mouse) => root.dragFader(channel.node, mouse.x, lineFader.width, false, mouse.modifiers)
 			}
 		}
 	}
@@ -477,28 +477,6 @@ Item {
 		}
 	}
 
-	component PagerArrow: Item {
-		id: arrow
-
-		property string glyph: ""
-		property bool lit: false
-		property real rows: 0
-
-		visible: root.pageable
-		width: arrow.visible ? Config.mixerArrowSize : 0
-		implicitWidth: width
-		height: arrow.rows
-
-		Text {
-			anchors.centerIn: parent
-			font.family: Config.fontFamily
-			font.pixelSize: Config.mixerArrowSize
-			color: Config.foreground
-			text: arrow.glyph
-			visible: arrow.lit
-		}
-	}
-
 	Column {
 		id: body
 
@@ -506,133 +484,75 @@ Item {
 		anchors.top: parent.top
 		anchors.margins: Config.mixerPadding
 		width: root.contentWidth
-		spacing: Config.mixerRowGap
+		spacing: Config.mixerChannelGap
 
-		Item {
-			id: appRow
+		DeviceLine {
+			id: sinkLine
 
 			width: parent.width
-			height: apps.implicitHeight
-			implicitHeight: height
-			visible: root.showApps
+			node: root.sink
 
-			Row {
-				id: apps
-
-				anchors.horizontalCenter: parent.horizontalCenter
-				spacing: Config.mixerArrowGap
-
-				PagerArrow {
-					glyph: Config.iconPrev
-					lit: root.page > 0
-					rows: content.implicitHeight
-				}
-
-				Item {
-					id: window
-
-					width: Math.min(content.implicitWidth, root.channelsMaxWidth)
-					height: content.implicitHeight
-					implicitWidth: width
-					implicitHeight: height
-					clip: true
-
-					Row {
-						id: content
-
-						 x: -root.offset
-						spacing: Config.mixerChannelGap
-
-						Row {
-							id: outputs
-
-							spacing: Config.mixerChannelGap
-
-							Repeater {
-								model: Pipewire.nodes
-
-								delegate: Item {
-									id: holder
-
-									required property var modelData
-
-									readonly property var node: holder.modelData
-									readonly property bool shown: System.shownStream(holder.node)
-									readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || System.streamPlaying(holder.node, root.runningOutput))
-									visible: System.streamVisible(holder.node, root.runningOutput, Config.mixerOnlyPlaying, root.held)
-									width: holder.visible ? channel.implicitWidth : 0
-									height: channel.implicitHeight
-									clip: true
-
-									onActiveChanged: {
-										if (!holder.active)
-											root.hold(holder.node, Date.now() + Config.mixerHoldMs);
-									}
-
-									PwObjectTracker {
-										objects: holder.node && holder.node.isStream ? [holder.node] : []
-									}
-
-									MixChannel {
-										id: channel
-
-										width: parent.width
-										node: holder.shown ? holder.node : null
-										glyph: Config.iconApp
-										appIcon: holder.shown
-										muted: holder.shown && System.nodeMuted(holder.node)
-										volume: holder.shown ? System.nodeVolume(holder.node) : 0
-									}
-								}
-							}
-						}
-					}
-				}
-
-				PagerArrow {
-					glyph: Config.iconNext
-					lit: root.page < root.lastPage
-					rows: content.implicitHeight
-				}
+			onActivate: function () {
+				root.keyboard = false;
+				root.openPicker("output");
 			}
+			glyph: Config.iconOutput
+			muted: System.nodeMuted(root.sink)
+			volume: System.nodeVolume(root.sink)
 		}
 
-		Column {
-			id: lines
+		DeviceLine {
+			id: sourceLine
 
 			width: parent.width
-			spacing: Config.mixerChannelGap
+			visible: root.hasInput && !root.compact
+			node: root.source
 
-			DeviceLine {
-				id: sinkLine
-
-				width: parent.width
-				node: root.sink
-
-				onActivate: function () {
-					root.keyboard = false;
-					root.openPicker("output");
-				}
-				glyph: Config.iconOutput
-				muted: System.nodeMuted(root.sink)
-				volume: System.nodeVolume(root.sink)
+			onActivate: function () {
+				root.keyboard = false;
+				root.openPicker("input");
 			}
+			glyph: Config.iconInput
+			recording: root.recording
+			muted: System.nodeMuted(root.source)
+			volume: System.nodeVolume(root.source)
+		}
 
-			DeviceLine {
-				id: sourceLine
+		Repeater {
+			model: Pipewire.nodes
 
+			delegate: Item {
+				id: holder
+
+				required property var modelData
+
+				readonly property var node: holder.modelData
+				readonly property bool shown: System.shownStream(holder.node)
+				readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || System.streamPlaying(holder.node, root.runningOutput))
+				visible: root.showApps && System.streamVisible(holder.node, root.runningOutput, Config.mixerOnlyPlaying, root.held)
 				width: parent.width
-				visible: root.hasInput && !root.compact
-				node: root.source
+				height: channel.implicitHeight
+				clip: true
 
-				onActivate: function () {
-					root.keyboard = false;
-					root.openPicker("input");
+				onActiveChanged: {
+					if (!holder.active)
+						root.hold(holder.node, Date.now() + Config.mixerHoldMs);
 				}
-				glyph: Config.iconInput
-				recording: root.recording
-				muted: System.nodeMuted(root.source)
-				volume: System.nodeVolume(root.source)
+
+				PwObjectTracker {
+					objects: holder.node && holder.node.isStream ? [holder.node] : []
+				}
+
+				MixChannel {
+					id: channel
+
+					width: parent.width
+					node: holder.shown ? holder.node : null
+					glyph: Config.iconApp
+					appIcon: holder.shown
+					muted: holder.shown && System.nodeMuted(holder.node)
+					volume: holder.shown ? System.nodeVolume(holder.node) : 0
+				}
 			}
 		}
 	}
