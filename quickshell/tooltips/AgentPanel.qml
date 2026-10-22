@@ -488,9 +488,9 @@ Item {
 								id: limitValue
 
 								anchors.right: limitReset.left
-								anchors.rightMargin: 10
+								anchors.rightMargin: 6
 								anchors.verticalCenter: parent.verticalCenter
-								width: 36
+								width: 34
 
 								horizontalAlignment: Text.AlignRight
 
@@ -505,7 +505,7 @@ Item {
 
 								anchors.right: parent.right
 								anchors.verticalCenter: parent.verticalCenter
-								width: 40
+								width: 26
 
 								horizontalAlignment: Text.AlignRight
 
