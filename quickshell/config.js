@@ -279,6 +279,7 @@ const calendarMeterValueSize = 18;
 const calendarMeterLabelWidth = 96;
 const calendarMeterValueWidth = 64;
 const calendarDialSize = 104;
+const calendarDialVariant = 1;
 const calendarDialRingWidth = 5;
 const calendarDialValueSize = 17;
 const calendarDialTrack = "#262626";
