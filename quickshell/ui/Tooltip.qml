@@ -20,6 +20,7 @@ PanelWindow {
 	property bool alignRight: false
 	property bool centered: false
 	property bool alwaysCentered: false
+	property bool centerScreen: false
 	readonly property bool fullscreen: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
 	readonly property string side: Util.popupSide(root.alignRight, root.centered, root.alwaysCentered, root.fullscreen)
 	readonly property bool centeredSide: root.centered && root.side !== "right"
@@ -65,14 +66,16 @@ PanelWindow {
 			: Config.gapsOut
 	readonly property real cardX: root.side === "right"
 		? Util.snap(root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight, root.scale)
-		: Util.snap(root.side === "center" ? (root.screenWidth - root.cardWidth) / 2
+		: Util.snap(root.centerScreen || root.side === "center" ? (root.screenWidth - root.cardWidth) / 2
 			: root.side === "float" ? root.floatX
 				: root.outerMargin + Config.tooltipGap + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
-	readonly property real cardY: root.fullscreen
-		? Math.round(root.floatY)
-		: root.atBottom
-			? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
-			: Math.round(root.barReserve + root.hang)
+	readonly property real cardY: root.centerScreen
+		? Math.round((root.screenHeight - root.cardHeight) / 2)
+		: root.fullscreen
+			? Math.round(root.floatY)
+			: root.atBottom
+				? Math.round(root.screenHeight - root.barReserve - root.hang - root.cardHeight)
+				: Math.round(root.barReserve + root.hang)
 	readonly property real slideX: root.screenWidth
 
 	visible: root.shown || (root.slideExit ? card.sliding : card.opacity > 0)
@@ -133,7 +136,7 @@ PanelWindow {
 			slideAnim.from = card.slideOffset;
 			slideAnim.to = 0;
 			slideAnim.restart();
-		} else if (root.slideExit) {
+		} else {
 			slideAnim.stop();
 			card.slideOffset = 0;
 		}
