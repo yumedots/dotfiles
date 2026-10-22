@@ -68,7 +68,7 @@ QtObject {
 				hasWorking = true;
 		}
 
-		if (hasBlocked)
+		if (hasBlocked || root.askingSessions.length > 0)
 			return "blocked";
 
 		if (hasError)
@@ -101,7 +101,7 @@ QtObject {
 				title: root.titleOf(id) || "session",
 				icon: root.iconOf(root.providerOf(id)),
 				working: running,
-				question: question,
+				question: question || root.askingSessions.indexOf(id) >= 0,
 				failed: failed,
 				detail: session.blocked || session.error || "",
 				updated: session.updated || 0,
@@ -499,6 +499,50 @@ QtObject {
 	// The sessions the server says are running right now.
 	property var runningSessions: []
 
+	// The sessions that are asking a question, so they wait for the user.
+	property var askingSessions: []
+
+	// The permission requests the server has open. A session that asks
+	// something is one of these, so the agent can be shown waiting for the
+	// user even when the question was asked before the shell started.
+	property Process listPermissions: Process {
+		command: root.serverUrl === "" ? ["true"] : [
+			"curl",
+			"-sS",
+			"-u",
+			"opencode:" + root.serverPassword,
+			root.serverUrl + "/api/permission/request",
+		]
+
+		stdout: StdioCollector {
+			onStreamFinished: function () {
+				root.readPermissions(this.text);
+			}
+		}
+	}
+
+	function readPermissions(text) {
+		let payload;
+
+		try {
+			payload = JSON.parse(text);
+		} catch (error) {
+			return;
+		}
+
+		const list = (payload && payload.data) || [];
+		const asking = [];
+
+		for (let i = 0; i < list.length; i++) {
+			const id = list[i] && list[i].sessionID;
+
+			if (id)
+				asking.push(id);
+		}
+
+		root.askingSessions = asking;
+	}
+
 	property Process listRunning: Process {
 		command: root.serverUrl === "" ? ["true"] : [
 			"curl",
@@ -543,7 +587,10 @@ QtObject {
 		running: true
 		triggeredOnStart: true
 
-		onTriggered: root.listRunning.running = true
+		onTriggered: {
+			root.listRunning.running = true;
+			root.listPermissions.running = true;
+		}
 	}
 
 	function findListed(id) {
