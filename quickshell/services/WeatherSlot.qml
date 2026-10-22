@@ -84,7 +84,7 @@ Item {
 		id: fetch
 
 		onDone: function (text) {
-			const parsed = Forecast.parseWeatherCurrent(text);
+			const parsed = Forecast.parseWeatherCurrent(text, Config.weatherTempUnit);
 
 			if (parsed === null) {
 				root.fail();
@@ -96,7 +96,7 @@ Item {
 			root.feels = parsed.feels;
 			root.wind = parsed.wind;
 			root.humidity = parsed.humidity;
-			root.days = Forecast.parseWeatherDaily(text);
+			root.days = Forecast.parseWeatherDaily(text, Config.weatherTempUnit);
 			root.failed = false;
 			retry.stop();
 			retry.interval = Config.weatherRetryMs;

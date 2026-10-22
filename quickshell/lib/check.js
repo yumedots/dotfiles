@@ -821,7 +821,17 @@ assert(weatherForecastUrl(1, 2, "celsius", "kmh", 7).indexOf("wind_speed_unit=km
 assert(weatherForecastUrl(1, 2, "celsius", "kmh", 7).indexOf("forecast_days=7") > 0, "and for the week of days the panel shows");
 assert(weatherForecastUrl(1, 2).indexOf("temperature_unit=celsius") > 0 && weatherForecastUrl(1, 2).indexOf("wind_speed_unit=kmh") > 0 && weatherForecastUrl(1, 2).indexOf("forecast_days=7") > 0, "with nothing asked for it is celsius and kmh for seven days");
 assert(weatherForecastUrl(1, 2).indexOf("daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,wind_speed_10m_max,relative_humidity_2m_mean") > 0, "the forecast asks for the daily block the panel draws");
-assert(Config.weatherTempUnit === "celsius" && Config.weatherWindUnit === "kmh", "the config reads in celsius and kmh");
+assert(Config.weatherTempUnit === "fahrenheit" && Config.weatherWindUnit === "mph", "the config reads in fahrenheit and mph");
+assert(parseWeatherCurrent(JSON.stringify({
+	current_units: { temperature_2m: "°C" },
+	current: { temperature_2m: 18.6, apparent_temperature: 17.9, relative_humidity_2m: 74, wind_speed_10m: 9.4, weather_code: 3 }
+})).temp === "19°c", "celsius is written low");
+assert(parseWeatherCurrent(JSON.stringify({
+	current: { temperature_2m: 70, apparent_temperature: 70, relative_humidity_2m: 50, wind_speed_10m: 1, weather_code: 0 }
+}), "celsius").temp === "70°c", "and a response with no unit reads the one that was asked for");
+assert(parseWeatherCurrent(JSON.stringify({
+	current: { temperature_2m: 70, apparent_temperature: 70, relative_humidity_2m: 50, wind_speed_10m: 1, weather_code: 0 }
+}), "fahrenheit").temp === "70°F", "so fahrenheit reads high");
 assert(Config.weatherDays === 7, "the config asks for a week of days");
 
 const current = parseWeatherCurrent(JSON.stringify({
@@ -866,18 +876,18 @@ assert(days.length === 2, "the daily block becomes one row per day");
 assert(days[0].date === "2026-10-21" && days[0].day === "WED", "a row keeps its date and names the weekday");
 assert(days[1].date === "2026-10-22" && days[1].day === "THU", "and so does the next one");
 assert(days[0].code === 3 && days[1].code === 61, "the condition code comes back rounded");
-assert(days[0].tempMax === "20°C" && days[0].tempMin === "6°C", "the high and the low are rounded and carry the unit");
-assert(days[1].tempMax === "18°C" && days[1].tempMin === "6°C", "and so is the next day");
-assert(days[0].feels === "19°C", "the apparent temperature is the apparent high");
+assert(days[0].tempMax === "20°c" && days[0].tempMin === "6°c", "the high and the low are rounded and carry the unit");
+assert(days[1].tempMax === "18°c" && days[1].tempMin === "6°c", "and so is the next day");
+assert(days[0].feels === "19°c", "the apparent temperature is the apparent high");
 assert(days[0].wind === "9 km/h" && days[1].wind === "15 km/h", "the wind is the daily maximum with its unit");
 assert(days[0].humidity === "74%" && days[1].humidity === "80%", "the humidity is the daily mean");
 assert(parseWeatherDaily(JSON.stringify({
 	current_units: { temperature_2m: "°C", wind_speed_10m: "km/h" },
 	daily: { time: ["2026-10-21"], weather_code: [0], temperature_2m_max: [20], temperature_2m_min: [6], apparent_temperature_max: [19], wind_speed_10m_max: [9], relative_humidity_2m_mean: [74] }
-}))[0].tempMax === "20°C", "without daily units the current units are the fallback");
+}))[0].tempMax === "20°c", "without daily units the current units are the fallback");
 assert(parseWeatherDaily(JSON.stringify({
 	daily: { time: ["2026-10-21"], weather_code: [0], temperature_2m_max: [20], temperature_2m_min: [6], apparent_temperature_max: [19], wind_speed_10m_max: [9], relative_humidity_2m_mean: [74] }
-}))[0].wind === "9 km/h", "and with no units at all it is celsius and km/h");
+}), "fahrenheit")[0].tempMax === "20°F", "and with no units at all it reads the one that was asked for");
 assert(parseWeatherDaily(JSON.stringify({ current: {} })).length === 0, "a response with no daily block has no days");
 assert(parseWeatherDaily("nope").length === 0, "a broken response has no days");
 assert(parseWeatherDaily(JSON.stringify({

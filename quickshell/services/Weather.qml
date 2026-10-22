@@ -61,6 +61,9 @@ Item {
 		if (place !== "" && root.wanted !== "" && place !== root.wanted)
 			return false;
 
+		if (cached.unit !== Config.weatherTempUnit)
+			return false;
+
 		root.description = cached.description || "";
 		root.location = cached.location || "";
 		root.place = place;
@@ -82,6 +85,7 @@ Item {
 	function save() {
 		cache.save({
 			fetched: root.fetched,
+			unit: Config.weatherTempUnit,
 			description: root.description,
 			location: root.location,
 			place: root.place,
@@ -407,7 +411,7 @@ Item {
 		command: Shell.curl(Forecast.weatherForecastUrl(root.lat, root.lon, Config.weatherTempUnit, Config.weatherWindUnit, Config.weatherDays))
 
 		onDone: function (text) {
-			const parsed = Forecast.parseWeatherCurrent(text);
+			const parsed = Forecast.parseWeatherCurrent(text, Config.weatherTempUnit);
 
 			root.loading = false;
 
@@ -422,7 +426,7 @@ Item {
 			root.feels = parsed.feels;
 			root.wind = parsed.wind;
 			root.humidity = parsed.humidity;
-			root.daily = Forecast.parseWeatherDaily(text);
+			root.daily = Forecast.parseWeatherDaily(text, Config.weatherTempUnit);
 			root.fetched = Date.now();
 			root.status = "";
 			root.save();

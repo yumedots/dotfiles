@@ -115,7 +115,20 @@ function weatherForecastUrl(lat, lon, tempUnit, windUnit, days) {
 		+ "&temperature_unit=" + temp + "&wind_speed_unit=" + wind + "&forecast_days=" + count + "&timezone=auto";
 }
 
-function parseWeatherCurrent(text) {
+function weatherTempUnitLabel(unit) {
+	return String(unit || "").toLowerCase() === "celsius" ? "°c" : "°F";
+}
+
+function weatherTempLabel(value, fallback) {
+	const text = String(value || "").replace(/\s/g, "");
+
+	if (text === "")
+		return fallback;
+
+	return text.toLowerCase() === "°c" ? "°c" : text;
+}
+
+function parseWeatherCurrent(text, unit) {
 	let data = null;
 
 	try {
@@ -130,14 +143,14 @@ function parseWeatherCurrent(text) {
 		return null;
 
 	const units = data.current_units || {};
-	const unit = String(units.temperature_2m || "°C").replace(/\s/g, "");
+	const label = weatherTempLabel(units.temperature_2m, weatherTempUnitLabel(unit));
 	const windUnit = String(units.wind_speed_10m || "km/h");
 
 	return {
 		code: Math.round(current.weather_code),
 		precip: Number(current.precipitation) || 0,
-		temp: Math.round(current.temperature_2m) + unit,
-		feels: Math.round(current.apparent_temperature) + unit,
+		temp: Math.round(current.temperature_2m) + label,
+		feels: Math.round(current.apparent_temperature) + label,
 		wind: Math.round(current.wind_speed_10m) + " " + windUnit,
 		humidity: Math.round(current.relative_humidity_2m) + "%"
 	};
@@ -167,7 +180,7 @@ function weatherDayLabel(date) {
 	return ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][stamp.getUTCDay()];
 }
 
-function parseWeatherDaily(text) {
+function parseWeatherDaily(text, unit) {
 	let data = null;
 
 	try {
@@ -193,7 +206,7 @@ function parseWeatherDaily(text) {
 
 	const units = data.daily_units || {};
 	const currentUnits = data.current_units || {};
-	const unit = String(units.temperature_2m_max || currentUnits.temperature_2m || "°C").replace(/\s/g, "");
+	const label = weatherTempLabel(units.temperature_2m_max || currentUnits.temperature_2m, weatherTempUnitLabel(unit));
 	const windUnit = String(units.wind_speed_10m_max || currentUnits.wind_speed_10m || "km/h");
 	const rows = [];
 
@@ -204,9 +217,9 @@ function parseWeatherDaily(text) {
 			date: date,
 			day: weatherDayLabel(date),
 			code: Math.round(Number(daily.weather_code[i]) || 0),
-			tempMax: Math.round(Number(daily.temperature_2m_max[i])) + unit,
-			tempMin: Math.round(Number(daily.temperature_2m_min[i])) + unit,
-			feels: Math.round(Number(daily.apparent_temperature_max[i])) + unit,
+			tempMax: Math.round(Number(daily.temperature_2m_max[i])) + label,
+			tempMin: Math.round(Number(daily.temperature_2m_min[i])) + label,
+			feels: Math.round(Number(daily.apparent_temperature_max[i])) + label,
 			wind: Math.round(Number(daily.wind_speed_10m_max[i]) || 0) + " " + windUnit,
 			humidity: Math.round(Number(daily.relative_humidity_2m_mean[i]) || 0) + "%"
 		});
