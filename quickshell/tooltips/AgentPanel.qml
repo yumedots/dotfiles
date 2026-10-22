@@ -289,11 +289,23 @@ Item {
 					text: Config.agentPanelTitle
 				}
 
-				Text {
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize
-					color: root.state === "error" ? Config.red : Config.muted
-					text: OpenCode.connected ? root.stateText : "OpenCode offline"
+				// The state, with the spinner that turns while the agent is
+				// working.
+				Row {
+					spacing: 5
+
+					Braille {
+						visible: root.state === "working"
+						running: root.state === "working"
+						ink: Config.muted
+					}
+
+					Text {
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: root.state === "error" ? Config.red : Config.muted
+						text: OpenCode.connected ? root.stateText : "OpenCode offline"
+					}
 				}
 
 				Text {
