@@ -12,13 +12,15 @@ Item {
 	property color ink: Config.foreground
 	property int size: Settings.fontSize
 
+	// The frames are the braille dots that turn, so the spinner is a text
+	// glyph and it sits with the rest of the type.
+	readonly property var frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
 	// The frame that is shown. It is turned by the timer below.
 	property int frame: 0
 
-	readonly property var frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-
-	implicitWidth: Math.round(root.size * 0.6)
-	implicitHeight: root.size
+	implicitWidth: glyph.implicitWidth
+	implicitHeight: glyph.implicitHeight
 
 	Timer {
 		interval: 90
@@ -29,6 +31,8 @@ Item {
 	}
 
 	Text {
+		id: glyph
+
 		anchors.centerIn: parent
 
 		font.family: Config.fontFamily
