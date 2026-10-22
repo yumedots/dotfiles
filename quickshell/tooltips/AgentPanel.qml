@@ -4,8 +4,8 @@ import qs
 import qs.services
 import qs.ui
 
-// The agent panel: the face at full size, the state of the agent, the work
-// that is going on, the work that is done, and the plan the agent runs on.
+// The agent panel: the work that is done, the agent itself, and the plan the
+// agent runs on, side by side.
 //
 // The panel keeps one size, so the popup it lives in never changes size
 // while it is open.
@@ -102,450 +102,456 @@ Item {
 		return (minutes % 60) + "m";
 	}
 
-	// The face, in the middle of the panel.
-	Item {
-		id: faceBox
+	Row {
+		id: row
 
-		anchors.top: parent.top
-		anchors.topMargin: Config.agentPanelPadding
-		anchors.horizontalCenter: parent.horizontalCenter
+		anchors.fill: parent
+		anchors.margins: Config.agentPanelPadding
 
-		width: Config.agentFaceSize
-		height: Config.agentFaceSize
+		spacing: 10
 
-		AgentFace {
-			anchors.fill: parent
+		// The work that is done, on the left.
+		Item {
+			id: doneBox
 
-			size: Config.agentFaceSize
-			state: root.state
-			followCursor: true
-			gazeX: root.gazeX
-			gazeY: root.gazeY
-
-			// The face is only turned while the panel is open, so a face
-			// that nobody sees costs nothing.
-			live: root.source ? root.source.popupVisible : true
-
-			bodyColor: Config.foreground
-			eyeColor: Config.surface
-		}
-	}
-
-	// The state of the agent, and what it is asking about.
-	Column {
-		id: stateBox
-
-		anchors.top: faceBox.bottom
-		anchors.topMargin: Config.agentPanelPadding
-		anchors.horizontalCenter: parent.horizontalCenter
-
-		spacing: 2
-
-		Text {
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			color: Config.foreground
-			text: Config.agentPanelTitle
-		}
-
-		Text {
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			color: root.state === "error" ? Config.red : Config.muted
-			text: OpenCode.connected ? root.stateText : "OpenCode offline"
-		}
-
-		Text {
-			width: root.width - 2 * Config.agentPanelPadding
-			visible: text !== ""
-			horizontalAlignment: Text.AlignHCenter
-			elide: Text.ElideRight
-
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			color: Config.muted
-			text: OpenCode.detailText
-		}
-	}
-
-	// The work that is going on. Every session that is running gets a row,
-	// so several of them working at once are all of them visible.
-	ListView {
-		id: workList
-
-		anchors.top: stateBox.bottom
-		anchors.topMargin: Config.agentPanelPadding
-		anchors.left: parent.left
-		anchors.right: parent.right
-		anchors.leftMargin: Config.agentPanelPadding
-		anchors.rightMargin: Config.agentPanelPadding
-
-		height: Math.max(0, splitLine.y - workList.y - Config.agentPanelPadding)
-		clip: true
-		spacing: 2
-		model: OpenCode.working
-
-		delegate: Item {
-			required property var modelData
-
-			width: workList.width - 8
-			height: root.rowHeight
-
-			// The figure that says what the session is doing: a braille
-			// spinner while it works, a question mark when it asks something,
-			// and a cross when it failed.
-			Braille {
-				id: figure
-
-				x: 0
-				y: 1
-				width: 12
-				height: root.rowHeight - 2
-
-				running: modelData.working
-				visible: modelData.working
-				ink: modelData.failed || modelData.question ? Config.red : Config.foreground
-			}
+			width: Config.agentDoneWidth
+			height: row.height
 
 			Text {
-				x: figure.x
-				y: 0
-				width: 12
-				height: root.rowHeight
-				visible: !modelData.working
-				verticalAlignment: Text.AlignVCenter
-				horizontalAlignment: Text.AlignHCenter
+				id: doneTitle
+
+				anchors.top: parent.top
+				anchors.left: parent.left
 
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
-				color: Config.red
-				text: modelData.question ? Config.agentIconQuestion : Config.agentIconClose
+				color: Config.muted
+				text: Config.agentDoneTitle
 			}
 
-			// The mark of the provider that is doing the work.
-			Image {
-				id: mark
+			ListView {
+				id: doneList
 
-				x: 16
-				y: 1
-				width: 15
-				height: 15
-				visible: modelData.icon !== ""
-
-				source: modelData.icon !== ""
-					? "file://" + Quickshell.shellDir + "/assets/providers/" + modelData.icon + ".svg?v=3"
-					: ""
-				sourceSize.width: Math.round(15 * root.dpr)
-				sourceSize.height: Math.round(15 * root.dpr)
-				fillMode: Image.PreserveAspectFit
-			}
-
-			Text {
-				anchors.left: mark.visible ? mark.right : figure.right
-				anchors.leftMargin: mark.visible ? 6 : 8
+				anchors.top: doneTitle.bottom
+				anchors.topMargin: 4
+				anchors.left: parent.left
 				anchors.right: parent.right
-				anchors.verticalCenter: parent.verticalCenter
+				anchors.bottom: parent.bottom
 
-				elide: Text.ElideRight
+				clip: true
+				spacing: 2
+				model: OpenCode.doneSessions
 
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: modelData.failed || modelData.question ? Config.red : Config.foreground
-				text: modelData.title
-			}
-		}
-	}
+				delegate: Item {
+					required property var modelData
 
-	// The thumb of the work list, which only shows when there is more work
-	// than fits.
-	Scrollbar {
-		view: workList
-		offset: 4
-	}
-
-	// The line that splits the work from the rest of the panel.
-	Rectangle {
-		id: splitLine
-
-		anchors.top: parent.top
-		anchors.topMargin: Config.agentPanelHeight - Config.agentBottomHeight
-		anchors.left: parent.left
-		anchors.right: parent.right
-		anchors.leftMargin: Config.agentPanelPadding
-		anchors.rightMargin: Config.agentPanelPadding
-
-		height: 1
-		color: Config.dim
-	}
-
-	// The work that is done, on the left.
-	Item {
-		id: doneBox
-
-		anchors.top: splitLine.bottom
-		anchors.topMargin: Config.agentPanelPadding
-		anchors.bottom: parent.bottom
-		anchors.bottomMargin: Config.agentPanelPadding
-		anchors.left: parent.left
-		anchors.leftMargin: Config.agentPanelPadding
-
-		width: Config.agentDoneWidth
-
-		Text {
-			id: doneTitle
-
-			anchors.top: parent.top
-			anchors.left: parent.left
-
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			color: Config.muted
-			text: Config.agentDoneTitle
-		}
-
-		ListView {
-			id: doneList
-
-			anchors.top: doneTitle.bottom
-			anchors.topMargin: 4
-			anchors.left: parent.left
-			anchors.right: parent.right
-			anchors.bottom: parent.bottom
-
-			clip: true
-			spacing: 2
-			model: OpenCode.doneSessions
-
-			delegate: Item {
-				required property var modelData
-
-				width: doneList.width - 8
-				height: root.rowHeight
-
-				// The figure that says the work is over.
-				Text {
-					id: doneFigure
-
-					x: 0
-					y: 0
-					width: 12
+					width: doneList.width - 8
 					height: root.rowHeight
-					verticalAlignment: Text.AlignVCenter
-					horizontalAlignment: Text.AlignHCenter
 
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize
-					color: Config.muted
-					text: Config.agentIconDone
-				}
+					// The figure that says the work is over.
+					Text {
+						id: doneFigure
 
-				Text {
-					anchors.left: doneFigure.right
-					anchors.leftMargin: 8
-					anchors.right: dismiss.left
-					anchors.rightMargin: 6
-					anchors.verticalCenter: parent.verticalCenter
+						x: 0
+						y: 0
+						width: 12
+						height: root.rowHeight
+						verticalAlignment: Text.AlignVCenter
+						horizontalAlignment: Text.AlignHCenter
 
-					elide: Text.ElideRight
-
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize
-					color: Config.muted
-					text: modelData.title
-				}
-
-				// The cross that takes the finished work off the list.
-				Text {
-					id: dismiss
-
-					anchors.right: parent.right
-					anchors.verticalCenter: parent.verticalCenter
-					width: 14
-
-					horizontalAlignment: Text.AlignHCenter
-
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize
-					color: dismissHit.containsMouse ? Config.foreground : Config.muted
-					text: Config.iconClose
-
-					MouseArea {
-						id: dismissHit
-
-						anchors.fill: parent
-						anchors.margins: -4
-
-						onClicked: OpenCode.dismiss(modelData.id)
-					}
-				}
-			}
-		}
-
-		Scrollbar {
-			view: doneList
-			offset: 4
-		}
-	}
-
-	// The plan the agent runs on, and how much of it is left.
-	Item {
-		id: planBox
-
-		anchors.top: splitLine.bottom
-		anchors.topMargin: Config.agentPanelPadding
-		anchors.bottom: parent.bottom
-		anchors.bottomMargin: Config.agentPanelPadding
-		anchors.left: doneBox.right
-		anchors.leftMargin: Config.agentPanelPadding
-		anchors.right: parent.right
-		anchors.rightMargin: Config.agentPanelPadding
-
-		Text {
-			id: planTitle
-
-			anchors.top: parent.top
-			anchors.left: parent.left
-
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			color: Config.muted
-			text: Config.agentPlanTitle
-		}
-
-		Flickable {
-			id: planFlick
-
-			anchors.top: planTitle.bottom
-			anchors.topMargin: 4
-			anchors.left: parent.left
-			anchors.right: parent.right
-			anchors.bottom: parent.bottom
-
-			contentWidth: width
-			contentHeight: planStack.height
-			clip: true
-
-			Column {
-				id: planStack
-
-				width: planFlick.width
-				spacing: 6
-
-				// The mark of the plan, with its name.
-				Row {
-					visible: OpenCode.limits.length > 0
-					spacing: 6
-
-					Image {
-						width: 18
-						height: 18
-
-						source: "file://" + Quickshell.shellDir + "/assets/providers/" + Config.agentPlanIcon + ".svg?v=3"
-						sourceSize.width: Math.round(18 * root.dpr)
-						sourceSize.height: Math.round(18 * root.dpr)
-						fillMode: Image.PreserveAspectFit
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: Config.muted
+						text: Config.agentIconDone
 					}
 
 					Text {
+						anchors.left: doneFigure.right
+						anchors.leftMargin: 8
+						anchors.right: dismiss.left
+						anchors.rightMargin: 6
+						anchors.verticalCenter: parent.verticalCenter
+
+						elide: Text.ElideRight
+
 						font.family: Config.fontFamily
 						font.pixelSize: Settings.fontSize
-						color: Config.foreground
-						text: Config.agentPlanName
+						color: Config.muted
+						text: modelData.title
+					}
+
+					// The cross that takes the finished work off the list.
+					Text {
+						id: dismiss
+
+						anchors.right: parent.right
+						anchors.verticalCenter: parent.verticalCenter
+						width: 14
+
+						horizontalAlignment: Text.AlignHCenter
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: dismissHit.containsMouse ? Config.foreground : Config.muted
+						text: Config.iconClose
+
+						MouseArea {
+							id: dismissHit
+
+							anchors.fill: parent
+							anchors.margins: -4
+
+							onClicked: OpenCode.dismiss(modelData.id)
+						}
 					}
 				}
+			}
 
-				Repeater {
-					model: OpenCode.limits
+			// The thumb of the list, which only shows when there is more done
+			// work than fits.
+			Scrollbar {
+				view: doneList
+				offset: 4
+			}
+		}
 
-					delegate: Item {
-						id: limitRow
+		// The line that splits the done work from the agent.
+		Rectangle {
+			width: 1
+			height: row.height
+			color: Config.dim
+		}
 
-						required property var modelData
+		// The agent itself, in the middle.
+		Item {
+			id: faceBox
 
-						width: parent.width
-						height: Math.max(limitLabel.implicitHeight, limitReset.implicitHeight)
+			width: Config.agentColumnWidth
+			height: row.height
 
-						readonly property bool alarming: modelData.percent >= 90
+			// The face.
+			Item {
+				id: face
 
-						// The label and the numbers are fixed columns, so every
-						// bar starts and ends in the same place. The percentage
-						// sits before the bar, so the bar is read as the rest.
-						Text {
-							id: limitLabel
+				anchors.top: parent.top
+				anchors.horizontalCenter: parent.horizontalCenter
 
-							anchors.left: parent.left
-							anchors.verticalCenter: parent.verticalCenter
-							width: 62
+				width: Config.agentFaceSize
+				height: Config.agentFaceSize
 
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: Config.foreground
-							text: modelData.title
-						}
+				AgentFace {
+					anchors.fill: parent
 
-						Text {
-							id: limitValue
+					size: Config.agentFaceSize
+					state: root.state
+					followCursor: true
+					gazeX: root.gazeX
+					gazeY: root.gazeY
 
-							anchors.left: limitLabel.right
-							anchors.leftMargin: 4
-							anchors.verticalCenter: parent.verticalCenter
-							width: 32
+					// The face is only turned while the panel is open, so a
+					// face that nobody sees costs nothing.
+					live: root.source ? root.source.popupVisible : true
 
-							horizontalAlignment: Text.AlignRight
+					bodyColor: Config.foreground
+					eyeColor: Config.surface
+				}
+			}
 
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: limitRow.alarming ? Config.red : Config.muted
-							text: Math.round(modelData.percent) + "%"
-						}
+			// The state of the agent, and what it is asking about.
+			Column {
+				id: stateBox
 
-						Text {
-							id: limitReset
+				anchors.top: face.bottom
+				anchors.topMargin: Config.agentPanelPadding
+				anchors.horizontalCenter: parent.horizontalCenter
 
-							anchors.right: parent.right
-							anchors.verticalCenter: parent.verticalCenter
-							width: 48
+				spacing: 2
 
-							horizontalAlignment: Text.AlignRight
+				Text {
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: Config.foreground
+					text: Config.agentPanelTitle
+				}
 
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: Config.muted
-							text: root.countdown(modelData.resetsAt)
-						}
-
-						StepBar {
-							id: limitMeter
-
-							anchors.left: limitValue.right
-							anchors.right: limitReset.left
-							anchors.leftMargin: 8
-							anchors.rightMargin: 8
-							anchors.verticalCenter: parent.verticalCenter
-
-							level: modelData.percent / 100
-							ink: limitRow.alarming ? Config.red : Config.foreground
-							track: Config.dim
-						}
-					}
+				Text {
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: root.state === "error" ? Config.red : Config.muted
+					text: OpenCode.connected ? root.stateText : "OpenCode offline"
 				}
 
 				Text {
 					width: parent.width
-					visible: OpenCode.limits.length === 0 && OpenCode.usageError !== ""
+					visible: text !== ""
+					horizontalAlignment: Text.AlignHCenter
 					elide: Text.ElideRight
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
 					color: Config.muted
-					text: OpenCode.usageError
+					text: OpenCode.detailText
 				}
+			}
+
+			// The work that is going on. Every session that is running gets a
+			// row, so several of them working at once are all of them visible.
+			ListView {
+				id: workList
+
+				anchors.top: stateBox.bottom
+				anchors.topMargin: Config.agentPanelPadding
+				anchors.left: parent.left
+				anchors.right: parent.right
+				anchors.bottom: parent.bottom
+
+				clip: true
+				spacing: 2
+				model: OpenCode.working
+
+				delegate: Item {
+					required property var modelData
+
+					width: workList.width - 8
+					height: root.rowHeight
+
+					// The figure that says what the session is doing: a
+					// braille spinner while it works, a question mark when it
+					// asks something, and a cross when it failed.
+					Braille {
+						id: figure
+
+						x: 0
+						y: 1
+						width: 12
+						height: root.rowHeight - 2
+
+						running: modelData.working
+						visible: modelData.working
+						ink: modelData.failed || modelData.question ? Config.red : Config.foreground
+					}
+
+					Text {
+						x: figure.x
+						y: 0
+						width: 12
+						height: root.rowHeight
+						visible: !modelData.working
+						verticalAlignment: Text.AlignVCenter
+						horizontalAlignment: Text.AlignHCenter
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: Config.red
+						text: modelData.question ? Config.agentIconQuestion : Config.agentIconClose
+					}
+
+					// The mark of the provider that is doing the work.
+					Image {
+						id: mark
+
+						x: 16
+						y: 1
+						width: 15
+						height: 15
+						visible: modelData.icon !== ""
+
+						source: modelData.icon !== ""
+							? "file://" + Quickshell.shellDir + "/assets/providers/" + modelData.icon + ".svg?v=3"
+							: ""
+						sourceSize.width: Math.round(15 * root.dpr)
+						sourceSize.height: Math.round(15 * root.dpr)
+						fillMode: Image.PreserveAspectFit
+					}
+
+					Text {
+						anchors.left: mark.visible ? mark.right : figure.right
+						anchors.leftMargin: mark.visible ? 6 : 8
+						anchors.right: parent.right
+						anchors.verticalCenter: parent.verticalCenter
+
+						elide: Text.ElideRight
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: modelData.failed || modelData.question ? Config.red : Config.foreground
+						text: modelData.title
+					}
+				}
+			}
+
+			// The thumb of the work list, which only shows when there is more
+			// work than fits.
+			Scrollbar {
+				view: workList
+				offset: 4
 			}
 		}
 
-		Scrollbar {
-			view: planFlick
-			offset: 4
+		// The line that splits the agent from the plan.
+		Rectangle {
+			width: 1
+			height: row.height
+			color: Config.dim
+		}
+
+		// The plan the agent runs on, and how much of it is left.
+		Item {
+			id: planBox
+
+			width: Config.agentPlanWidth
+			height: row.height
+
+			Text {
+				id: planTitle
+
+				anchors.top: parent.top
+				anchors.left: parent.left
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: Config.muted
+				text: Config.agentPlanTitle
+			}
+
+			Flickable {
+				id: planFlick
+
+				anchors.top: planTitle.bottom
+				anchors.topMargin: 4
+				anchors.left: parent.left
+				anchors.right: parent.right
+				anchors.bottom: parent.bottom
+
+				contentWidth: width
+				contentHeight: planStack.height
+				clip: true
+
+				Column {
+					id: planStack
+
+					width: planFlick.width
+					spacing: 6
+
+					// The mark of the plan, with its name.
+					Row {
+						visible: OpenCode.limits.length > 0
+						spacing: 6
+
+						Image {
+							width: 18
+							height: 18
+
+							source: "file://" + Quickshell.shellDir + "/assets/providers/" + Config.agentPlanIcon + ".svg?v=3"
+							sourceSize.width: Math.round(18 * root.dpr)
+							sourceSize.height: Math.round(18 * root.dpr)
+							fillMode: Image.PreserveAspectFit
+						}
+
+						Text {
+							font.family: Config.fontFamily
+							font.pixelSize: Settings.fontSize
+							color: Config.foreground
+							text: Config.agentPlanName
+						}
+					}
+
+					Repeater {
+						model: OpenCode.limits
+
+						delegate: Item {
+							id: limitRow
+
+							required property var modelData
+
+							width: parent.width
+							height: Math.max(limitLabel.implicitHeight, limitReset.implicitHeight)
+
+							readonly property bool alarming: modelData.percent >= 90
+
+							// The label and the numbers are fixed columns, so
+							// every bar starts and ends in the same place. The
+							// percentage sits before the bar, so the bar is
+							// read as the rest.
+							Text {
+								id: limitLabel
+
+								anchors.left: parent.left
+								anchors.verticalCenter: parent.verticalCenter
+								width: 60
+
+								font.family: Config.fontFamily
+								font.pixelSize: Settings.fontSize
+								color: Config.foreground
+								text: modelData.title
+							}
+
+							Text {
+								id: limitValue
+
+								anchors.left: limitLabel.right
+								anchors.leftMargin: 4
+								anchors.verticalCenter: parent.verticalCenter
+								width: 32
+
+								horizontalAlignment: Text.AlignRight
+
+								font.family: Config.fontFamily
+								font.pixelSize: Settings.fontSize
+								color: limitRow.alarming ? Config.red : Config.muted
+								text: Math.round(modelData.percent) + "%"
+							}
+
+							Text {
+								id: limitReset
+
+								anchors.right: parent.right
+								anchors.verticalCenter: parent.verticalCenter
+								width: 48
+
+								horizontalAlignment: Text.AlignRight
+
+								font.family: Config.fontFamily
+								font.pixelSize: Settings.fontSize
+								color: Config.muted
+								text: root.countdown(modelData.resetsAt)
+							}
+
+							StepBar {
+								id: limitMeter
+
+								anchors.left: limitValue.right
+								anchors.right: limitReset.left
+								anchors.leftMargin: 8
+								anchors.rightMargin: 8
+								anchors.verticalCenter: parent.verticalCenter
+
+								level: modelData.percent / 100
+								ink: limitRow.alarming ? Config.red : Config.foreground
+								track: Config.dim
+							}
+						}
+					}
+
+					Text {
+						width: parent.width
+						visible: OpenCode.limits.length === 0 && OpenCode.usageError !== ""
+						elide: Text.ElideRight
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: Config.muted
+						text: OpenCode.usageError
+					}
+				}
+			}
+
+			// The thumb of the plan, which only shows when there is more plan
+			// than fits.
+			Scrollbar {
+				view: planFlick
+				offset: 4
+			}
 		}
 	}
 }
