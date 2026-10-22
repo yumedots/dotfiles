@@ -62,6 +62,15 @@ Item {
 	// The spikes turn while the agent is working.
 	property real spin: 0
 
+	// The turn of the spikes, in degrees, rounded to a small step. The step
+	// is too small to see, but it keeps the path from being rebuilt on every
+	// frame.
+	readonly property real turn: Math.round(root.spin * 2) / 2
+
+	// Whether the face is on screen. A face that is not on screen does not
+	// rebuild its path, so it costs nothing.
+	property bool live: true
+
 	readonly property bool spinning: root.state === "working" && !root.paused
 
 	RotationAnimation on spin {
@@ -242,7 +251,14 @@ Item {
 	readonly property var outline: {
 		// The spikes turn while the agent works. The outline is turned on its
 		// own so the eyes stay level and still read as eyes.
-		return Agent.rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.spin);
+		//
+		// The turn is rounded to a small step, so the path is not rebuilt on
+		// every frame. The step is far too small to see, and a face that is
+		// not on screen does not rebuild its path at all.
+		if (!root.live)
+			return root.body;
+
+		return Agent.rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.turn);
 	}
 
 	// The icon is drawn in body-local space, so it moves with the body.
