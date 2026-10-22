@@ -317,7 +317,7 @@ Item {
 						}
 
 						Text {
-							visible: !root.detailHidden
+							visible: root.detail !== "" && !root.detailHidden
 
 							font.family: Config.fontFamily
 							font.pixelSize: Settings.fontSize
@@ -426,7 +426,7 @@ Item {
 							width: 18
 							height: 18
 
-							source: "file://" + Quickshell.shellDir + "/assets/providers/" + Config.agentPlanIcon + ".svg?v=3"
+							source: "file://" + Quickshell.shellDir + "/assets/providers/" + Config.agentPlanIcon + ".svg?v=4"
 							sourceSize.width: Math.round(18 * root.dpr)
 							sourceSize.height: Math.round(18 * root.dpr)
 							fillMode: Image.PreserveAspectFit

@@ -78,7 +78,7 @@ Item {
 		visible: root.icon !== ""
 
 		source: root.icon !== ""
-			? "file://" + Quickshell.shellDir + "/assets/providers/" + root.icon + ".svg?v=3"
+			? "file://" + Quickshell.shellDir + "/assets/providers/" + root.icon + ".svg?v=4"
 			: ""
 		sourceSize.width: Math.round(15 * root.dpr)
 		sourceSize.height: Math.round(15 * root.dpr)
