@@ -284,6 +284,21 @@ const calendarDialGlyphSize = 23;
 const calendarDialMoonLift = 5;
 const calendarDialDayStart = 6;
 const calendarDialDayEnd = 18;
+const calendarDialRamp = [
+	[0.0, "#2b4a94"],
+	[0.208, "#2b4a94"],
+	[0.25, "#d14a3c"],
+	[0.292, "#e8873a"],
+	[0.375, "#f2c14e"],
+	[0.458, "#f7e3a1"],
+	[0.5, "#fdf3cf"],
+	[0.542, "#f7e3a1"],
+	[0.625, "#f2c14e"],
+	[0.708, "#e8873a"],
+	[0.792, "#d14a3c"],
+	[0.875, "#2b4a94"],
+	[1.0, "#2b4a94"]
+];
 const calendarIconSun = "\uf522";
 const calendarIconMoon = "\ue3a4";
 const calendarBirthYear = 0;
