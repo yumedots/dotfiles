@@ -255,6 +255,21 @@ Item {
 					bodyColor: Config.foreground
 					eyeColor: Config.surface
 				}
+
+				// The question mark, when the agent is waiting for the user.
+				Text {
+					anchors.left: parent.left
+					anchors.leftMargin: 4
+					anchors.top: parent.top
+					anchors.topMargin: 4
+
+					visible: root.state === "blocked"
+
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize + 4
+					color: Config.red
+					text: Config.agentIconQuestion
+				}
 			}
 
 			// The state of the agent, and what it is asking about.
