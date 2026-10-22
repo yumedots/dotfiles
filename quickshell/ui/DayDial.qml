@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import qs
 
 Item {
@@ -24,72 +25,65 @@ Item {
 		return dial.cy - Math.sin(dial.angleOf(hour)) * dial.ringR;
 	}
 
-	function mix(a, b, k) {
-		const ar = parseInt(a.substr(1, 2), 16);
-		const ag = parseInt(a.substr(3, 2), 16);
-		const ab = parseInt(a.substr(5, 2), 16);
-		const br = parseInt(b.substr(1, 2), 16);
-		const bg = parseInt(b.substr(3, 2), 16);
-		const bb = parseInt(b.substr(5, 2), 16);
-		const hex = (v) => Math.round(v).toString(16).padStart(2, "0");
+	function bandPoints() {
+		const out = [];
+		const steps = 72;
+		const outer = dial.ringR + Config.calendarDialRingWidth / 2;
+		const inner = dial.ringR - Config.calendarDialRingWidth / 2;
 
-		return "#" + hex(ar + (br - ar) * k) + hex(ag + (bg - ag) * k) + hex(ab + (bb - ab) * k);
-	}
+		for (let i = 0; i <= steps; i++) {
+			const a = (180 - 180 * i / steps) * Math.PI / 180;
 
-	function rampAt(t) {
-		const stops = Config.calendarDialRamp;
-
-		for (let i = 1; i < stops.length; i++) {
-			if (t <= stops[i][0]) {
-				const span = stops[i][0] - stops[i - 1][0];
-				const k = span > 0 ? (t - stops[i - 1][0]) / span : 0;
-
-				return dial.mix(stops[i - 1][1], stops[i][1], k);
-			}
+			out.push(Qt.point(dial.cx + Math.cos(a) * outer, dial.cy - Math.sin(a) * outer));
 		}
 
-		return stops[stops.length - 1][1];
+		for (let i = steps; i >= 0; i--) {
+			const a = (180 - 180 * i / steps) * Math.PI / 180;
+
+			out.push(Qt.point(dial.cx + Math.cos(a) * inner, dial.cy - Math.sin(a) * inner));
+		}
+
+		return out;
 	}
 
 	implicitWidth: Config.calendarDialSize
 	implicitHeight: dial.cy + Config.calendarDialRingWidth
 
-	Canvas {
+	Shape {
 		id: band
 
-		width: dial.width
-		height: dial.height
-		renderStrategy: Canvas.Cooperative
+		anchors.fill: parent
+		preferredRendererType: Shape.CurveRenderer
+		asynchronous: false
 
-		onPaint: {
-			const ctx = getContext("2d");
+		ShapePath {
+			strokeColor: "transparent"
+			fillColor: "transparent"
 
-			ctx.reset();
+			fillGradient: ConicalGradient {
+				centerX: dial.cx
+				centerY: dial.cy
+				angle: 0
 
-			const steps = 240;
-			const outer = dial.ringR + Config.calendarDialRingWidth / 2;
-			const inner = dial.ringR - Config.calendarDialRingWidth / 2;
-			const overlap = 0.004;
+				GradientStop { position: 0.0; color: "#2b4a94" }
+				GradientStop { position: 0.104; color: "#2b4a94" }
+				GradientStop { position: 0.125; color: "#d14a3c" }
+				GradientStop { position: 0.146; color: "#e8873a" }
+				GradientStop { position: 0.1875; color: "#f2c14e" }
+				GradientStop { position: 0.229; color: "#f7e3a1" }
+				GradientStop { position: 0.25; color: "#fdf3cf" }
+				GradientStop { position: 0.271; color: "#f7e3a1" }
+				GradientStop { position: 0.3125; color: "#f2c14e" }
+				GradientStop { position: 0.354; color: "#7cc4f0" }
+				GradientStop { position: 0.396; color: "#d14a3c" }
+				GradientStop { position: 0.4375; color: "#2b4a94" }
+				GradientStop { position: 0.5; color: "#2b4a94" }
+			}
 
-			for (let i = 0; i < steps; i++) {
-				const t0 = i / steps;
-				const t1 = (i + 1) / steps;
-				const a0 = Math.PI + Math.PI * t0 - overlap;
-				const a1 = Math.PI + Math.PI * t1 + overlap;
-
-				ctx.fillStyle = dial.rampAt((t0 + t1) / 2);
-				ctx.beginPath();
-				ctx.arc(dial.cx, dial.cy, outer, a0, a1);
-				ctx.arc(dial.cx, dial.cy, inner, a1, a0, true);
-				ctx.closePath();
-				ctx.fill();
+			PathPolyline {
+				path: dial.bandPoints()
 			}
 		}
-
-		Component.onCompleted: band.requestPaint()
-
-		onWidthChanged: band.requestPaint()
-		onHeightChanged: band.requestPaint()
 	}
 
 	TextMetrics {
