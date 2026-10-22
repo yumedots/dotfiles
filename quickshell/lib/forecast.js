@@ -104,10 +104,15 @@ function coordsFor(map, place) {
 	return row ? row : { lat: 0, lon: 0 };
 }
 
-function weatherForecastUrl(lat, lon) {
+function weatherForecastUrl(lat, lon, tempUnit, windUnit, days) {
+	const temp = String(tempUnit || "celsius");
+	const wind = String(windUnit || "kmh");
+	const count = Number(days) > 0 ? Number(days) : 7;
+
 	return "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon
 		+ "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,precipitation"
-		+ "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto";
+		+ "&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,wind_speed_10m_max,relative_humidity_2m_mean"
+		+ "&temperature_unit=" + temp + "&wind_speed_unit=" + wind + "&forecast_days=" + count + "&timezone=auto";
 }
 
 function parseWeatherCurrent(text) {
@@ -124,16 +129,90 @@ function parseWeatherCurrent(text) {
 	if (!current || typeof current.weather_code !== "number")
 		return null;
 
-	const unit = String((data.current_units || {}).temperature_2m || "°F").replace(/\s/g, "");
+	const units = data.current_units || {};
+	const unit = String(units.temperature_2m || "°C").replace(/\s/g, "");
+	const windUnit = String(units.wind_speed_10m || "km/h");
 
 	return {
 		code: Math.round(current.weather_code),
 		precip: Number(current.precipitation) || 0,
 		temp: Math.round(current.temperature_2m) + unit,
 		feels: Math.round(current.apparent_temperature) + unit,
-		wind: Math.round(current.wind_speed_10m) + "mph",
+		wind: Math.round(current.wind_speed_10m) + " " + windUnit,
 		humidity: Math.round(current.relative_humidity_2m) + "%"
 	};
+}
+
+function weatherDayLabel(date) {
+	const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(date || "").trim());
+
+	if (!match)
+		return "";
+
+	const year = Number(match[1]);
+	const month = Number(match[2]);
+	const day = Number(match[3]);
+
+	if (month < 1 || month > 12 || day < 1 || day > 31)
+		return "";
+
+	const stamp = new Date(Date.UTC(year, month - 1, day));
+
+	if (isNaN(stamp.getTime()))
+		return "";
+
+	if (stamp.getUTCFullYear() !== year || stamp.getUTCMonth() !== month - 1 || stamp.getUTCDate() !== day)
+		return "";
+
+	return ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][stamp.getUTCDay()];
+}
+
+function parseWeatherDaily(text) {
+	let data = null;
+
+	try {
+		data = JSON.parse(text);
+	} catch (error) {
+		data = null;
+	}
+
+	const daily = data && data.daily;
+
+	if (!daily || !Array.isArray(daily.time))
+		return [];
+
+	const times = daily.time;
+	const fields = ["weather_code", "temperature_2m_max", "temperature_2m_min", "apparent_temperature_max", "wind_speed_10m_max", "relative_humidity_2m_mean"];
+
+	for (let f = 0; f < fields.length; f++) {
+		const values = daily[fields[f]];
+
+		if (!Array.isArray(values) || values.length < times.length)
+			return [];
+	}
+
+	const units = data.daily_units || {};
+	const currentUnits = data.current_units || {};
+	const unit = String(units.temperature_2m_max || currentUnits.temperature_2m || "°C").replace(/\s/g, "");
+	const windUnit = String(units.wind_speed_10m_max || currentUnits.wind_speed_10m || "km/h");
+	const rows = [];
+
+	for (let i = 0; i < times.length; i++) {
+		const date = String(times[i]);
+
+		rows.push({
+			date: date,
+			day: weatherDayLabel(date),
+			code: Math.round(Number(daily.weather_code[i]) || 0),
+			tempMax: Math.round(Number(daily.temperature_2m_max[i])) + unit,
+			tempMin: Math.round(Number(daily.temperature_2m_min[i])) + unit,
+			feels: Math.round(Number(daily.apparent_temperature_max[i])) + unit,
+			wind: Math.round(Number(daily.wind_speed_10m_max[i]) || 0) + " " + windUnit,
+			humidity: Math.round(Number(daily.relative_humidity_2m_mean[i]) || 0) + "%"
+		});
+	}
+
+	return rows;
 }
 
 function splitTemp(temp) {

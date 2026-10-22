@@ -14,10 +14,10 @@ Item {
 	property string feels: ""
 	property string wind: ""
 	property string humidity: ""
+	property var daily: []
 	property real lat: 0
 	property real lon: 0
 	property int code: -1
-	property int primaryCode: -1
 	property var stations: []
 	property bool placeFailed: false
 	property real fetched: 0
@@ -27,6 +27,7 @@ Item {
 	property int index: 0
 	property var suggestions: []
 	property var coords: ({})
+	property string watching: ""
 
 	readonly property string dir: Quickshell.shellDir + "/cache/weather"
 	readonly property string placeFile: root.dir + "/place"
@@ -35,23 +36,47 @@ Item {
 	readonly property string cacheFile: root.dir + "/current.json"
 	readonly property var codeInfo: Forecast.weatherCodeInfo(root.code, Config.weatherCodes, Config.weatherIcon)
 	readonly property string icon: root.codeInfo.glyph
-	readonly property var primaryInfo: Forecast.weatherCodeInfo(root.primaryCode, Config.weatherCodes, Config.weatherIcon)
-	readonly property string primaryIcon: root.primaryInfo.glyph
+	readonly property var focused: slotRepeater.count > root.index ? slotRepeater.itemAt(root.index) : null
+	readonly property string focusedPlace: String(root.places[root.index] || "").split(",")[0].trim()
+	readonly property bool fresh: root.focused !== null && root.focused.temp !== ""
+	readonly property int shownCode: root.fresh ? root.focused.code : root.code
+	readonly property int primaryCode: root.shownCode
+	readonly property string primaryIcon: Forecast.weatherCodeInfo(root.shownCode, Config.weatherCodes, Config.weatherIcon).glyph
+	readonly property var days: root.focused && root.focused.days && root.focused.days.length > 0 ? root.focused.days : root.daily
+	readonly property var current: ({
+		temp: root.fresh ? root.focused.temp : root.temp,
+		feels: root.fresh ? root.focused.feels : root.feels,
+		wind: root.fresh ? root.focused.wind : root.wind,
+		humidity: root.fresh ? root.focused.humidity : root.humidity,
+		code: root.shownCode,
+		icon: root.primaryIcon,
+		description: root.fresh ? root.focused.description : root.description,
+		place: root.focusedPlace !== "" ? root.focusedPlace : String(root.place || "").split(",")[0].trim(),
+		loading: (root.fresh ? root.focused.temp : root.temp) === ""
+	})
 
 	function adopt(cached) {
+		const place = cached.place || "";
+
+		if (place !== "" && root.wanted !== "" && place !== root.wanted)
+			return false;
+
 		root.description = cached.description || "";
 		root.location = cached.location || "";
-		root.place = cached.place || "";
+		root.place = place;
 		root.temp = cached.temp || "";
 		root.feels = cached.feels || "";
 		root.wind = cached.wind || "";
 		root.humidity = cached.humidity || "";
+		root.daily = cached.daily || [];
 		root.lat = cached.lat || 0;
 		root.lon = cached.lon || 0;
 		root.code = typeof cached.code === "number" ? cached.code : -1;
 		root.stations = cached.stations || [];
 		root.placeFailed = cached.placeFailed === true;
 		root.fetched = cached.fetched || 0;
+
+		return true;
 	}
 
 	function save() {
@@ -64,6 +89,7 @@ Item {
 			feels: root.feels,
 			wind: root.wind,
 			humidity: root.humidity,
+			daily: root.daily,
 			lat: root.lat,
 			lon: root.lon,
 			code: root.code,
@@ -73,7 +99,7 @@ Item {
 	}
 
 	function refresh(force) {
-		if (root.loading || root.index !== 0)
+		if (root.loading)
 			return;
 
 		root.loading = true;
@@ -91,6 +117,7 @@ Item {
 			root.feels = "";
 			root.wind = "";
 			root.humidity = "";
+			root.daily = [];
 			root.stations = [];
 			root.code = -1;
 			root.lat = 0;
@@ -166,7 +193,45 @@ Item {
 			rows[i] = rows[i] !== "" ? rows[i] : (Config.weatherPlaceDefaults[i - 1] || "");
 
 		root.places = rows.slice(0, Config.weatherPlaceCount);
-		root.index = 0;
+		root.index = root.firstFilled();
+	}
+
+	function firstFilled() {
+		for (let i = 0; i < root.places.length; i++) {
+			if (String(root.places[i] || "") !== "")
+				return i;
+		}
+
+		return 0;
+	}
+
+	function focusPlace(at) {
+		const target = root.places[at] || Config.weatherLocation;
+
+		root.index = at;
+		root.stations = [];
+		root.placeFailed = false;
+		root.loading = false;
+		root.status = "";
+		root.lat = 0;
+		root.lon = 0;
+		root.place = target;
+		root.location = target;
+		root.adoptSlot(root.slot(at));
+		root.refresh(true);
+	}
+
+	function adoptSlot(slot) {
+		if (!slot)
+			return;
+
+		root.code = slot.code;
+		root.description = slot.description;
+		root.temp = slot.temp;
+		root.feels = slot.feels;
+		root.wind = slot.wind;
+		root.humidity = slot.humidity;
+		root.daily = slot.days;
 	}
 
 	function choose(label, lat, lon) {
@@ -174,6 +239,8 @@ Item {
 			return;
 
 		const rows = root.slots();
+		const target = root.slot(root.index);
+		const previous = target ? target.place : "";
 
 		rows[root.index] = label;
 		root.places = rows;
@@ -182,34 +249,64 @@ Item {
 		root.placeFailed = false;
 		root.suggestions = [];
 		root.loading = false;
+		root.status = "";
+		root.lat = 0;
+		root.lon = 0;
 		root.place = label;
 		root.location = label;
+
+		if (target) {
+			target.reset();
+
+			if (previous === label)
+				target.refresh();
+		}
+
 		root.store();
 		root.refresh(true);
 	}
 
-	function shift(step) {
-		const count = Config.weatherPlaceCount;
-		const next = ((root.index + step) % count + count) % count;
-
-		if (next === root.index)
+	function add(label, lat, lon) {
+		if (label === "")
 			return;
 
-		const target = root.places[next] || Config.weatherLocation;
+		const rows = root.slots();
+		let at = root.index;
 
-		root.index = next;
-		root.stations = [];
-		root.placeFailed = false;
-		root.loading = false;
-		root.lat = 0;
-		root.lon = 0;
-		root.place = target;
-		root.location = target;
-		root.refresh(true);
+		for (let i = 0; i < rows.length; i++) {
+			if (String(rows[i] || "") === "") {
+				at = i;
+				break;
+			}
+		}
+
+		rows[at] = label;
+		root.places = rows;
+		root.rememberCoords(label, lat, lon);
+		root.suggestions = [];
+		root.store();
+		root.focusPlace(at);
 	}
 
-	function observe() {		if (Config.weatherStationCount <= 0 || root.placeFailed)
+	function shift(step) {
+		const count = Config.weatherPlaceCount;
+		const direction = step < 0 ? -1 : 1;
+
+		for (let i = 1; i < count; i++) {
+			const next = ((root.index + direction * i) % count + count) % count;
+
+			if (String(root.places[next] || "") !== "") {
+				root.focusPlace(next);
+				return;
+			}
+		}
+	}
+
+	function observe() {
+		if (Config.weatherStationCount <= 0 || root.placeFailed)
 			return;
+
+		root.watching = root.place;
 
 		if (root.stations.length > 0) {
 			observe.running = true;
@@ -259,7 +356,10 @@ Item {
 		maxAge: Config.weatherCacheMs
 
 		onLoaded: function (data, stale) {
-			root.adopt(data);
+			if (!root.adopt(data)) {
+				root.locate();
+				return;
+			}
 
 			if (root.place !== root.wanted) {
 				root.stations = [];
@@ -304,7 +404,7 @@ Item {
 	Request {
 		id: fetch
 
-		command: Shell.curl(Forecast.weatherForecastUrl(root.lat, root.lon))
+		command: Shell.curl(Forecast.weatherForecastUrl(root.lat, root.lon, Config.weatherTempUnit, Config.weatherWindUnit, Config.weatherDays))
 
 		onDone: function (text) {
 			const parsed = Forecast.parseWeatherCurrent(text);
@@ -322,6 +422,7 @@ Item {
 			root.feels = parsed.feels;
 			root.wind = parsed.wind;
 			root.humidity = parsed.humidity;
+			root.daily = Forecast.parseWeatherDaily(text);
 			root.fetched = Date.now();
 			root.status = "";
 			root.save();
@@ -383,6 +484,9 @@ Item {
 		command: ["sh", "-c", Forecast.weatherRequest(root.stations.map(function (id) { return Shell.shellQuote(Forecast.weatherObservationUrl(id)); }).join(" "))]
 
 		onDone: function (text) {
+			if (root.watching !== root.place)
+				return;
+
 			const rows = Forecast.parseWeatherObservations(text);
 			const near = Forecast.weatherObservationCode(rows);
 
@@ -391,6 +495,10 @@ Item {
 
 			root.code = near;
 			root.description = root.codeInfo.name;
+
+			if (root.focused && root.focused.place !== "" && root.focused.place === root.place)
+				root.focused.stationCode = near;
+
 			root.save();
 		}
 	}

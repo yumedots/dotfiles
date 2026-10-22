@@ -8,16 +8,37 @@ Item {
 	property string place: ""
 	property var known: ({})
 	property bool primary: false
-	property int code: -1
 	property string temp: ""
+	property string feels: ""
+	property string wind: ""
+	property string humidity: ""
+	property var days: []
+	property int modelCode: -1
+	property int stationCode: -1
+	property bool failed: false
 
+	readonly property int code: root.stationCode >= 0 ? root.stationCode : root.modelCode
 	readonly property var info: Forecast.weatherCodeInfo(root.code, Config.weatherCodes, Config.weatherIcon)
-	readonly property string icon: root.temp !== "" ? root.info.glyph : Config.weatherLoadingIcon
+	readonly property string icon: root.place === "" ? "" : (root.temp !== "" ? root.info.glyph : Config.weatherLoadingIcon)
 	readonly property string description: root.info.name
 
-	onPlaceChanged: root.refresh()
+	onPlaceChanged: {
+		root.reset();
+		root.refresh();
+	}
+
 	Component.onCompleted: root.refresh()
-	onCodeChanged: if (root.primary) Weather.primaryCode = root.code
+
+	function reset() {
+		root.modelCode = -1;
+		root.stationCode = -1;
+		root.temp = "";
+		root.feels = "";
+		root.wind = "";
+		root.humidity = "";
+		root.days = [];
+		root.failed = false;
+	}
 
 	function refresh() {
 		if (root.place === "")
@@ -26,7 +47,7 @@ Item {
 		const spot = Forecast.coordsFor(root.known, root.place);
 
 		if (spot.lat !== 0 && spot.lon !== 0) {
-			fetch.command = Shell.curl(Forecast.weatherForecastUrl(spot.lat, spot.lon));
+			fetch.command = Shell.curl(Forecast.weatherForecastUrl(spot.lat, spot.lon, Config.weatherTempUnit, Config.weatherWindUnit, Config.weatherDays));
 			fetch.running = true;
 			return;
 		}
@@ -36,6 +57,7 @@ Item {
 	}
 
 	function fail() {
+		root.failed = true;
 		retry.interval = Math.min(retry.interval * 2, Config.weatherRefreshMs);
 		retry.restart();
 	}
@@ -47,13 +69,12 @@ Item {
 			const found = Forecast.parseWeatherGeo(text);
 
 			if (!found) {
-				root.code = -1;
-				root.temp = "";
+				root.reset();
 				root.fail();
 				return;
 			}
 
-			fetch.command = Shell.curl(Forecast.weatherForecastUrl(found.lat, found.lon));
+			fetch.command = Shell.curl(Forecast.weatherForecastUrl(found.lat, found.lon, Config.weatherTempUnit, Config.weatherWindUnit, Config.weatherDays));
 			fetch.running = true;
 			Weather.rememberCoords(root.place, found.lat, found.lon);
 		}
@@ -70,8 +91,13 @@ Item {
 				return;
 			}
 
-			root.code = Forecast.weatherCodeFor(parsed.code, parsed.precip);
+			root.modelCode = Forecast.weatherCodeFor(parsed.code, parsed.precip);
 			root.temp = parsed.temp;
+			root.feels = parsed.feels;
+			root.wind = parsed.wind;
+			root.humidity = parsed.humidity;
+			root.days = Forecast.parseWeatherDaily(text);
+			root.failed = false;
 			retry.stop();
 			retry.interval = Config.weatherRetryMs;
 		}
