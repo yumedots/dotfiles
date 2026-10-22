@@ -65,7 +65,7 @@ Item {
 	// The turn of the spikes, in degrees, rounded to a small step. The step
 	// is too small to see, but it keeps the path from being rebuilt on every
 	// frame.
-	readonly property real turn: Math.round(root.spin * 2) / 2
+	readonly property real turn: root.spin
 
 	// Whether the face is on screen. A face that is not on screen does not
 	// rebuild its path, so it costs nothing.
