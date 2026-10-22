@@ -62,11 +62,6 @@ Item {
 	// The spikes turn while the agent is working.
 	property real spin: 0
 
-	// The turn of the spikes, in degrees, rounded to a small step. The step
-	// is too small to see, but it keeps the path from being rebuilt on every
-	// frame.
-	readonly property real turn: root.spin
-
 	// Whether the face is on screen. A face that is not on screen does not
 	// rebuild its path, so it costs nothing.
 	property bool live: true
@@ -252,13 +247,16 @@ Item {
 		// The spikes turn while the agent works. The outline is turned on its
 		// own so the eyes stay level and still read as eyes.
 		//
-		// The turn is rounded to a small step, so the path is not rebuilt on
-		// every frame. The step is far too small to see, and a face that is
-		// not on screen does not rebuild its path at all.
+		// A face that is too small for the eyes to read turns on the graphics
+		// card instead, which costs nothing. A face that is not on screen does
+		// not turn at all.
 		if (!root.live)
 			return root.body;
 
-		return Agent.rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.turn);
+		if (root.small)
+			return root.body;
+
+		return Agent.rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.spin);
 	}
 
 	// The icon is drawn in body-local space, so it moves with the body.
@@ -270,7 +268,10 @@ Item {
 		width: root.bodyWidth
 		height: root.bodyHeight
 
-		rotation: root.eyeX * 4
+		// A face that is too small for the eyes to read turns as one piece,
+		// which the graphics card does for free. A bigger face turns its
+		// outline, so the eyes stay level.
+		rotation: root.eyeX * 4 + (root.small ? root.spin : 0)
 
 		scale: root.breathe
 		transformOrigin: Item.Center
