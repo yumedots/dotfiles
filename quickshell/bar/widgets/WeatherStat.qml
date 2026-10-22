@@ -14,7 +14,7 @@ BarStat {
 	iconSize: Settings.iconSize + 4
 	iconLift: -1
 	barColor: Util.pick(Config.mono, Config.weatherBase, Config.weatherBaseMono)
-	icon: Weather.primaryCode >= 0 ? Weather.primaryIcon : Config.weatherLoadingIcon
+	icon: Weather.current.code >= 0 ? Weather.current.icon : Config.weatherLoadingIcon
 
 	popupContent: Component {
 		WeatherCard {
