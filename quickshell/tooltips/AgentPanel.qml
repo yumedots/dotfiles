@@ -255,7 +255,7 @@ Item {
 					id: stateRow
 
 					width: parent.width
-					height: stateContent.implicitHeight
+					height: root.rowHeight
 
 					Row {
 						id: stateContent
