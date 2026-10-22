@@ -1449,10 +1449,6 @@ section("agent", function () {
 
 	assert(blended.length === body.length && blended.every(isFinite), "two bodies blend into one outline");
 
-	const turned = rotatePoints(body, 20, 20, Math.PI / 2);
-
-	assert(turned.length === body.length && turned.every(isFinite), "the outline turns on its own");
-
 	const sockets = clipSockets(body, [
 		{ x: 20, y: 20, radiusX: 4, radiusY: 4 },
 		{ x: 60, y: 20, radiusX: 4, radiusY: 4 },

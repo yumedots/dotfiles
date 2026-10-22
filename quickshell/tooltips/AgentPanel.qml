@@ -252,6 +252,10 @@ Item {
 					// face that nobody sees costs nothing.
 					live: root.source ? root.source.popupVisible : true
 
+					// The card behind the panel is flat, so the eyes are
+					// painted in it and the body can turn on its own.
+					paintEyes: true
+
 					bodyColor: Config.foreground
 					eyeColor: Config.surface
 				}

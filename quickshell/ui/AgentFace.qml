@@ -63,8 +63,14 @@ Item {
 	property real spin: 0
 
 	// Whether the face is on screen. A face that is not on screen does not
-	// rebuild its path, so it costs nothing.
+	// turn at all, so it costs nothing.
 	property bool live: true
+
+	// Whether the eyes are painted in the background instead of being holes
+	// in the body. A face on a flat background paints them, so the body can
+	// turn on its own; a face on a see-through background keeps them as
+	// holes.
+	property bool paintEyes: false
 
 	readonly property bool spinning: root.state === "working" && !root.paused
 
@@ -243,21 +249,10 @@ Item {
 		return Agent.blendPoints(from, to, root.morph);
 	}
 
-	readonly property var outline: {
-		// The spikes turn while the agent works. The outline is turned on its
-		// own so the eyes stay level and still read as eyes.
-		//
-		// A face that is too small for the eyes to read turns on the graphics
-		// card instead, which costs nothing. A face that is not on screen does
-		// not turn at all.
-		if (!root.live)
-			return root.body;
-
-		if (root.small)
-			return root.body;
-
-		return Agent.rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.spin);
-	}
+	// The outline of the body. The spikes turn as the whole body turns, so
+	// the outline itself never changes and the path is not rebuilt while the
+	// face is turning.
+	readonly property var outline: root.body
 
 	// The icon is drawn in body-local space, so it moves with the body.
 	Item {
@@ -268,23 +263,43 @@ Item {
 		width: root.bodyWidth
 		height: root.bodyHeight
 
-		// A face that is too small for the eyes to read turns as one piece,
-		// which the graphics card does for free. A bigger face turns its
-		// outline, so the eyes stay level.
-		rotation: root.eyeX * 4 + (root.small ? root.spin : 0)
+		// The body leans toward the cursor.
+		rotation: root.eyeX * 4
 
 		scale: root.breathe
 		transformOrigin: Item.Center
 
-		// The body and the eyes are one path, so the eyes are holes in the
-		// body. The outline is turned on its own, so the spikes spin while the
-		// eyes stay level and still read as eyes.
+		// The spikes turn as the whole body turns, which the graphics card
+		// does for free, so a turning face costs nothing to draw.
+		Item {
+			id: spinner
+
+			anchors.fill: parent
+
+			rotation: root.live ? root.spin : 0
+
+			// The body and the eyes are one path, so the eyes are holes in
+			// the body.
+			DynamicIcon {
+				anchors.fill: parent
+
+				ink: root.bodyColor
+
+				subpaths: root.paintEyes ? [root.outline] : [root.outline].concat(root.eyePaths)
+			}
+		}
+
+		// A face that is drawn on a flat background paints its eyes in that
+		// background, so the body can turn on its own and the eyes stay
+		// level. A face on a see-through background keeps them as holes.
 		DynamicIcon {
 			anchors.fill: parent
 
-			ink: root.bodyColor
+			visible: root.paintEyes
 
-			subpaths: [root.outline].concat(root.eyePaths)
+			ink: root.eyeColor
+
+			subpaths: root.eyePaths
 		}
 	}
 }

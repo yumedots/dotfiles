@@ -55,31 +55,6 @@ function blendPoints(from, to, progress) {
 	return points;
 }
 
-// Turns a set of points around a centre.
-//
-// The body and the eyes are one path, so the eyes are holes in the body. That
-// means the whole body has to turn for the spikes to spin, and the eyes would
-// turn with it. Rotating the points instead turns the outline on its own, and
-// the eyes stay where they are.
-function rotatePoints(points, cx, cy, angle) {
-	if (!angle)
-		return points;
-
-	const cos = Math.cos(angle);
-	const sin = Math.sin(angle);
-	const out = new Array(points.length);
-
-	for (let i = 0; i < points.length; i += 2) {
-		const x = points[i] - cx;
-		const y = points[i + 1] - cy;
-
-		out[i] = cx + x * cos - y * sin;
-		out[i + 1] = cy + x * sin + y * cos;
-	}
-
-	return out;
-}
-
 // Ellipse outline, used for the eye sockets. A socket squashes vertically as
 // the eye closes, so a blink flattens the eye into a line.
 function ellipsePoints(cx, cy, radiusX, radiusY, samples) {
