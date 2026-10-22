@@ -10,6 +10,9 @@ Item {
 
 	property var entries: Apps.desktopEntries(DesktopEntries.applications.values)
 	property var icons: ({})
+
+	// The icon listing as it was read, so the same text is not parsed twice.
+	property string iconText: ""
 	property var resolved: ({})
 	property var pidIcons: ({})
 	property var pidWalked: ({})
@@ -105,10 +108,9 @@ Item {
 		pidWalk.running = true;
 	}
 
-	onEntriesChanged: {
-		root.resolved = ({});
-		iconScan.running = true;
-	}
+	// The icon of an app does not change when another app is added, so the
+	// paths that are already resolved are kept. Wiping them made the next
+	// search resolve every icon again, which is slow.
 
 	Component.onCompleted: iconScan.running = true
 
@@ -118,6 +120,12 @@ Item {
 		command: ["sh", "-c", "for dir in \"$HOME/.local/share\" $(echo \"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}\" | tr ':' ' '); do find \"$dir/icons/breeze\" \"$dir/icons/hicolor\" \"$dir/pixmaps\" -mindepth 1 -maxdepth 3 \\( -type f -o -type l \\) \\( -name '*.png' -o -name '*.svg' -o -name '*.xpm' \\) 2>/dev/null; done | tee " + Shell.shellQuote(root.cachePath)]
 
 		onDone: function (text) {
+			// The listing is read from the cache file as well, so the same
+			// text is parsed once and not twice.
+			if (text === root.iconText)
+				return;
+
+			root.iconText = text;
 			root.icons = Apps.iconFiles(text);
 		}
 	}
@@ -155,8 +163,13 @@ Item {
 		printErrors: false
 
 		onLoaded: {
-			if (Object.keys(root.icons).length === 0)
-				root.icons = Apps.iconFiles(iconCache.text());
+			const text = iconCache.text();
+
+			if (text === root.iconText)
+				return;
+
+			root.iconText = text;
+			root.icons = Apps.iconFiles(text);
 		}
 	}
 }

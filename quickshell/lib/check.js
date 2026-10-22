@@ -319,11 +319,12 @@ assert(terminalName('local otherterminal = "x"\n') === "", "a lookalike variable
 assert(launchCommand({ exec: "code-insiders" }, "code-insiders").join(" ") === "sh -c code-insiders", "a regular app runs through the shell");
 assert(launchCommand(null, "footclient").join(" ") === "sh -c footclient", "an entry-less app runs through the shell");
 assert(launchCommand({ execLine: "helium-browser --new-window" }, "helium-browser").join(" ") === "sh -c helium-browser --new-window", "the full exec line keeps the arguments");
-assert(iconFiles("/usr/share/icons/hicolor/48x48/apps/foo.png\n/usr/share/icons/hicolor/scalable/apps/foo.svg").foo === "/usr/share/icons/hicolor/scalable/apps/foo.svg", "the scalable icon wins");
-assert(iconFiles("/usr/share/icons/hicolor/48x48/apps/bar.png\n/usr/share/icons/hicolor/256x256/apps/bar.png").bar === "/usr/share/icons/hicolor/256x256/apps/bar.png", "the largest bitmap wins");
-assert(iconFiles("/usr/share/pixmaps/baz.xpm").baz === "/usr/share/pixmaps/baz.xpm", "a pixmap is kept");
-assert(iconFiles("/var/lib/flatpak/exports/share/icons/hicolor/scalable/apps/org.vinegarhq.Sober.svg")["org.vinegarhq.Sober"] !== undefined, "a dotted id keeps its dots");
-assert(Object.keys(iconFiles("")).length === 0, "an empty icon listing yields nothing");
+assert(iconFiles("/usr/share/icons/hicolor/48x48/apps/foo.png\n/usr/share/icons/hicolor/scalable/apps/foo.svg").names.foo === "/usr/share/icons/hicolor/scalable/apps/foo.svg", "the scalable icon wins");
+assert(iconFiles("/usr/share/icons/hicolor/48x48/apps/bar.png\n/usr/share/icons/hicolor/256x256/apps/bar.png").names.bar === "/usr/share/icons/hicolor/256x256/apps/bar.png", "the largest bitmap wins");
+assert(iconFiles("/usr/share/pixmaps/baz.xpm").names.baz === "/usr/share/pixmaps/baz.xpm", "a pixmap is kept");
+assert(iconFiles("/var/lib/flatpak/exports/share/icons/hicolor/scalable/apps/org.vinegarhq.Sober.svg").names["org.vinegarhq.Sober"] !== undefined, "a dotted id keeps its dots");
+assert(Object.keys(iconFiles("").names).length === 0, "an empty icon listing yields nothing");
+assert(Object.keys(iconFiles("").lower).length === 0, "an empty icon listing has no lower case names either");
 assert(iconLookup(iconFiles("/usr/share/pixmaps/Alacritty.svg"), "alacritty") === "/usr/share/pixmaps/Alacritty.svg", "icon lookup matches case-insensitively");
 assert(iconLookup(iconFiles("/usr/share/pixmaps/Alacritty.svg"), "Alacritty") === "/usr/share/pixmaps/Alacritty.svg", "icon lookup keeps exact matches first");
 assert(iconLookup(iconFiles("/usr/share/pixmaps/Alacritty.svg"), "nope") === "", "an unknown icon resolves to nothing");

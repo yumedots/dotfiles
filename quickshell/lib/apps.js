@@ -25,6 +25,11 @@ function iconRank(path) {
 	return match ? Number(match[1]) : 0;
 }
 
+// The icon files, by name.
+//
+// The names are kept twice: once as they are on disk, and once in lower case,
+// so a lookup does not have to walk every name to find one that only differs
+// in case. The map holds thousands of names and a search misses often.
 function iconFiles(text) {
 	const files = {};
 	const ranks = {};
@@ -42,19 +47,25 @@ function iconFiles(text) {
 		}
 	});
 
-	return files;
+	const lower = {};
+
+	for (const key in files)
+		lower[key.toLowerCase()] = files[key];
+
+	return { names: files, lower: lower };
 }
 
 function iconLookup(files, name) {
-	if (files[name])
-		return files[name];
+	if (!files)
+		return "";
+
+	if (files.names && files.names[name])
+		return files.names[name];
 
 	const lower = String(name).toLowerCase();
 
-	for (const key in files) {
-		if (key.toLowerCase() === lower)
-			return files[key];
-	}
+	if (files.lower && files.lower[lower])
+		return files.lower[lower];
 
 	return "";
 }
