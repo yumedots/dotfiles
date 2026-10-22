@@ -109,12 +109,17 @@ QtObject {
 		};
 
 		// The sessions the shell has heard about that are working, asking a
-		// question, or failed.
+		// question, or failed. The sub agents are left out, the session that
+		// sent for them is the one that shows.
 		const ids = Object.keys(root.sessions);
 
 		for (let i = 0; i < ids.length; i++) {
 			const id = ids[i];
 			const session = root.sessions[id];
+
+			if (root.isSubagent(id))
+				continue;
+
 			const busy = session.status === "busy" || session.status === "retry";
 			const question = !!session.blocked;
 			const failed = !!session.error;
@@ -129,8 +134,12 @@ QtObject {
 		// the shell never heard about.
 		const running = root.runningSessions;
 
-		for (let i = 0; i < running.length; i++)
+		for (let i = 0; i < running.length; i++) {
+			if (root.isSubagent(running[i]))
+				continue;
+
 			push(running[i], true, false, false);
+		}
 
 		// The ones that are working come first, then the ones asking a
 		// question, then the ones that failed. Inside a group the one
@@ -159,6 +168,13 @@ QtObject {
 		const listed = root.findListed(id);
 
 		return listed ? listed.title : "";
+	}
+
+	// Whether a session is a sub agent, which has a parent session.
+	function isSubagent(id) {
+		const listed = root.findListed(id);
+
+		return !!listed && !!listed.parent;
 	}
 
 	// The provider a session runs on, so a row can say who is doing the work.
@@ -487,7 +503,8 @@ QtObject {
 					return {
 						id: session.id,
 						title: session.title || "",
-						provider: (session.model && session.model.providerID) || ""
+						provider: (session.model && session.model.providerID) || "",
+						parent: session.parentID || ""
 					};
 				});
 			}
