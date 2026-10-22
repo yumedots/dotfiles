@@ -1355,7 +1355,7 @@ assert(up[0] === "sh" && up[2].indexOf("speed_upload") < 0, "the upload test is 
 
 assert(megaBits(125000).toFixed(1) === "1.0", "a byte rate converts to megabits per second");
 assert(Config.notifyWidth === Math.round(280 * Config.notifyScale), "the notification width follows the size");
-assert(Config.notifySlot === Math.round(22 * Config.notifyScale), "the notification icon follows the size");
+assert(Config.notifySlot === Math.round(26 * Config.notifyScale), "the notification icon follows the size");
 assert(Config.notifyRowHeight === Math.round(38 * Config.notifyScale), "the notification row follows the size");
 assert(Config.notifyAppFontSize === Math.round(11 * Config.notifyScale), "the notification text follows the size");
 assert(megaBits(0) === 0 && megaBits(null) === 0, "no traffic reads as zero megabits");
