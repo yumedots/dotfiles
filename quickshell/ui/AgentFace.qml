@@ -77,7 +77,7 @@ Item {
 	RotationAnimation on spin {
 		from: 0
 		to: 360
-		duration: root.small ? Config.agentBarSpinMs : Config.agentSpinMs
+		duration: Config.agentSpinMs
 		running: root.spinning
 		loops: Animation.Infinite
 	}
@@ -249,13 +249,6 @@ Item {
 		return Agent.blendPoints(from, to, root.morph);
 	}
 
-	// The step the spikes turn in, in degrees. The step is too small to see,
-	// but it keeps the path from being rebuilt on every frame.
-	readonly property real turnStep: root.small ? 3 : 0.5
-
-	// The turn of the spikes, in degrees, rounded to the step.
-	readonly property real turn: Math.round(root.spin / root.turnStep) * root.turnStep
-
 	// The outline of the body, with the spikes turned on it. The eyes are
 	// holes in the body, so the body is turned on its own and the eyes stay
 	// where they are.
@@ -263,7 +256,7 @@ Item {
 		if (!root.live)
 			return root.body;
 
-		return Agent.rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.turn);
+		return Agent.rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.spin);
 	}
 
 	// The icon is drawn in body-local space, so it moves with the body.
