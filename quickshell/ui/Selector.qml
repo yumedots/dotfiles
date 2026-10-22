@@ -84,7 +84,6 @@ Item {
 		anchors.rightMargin: root.scrollWidth + root.rowSpacing
 		clip: true
 		spacing: root.rowSpacing
-		interactive: false
 		boundsBehavior: Flickable.StopAtBounds
 		keyNavigationEnabled: false
 		highlightFollowsCurrentItem: true
@@ -100,15 +99,6 @@ Item {
 			fillParent: false
 		}
 
-		MouseArea {
-			anchors.fill: parent
-			acceptedButtons: Qt.NoButton
-
-			onWheel: function (wheel) {
-				root.scroll(wheel.angleDelta.y > 0 ? -(root.rowHeight + root.rowSpacing) : (root.rowHeight + root.rowSpacing));
-				wheel.accepted = true;
-			}
-		}
 	}
 
 	Scrollbar {
