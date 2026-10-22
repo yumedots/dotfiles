@@ -151,13 +151,15 @@ PanelWindow {
 		const from = card.slideOffset;
 		const to = root.slideX - root.cardX;
 
-		root.shown = false;
-
+		// The slide starts before the popup is marked closed, otherwise the
+		// card is hidden for a frame and the toast flashes on its way out.
 		if (slide) {
 			slideAnim.from = from;
 			slideAnim.to = to;
 			slideAnim.restart();
 		}
+
+		root.shown = false;
 	}
 
 	function toggle() {

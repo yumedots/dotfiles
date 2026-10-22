@@ -76,9 +76,11 @@ BarStat {
 		}
 	}
 
-	popupPadding: 0
 	popupKeyboard: root.keyboardPopup
 	popupAlignRight: root.keyboardPopup === false
+	popupCentered: true
+	popupAlwaysCentered: true
+	popupPreload: true
 	popupSlide: root.keyboardPopup === false
 
 	popupContent: Component {
