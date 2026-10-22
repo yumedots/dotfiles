@@ -75,7 +75,7 @@ Item {
 				GradientStop { position: 0.271; color: "#f7e3a1" }
 				GradientStop { position: 0.3125; color: "#f2c14e" }
 				GradientStop { position: 0.354; color: "#7cc4f0" }
-				GradientStop { position: 0.396; color: "#d14a3c" }
+				GradientStop { position: 0.396; color: "#2b4a94" }
 				GradientStop { position: 0.4375; color: "#2b4a94" }
 				GradientStop { position: 0.5; color: "#2b4a94" }
 			}
