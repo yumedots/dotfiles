@@ -310,47 +310,16 @@ Item {
 
 			width: card.width
 			height: placeMetrics.height
-			opacity: root.headerShown ? 1 : 0
-
-			Behavior on opacity {
-				NumberAnimation {
-					duration: Config.popupFadeMs
-				}
-			}
 
 			HoverHandler {
 				id: headerHover
 			}
 
 			Text {
-				id: leftArrow
-
-				visible: !root.editing
-				anchors.left: parent.left
-				anchors.verticalCenter: parent.verticalCenter
-				height: placeMetrics.height
-				font.family: Config.fontFamily
-				font.pixelSize: Config.weatherPlaceSize
-				color: leftHit.containsMouse ? Config.foreground : Config.muted
-				text: Config.weatherIconLeft
-
-				MouseArea {
-					id: leftHit
-
-					anchors.fill: parent
-					anchors.margins: -4
-					hoverEnabled: true
-					enabled: root.headerShown
-					onClicked: Weather.shift(-1)
-				}
-			}
-
-			Text {
 				id: placeText
 
 				visible: !root.editing
-				anchors.left: leftArrow.right
-				anchors.leftMargin: Config.weatherCardHeaderGap
+				anchors.left: parent.left
 				anchors.verticalCenter: parent.verticalCenter
 				width: Math.min(implicitWidth, root.placeMaxWidth)
 				height: placeMetrics.height
@@ -366,8 +335,38 @@ Item {
 					anchors.fill: parent
 					anchors.margins: -4
 					hoverEnabled: true
-					enabled: root.headerShown
 					onClicked: root.startEdit(root.placeName)
+				}
+			}
+
+			Text {
+				id: leftArrow
+
+				visible: !root.editing
+				anchors.left: placeText.right
+				anchors.leftMargin: Config.weatherCardHeaderGap
+				anchors.verticalCenter: parent.verticalCenter
+				height: placeMetrics.height
+				opacity: root.headerShown ? 1 : 0
+				font.family: Config.fontFamily
+				font.pixelSize: Config.weatherPlaceSize
+				color: leftHit.containsMouse ? Config.foreground : Config.muted
+				text: Config.weatherIconLeft
+
+				Behavior on opacity {
+					NumberAnimation {
+						duration: Config.popupFadeMs
+					}
+				}
+
+				MouseArea {
+					id: leftHit
+
+					anchors.fill: parent
+					anchors.margins: -4
+					hoverEnabled: true
+					enabled: root.headerShown
+					onClicked: Weather.shift(-1)
 				}
 			}
 
@@ -375,14 +374,21 @@ Item {
 				id: rightArrow
 
 				visible: !root.editing
-				anchors.left: placeText.right
+				anchors.left: leftArrow.right
 				anchors.leftMargin: Config.weatherCardHeaderGap
 				anchors.verticalCenter: parent.verticalCenter
 				height: placeMetrics.height
+				opacity: root.headerShown ? 1 : 0
 				font.family: Config.fontFamily
 				font.pixelSize: Config.weatherPlaceSize
 				color: rightHit.containsMouse ? Config.foreground : Config.muted
 				text: Config.weatherIconRight
+
+				Behavior on opacity {
+					NumberAnimation {
+						duration: Config.popupFadeMs
+					}
+				}
 
 				MouseArea {
 					id: rightHit
@@ -402,10 +408,17 @@ Item {
 				anchors.right: parent.right
 				anchors.verticalCenter: parent.verticalCenter
 				height: placeMetrics.height
+				opacity: root.headerShown ? 1 : 0
 				font.family: Config.fontFamily
 				font.pixelSize: Config.weatherPlaceSize
 				color: addHit.containsMouse ? Config.foreground : Config.muted
 				text: Config.weatherIconAdd
+
+				Behavior on opacity {
+					NumberAnimation {
+						duration: Config.popupFadeMs
+					}
+				}
 
 				MouseArea {
 					id: addHit
