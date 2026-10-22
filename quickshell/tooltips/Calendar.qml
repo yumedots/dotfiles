@@ -20,13 +20,10 @@ Item {
 	readonly property var weekdays: Dates.weekdayLabels(root.weekStart)
 	readonly property var meters: Dates.meters(root.today, Config.calendarBirthYear, Config.calendarLifeExpectancy, [Config.calendarIconDay, Config.calendarIconMonth, Config.calendarIconYear, Config.calendarIconLife])
 	readonly property real gridWidth: Config.calendarCellWidth * 7
-	readonly property real gridLeft: Config.calendarMeterColumn + Config.calendarColumnGap * 2 + Config.calendarSeparator
 	readonly property string monthText: Qt.formatDate(new Date(root.cursor.getFullYear(), root.cursor.getMonth(), 1), "MMMM")
 	readonly property string yearText: String(root.cursor.getFullYear())
 	readonly property real mondayInk: (Config.calendarCellWidth - weekdayMetrics.width) / 2 + weekdayMetrics.tightBoundingRect.x
-	readonly property real titleX: root.gridLeft + root.mondayInk - monthMetrics.tightBoundingRect.x
-	readonly property real gridTop: Config.calendarCellHeight + calendar.spacing
-	readonly property real meterTop: root.gridTop + Math.max(0, Config.calendarRows - root.meters.length) * Config.calendarCellHeight
+	readonly property real titleX: root.mondayInk - monthMetrics.tightBoundingRect.x
 
 	implicitWidth: card.implicitWidth + Config.calendarPadding * 2
 	implicitHeight: card.implicitHeight + Config.calendarPadding * 2
@@ -74,234 +71,205 @@ Item {
 
 		x: Config.calendarPadding
 		y: Config.calendarPadding
-		spacing: Config.calendarHeaderGap
+		width: root.gridWidth
+		spacing: Config.calendarGap
 
 		Item {
 			id: box
 
-			width: row.width
-			height: boxColumn.implicitHeight + Config.procSearchPadding * 2
+			width: card.width
+			height: Math.max(title.height, arrows.height)
 
-			Column {
-				id: boxColumn
+			Row {
+				id: title
 
-				anchors.left: parent.left
+				x: root.titleX
+				anchors.verticalCenter: parent.verticalCenter
+				spacing: Config.calendarTitleGap
+
+				Text {
+					id: month
+
+					font.family: Config.fontFamily
+					font.pixelSize: Config.calendarMonthSize
+					color: Config.calendarBase
+					text: root.monthText
+				}
+
+				Text {
+					id: yearLabel
+
+					font.family: Config.fontFamily
+					font.pixelSize: Config.calendarMonthSize
+					color: Config.calendarBase
+					text: root.yearText
+				}
+			}
+
+			Row {
+				id: arrows
+
 				anchors.right: parent.right
 				anchors.verticalCenter: parent.verticalCenter
-				spacing: 2
+				spacing: Config.calendarArrowGap
 
-				Item {
-					id: titleRow
+				Text {
+					font.family: Config.fontFamily
+					font.pixelSize: Config.calendarArrowSize
+					color: Config.calendarBase
+					text: Config.iconPrev
 
-					width: boxColumn.width
-					height: Math.max(title.height, arrows.height)
+					MouseArea {
+						anchors.fill: parent
+						anchors.margins: -Config.calendarArrowSize / 2
 
-					Row {
-						id: title
-
-						x: root.titleX
-						anchors.verticalCenter: parent.verticalCenter
-						spacing: Config.calendarArrowGap
-
-						Text {
-							id: month
-
-							font.family: Config.fontFamily
-							font.pixelSize: Config.calendarMonthSize
-							color: Config.calendarBase
-							text: root.monthText
-						}
-
-						Text {
-							id: yearLabel
-
-							font.family: Config.fontFamily
-							font.pixelSize: Config.calendarMonthSize
-							color: Config.calendarBase
-							text: root.yearText
-						}
+						onClicked: root.stepMonths(-1)
 					}
+				}
 
-					Row {
-						id: arrows
+				Text {
+					font.family: Config.fontFamily
+					font.pixelSize: Config.calendarArrowSize
+					color: Config.calendarBase
+					text: Config.iconNext
 
-						anchors.right: parent.right
-						anchors.rightMargin: Config.procSearchPadding
-						anchors.verticalCenter: parent.verticalCenter
-						spacing: Config.calendarArrowGap
+					MouseArea {
+						anchors.fill: parent
+						anchors.margins: -Config.calendarArrowSize / 2
 
-						Text {
-							font.family: Config.fontFamily
-							font.pixelSize: Config.calendarArrowSize
-							color: Config.calendarBase
-							text: Config.iconPrev
+						onClicked: root.stepMonths(1)
+					}
+				}
+			}
+		}
 
-							MouseArea {
-								anchors.fill: parent
-								anchors.margins: -Config.calendarArrowSize / 2
+		Column {
+			id: calendar
 
-								onClicked: root.stepMonths(-1)
-							}
+			width: card.width
+			spacing: 6
+
+			Row {
+				id: weekdays
+
+				Repeater {
+					model: root.weekdays
+
+					delegate: Text {
+						required property string modelData
+
+						width: Config.calendarCellWidth
+						height: Config.calendarCellHeight
+						horizontalAlignment: Text.AlignHCenter
+						verticalAlignment: Text.AlignVCenter
+						font.family: Config.fontFamily
+						font.pixelSize: Config.calendarWeekdaySize
+						color: Config.foreground
+						text: modelData
+					}
+				}
+			}
+
+			Item {
+				id: days
+
+				width: calendar.width
+				height: Config.calendarCellHeight * Config.calendarRows
+
+				Repeater {
+					model: Config.calendarRows * 7
+
+					delegate: Item {
+						id: cell
+
+						required property int index
+
+						readonly property var day: root.grid[Math.floor(cell.index / 7)][cell.index % 7]
+
+						x: (cell.index % 7) * Config.calendarCellWidth
+						y: Math.floor(cell.index / 7) * Config.calendarCellHeight
+						width: Config.calendarCellWidth
+						height: Config.calendarCellHeight
+
+						Rectangle {
+							anchors.fill: parent
+							visible: cell.day.today
+							color: Config.calendarTodayBox
+						}
+
+						Rectangle {
+							anchors.fill: parent
+							visible: cell.day.cursor
+							color: "transparent"
+							border.width: Config.calendarCursorBorder
+							border.color: Config.calendarCursor
 						}
 
 						Text {
+							anchors.centerIn: parent
 							font.family: Config.fontFamily
-							font.pixelSize: Config.calendarArrowSize
-							color: Config.calendarBase
-							text: Config.iconNext
-
-							MouseArea {
-								anchors.fill: parent
-								anchors.margins: -Config.calendarArrowSize / 2
-
-								onClicked: root.stepMonths(1)
-							}
+							font.pixelSize: Config.calendarDaySize
+							color: cell.day.inMonth || cell.day.today || cell.day.cursor ? Config.foreground : Config.calendarOutside
+							text: cell.day.day
 						}
 					}
 				}
 			}
 		}
 
-		Row {
-			id: row
+		Column {
+			id: meters
 
-			spacing: Config.calendarColumnGap
+			width: card.width
+			spacing: Config.calendarMeterGap
 
-			Item {
-				id: meterColumn
+			Repeater {
+				model: root.meters
 
-				width: Config.calendarMeterColumn
-				height: calendar.height
+				delegate: Item {
+					required property var modelData
+					required property int index
 
-				Repeater {
-					model: root.meters
+					width: meters.width
+					height: Config.calendarMeterRow
 
-					delegate: Item {
-						required property var modelData
-						required property int index
+					Text {
+						id: meterLabel
 
-						width: meterColumn.width
-						height: Config.calendarMeterRow
-						y: root.meterTop + index * Config.calendarCellHeight + (Config.calendarCellHeight - height) / 2
+						anchors.verticalCenter: parent.verticalCenter
+						width: Config.calendarMeterLabelWidth
+						font.family: Config.fontFamily
+						font.pixelSize: Config.calendarMeterLabelSize
+						color: Config.foreground
+						text: modelData.icon + " " + modelData.label
+					}
 
-						Text {
-							id: meterLabel
+					Text {
+						id: meterValue
 
-							anchors.verticalCenter: parent.verticalCenter
-							width: Config.calendarMeterLabelWidth
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: Config.foreground
-							text: modelData.icon + " " + modelData.label
-						}
+						anchors.right: parent.right
+						anchors.verticalCenter: parent.verticalCenter
+						width: Config.calendarMeterValueWidth
+						horizontalAlignment: Text.AlignRight
+						font.family: Config.fontFamily
+						font.pixelSize: Config.calendarMeterValueSize
+						color: Config.foreground
+						text: modelData.pct + "%"
+					}
 
-						Text {
-							id: meterValue
+					Rectangle {
+						id: meterTrack
 
-							anchors.right: parent.right
-							anchors.verticalCenter: parent.verticalCenter
-							width: Config.calendarMeterValueWidth
-							horizontalAlignment: Text.AlignRight
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: Config.foreground
-							text: modelData.pct + "%"
-						}
+						anchors.left: meterLabel.right
+						anchors.right: meterValue.left
+						anchors.verticalCenter: parent.verticalCenter
+						height: Config.calendarMeterHeight
+						color: Config.calendarTrack
 
 						Rectangle {
-							id: meterTrack
-
-							anchors.left: meterLabel.right
-							anchors.right: meterValue.left
-							anchors.verticalCenter: parent.verticalCenter
-							height: Config.calendarMeterHeight
-							color: Config.calendarTrack
-
-							Rectangle {
-								width: Math.round(parent.width * modelData.pct / 100)
-								height: parent.height
-								color: Config.foreground
-							}
-						}
-					}
-				}
-			}
-
-			Rectangle {
-				width: Config.calendarSeparator
-				height: calendar.height
-				color: Config.calendarSeparatorColor
-			}
-
-			Column {
-				id: calendar
-
-				width: root.gridWidth
-				spacing: 6
-
-				Row {
-					id: weekdays
-
-					Repeater {
-						model: root.weekdays
-
-						delegate: Text {
-							required property string modelData
-
-							width: Config.calendarCellWidth
-							height: Config.calendarCellHeight
-							horizontalAlignment: Text.AlignHCenter
-							verticalAlignment: Text.AlignVCenter
-							font.family: Config.fontFamily
-							font.pixelSize: Config.calendarWeekdaySize
+							width: Math.round(parent.width * modelData.pct / 100)
+							height: parent.height
 							color: Config.foreground
-							text: modelData
-						}
-					}
-				}
-
-				Item {
-					id: days
-
-					width: calendar.width
-					height: Config.calendarCellHeight * Config.calendarRows
-
-					Repeater {
-						model: Config.calendarRows * 7
-
-						delegate: Item {
-							id: cell
-
-							required property int index
-
-							readonly property var day: root.grid[Math.floor(cell.index / 7)][cell.index % 7]
-
-							x: (cell.index % 7) * Config.calendarCellWidth
-							y: Math.floor(cell.index / 7) * Config.calendarCellHeight
-							width: Config.calendarCellWidth
-							height: Config.calendarCellHeight
-
-							Rectangle {
-								anchors.fill: parent
-								visible: cell.day.today
-								color: Config.calendarTodayBox
-							}
-
-							Rectangle {
-								anchors.fill: parent
-								visible: cell.day.cursor
-								color: "transparent"
-								border.width: Config.calendarCursorBorder
-								border.color: Config.calendarCursor
-							}
-
-							Text {
-								anchors.centerIn: parent
-								font.family: Config.fontFamily
-								font.pixelSize: Settings.fontSize
-								color: cell.day.inMonth || cell.day.today || cell.day.cursor ? Config.foreground : Config.calendarOutside
-								text: cell.day.day
-							}
 						}
 					}
 				}
