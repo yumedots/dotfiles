@@ -48,6 +48,13 @@ Item {
 		}
 	}
 
+	// The panel is on screen. Every time it opens the plan is asked for again,
+	// so the windows of the allowance are current and not whatever was left
+	// from the last time it was looked at.
+	readonly property bool open: root.source ? root.source.popupVisible : true
+
+	onOpenChanged: if (root.open) OpenCode.fetchUsage()
+
 	// The marks are drawn at the size of the screen, so a small svg stays
 	// sharp instead of being scaled up from a small raster.
 	readonly property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
