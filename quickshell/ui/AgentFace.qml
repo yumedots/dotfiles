@@ -111,8 +111,12 @@ Item {
 
 	// The eyes are spaced so they never merge, at any size, and stay well
 	// inside the body even when they look to the side.
+	//
+	// An eye is taller than it is wide, so it reads as a pill rather than a
+	// dot.
 	readonly property real eyeSpacing: root.size * 0.235
-	readonly property real eyeRadius: root.size * 0.13
+	readonly property real eyeRadius: root.size * 0.185
+	readonly property real eyeWidth: root.size * 0.125
 	readonly property real eyeLift: root.size * 0.04
 
 	// How far the eyes travel toward the cursor.
@@ -126,22 +130,23 @@ Item {
 		// A closed eye keeps a little thickness, so it reads as a shut eye
 		// instead of a scratch.
 		const squish = Math.max(0.2, Math.min(1, root.openness * root.blink));
-		const cy = root.bodyHeight / 2 - root.eyeLift + root.eyeY * root.eyeTravel;
-		const shift = root.eyeX * root.eyeTravel;
+		const cy = root.bodyHeight / 2 - root.eyeLift;
 
 		// A closed eye is a short line, not a wide flat slot, so it stays inside
 		// the body and reads as a shut eye rather than a scratch.
-		const radiusX = root.eyeRadius * (0.55 + 0.45 * squish);
-
 		const wanted = [
-			{ x: root.bodyWidth / 2 - root.eyeSpacing + shift, y: cy, radiusX: radiusX, radiusY: root.eyeRadius * squish },
-			{ x: root.bodyWidth / 2 + root.eyeSpacing + shift, y: cy, radiusX: radiusX, radiusY: root.eyeRadius * squish },
+			{ x: root.bodyWidth / 2 - root.eyeSpacing, y: cy, radiusX: root.eyeWidth, radiusY: root.eyeRadius * squish },
+			{ x: root.bodyWidth / 2 + root.eyeSpacing, y: cy, radiusX: root.eyeWidth, radiusY: root.eyeRadius * squish },
 		];
 
-		// An eye that runs past the edge of the body would turn inside out, so
-		// the sockets are pulled back until they fit. Both shrink the same
-		// amount, so the eyes stay the same size.
-		return Agent.clipSockets(root.body, wanted);
+		// The eyes only shrink to fit the body; the look around pulls the slide
+		// back instead, so the eyes keep the same size wherever the pointer is.
+		const fitted = Agent.clipSockets(root.body, wanted);
+		const slide = Agent.clampShift(root.body, fitted, root.eyeX * root.eyeTravel, root.eyeY * root.eyeTravel);
+
+		return fitted.map(function (socket) {
+			return { x: socket.x + slide.x, y: socket.y + slide.y, radiusX: socket.radiusX, radiusY: socket.radiusY };
+		});
 	}
 
 	// The eyes, as paths. They are holes in the body.
