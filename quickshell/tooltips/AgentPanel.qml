@@ -48,12 +48,18 @@ Item {
 		}
 	}
 
+	// Why the plans are missing, when nothing could be read.
+	readonly property string planError: OpenCode.usageError !== "" ? OpenCode.usageError : OpenCode.codexError
+
 	// The panel is on screen. Every time it opens the plan is asked for again,
 	// so the windows of the allowance are current and not whatever was left
 	// from the last time it was looked at.
 	readonly property bool open: root.source ? root.source.popupVisible : true
 
-	onOpenChanged: if (root.open) OpenCode.fetchUsage()
+	onOpenChanged: if (root.open) {
+		OpenCode.fetchUsage();
+		OpenCode.fetchCodex();
+	}
 
 	// The marks are drawn at the size of the screen, so a small svg stays
 	// sharp instead of being scaled up from a small raster.
@@ -480,115 +486,131 @@ Item {
 					width: planFlick.width
 					spacing: 6
 
-					// The mark of the plan, with its name.
-					Row {
-						visible: OpenCode.limits.length > 0
-						spacing: 6
-
-						Image {
-							width: 18
-							height: 18
-
-							source: "file://" + Quickshell.shellDir + "/assets/providers/" + Config.agentPlanIcon + ".svg?v=4"
-							sourceSize.width: Math.round(18 * root.dpr)
-							sourceSize.height: Math.round(18 * root.dpr)
-							fillMode: Image.PreserveAspectFit
-						}
-
-						Text {
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: Config.foreground
-							text: Config.agentPlanName
-						}
-					}
-
+					// One block for each plan the shell knows about: its
+					// name, and the windows of what is left of it.
 					Repeater {
-						model: OpenCode.limits
+						model: OpenCode.plans
 
-						delegate: Item {
-							id: limitRow
+						delegate: Column {
+							id: planBlock
 
 							required property var modelData
 
-							width: parent.width
-							height: Math.max(limitLabel.implicitHeight, limitReset.implicitHeight)
+							width: planStack.width
+							spacing: 6
 
-							readonly property bool alarming: modelData.percent >= 90
+							Row {
+								spacing: 6
 
-							// The label and the numbers are fixed columns, so
-							// every bar starts and ends in the same place. The
-							// percentage sits before the bar, so the bar is
-							// read as the rest.
-							Text {
-								id: limitLabel
+								Image {
+									visible: planBlock.modelData.icon !== ""
+									width: 18
+									height: 18
 
-								anchors.left: parent.left
-								anchors.verticalCenter: parent.verticalCenter
-								width: 60
+									source: planBlock.modelData.icon === ""
+										? ""
+										: "file://" + Quickshell.shellDir + "/assets/providers/" + planBlock.modelData.icon + ".svg?v=4"
+									sourceSize.width: Math.round(18 * root.dpr)
+									sourceSize.height: Math.round(18 * root.dpr)
+									fillMode: Image.PreserveAspectFit
+								}
 
-								font.family: Config.fontFamily
-								font.pixelSize: Settings.fontSize
-								color: Config.foreground
-								text: modelData.title
+								Text {
+									font.family: Config.fontFamily
+									font.pixelSize: Settings.fontSize
+									color: Config.foreground
+									text: planBlock.modelData.title
+								}
 							}
 
-							StepBar {
-								id: limitMeter
+							Repeater {
+								model: planBlock.modelData.limits
 
-								anchors.left: limitLabel.right
-								anchors.right: limitValue.left
-								anchors.leftMargin: 8
-								anchors.rightMargin: 10
-								anchors.verticalCenter: parent.verticalCenter
+								delegate: Item {
+									id: limitRow
 
-								level: modelData.percent / 100
-								ink: limitRow.alarming ? Config.red : Config.foreground
-								track: Config.dim
-							}
+									required property var modelData
 
-							Text {
-								id: limitValue
+									width: planBlock.width
+									height: Math.max(limitLabel.implicitHeight, limitReset.implicitHeight)
 
-								anchors.right: limitReset.left
-								anchors.rightMargin: 6
-								anchors.verticalCenter: parent.verticalCenter
-								width: 34
+									readonly property bool alarming: modelData.percent >= 90
 
-								horizontalAlignment: Text.AlignRight
+									// The label and the numbers are fixed columns, so
+									// every bar starts and ends in the same place. The
+									// percentage sits before the bar, so the bar is
+									// read as the rest.
+									Text {
+										id: limitLabel
 
-								font.family: Config.fontFamily
-								font.pixelSize: Settings.fontSize
-								color: limitRow.alarming ? Config.red : Config.muted
-								text: Math.round(modelData.percent) + "%"
-							}
+										anchors.left: parent.left
+										anchors.verticalCenter: parent.verticalCenter
+										width: 60
 
-							Text {
-								id: limitReset
+										font.family: Config.fontFamily
+										font.pixelSize: Settings.fontSize
+										color: Config.foreground
+										text: modelData.title
+									}
 
-								anchors.right: parent.right
-								anchors.verticalCenter: parent.verticalCenter
-								width: 26
+									StepBar {
+										id: limitMeter
 
-								horizontalAlignment: Text.AlignRight
+										anchors.left: limitLabel.right
+										anchors.right: limitValue.left
+										anchors.leftMargin: 8
+										anchors.rightMargin: 10
+										anchors.verticalCenter: parent.verticalCenter
 
-								font.family: Config.fontFamily
-								font.pixelSize: Settings.fontSize
-								color: Config.muted
-								text: root.countdown(modelData.resetsAt)
+										level: modelData.percent / 100
+										ink: limitRow.alarming ? Config.red : Config.foreground
+										track: Config.dim
+									}
+
+									Text {
+										id: limitValue
+
+										anchors.right: limitReset.left
+										anchors.rightMargin: 6
+										anchors.verticalCenter: parent.verticalCenter
+										width: 34
+
+										horizontalAlignment: Text.AlignRight
+
+										font.family: Config.fontFamily
+										font.pixelSize: Settings.fontSize
+										color: limitRow.alarming ? Config.red : Config.muted
+										text: Math.round(modelData.percent) + "%"
+									}
+
+									Text {
+										id: limitReset
+
+										anchors.right: parent.right
+										anchors.verticalCenter: parent.verticalCenter
+										width: 26
+
+										horizontalAlignment: Text.AlignRight
+
+										font.family: Config.fontFamily
+										font.pixelSize: Settings.fontSize
+										color: Config.muted
+										text: root.countdown(modelData.resetsAt)
+									}
+								}
 							}
 						}
 					}
 
 					Text {
 						width: parent.width
-						visible: OpenCode.limits.length === 0 && OpenCode.usageError !== ""
+						visible: OpenCode.plans.length === 0 && root.planError !== ""
 						elide: Text.ElideRight
 
 						font.family: Config.fontFamily
 						font.pixelSize: Settings.fontSize
 						color: Config.muted
-						text: OpenCode.usageError
+						text: root.planError
 					}
 				}
 			}
