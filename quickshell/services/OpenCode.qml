@@ -442,8 +442,7 @@ QtObject {
 	property var doneSessions: []
 
 	function announceFinished(sessionID) {
-		const session = root.sessions[sessionID] || {};
-		const title = session.title || "agent";
+		const title = root.titleOf(sessionID) || "agent";
 
 		root.doneSessions = [{ id: sessionID, title: title, at: Date.now() }].concat(root.doneSessions).slice(0, 20);
 
@@ -461,13 +460,14 @@ QtObject {
 	// A session that asks something needs the user, so the notification stays
 	// on the screen until it is answered.
 	function announceQuestion(sessionID, text) {
-		const session = root.sessions[sessionID] || {};
-		const title = session.title || "agent";
+		const title = root.titleOf(sessionID) || "agent";
 
 		Quickshell.execDetached([
 			"notify-send",
 			"-a",
 			"OpenCode",
+			"-i",
+			"opencode",
 			"-u",
 			"critical",
 			"-t",
