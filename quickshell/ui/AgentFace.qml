@@ -51,7 +51,17 @@ Item {
 	property real blink: 1
 	property real breathe: 1
 
-	readonly property real openness: root.state === "working" ? 0 : (root.state === "blocked" ? 1.15 : 1)
+	property real openness: root.state === "working" ? 0 : (root.state === "blocked" ? 1.15 : 1)
+
+	// The eyes close into a squint when the agent starts working instead of
+	// snapping shut, and open again when it stops.
+	Behavior on openness {
+		enabled: !root.paused
+		NumberAnimation {
+			duration: 240
+			easing.type: Easing.OutCubic
+		}
+	}
 	readonly property real bodyWidth: root.size * 0.86
 	readonly property real bodyHeight: root.size * 0.86
 
