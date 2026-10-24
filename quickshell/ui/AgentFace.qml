@@ -176,7 +176,6 @@ Item {
 		root.fromState = root.lastState;
 		root.lastState = root.state;
 		root.morph = 0;
-		root.spin = 0;
 		morphAnimation.restart();
 	}
 

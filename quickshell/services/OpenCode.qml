@@ -75,7 +75,17 @@ QtObject {
 		if (hasError)
 			return "error";
 
-		if (hasWorking || root.runningSessions.length > 0)
+		// A session that the stream has already told us about is believed over
+		// the running list, which is only polled now and then: a run that just
+		// finished would otherwise keep the face working for a while.
+		for (let i = 0; i < root.runningSessions.length; i++) {
+			const session = root.sessions[root.runningSessions[i]];
+
+			if (!session || session.status === undefined)
+				hasWorking = true;
+		}
+
+		if (hasWorking)
 			return "working";
 
 		return "idle";
