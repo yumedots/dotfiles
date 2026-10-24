@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs
 import qs.services
 import qs.ui
@@ -13,6 +14,39 @@ Item {
 	id: root
 
 	property var source: null
+
+	// The name the panel shows for the agent. It is typed in the panel and
+	// kept in a file, so it survives a restart.
+	property string agentName: Config.agentPanelTitle
+
+	readonly property string agentNamePath: Quickshell.shellDir + "/" + Config.agentNameFile
+
+	// A blank name falls back to the one the shell ships with, so the panel
+	// never loses its title.
+	function saveAgentName(value) {
+		const name = String(value === undefined || value === null ? "" : value).trim();
+
+		root.agentName = name === "" ? Config.agentPanelTitle : name;
+		nameField.text = root.agentName;
+
+		if (nameFile.text().trim() !== root.agentName)
+			Quickshell.execDetached(Shell.writeCommand(root.agentNamePath, root.agentName + "\n"));
+	}
+
+	FileView {
+		id: nameFile
+
+		path: root.agentNamePath
+		blockLoading: true
+		watchChanges: true
+
+		onLoaded: {
+			const name = nameFile.text().trim();
+
+			root.agentName = name === "" ? Config.agentPanelTitle : name;
+			nameField.text = root.agentName;
+		}
+	}
 
 	// The marks are drawn at the size of the screen, so a small svg stays
 	// sharp instead of being scaled up from a small raster.
@@ -249,14 +283,24 @@ Item {
 				width: Config.agentColumnWidth
 				spacing: 2
 
-				Text {
+				TextInput {
+					id: nameField
+
 					width: parent.width
-					horizontalAlignment: Text.AlignHCenter
+					height: root.rowHeight
+					verticalAlignment: TextInput.AlignVCenter
+					horizontalAlignment: TextInput.AlignHCenter
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
 					color: Config.foreground
-					text: Config.agentPanelTitle
+					selectionColor: Config.muted
+					selectedTextColor: Config.background
+					selectByMouse: true
+					text: root.agentName
+
+					onAccepted: root.saveAgentName(text)
+					onActiveFocusChanged: if (!activeFocus) root.saveAgentName(text)
 				}
 
 				// The state, with the spinner that turns while the agent is
