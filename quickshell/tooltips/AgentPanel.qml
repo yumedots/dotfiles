@@ -373,6 +373,7 @@ Item {
 
 								anchors.fill: parent
 								anchors.margins: -4
+								hoverEnabled: true
 
 								onClicked: root.dismissDetail()
 							}
