@@ -301,6 +301,12 @@ Item {
 
 					onAccepted: root.saveAgentName(text)
 					onActiveFocusChanged: if (!activeFocus) root.saveAgentName(text)
+
+					Keys.onEscapePressed: function (event) {
+						root.saveAgentName(text);
+						nameField.focus = false;
+						event.accepted = true;
+					}
 				}
 
 				// The state, with the spinner that turns while the agent is
