@@ -93,23 +93,23 @@ Item {
 		return Qt.point(originX + at.x + root.width / 2, originY + at.y);
 	}
 
-	// The pointer position is read against a shorter arm than the face is
-	// wide, so the eyes answer a pointer that is right next to them instead of
-	// sitting almost still until the pointer is far away.
-	readonly property real gazeArm: Config.agentFaceSize * 0.7
+	// The pointer is read through a curve that rises quickly while it is near
+	// the face and levels off as it gets far, so the eyes answer a pointer
+	// close by without slamming into the end of their travel.
+	readonly property real gazeArm: Config.agentFaceSize * 0.55
 
 	readonly property real gazeX: {
 		if (!Cursor.valid)
 			return 0;
 
-		return Util.clamp((Cursor.x - root.faceCenter.x) / root.gazeArm, -1, 1);
+		return Math.tanh((Cursor.x - root.faceCenter.x) / root.gazeArm);
 	}
 
 	readonly property real gazeY: {
 		if (!Cursor.valid)
 			return 0;
 
-		return Util.clamp((Cursor.y - root.faceCenter.y) / root.gazeArm, -1, 1);
+		return Math.tanh((Cursor.y - root.faceCenter.y) / root.gazeArm);
 	}
 
 	implicitWidth: Config.agentPanelWidth + 2 * Config.agentPanelPadding
