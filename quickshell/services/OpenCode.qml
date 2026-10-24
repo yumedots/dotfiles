@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs
 
 // Talks to the OpenCode v2 server that backs the local `opencode` CLI.
 //
@@ -515,7 +516,8 @@ QtObject {
 						id: session.id,
 						title: session.title || "",
 						provider: (session.model && session.model.providerID) || "",
-						parent: session.parentID || ""
+						parent: session.parentID || "",
+						directory: (session.location && session.location.directory) || ""
 					};
 				});
 			}
@@ -530,24 +532,136 @@ QtObject {
 	// The sessions that are asking a question, so they wait for the user.
 	property var askingSessions: []
 
-	// The permission requests the server has open. A session that asks
-	// something is one of these, so the agent can be shown waiting for the
-	// user even when the question was asked before the shell started.
-	property Process listPermissions: Process {
-		command: root.serverUrl === "" ? ["true"] : [
-			"curl",
-			"-sS",
-			"-u",
-			"opencode:" + root.serverPassword,
-			root.serverUrl + "/api/permission/request",
+	// The questions the server has open, and the permissions it is waiting on.
+	// Both lists are kept per directory, so the shell asks for them in every
+	// directory a running session works in. A session that asks something is
+	// in one of them, so the agent is shown waiting for the user even when the
+	// question was asked before the shell started.
+	readonly property var questioning: []
+
+	property Process listQuestions: Process {
+		command: root.serverUrl === "" || root.questionDirs.length === 0 ? ["true"] : [
+			"sh",
+			"-c",
+			root.questionScript(),
 		]
 
 		stdout: StdioCollector {
 			onStreamFinished: function () {
-				root.readPermissions(this.text);
+				root.readQuestions(this.text);
 			}
 		}
 	}
+
+	readonly property var questionDirs: {
+		root.revision;
+
+		const dirs = [];
+		const ids = Object.keys(root.sessions);
+		const running = root.runningSessions;
+
+		for (let i = 0; i < running.length; i++)
+			ids.push(running[i]);
+
+		for (let i = 0; i < ids.length; i++) {
+			const listed = root.findListed(ids[i]);
+			const dir = listed && listed.directory;
+
+			if (dir && dirs.indexOf(dir) < 0)
+				dirs.push(dir);
+		}
+
+		return dirs;
+	}
+
+	function questionScript() {
+		const parts = [];
+
+		for (let i = 0; i < root.questionDirs.length; i++) {
+			const dir = root.questionDirs[i];
+
+			parts.push("curl -sS -G -u " + Shell.shellQuote("opencode:" + root.serverPassword)
+				+ " --data-urlencode " + Shell.shellQuote("location[directory]=" + dir)
+				+ " " + Shell.shellQuote(root.serverUrl + "/api/form"));
+			parts.push("printf '\\n'");
+			parts.push("curl -sS -G -u " + Shell.shellQuote("opencode:" + root.serverPassword)
+				+ " --data-urlencode " + Shell.shellQuote("location[directory]=" + dir)
+				+ " " + Shell.shellQuote(root.serverUrl + "/api/permission/request"));
+			parts.push("printf '\\n'");
+		}
+
+		return parts.join("; ");
+	}
+
+	function readQuestions(text) {
+		const lines = String(text || "").split("\n");
+		const asking = [];
+		const seen = {};
+
+		for (let i = 0; i < lines.length; i++) {
+			let payload;
+
+			try {
+				payload = JSON.parse(lines[i]);
+			} catch (error) {
+				continue;
+			}
+
+			const list = (payload && payload.data) || [];
+
+			for (let j = 0; j < list.length; j++) {
+				const id = list[j] && list[j].sessionID;
+
+				if (!id || seen[id])
+					continue;
+
+				seen[id] = true;
+				asking.push(id);
+			}
+		}
+
+		root.askingSessions = asking;
+		root.announceNewQuestions(asking);
+	}
+
+	// A session that starts asking something gets one urgent notification, the
+	// kind that stays until it is answered.
+	function announceNewQuestions(asking) {
+		const asked = {};
+
+		for (let i = 0; i < asking.length; i++)
+			asked[asking[i]] = true;
+
+		// A session that stopped asking can ask again later.
+		const next = {};
+
+		for (const id in root.askedSessions)
+			if (asked[id])
+				next[id] = true;
+
+		root.askedSessions = next;
+
+		for (let i = 0; i < asking.length; i++) {
+			const id = asking[i];
+
+			if (root.askedSessions[id])
+				continue;
+
+			root.askedSessions = Object.assign({}, root.askedSessions, (function () {
+				const out = {};
+
+				out[id] = true;
+
+				return out;
+			})());
+
+			const session = root.sessions[id] || {};
+
+			root.announceQuestion(id, session.blocked || "has a question");
+		}
+	}
+
+	property var askedSessions: ({})
 
 	function readPermissions(text) {
 		let payload;
@@ -617,7 +731,7 @@ QtObject {
 
 		onTriggered: {
 			root.listRunning.running = true;
-			root.listPermissions.running = true;
+			root.listQuestions.running = true;
 		}
 	}
 
