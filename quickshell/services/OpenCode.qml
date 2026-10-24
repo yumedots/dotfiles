@@ -907,6 +907,158 @@ QtObject {
 		running: true
 		triggeredOnStart: true
 
-		onTriggered: root.fetchUsage()
+		onTriggered: {
+			root.fetchUsage();
+			root.fetchCodex();
+		}
+	}
+
+	// The plans the panel shows: the one this shell talks to, and the Codex
+	// CLI when it is signed in on this machine.
+	readonly property var plans: {
+		root.revision;
+
+		const plans = [];
+
+		if (root.limits.length > 0)
+			plans.push({ title: Config.agentPlanName, icon: Config.agentPlanIcon, limits: root.limits, error: "" });
+
+		if (root.codexLimits.length > 0)
+			plans.push({ title: root.codexTitle, icon: "", limits: root.codexLimits, error: "" });
+
+		return plans;
+	}
+
+	// ---- codex -----------------------------------------------------------------
+	//
+	// The Codex CLI keeps its own credential in ~/.codex/auth.json, so the file
+	// is watched: signing in or out is picked up without a restart.
+
+	property var codexLimits: []
+	property string codexPlan: ""
+	property string codexToken: ""
+	property string codexAccount: ""
+	property string codexError: ""
+
+	readonly property string codexTitle: "ChatGPT" + (root.codexPlan === "" ? "" : " " + root.codexPlan.charAt(0).toUpperCase() + root.codexPlan.substring(1))
+
+	readonly property string codexAuthPath: (Quickshell.env("CODEX_HOME") || (Quickshell.env("HOME") + "/.codex")) + "/auth.json"
+
+	property FileView codexAuth: FileView {
+		path: root.codexAuthPath
+		blockLoading: true
+		watchChanges: true
+
+		onFileChanged: codexAuth.reload()
+		onLoaded: root.readCodexAuth(codexAuth.text())
+	}
+
+	function readCodexAuth(text) {
+		let payload;
+
+		try {
+			payload = JSON.parse(text);
+		} catch (error) {
+			return;
+		}
+
+		const tokens = (payload && payload.tokens) || {};
+
+		if (payload.auth_mode !== "chatgpt" || !tokens.access_token) {
+			root.codexLimits = [];
+			root.codexToken = "";
+			return;
+		}
+
+		root.codexToken = tokens.access_token;
+		root.codexAccount = tokens.account_id || "";
+		root.fetchCodex();
+	}
+
+	function fetchCodex() {
+		if (root.codexToken === "")
+			return;
+
+		root.codexUsage.running = true;
+	}
+
+	property Process codexUsage: Process {
+		command: root.codexToken === "" ? ["true"] : [
+			"curl",
+			"-sS",
+			"-m",
+			"15",
+			"-H",
+			"Authorization: Bearer " + root.codexToken,
+			"-H",
+			"chatgpt-account-id: " + root.codexAccount,
+			"https://chatgpt.com/backend-api/wham/usage",
+		]
+
+		stdout: StdioCollector {
+			onStreamFinished: function () {
+				root.readCodexUsage(this.text);
+			}
+		}
+
+		onExited: function (code) {
+			if (code !== 0 && root.codexLimits.length === 0)
+				root.codexError = "plan unreachable";
+		}
+	}
+
+	function readCodexUsage(text) {
+		let payload;
+
+		try {
+			payload = JSON.parse(text);
+		} catch (error) {
+			root.codexError = "usage unreadable";
+			return;
+		}
+
+		const rate = (payload && payload.rate_limit) || {};
+		const windows = [["primary_window", "Session"], ["secondary_window", "Weekly"]];
+		const limits = [];
+
+		root.codexPlan = payload.plan_type || "";
+
+		for (let i = 0; i < windows.length; i++) {
+			const window = rate[windows[i][0]];
+
+			if (!window)
+				continue;
+
+			limits.push({
+				title: root.codexWindowTitle(window.limit_window_seconds, windows[i][1]),
+				percent: Number(window.used_percent) || 0,
+				resetsAt: window.reset_at ? new Date(window.reset_at * 1000).toISOString() : "",
+			});
+		}
+
+		if (limits.length === 0) {
+			root.codexError = "no plan";
+			return;
+		}
+
+		root.codexLimits = limits;
+		root.codexError = "";
+	}
+
+	// A window is named for how long it lasts, so a monthly window is not
+	// called a session.
+	function codexWindowTitle(seconds, fallback) {
+		const span = Number(seconds) || 0;
+
+		if (span >= 7 * 86400)
+			return "Monthly";
+
+		if (span >= 86400)
+			return "Weekly";
+
+		if (span > 0)
+			return "Session";
+
+		return fallback;
 	}
 }
