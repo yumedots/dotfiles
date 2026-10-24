@@ -250,6 +250,22 @@ Item {
 	}
 
 	TextMetrics {
+		id: heroTempInk
+
+		font.family: Config.fontFamily
+		font.pixelSize: Config.weatherHeroTempSize
+		text: root.tempValue
+	}
+
+	TextMetrics {
+		id: heroUnitInk
+
+		font.family: Config.fontFamily
+		font.pixelSize: Config.weatherHeroUnitSize
+		text: String(root.tempUnit).replace("°", "")
+	}
+
+	TextMetrics {
 		id: heroLabelMetrics
 
 		font.family: Config.fontFamily
@@ -567,8 +583,9 @@ Item {
 					id: tempUnitText
 
 					anchors.left: tempNumber.right
-					anchors.top: parent.top
-					anchors.topMargin: -Config.weatherHeroUnitTop
+					anchors.top: tempNumber.top
+					anchors.topMargin: (heroTempInk.tightBoundingRect.y - heroTempInk.boundingRect.y)
+						- (heroUnitInk.tightBoundingRect.y - heroUnitInk.boundingRect.y)
 					height: heroUnitMetrics.height
 					font.family: Config.fontFamily
 					font.pixelSize: Config.weatherHeroUnitSize
