@@ -93,16 +93,16 @@ Item {
 	Behavior on eyeX {
 		enabled: !root.paused
 		NumberAnimation {
-			duration: 260
-			easing.type: Easing.OutCubic
+			duration: 110
+			easing.type: Easing.OutQuad
 		}
 	}
 
 	Behavior on eyeY {
 		enabled: !root.paused
 		NumberAnimation {
-			duration: 260
-			easing.type: Easing.OutCubic
+			duration: 110
+			easing.type: Easing.OutQuad
 		}
 	}
 
@@ -120,7 +120,7 @@ Item {
 	readonly property real eyeLift: root.size * 0.04
 
 	// How far the eyes travel toward the cursor.
-	readonly property real eyeTravel: root.size * 0.05
+	readonly property real eyeTravel: root.size * 0.065
 
 	// The eye sockets, in body-local coordinates. They are holes in the body,
 	// and they slide toward the cursor so the face looks where the pointer is.
@@ -204,8 +204,8 @@ Item {
 			target: root
 			property: "blink"
 			to: 1
-			duration: 110
-			easing.type: Easing.OutQuad
+			duration: 260
+			easing.type: Easing.OutCubic
 		}
 	}
 
