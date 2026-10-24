@@ -150,8 +150,13 @@ Item {
 	}
 
 	// The eyes, as paths. They are holes in the body.
+	//
+	// An eye is a rectangle with round corners, and the corner radius is half
+	// the short side, so the ends are circles.
 	readonly property var eyePaths: root.sockets.map(function (socket) {
-		return Agent.ellipsePoints(socket.x, socket.y, socket.radiusX, socket.radiusY, 40);
+		const radius = Math.min(socket.radiusX, socket.radiusY);
+
+		return Agent.roundedRectPoints(socket.x, socket.y, socket.radiusX, socket.radiusY, radius, 40);
 	})
 
 	onStateChanged: {

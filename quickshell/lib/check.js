@@ -1540,6 +1540,19 @@ section("agent", function () {
 	const eye = ellipsePoints(20, 20, 3, 2, 24);
 
 	assert(eye.length === 48 && eye.every(isFinite), "an eye is an ellipse of points");
+
+	const pill = roundedRectPoints(20, 20, 3, 8, 3, 40);
+	let pillMinX = Infinity;
+	let pillMaxX = -Infinity;
+
+	for (let i = 0; i < pill.length; i += 2) {
+		pillMinX = Math.min(pillMinX, pill[i]);
+		pillMaxX = Math.max(pillMaxX, pill[i]);
+	}
+
+	assert(pill.length > 8 && pill.every(isFinite), "a pill is a path of real points");
+	assert(Math.abs(pillMinX - 17) < 0.5 && Math.abs(pillMaxX - 23) < 0.5, "a pill keeps its width");
+	assert(pill.some(function (value, index) { return index % 2 === 1 && Math.abs(value - 20) < 0.001; }) === false, "a tall pill has straight sides");
 });
 
 console.log("check ok (" + ran + " assertions" + (filter === "" ? "" : ", filter " + filter) + ")");

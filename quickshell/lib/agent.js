@@ -94,6 +94,32 @@ function ellipsePoints(cx, cy, radiusX, radiusY, samples) {
 	return points;
 }
 
+// The path of a rectangle with round corners. When the corner radius is half
+// the short side the corners are circles and the shape is a pill.
+function roundedRectPoints(cx, cy, halfWidth, halfHeight, radius, samples) {
+	const count = Math.max(2, Math.round((samples || 40) / 4));
+	const r = Math.min(radius, Math.min(halfWidth, halfHeight));
+	const points = [];
+	const corners = [
+		[cx + halfWidth - r, cy - halfHeight + r, -Math.PI / 2],
+		[cx + halfWidth - r, cy + halfHeight - r, 0],
+		[cx - halfWidth + r, cy + halfHeight - r, Math.PI / 2],
+		[cx - halfWidth + r, cy - halfHeight + r, Math.PI],
+	];
+
+	for (let i = 0; i < corners.length; i++) {
+		const corner = corners[i];
+
+		for (let j = 0; j <= count; j++) {
+			const angle = corner[2] + (j / count) * (Math.PI / 2);
+
+			points.push(corner[0] + Math.cos(angle) * r, corner[1] + Math.sin(angle) * r);
+		}
+	}
+
+	return points;
+}
+
 // Keeps an eye socket inside the body outline.
 //
 // The body and the eyes are one path, filled with the odd-even rule, so an eye
