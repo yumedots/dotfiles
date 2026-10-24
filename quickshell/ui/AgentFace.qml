@@ -124,37 +124,40 @@ Item {
 	//
 	// An eye is taller than it is wide, so it reads as a pill rather than a
 	// dot.
-	readonly property real eyeSpacing: root.size * 0.235
+	readonly property real eyeSpacing: root.size * 0.22
 	readonly property real eyeRadius: root.size * 0.185
-	readonly property real eyeWidth: root.size * 0.125
+	readonly property real eyeWidth: root.size * 0.105
 	readonly property real eyeLift: root.size * 0.04
 
+	// How much room the eye keeps from the edge of the body, so it never
+	// touches the rim and flattens the outline into a notch.
+	readonly property real eyeMargin: root.size * 0.02
+
 	// How far the eyes travel toward the cursor.
-	readonly property real eyeTravel: root.size * 0.065
+	readonly property real eyeTravel: root.size * 0.055
 
 	// The eye sockets, in body-local coordinates. They are holes in the body,
 	// and they slide toward the cursor so the face looks where the pointer is.
 	// The socket squashes vertically as the eye closes, so a blink flattens the
 	// eye into a line.
-	readonly property var sockets: {
+	//
+	// The fit only changes when the body or a blink does, so the pointer moving
+	// costs a few comparisons instead of a hit test.
+	readonly property var fittedSockets: {
 		// A closed eye keeps a little thickness, so it reads as a shut eye
 		// instead of a scratch.
-		const squish = Math.max(0.2, Math.min(1, root.openness * root.blink));
-		const cy = root.bodyHeight / 2 - root.eyeLift;
+		const squish = Math.max(0.3, Math.min(1, root.openness * root.blink));
 
-		// A closed eye is a short line, not a wide flat slot, so it stays inside
-		// the body and reads as a shut eye rather than a scratch.
-		const wanted = [
-			{ x: root.bodyWidth / 2 - root.eyeSpacing, y: cy, radiusX: root.eyeWidth, radiusY: root.eyeRadius * squish },
-			{ x: root.bodyWidth / 2 + root.eyeSpacing, y: cy, radiusX: root.eyeWidth, radiusY: root.eyeRadius * squish },
-		];
+		return Agent.clipSockets(root.body, [
+			{ x: root.bodyWidth / 2 - root.eyeSpacing, y: root.bodyHeight / 2 - root.eyeLift, radiusX: root.eyeWidth, radiusY: root.eyeRadius * squish },
+			{ x: root.bodyWidth / 2 + root.eyeSpacing, y: root.bodyHeight / 2 - root.eyeLift, radiusX: root.eyeWidth, radiusY: root.eyeRadius * squish },
+		], root.eyeMargin);
+	}
 
-		// The eyes only shrink to fit the body; the look around pulls the slide
-		// back instead, so the eyes keep the same size wherever the pointer is.
-		const fitted = Agent.clipSockets(root.body, wanted);
-		const slide = Agent.clampShift(root.body, fitted, root.eyeX * root.eyeTravel, root.eyeY * root.eyeTravel);
+	readonly property var sockets: {
+		const slide = Agent.clampShift(root.body, root.fittedSockets, root.eyeX * root.eyeTravel, root.eyeY * root.eyeTravel, root.eyeMargin);
 
-		return fitted.map(function (socket) {
+		return root.fittedSockets.map(function (socket) {
 			return { x: socket.x + slide.x, y: socket.y + slide.y, radiusX: socket.radiusX, radiusY: socket.radiusY };
 		});
 	}

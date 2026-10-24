@@ -128,9 +128,9 @@ function roundedRectPoints(cx, cy, halfWidth, halfHeight, radius, samples) {
 //
 // Both sockets are scaled by the same amount, so the two eyes stay the same
 // size even when one of them sits close to the edge.
-function clipSockets(outline, sockets) {
+function clipSockets(outline, sockets, margin) {
 	const inside = function (socket, factor) {
-		return socketInside(outline, socket.x, socket.y, socket.radiusX * factor, socket.radiusY * factor);
+		return socketInside(outline, socket.x, socket.y, socket.radiusX * factor, socket.radiusY * factor, 24, margin || 0);
 	};
 
 	// Find the largest scale that fits every socket.
@@ -158,13 +158,14 @@ function clipSockets(outline, sockets) {
 
 // Whether a whole eye socket sits inside the body outline. The edge is sampled
 // rather than solved, which is exact enough for a shape that turns.
-function socketInside(outline, cx, cy, radiusX, radiusY) {
+function socketInside(outline, cx, cy, radiusX, radiusY, samples, margin) {
 	const count = outline.length / 2;
+	const gap = margin || 0;
+	const edge = roundedRectPoints(cx, cy, radiusX - gap, radiusY - gap, Math.min(radiusX, radiusY) - gap, samples || 24);
 
-	for (let i = 0; i < 24; i++) {
-		const angle = (i / 24) * TWO_PI;
-		const x = cx + Math.cos(angle) * radiusX;
-		const y = cy + Math.sin(angle) * radiusY;
+	for (let i = 0; i < edge.length; i += 2) {
+		const x = edge[i];
+		const y = edge[i + 1];
 
 		let insidePoint = false;
 
@@ -187,15 +188,16 @@ function socketInside(outline, cx, cy, radiusX, radiusY) {
 
 // Slides the eye sockets toward the cursor without changing their size.
 //
-// The eyes look where the pointer is, but an eye that runs past the edge of the
-// body turns inside out. Only the slide is pulled back until both eyes fit, so
-// the eyes never grow or shrink as the pointer moves.
-function clampShift(outline, sockets, dx, dy) {
+// The slide is pulled back until both eyes still fit the body, so an eye that
+// reaches the edge slides no further instead of growing or turning the body
+// inside out. The edge is sampled coarsely, because this runs whenever the
+// pointer moves.
+function clampShift(outline, sockets, dx, dy, margin) {
 	const fits = function (t) {
 		for (let i = 0; i < sockets.length; i++) {
 			const socket = sockets[i];
 
-			if (!socketInside(outline, socket.x + dx * t, socket.y + dy * t, socket.radiusX, socket.radiusY))
+			if (!socketInside(outline, socket.x + dx * t, socket.y + dy * t, socket.radiusX, socket.radiusY, 8, margin || 0))
 				return false;
 		}
 
@@ -205,7 +207,7 @@ function clampShift(outline, sockets, dx, dy) {
 	let low = 0;
 	let high = 1;
 
-	for (let i = 0; i < 12; i++) {
+	for (let i = 0; i < 8; i++) {
 		const mid = (low + high) / 2;
 
 		if (fits(mid))

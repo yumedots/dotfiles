@@ -1531,11 +1531,11 @@ section("agent", function () {
 	];
 	const slid = clampShift(body, grazing, 30, 0);
 
-	assert(Math.abs(slid.x) < 30, "a slide that runs past the body is pulled back");
+	assert(slid.x < 30, "a slide that runs past the body is pulled back");
 	assert(grazing.every(function (socket) {
 		return socketInside(body, socket.x + slid.x, socket.y + slid.y, socket.radiusX, socket.radiusY);
 	}), "both eyes stay whole while looking around");
-	assert(grazing[0].radiusX === 4, "looking around does not resize an eye");
+	assert(grazing[0].radiusX === 4 && grazing[1].radiusX === 4, "looking around does not resize an eye");
 
 	const eye = ellipsePoints(20, 20, 3, 2, 24);
 
