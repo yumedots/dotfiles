@@ -139,6 +139,11 @@ pub const Apps = struct {
 			if (!std.mem.endsWith(u8, item.name, ".desktop")) continue;
 
 			if (self.parseEntry(child, item.name)) |entry| {
+				if (hasId(out.items, entry.id)) {
+					self.freeEntry(entry);
+					continue;
+				}
+
 				out.append(self.allocator, entry) catch continue;
 			}
 		}
@@ -254,6 +259,14 @@ pub const Apps = struct {
 		try writer.writeAll("}}");
 	}
 };
+
+fn hasId(entries: []const Entry, id: []const u8) bool {
+	for (entries) |entry| {
+		if (std.mem.eql(u8, entry.id, id)) return true;
+	}
+
+	return false;
+}
 
 fn stripFieldCodes(allocator: Allocator, token: []const u8) ![]u8 {
 	var out: std.ArrayList(u8) = .empty;
