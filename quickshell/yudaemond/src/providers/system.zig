@@ -113,6 +113,7 @@ pub const System = struct {
 	previous: std.AutoHashMapUnmanaged(i32, i64) = .empty,
 	last_cpu: [max_cores + 1][4]i64 = undefined,
 	last_cpu_count: usize = 0,
+	last_proc_at: i64 = 0,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*System {
 		const self = try allocator.create(System);
@@ -314,6 +315,12 @@ pub const System = struct {
 
 	fn sampleProcesses(self: *System) void {
 		const list = proc.listProcesses(self.io, self.allocator) catch return;
+		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
+		const seconds = if (self.last_proc_at > 0 and now > self.last_proc_at)
+			@as(f64, @floatFromInt(now - self.last_proc_at)) / 1000.0
+		else
+			0;
+		self.last_proc_at = now;
 
 		var next: std.AutoHashMapUnmanaged(i32, i64) = .empty;
 		var top: [max_top]Process = @splat(.{});
@@ -333,7 +340,7 @@ pub const System = struct {
 				.pid = entry.pid,
 				.comm = entry.comm,
 				.comm_len = entry.comm_len,
-				.cpu = @as(f64, @floatFromInt(delta)) / 185.0 * 100.0,
+				.cpu = cpuPercent(delta, seconds),
 				.rss_kb = entry.rss_kb,
 			};
 
@@ -478,3 +485,14 @@ pub const System = struct {
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
+
+fn cpuPercent(delta: i64, seconds: f64) f64 {
+	if (seconds <= 0 or delta <= 0) return 0;
+	return @as(f64, @floatFromInt(delta)) / seconds;
+}
+
+test "cpu percent uses the sample window" {
+	try std.testing.expectApproxEqAbs(@as(f64, 100), cpuPercent(555, 5.55), 0.001);
+	try std.testing.expectApproxEqAbs(@as(f64, 50), cpuPercent(100, 2.0), 0.001);
+	try std.testing.expectEqual(@as(f64, 0), cpuPercent(10, 0));
+}
