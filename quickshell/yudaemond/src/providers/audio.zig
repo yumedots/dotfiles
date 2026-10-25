@@ -9,6 +9,15 @@ const Io = std.Io;
 const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
+const pending_ms = 250;
+
+const Write = struct {
+	id: i64,
+	level: f64 = 0,
+	mute: bool = false,
+	kind: enum { volume, mute },
+};
+
 const Node = struct {
 	id: i64,
 	name: []u8,
@@ -22,6 +31,8 @@ const Node = struct {
 	is_stream: bool,
 	is_sink: bool,
 	state: []u8,
+	pending: f64 = -1,
+	pending_until: i64 = 0,
 };
 
 const PropsOut = struct {
@@ -67,6 +78,10 @@ pub const Audio = struct {
 	has_input: bool = false,
 	watch: std.atomic.Value(bool) = .init(false),
 	dirty: std.atomic.Value(bool) = .init(true),
+	write_mutex: std.Io.Mutex = .init,
+	writes: [16]Write = undefined,
+	write_count: usize = 0,
+	write_ready: std.atomic.Value(bool) = .init(false),
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Audio {
 		const self = try allocator.create(Audio);
@@ -95,6 +110,88 @@ pub const Audio = struct {
 
 		const events = try std.Thread.spawn(.{}, subscribe, .{self});
 		events.detach();
+
+		const writer = try std.Thread.spawn(.{}, writeLoop, .{self});
+		writer.detach();
+	}
+
+	fn writeLoop(self: *Audio) void {
+		while (true) {
+			if (!self.write_ready.swap(false, .monotonic)) {
+				sleep.ms(15);
+				continue;
+			}
+
+			while (self.takeWrite()) |item| self.runWrite(item);
+		}
+	}
+
+	fn runWrite(self: *Audio, item: Write) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+		const id_text = std.fmt.allocPrint(allocator, "{d}", .{item.id}) catch return;
+
+		var argv: std.ArrayList([]const u8) = .empty;
+
+		switch (item.kind) {
+			.volume => {
+				const text = std.fmt.allocPrint(allocator, "{d}%", .{@as(i64, @intFromFloat(@round(item.level * 100)))}) catch return;
+
+				for ([_][]const u8{ "wpctl", "set-volume", id_text, text }) |arg| argv.append(allocator, arg) catch return;
+			},
+			.mute => {
+				const flag = if (item.mute) "1" else "0";
+
+				for ([_][]const u8{ "wpctl", "set-mute", id_text, flag }) |arg| argv.append(allocator, arg) catch return;
+			},
+		}
+
+		if (exec.run(self.io, self.allocator, argv.items)) |result| {
+			result.deinit(self.allocator);
+		} else |_| {}
+	}
+
+	fn takeWrite(self: *Audio) ?Write {
+		self.write_mutex.lockUncancelable(self.io);
+		defer self.write_mutex.unlock(self.io);
+
+		if (self.write_count == 0) return null;
+
+		const item = self.writes[0];
+
+		var index: usize = 1;
+		while (index < self.write_count) : (index += 1) {
+			self.writes[index - 1] = self.writes[index];
+		}
+
+		self.write_count -= 1;
+
+		return item;
+	}
+
+	fn queueWrite(self: *Audio, item: Write) void {
+		self.write_mutex.lockUncancelable(self.io);
+
+		var index: usize = 0;
+		var replaced = false;
+
+		while (index < self.write_count) : (index += 1) {
+			if (self.writes[index].id == item.id and self.writes[index].kind == item.kind) {
+				self.writes[index] = item;
+				replaced = true;
+			}
+		}
+
+		if (!replaced and self.write_count < self.writes.len) {
+			self.writes[self.write_count] = item;
+			self.write_count += 1;
+		}
+
+		self.write_mutex.unlock(self.io);
+
+		self.write_ready.store(true, .monotonic);
 	}
 
 	fn subscribe(self: *Audio) void {
@@ -173,15 +270,23 @@ pub const Audio = struct {
 		const level = std.fmt.parseFloat(f64, text[0..stop]) catch return false;
 		const muted = std.mem.indexOf(u8, result.out, "[MUTED]") != null;
 
+		const rounded = @round(level * 1000) / 1000;
+		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
+
 		self.mutex.lockUncancelable(self.io);
 		var found = false;
 
 		for (self.nodes.items) |*node| {
 			if (node.id != id) continue;
 
-			node.volume = @round(level * 1000) / 1000;
-			node.mute = muted;
 			found = true;
+
+			if (now < node.pending_until and node.pending >= 0 and @abs(node.pending - rounded) > 0.01) {
+				continue;
+			}
+
+			node.volume = rounded;
+			node.mute = muted;
 		}
 
 		self.mutex.unlock(self.io);
@@ -407,39 +512,37 @@ pub const Audio = struct {
 
 	pub fn setVolume(self: *Audio, id: i64, fraction: f64) void {
 		const level = std.math.clamp(fraction, 0, 1);
+		const until = std.Io.Clock.real.now(self.io).toMilliseconds() + pending_ms;
 
 		self.mutex.lockUncancelable(self.io);
 		for (self.nodes.items) |*node| {
-			if (node.id == id) node.volume = level;
+			if (node.id != id) continue;
+
+			node.volume = level;
+			node.pending = level;
+			node.pending_until = until;
 		}
 		self.mutex.unlock(self.io);
 
 		self.hub.publish();
-
-		const text = std.fmt.allocPrint(self.allocator, "{d}%", .{@as(i64, @intFromFloat(@round(level * 100)))}) catch return;
-		defer self.allocator.free(text);
-
-		const id_text = std.fmt.allocPrint(self.allocator, "{d}", .{id}) catch return;
-		defer self.allocator.free(id_text);
-
-		const result = exec.run(self.io, self.allocator, &.{ "wpctl", "set-volume", id_text, text }) catch return;
-		result.deinit(self.allocator);
+		self.queueWrite(.{ .id = id, .level = level, .kind = .volume });
 	}
 
 	pub fn setMute(self: *Audio, id: i64, mute: bool) void {
+		const until = std.Io.Clock.real.now(self.io).toMilliseconds() + pending_ms;
+
 		self.mutex.lockUncancelable(self.io);
 		for (self.nodes.items) |*node| {
-			if (node.id == id) node.mute = mute;
+			if (node.id != id) continue;
+
+			node.mute = mute;
+			node.pending = -1;
+			node.pending_until = until;
 		}
 		self.mutex.unlock(self.io);
 
 		self.hub.publish();
-
-		const id_text = std.fmt.allocPrint(self.allocator, "{d}", .{id}) catch return;
-		defer self.allocator.free(id_text);
-
-		const result = exec.run(self.io, self.allocator, &.{ "wpctl", "set-mute", id_text, if (mute) "1" else "0" }) catch return;
-		result.deinit(self.allocator);
+		self.queueWrite(.{ .id = id, .mute = mute, .kind = .mute });
 	}
 
 	pub fn setDefault(self: *Audio, id: i64) void {
