@@ -41,6 +41,12 @@ const ModeOut = struct {
 	label: []const u8,
 };
 
+const ResOut = struct {
+	width: i64,
+	height: i64,
+	refreshes: []ModeOut,
+};
+
 const MonitorOut = struct {
 	id: i64,
 	name: []const u8,
@@ -58,6 +64,7 @@ const MonitorOut = struct {
 	disabled: bool,
 	workspace: []const u8,
 	modes: []ModeOut,
+	resolutions: []ResOut,
 };
 
 const Out = struct {
@@ -198,6 +205,34 @@ pub const Screen = struct {
 				});
 			}
 
+			var resolutions: std.ArrayListUnmanaged(ResOut) = .empty;
+
+			for (monitor.modes.items) |mode| {
+				var found: ?*ResOut = null;
+				for (resolutions.items) |*res| {
+					if (res.width == mode.width and res.height == mode.height) {
+						found = res;
+						break;
+					}
+				}
+
+				if (found == null) {
+					try resolutions.append(arena, .{ .width = mode.width, .height = mode.height, .refreshes = &.{} });
+					found = &resolutions.items[resolutions.items.len - 1];
+				}
+
+				var refreshes: std.ArrayListUnmanaged(ModeOut) = .empty;
+				for (found.?.refreshes) |entry| try refreshes.append(arena, entry);
+				try refreshes.append(arena, .{
+					.width = mode.width,
+					.height = mode.height,
+					.refresh = mode.refresh,
+					.label = try std.fmt.allocPrint(arena, "{d} Hz", .{@as(i64, @intFromFloat(@round(mode.refresh)))}),
+				});
+				std.mem.sort(ModeOut, refreshes.items, {}, byRefreshDesc);
+				found.?.refreshes = refreshes.items;
+			}
+
 			try monitors.append(arena, .{
 				.id = monitor.id,
 				.name = monitor.name,
@@ -215,6 +250,7 @@ pub const Screen = struct {
 				.disabled = monitor.disabled,
 				.workspace = monitor.workspace,
 				.modes = modes.items,
+				.resolutions = resolutions.items,
 			});
 		}
 
@@ -222,6 +258,10 @@ pub const Screen = struct {
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
+
+fn byRefreshDesc(_: void, a: ModeOut, b: ModeOut) bool {
+	return a.refresh > b.refresh;
+}
 
 fn workspaceString(workspace: json.Value) []const u8 {
 	const name = json.textAt(workspace, "name");
