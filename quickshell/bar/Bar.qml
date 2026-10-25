@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs.ui
 import qs
 import qs.services
@@ -12,11 +11,8 @@ PanelWindow {
 	required property var modelData
 	screen: modelData
 
-	property var layout: barLayoutEmpty()
-	readonly property var parsed: parseBarLayout(layoutFile.text())
+	readonly property var layout: Yudae.bar && Yudae.bar.left ? Yudae.bar : barLayoutEmpty()
 	property var widgets: ({})
-
-	onParsedChanged: if (bar.parsed !== null) bar.layout = bar.parsed
 
 	readonly property bool atBottom: bar.layout.position === "bottom"
 	readonly property real outerMargin: Config.barFloating ? Config.gapsOut : 0
@@ -251,17 +247,6 @@ PanelWindow {
 		}
 	}
 
-	FileView {
-		id: layoutFile
-
-		path: Quickshell.shellDir + "/" + Config.barLayoutFile
-		blockLoading: true
-		watchChanges: true
-
-		onFileChanged: layoutFile.reload()
-		onLoadFailed: console.warn("topbarlayout: " + layoutFile.path + " is unreadable, keeping the layout the bar has")
-	}
-
 	HyprBorder {
 		id: border
 
@@ -339,33 +324,4 @@ PanelWindow {
 		};
 	}
 
-	function parseBarLayout(text) {
-		let data;
-
-		try {
-			data = JSON.parse(String(text === undefined || text === null ? "" : text));
-		} catch (error) {
-			return null;
-		}
-
-		const bar = data && typeof data === "object" && data.bar && typeof data.bar === "object" ? data.bar : {};
-		const layout = bar.layout && typeof bar.layout === "object" ? bar.layout : {};
-		const slot = function (name) {
-			const list = layout[name];
-
-			if (!Array.isArray(list))
-				return [];
-
-			return list.filter(function (entry) { return entry && typeof entry.id === "string" && entry.id !== ""; });
-		};
-
-		return {
-			position: bar.position === "bottom" ? "bottom" : "top",
-			transparent: bar.transparent === true,
-			centerAnchor: typeof bar.centerAnchor === "string" ? bar.centerAnchor : "",
-			left: slot("left"),
-			center: slot("center"),
-			right: slot("right")
-		};
-	}
 }

@@ -259,6 +259,17 @@ QtObject {
 		root.send({ cmd: { screen: { detect: true } } });
 	}
 
+	readonly property var bar: root.snapshot.bar || ({})
+	readonly property var wallpaper: root.snapshot.wallpaper || ({})
+
+	function wallpaperApply(path, band) {
+		root.send({ cmd: { wallpaper: { apply: { path: path, band: band || 0 } } } });
+	}
+
+	function wallpaperScan() {
+		root.send({ cmd: { wallpaper: { scan: true } } });
+	}
+
 	readonly property var audio: root.snapshot.audio || ({})
 	readonly property var audioNodes: root.audio.nodes || []
 

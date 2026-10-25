@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import Quickshell.Wayland
 import qs
 import qs.services
@@ -13,15 +12,13 @@ PanelWindow {
 	property bool active: true
 	property bool alwaysMapped: false
 
-	property string wallpaperDir: ""
-	property string activeWallpaper: ""
-	property string listing: ""
+	readonly property var state: Yudae.wallpaper
+	readonly property string listing: (root.state.list || []).map(function (entry) { return entry.path; }).join("\n")
+	readonly property string activeWallpaper: root.state.active || ""
 	property var wallpapers: []
 	property int currentIndex: 0
 	property var pointer: null
 
-	readonly property string home: Quickshell.env("HOME")
-	readonly property string settingsPath: Quickshell.shellDir + "/cache/settings.lua"
 	readonly property var held: root.currentIndex >= 0 && root.currentIndex < root.wallpapers.length ? root.wallpapers[root.currentIndex] : null
 	readonly property string shotPath: root.held === null ? "" : root.held.path
 	readonly property int columns: Math.max(1, Config.wallpaperColumns)
@@ -63,7 +60,10 @@ PanelWindow {
 
 	mask: root.shown ? null : emptyRegion
 
-	Component.onCompleted: root.reload()
+	onListingChanged: {
+		root.wallpapers = root.state.list || [];
+		root.selectActive();
+	}
 
 	onWallpapersChanged: {
 		if (root.wallpapers.length > 0)
@@ -81,7 +81,8 @@ PanelWindow {
 	}
 
 	function selectActive() {
-		const index = root.wallpapers.map(function (entry) { return entry.path; }).indexOf(root.activeWallpaper);
+		const active = root.state.active || "";
+		const index = root.wallpapers.map(function (entry) { return entry.path; }).indexOf(active);
 
 		root.currentIndex = index >= 0 ? index : 0;
 		Qt.callLater(root.reveal);
@@ -117,66 +118,18 @@ PanelWindow {
 	}
 
 	function reload() {
-		if (!root.active || settingsFile.running)
-			return;
-
-		settingsFile.running = true;
-	}
-
-	function listWallpapers(dir) {
-		const path = String(dir || "").replace(/^~/, root.home);
-		const prune = ["node_modules", ".git"].map(function (name) { return "-name " + Shell.shellQuote(name); }).join(" -o ");
-		const images = Shell.shellQuote("\\.(jpg|jpeg|png|webp|gif|bmp|avif)$");
-
-		return ["sh", "-c", "find " + Shell.shellQuote(path) + " -maxdepth " + Config.wallpaperDepth
-			+ " \\( " + prune + " \\) -prune -o -type f -print 2>/dev/null | grep -iE " + images + " | sort"];
+		if (root.active)
+			Yudae.wallpaperScan();
 	}
 
 	function applyCurrent() {
 		if (root.held === null)
 			return;
 
-		Quickshell.execDetached(applyCommand(root.held.path, Config, BarInk.bandPx()));
-		root.saveWallpaper(root.held.path);
+		Yudae.wallpaperApply(root.held.path, BarInk.bandPx());
 		root.close();
 	}
 
-	function saveWallpaper(image) {
-		if (root.wallpaperDir === "")
-			return;
-
-		root.activeWallpaper = image;
-		root.writeFile(root.settingsPath, settingsText(image, root.wallpaperDir));
-	}
-
-	function writeFile(path, text) {
-		Quickshell.execDetached(Shell.writeCommand(path, text));
-	}
-
-	Request {
-		id: settingsFile
-
-		command: ["sh", "-c", "cat " + Shell.shellQuote(root.settingsPath) + " 2>/dev/null"]
-
-		onDone: function (text) {
-			root.wallpaperDir = dirFromText(text) || Config.wallpaperDir;
-			root.activeWallpaper = wallpaperFromText(text) || "";
-			wallpapersFile.command = root.listWallpapers(root.wallpaperDir);
-			wallpapersFile.running = true;
-		}
-	}
-
-	Request {
-		id: wallpapersFile
-
-		command: ["sh", "-c", "true"]
-
-		onDone: function (text) {
-			root.listing = text;
-			root.wallpapers = entries(text);
-			root.selectActive();
-		}
-	}
 
 	Item {
 		id: preloader
@@ -290,7 +243,7 @@ PanelWindow {
 						asynchronous: true
 						retainWhileLoading: true
 						sourceSize.width: root.loaderWidth
-						source: root.held === null ? "" : "file://" + root.held.preview
+						source: root.held === null ? "" : "file://" + root.held.path
 					}
 
 					Text {
@@ -371,7 +324,7 @@ PanelWindow {
 								opacity: cell.current ? 1 : Config.wallpaperTileDim
 								sourceSize.width: Math.round(tile.width * Config.wallpaperTileDouble)
 								sourceSize.height: Math.round(tile.height * Config.wallpaperTileDouble)
-								source: "file://" + cell.modelData.preview
+								source: "file://" + cell.modelData.path
 
 								Behavior on opacity {
 									NumberAnimation {
@@ -452,69 +405,5 @@ PanelWindow {
 				}
 			}
 		}
-	}
-
-	readonly property var extensions: [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif"];
-
-	function lastValue(source, key) {
-		const pattern = new RegExp("(?:^|\\n)[ \\t]*(?:local[ \\t]+)?" + key + "[ \\t]*=[ \\t]*[\"']([^\"'\\n]+)[\"']", "g");
-		let match;
-		let found = null;
-
-		while ((match = pattern.exec(source)) !== null)
-			found = match[1];
-
-		return found;
-	}
-
-	function dirFromText(source) {
-		return lastValue(String(source === undefined || source === null ? "" : source), "wallpaperDir");
-	}
-
-	function wallpaperFromText(source) {
-		return lastValue(String(source === undefined || source === null ? "" : source), "wallpaper");
-	}
-
-	function nameOf(path) {
-		const text = String(path === undefined || path === null ? "" : path);
-		const base = text.substring(text.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
-
-		return base.replace(/[-_]+/g, " ").trim() || base;
-	}
-
-	function supported(path) {
-		const text = String(path === undefined || path === null ? "" : path).toLowerCase();
-
-		return extensions.indexOf(text.substring(text.lastIndexOf("."))) >= 0;
-	}
-
-	function entries(text) {
-		return String(text === undefined || text === null ? "" : text)
-			.split("\n")
-			.map(function (line) { return line.trim(); })
-			.filter(function (line) { return line !== "" && supported(line); })
-			.map(function (path) {
-				return { id: "wall:" + path, kind: "wallpaper", name: nameOf(path), keywords: [], path: path, preview: path };
-			});
-	}
-
-	function applyCommand(path, config, band) {
-		const cmd = [
-			"awww", "img",
-			"--transition-type", config.wallpaperTransition,
-			"--transition-duration", String(config.wallpaperTransitionMs / 1000),
-			"--transition-fps", String(config.wallpaperTransitionFps)
-		];
-
-		if (band > 0)
-			cmd.push("--ink-band", String(Math.ceil(band)));
-
-		cmd.push(path);
-		return cmd;
-	}
-
-	function settingsText(image, dir) {
-		return "return {\n    wallpaper = \"" + String(image === undefined || image === null ? "" : image)
-			+ "\",\n    wallpaperDir = \"" + String(dir === undefined || dir === null ? "" : dir) + "\",\n}\n";
 	}
 }

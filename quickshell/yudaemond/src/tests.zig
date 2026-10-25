@@ -20,6 +20,8 @@ test {
 	_ = @import("providers/settings.zig");
 	_ = @import("providers/network.zig");
 	_ = @import("providers/audio.zig");
+	_ = @import("providers/wallpaper.zig");
+	_ = @import("providers/bar.zig");
 	_ = @import("primitives/hypr.zig");
 	_ = @import("primitives/config.zig");
 	_ = @import("cli.zig");

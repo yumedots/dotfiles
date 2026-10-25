@@ -16,6 +16,8 @@ const screen = @import("providers/screen.zig");
 const settings = @import("providers/settings.zig");
 const network = @import("providers/network.zig");
 const audio = @import("providers/audio.zig");
+const wallpaper = @import("providers/wallpaper.zig");
+const bar = @import("providers/bar.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
@@ -41,6 +43,8 @@ pub const Context = struct {
 	settings: *settings.Settings,
 	network: *network.Network,
 	audio: *audio.Audio,
+	wallpaper: *wallpaper.Wallpaper,
+	bar: *bar.Bar,
 	socket_path: []const u8,
 };
 
@@ -108,6 +112,19 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 
 		if (json.flag(net_cmd, "speed")) context.network.speedTest();
 		if (json.flag(net_cmd, "speedCancel")) context.network.speedCancel();
+
+		return;
+	}
+
+	if (json.field(value, "wallpaper")) |wp_cmd| {
+		if (json.field(wp_cmd, "apply")) |target| {
+			const path = json.textAt(target, "path");
+			const band = json.numberAt(target, "band");
+
+			if (path.len > 0) context.wallpaper.apply(path, band);
+		}
+
+		if (json.flag(wp_cmd, "scan")) context.wallpaper.reload();
 
 		return;
 	}
@@ -277,6 +294,12 @@ fn run(io: std.Io) !void {
 	const audio_provider = try audio.Audio.create(allocator, io, hub);
 	try hub.add(audio_provider.provider());
 
+	const wallpaper_provider = try wallpaper.Wallpaper.create(allocator, io, hub);
+	try hub.add(wallpaper_provider.provider());
+
+	const bar_provider = try bar.Bar.create(allocator, io, hub);
+	try hub.add(bar_provider.provider());
+
 	screen_provider.attachSettings(settings_provider);
 
 	const context = try allocator.create(Context);
@@ -297,6 +320,8 @@ fn run(io: std.Io) !void {
 		.settings = settings_provider,
 		.network = network_provider,
 		.audio = audio_provider,
+		.wallpaper = wallpaper_provider,
+		.bar = bar_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -323,6 +348,8 @@ fn run(io: std.Io) !void {
 	try settings_provider.start();
 	try network_provider.start();
 	try audio_provider.start();
+	try wallpaper_provider.start();
+	try bar_provider.start();
 
 	hub.publish();
 

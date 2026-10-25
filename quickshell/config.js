@@ -63,7 +63,6 @@ const barThickness = 1.5;
 const barSweepMs = 1400;
 const sweepFade = 0.45;
 const sweepSteps = 5;
-const barLayoutFile = "topbarlayout.json";
 const clockFormat = "ddd MMM d h:mm AP";
 const scrollbarWidth = 2;
 
@@ -206,11 +205,7 @@ const launcherGroups = [
 ];
 const launcherAppAliases = { foot: ["foot", "footclient", "foot-server"] };
 
-const wallpaperDir = "~/Documents/Wallpaper";
-const wallpaperDepth = 2;
-const wallpaperTransition = "fade";
 const wallpaperTransitionMs = 400;
-const wallpaperTransitionFps = 60;
 const wallpaperEmpty = "No wallpapers found";
 const wallpaperPickerWidth = 1100;
 const wallpaperStageWidth = 680;
