@@ -1,0 +1,16 @@
+[Unit]
+Description=yudaemond shell backend
+Documentation=file:%h/.config/quickshell/yudaemond
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.config/quickshell/yudaemond/zig-out/bin/yudaemond run
+Restart=always
+RestartSec=1
+MemoryMax=96M
+LimitNOFILE=16384
+Nice=5
+
+[Install]
+WantedBy=default.target
