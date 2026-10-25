@@ -13,6 +13,7 @@ const weather = @import("providers/weather.zig");
 const system = @import("providers/system.zig");
 const apps = @import("providers/apps.zig");
 const screen = @import("providers/screen.zig");
+const settings = @import("providers/settings.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
@@ -35,6 +36,7 @@ pub const Context = struct {
 	system: *system.System,
 	apps: *apps.Apps,
 	screen: *screen.Screen,
+	settings: *settings.Settings,
 	socket_path: []const u8,
 };
 
@@ -54,6 +56,28 @@ fn snapshotThunk(ctx: *anyopaque, allocator_: std.mem.Allocator) anyerror![]u8 {
 
 fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	const context: *Context = @ptrCast(@alignCast(ctx));
+
+	if (json.field(value, "settings")) |settings_cmd| {
+		if (json.field(settings_cmd, "font")) |size| {
+			context.settings.setFontSize(json.integer(size));
+		}
+
+		if (json.field(settings_cmd, "output")) |output| {
+			const name = json.textAt(output, "name");
+			const mode = json.field(output, "mode");
+			const scale = json.field(output, "scale");
+
+			if (name.len > 0) {
+				context.settings.setOutput(
+					name,
+					if (mode) |m| json.text(m) else null,
+					if (scale) |s| json.number(s) else null,
+				);
+			}
+		}
+
+		return;
+	}
 
 	if (json.field(value, "system")) |system_cmd| {
 		const governor = json.textAt(system_cmd, "governor");
@@ -170,6 +194,9 @@ fn run(io: std.Io) !void {
 	const screen_provider = try screen.Screen.create(allocator, io, hub);
 	try hub.add(screen_provider.provider());
 
+	const settings_provider = try settings.Settings.create(allocator, io, hub);
+	try hub.add(settings_provider.provider());
+
 	const context = try allocator.create(Context);
 	context.* = .{
 		.allocator = allocator,
@@ -185,6 +212,7 @@ fn run(io: std.Io) !void {
 		.system = system_provider,
 		.apps = apps_provider,
 		.screen = screen_provider,
+		.settings = settings_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -208,6 +236,7 @@ fn run(io: std.Io) !void {
 	try system_provider.start();
 	try apps_provider.start();
 	try screen_provider.start();
+	try settings_provider.start();
 
 	hub.publish();
 

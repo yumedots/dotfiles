@@ -17,6 +17,7 @@ test {
 	_ = @import("providers/system.zig");
 	_ = @import("providers/apps.zig");
 	_ = @import("providers/screen.zig");
+	_ = @import("providers/settings.zig");
 	_ = @import("primitives/hypr.zig");
 	_ = @import("primitives/config.zig");
 	_ = @import("cli.zig");
