@@ -4,6 +4,7 @@ const hypr = @import("../primitives/hypr.zig");
 const json = @import("../primitives/json.zig");
 const sleep = @import("../primitives/sleep.zig");
 const config = @import("../primitives/config.zig");
+const settings = @import("settings.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -69,8 +70,19 @@ const MonitorOut = struct {
 	scales: []f64,
 };
 
+const PanelOut = struct {
+	row: i64,
+	step: i64,
+	rows: []const []const u8,
+	cursor: []const u8,
+	options: []const []const u8,
+	selected: i64,
+	value: []const u8,
+};
+
 const Out = struct {
 	monitors: []MonitorOut,
+	panel: PanelOut,
 	raw: []const u8,
 };
 
@@ -85,6 +97,11 @@ pub const Screen = struct {
 	available: bool = false,
 	scale_min: f64 = 1,
 	scale_max: f64 = 2,
+	row: i64 = 0,
+	step: i64 = 0,
+	fonts: [12]i64 = @splat(0),
+	font_count: usize = 0,
+	settings: ?*settings.Settings = null,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Screen {
 		const self = try allocator.create(Screen);
@@ -106,6 +123,21 @@ pub const Screen = struct {
 
 		self.scale_min = cfg.number("displayScaleMin", 1);
 		self.scale_max = cfg.number("displayScaleMax", 2);
+
+		const fonts = cfg.strings("displayFonts", self.allocator) catch &.{};
+		self.font_count = @min(fonts.len, self.fonts.len);
+
+		for (fonts[0..self.font_count], 0..) |value, i| {
+			self.fonts[i] = std.fmt.parseInt(i64, value, 10) catch 0;
+			self.allocator.free(value);
+		}
+
+		if (self.font_count == 0) {
+			self.fonts[0] = 12;
+			self.fonts[1] = 14;
+			self.fonts[2] = 16;
+			self.font_count = 3;
+		}
 	}
 
 	pub fn provider(self: *Screen) hubmod.Provider {
@@ -197,6 +229,157 @@ pub const Screen = struct {
 		monitor.modes.deinit(self.allocator);
 	}
 
+	pub fn attachSettings(self: *Screen, target: *settings.Settings) void {
+		self.settings = target;
+	}
+
+	pub fn key(self: *Screen, name: []const u8) void {
+		if (std.mem.eql(u8, name, "up")) {
+			self.row = @mod(self.row - 1 + 4, 4);
+			self.step = 0;
+		} else if (std.mem.eql(u8, name, "down")) {
+			self.row = @mod(self.row + 1, 4);
+			self.step = 0;
+		} else if (std.mem.eql(u8, name, "left")) {
+			self.step = @max(0, self.step - 1);
+		} else if (std.mem.eql(u8, name, "right")) {
+			self.step += 1;
+		} else if (std.mem.eql(u8, name, "enter")) {
+			self.apply();
+		}
+
+		self.hub.publish();
+	}
+
+	fn apply(self: *Screen) void {
+		const target = self.settings orelse return;
+		if (self.monitors.items.len == 0) return;
+
+		var monitor = &self.monitors.items[0];
+		for (self.monitors.items) |*entry| {
+			if (entry.focused) {
+				monitor = entry;
+				break;
+			}
+		}
+
+		const kind = @mod(self.row, 4);
+		const step: usize = if (self.step < 0) 0 else @intCast(self.step);
+
+		if (kind == 0) {
+			const steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
+			var options: [8]f64 = undefined;
+			var count: usize = 0;
+
+			for (steps) |value| {
+				if (value < self.scale_min or value > self.scale_max) continue;
+				options[count] = value;
+				count += 1;
+			}
+
+			if (count == 0) return;
+			target.setOutput(monitor.name, null, options[step % count]);
+		} else if (kind == 1) {
+			if (monitor.modes.items.len == 0) return;
+			const mode = monitor.modes.items[step % monitor.modes.items.len];
+
+			const text = std.fmt.allocPrint(self.allocator, "{d}x{d}@{d:.2}Hz", .{ mode.width, mode.height, mode.refresh }) catch return;
+			defer self.allocator.free(text);
+
+			target.setOutput(monitor.name, text, null);
+		} else if (kind == 2) {
+			if (self.font_count == 0) return;
+			target.setFontSize(self.fonts[step % self.font_count]);
+		} else {
+			if (monitor.modes.items.len == 0) return;
+
+			var sizes: [16]struct { width: i64, height: i64 } = undefined;
+			var count: usize = 0;
+
+			for (monitor.modes.items) |mode| {
+				var seen = false;
+				for (sizes[0..count]) |size| {
+					if (size.width == mode.width and size.height == mode.height) {
+						seen = true;
+						break;
+					}
+				}
+				if (seen or count == sizes.len) continue;
+
+				sizes[count] = .{ .width = mode.width, .height = mode.height };
+				count += 1;
+			}
+
+			if (count == 0) return;
+			const picked = sizes[step % count];
+
+			var best = monitor.modes.items[0];
+			for (monitor.modes.items) |mode| {
+				if (mode.width != picked.width or mode.height != picked.height) continue;
+				if (mode.refresh > best.refresh) best = mode;
+			}
+
+			const text = std.fmt.allocPrint(self.allocator, "{d}x{d}@{d:.2}Hz", .{ best.width, best.height, best.refresh }) catch return;
+			defer self.allocator.free(text);
+
+			target.setOutput(monitor.name, text, null);
+		}
+	}
+
+	fn panelLocked(self: *Screen, arena: Allocator) !PanelOut {
+		const names = [_][]const u8{ "scale", "refresh", "font", "resolution" };
+		var options: std.ArrayListUnmanaged([]const u8) = .empty;
+
+		if (self.monitors.items.len == 0) {
+			return .{ .row = 0, .step = 0, .rows = &names, .cursor = names[0], .options = &.{}, .selected = -1, .value = "" };
+		}
+
+		const monitor = self.monitors.items[0];
+		const kind = names[@intCast(@mod(self.row, 4))];
+
+		if (std.mem.eql(u8, kind, "scale")) {
+			const steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
+			for (steps) |value| {
+				if (value < self.scale_min or value > self.scale_max) continue;
+				try options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{value}));
+			}
+		} else if (std.mem.eql(u8, kind, "refresh")) {
+			for (monitor.modes.items) |mode| {
+				try options.append(arena, try std.fmt.allocPrint(arena, "{d} Hz", .{@as(i64, @intFromFloat(@round(mode.refresh)))}));
+			}
+		} else if (std.mem.eql(u8, kind, "font")) {
+			for (self.fonts[0..self.font_count]) |size| try options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{size}));
+		} else {
+			var seen: std.ArrayListUnmanaged(ResSize) = .empty;
+			for (monitor.modes.items) |mode| {
+				var found = false;
+				for (seen.items) |item| {
+					if (item.width == mode.width and item.height == mode.height) {
+						found = true;
+						break;
+					}
+				}
+				if (found) continue;
+
+				try seen.append(arena, .{ .width = mode.width, .height = mode.height });
+				try options.append(arena, try std.fmt.allocPrint(arena, "{d}x{d}", .{ mode.width, mode.height }));
+			}
+		}
+
+		const step: usize = if (options.items.len == 0) 0 else @intCast(@mod(self.step, @as(i64, @intCast(options.items.len))));
+		self.step = @intCast(step);
+
+		return .{
+			.row = self.row,
+			.step = self.step,
+			.rows = &names,
+			.cursor = kind,
+			.options = options.items,
+			.selected = if (options.items.len == 0) -1 else @intCast(step),
+			.value = if (options.items.len == 0) "" else options.items[step],
+		};
+	}
+
 	fn render(self: *Screen, writer: *Writer) !void {
 		self.mutex.lockUncancelable(self.io);
 		defer self.mutex.unlock(self.io);
@@ -277,9 +460,15 @@ pub const Screen = struct {
 			});
 		}
 
-		const out = Out{ .monitors = monitors.items, .raw = self.raw };
+		const panel = try self.panelLocked(arena);
+		const out = Out{ .monitors = monitors.items, .panel = panel, .raw = self.raw };
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
+};
+
+const ResSize = struct {
+	width: i64,
+	height: i64,
 };
 
 fn byRefreshDesc(_: void, a: ModeOut, b: ModeOut) bool {

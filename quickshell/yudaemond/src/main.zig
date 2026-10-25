@@ -57,6 +57,13 @@ fn snapshotThunk(ctx: *anyopaque, allocator_: std.mem.Allocator) anyerror![]u8 {
 fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	const context: *Context = @ptrCast(@alignCast(ctx));
 
+	if (json.field(value, "screen")) |screen_cmd| {
+		const key = json.textAt(screen_cmd, "key");
+		if (key.len > 0) context.screen.key(key);
+
+		return;
+	}
+
 	if (json.field(value, "settings")) |settings_cmd| {
 		if (json.field(settings_cmd, "font")) |size| {
 			context.settings.setFontSize(json.integer(size));
@@ -196,6 +203,8 @@ fn run(io: std.Io) !void {
 
 	const settings_provider = try settings.Settings.create(allocator, io, hub);
 	try hub.add(settings_provider.provider());
+
+	screen_provider.attachSettings(settings_provider);
 
 	const context = try allocator.create(Context);
 	context.* = .{
