@@ -69,12 +69,14 @@ const SlotOut = struct {
 
 const Suggest = struct {
 	label: []u8,
+	name: []u8,
 	lat: f64,
 	lon: f64,
 };
 
 const SuggestOut = struct {
 	label: []const u8,
+	name: []const u8,
 	lat: f64,
 	lon: f64,
 };
@@ -501,13 +503,17 @@ pub const Weather = struct {
 
 			next.append(self.allocator, .{
 				.label = label,
+				.name = self.allocator.dupe(u8, name) catch continue,
 				.lat = json.numberAt(entry, "latitude"),
 				.lon = json.numberAt(entry, "longitude"),
 			}) catch continue;
 		}
 
 		self.mutex.lockUncancelable(self.io);
-		for (self.suggestions.items) |item| self.allocator.free(item.label);
+		for (self.suggestions.items) |item| {
+			self.allocator.free(item.label);
+			self.allocator.free(item.name);
+		}
 		self.suggestions.deinit(self.allocator);
 		self.suggestions = next;
 		self.mutex.unlock(self.io);
@@ -559,7 +565,10 @@ pub const Weather = struct {
 		self.slots[at].failed = false;
 		self.mutex.unlock(self.io);
 
-		for (self.suggestions.items) |item| self.allocator.free(item.label);
+		for (self.suggestions.items) |item| {
+			self.allocator.free(item.label);
+			self.allocator.free(item.name);
+		}
 		self.suggestions.deinit(self.allocator);
 		self.suggestions = .empty;
 
@@ -594,7 +603,10 @@ pub const Weather = struct {
 
 	pub fn dismissSuggestions(self: *Weather) void {
 		self.mutex.lockUncancelable(self.io);
-		for (self.suggestions.items) |item| self.allocator.free(item.label);
+		for (self.suggestions.items) |item| {
+			self.allocator.free(item.label);
+			self.allocator.free(item.name);
+		}
 		self.suggestions.deinit(self.allocator);
 		self.suggestions = .empty;
 		self.mutex.unlock(self.io);
@@ -761,7 +773,7 @@ pub const Weather = struct {
 
 		var suggestions: std.ArrayListUnmanaged(SuggestOut) = .empty;
 		for (self.suggestions.items) |item| {
-			try suggestions.append(arena, .{ .label = item.label, .lat = item.lat, .lon = item.lon });
+			try suggestions.append(arena, .{ .label = item.label, .name = item.name, .lat = item.lat, .lon = item.lon });
 		}
 
 		const out = Out{
