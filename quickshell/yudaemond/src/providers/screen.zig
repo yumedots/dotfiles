@@ -5,6 +5,7 @@ const json = @import("../primitives/json.zig");
 const sleep = @import("../primitives/sleep.zig");
 const config = @import("../primitives/config.zig");
 const settings = @import("settings.zig");
+const exec = @import("../primitives/exec.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -391,6 +392,7 @@ pub const Screen = struct {
 		const step: usize = if (self.step < 0) 0 else @intCast(self.step);
 
 		if (kind == 0) {
+			defer self.reloadHyprland();
 			const steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
 			var options: [8]f64 = undefined;
 			var count: usize = 0;
@@ -402,8 +404,10 @@ pub const Screen = struct {
 			}
 
 			if (count == 0) return;
-			target.setOutput(monitor.name, null, options[step % count]);
+			const chosen = options[step % count];
+			target.setOutput(monitor.name, null, if (@abs(chosen - 1.33) < 0.001) 1.333333 else chosen);
 		} else if (kind == 1) {
+			defer self.reloadHyprland();
 			var modes: std.ArrayListUnmanaged(Mode) = .empty;
 			defer modes.deinit(self.allocator);
 
@@ -461,6 +465,11 @@ pub const Screen = struct {
 
 			target.setOutput(monitor.name, text, null);
 		}
+	}
+
+	fn reloadHyprland(self: *Screen) void {
+		const result = exec.run(self.io, self.allocator, &.{ "hyprctl", "reload" }) catch return;
+		result.deinit(self.allocator);
 	}
 
 	fn panelLocked(self: *Screen, arena: Allocator) !PanelOut {

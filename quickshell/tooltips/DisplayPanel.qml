@@ -93,7 +93,7 @@ Item {
 			cursor: group.cursor
 			ink: root.ink
 
-			onPick: Yudae.screenPick(group.kind, value)
+			onPick: function (value) { Yudae.screenPick(group.kind, value) }
 		}
 	}
 
@@ -186,7 +186,7 @@ Item {
 
 				Glyph {
 					text: Config.displayIconRefresh
-					onActivate: Yudae.screenDetect()
+					onActivate: function () { Yudae.screenDetect() }
 				}
 			}
 
@@ -267,7 +267,7 @@ Item {
 					label: modelData.label
 					hint: modelData.maxRefresh > 0 ? modelData.maxRefresh + " Hz" : ""
 					lit: root.resolutionCursor === index
-					onPick: Yudae.screenPick("resolution", modelData.label)
+					onPick: function () { Yudae.screenPick("resolution", modelData.label) }
 				}
 			}
 		}
