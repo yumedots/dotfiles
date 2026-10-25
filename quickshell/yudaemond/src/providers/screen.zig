@@ -62,6 +62,7 @@ const MonitorOut = struct {
 
 const Out = struct {
 	monitors: []MonitorOut,
+	raw: []const u8,
 };
 
 pub const Screen = struct {
@@ -71,6 +72,7 @@ pub const Screen = struct {
 	mutex: std.Io.Mutex = .init,
 	scratch: std.heap.ArenaAllocator,
 	monitors: std.ArrayListUnmanaged(Monitor) = .empty,
+	raw: []u8 = &.{},
 	available: bool = false,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Screen {
@@ -155,6 +157,8 @@ pub const Screen = struct {
 
 		self.mutex.lockUncancelable(self.io);
 		self.available = true;
+		if (self.raw.len > 0) self.allocator.free(self.raw);
+		self.raw = self.allocator.dupe(u8, body) catch &.{};
 		for (self.monitors.items) |*monitor| self.freeMonitor(monitor);
 		self.monitors.deinit(self.allocator);
 		self.monitors = next;
@@ -214,7 +218,7 @@ pub const Screen = struct {
 			});
 		}
 
-		const out = Out{ .monitors = monitors.items };
+		const out = Out{ .monitors = monitors.items, .raw = self.raw };
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };

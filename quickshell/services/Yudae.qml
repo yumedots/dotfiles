@@ -211,6 +211,10 @@ QtObject {
 
 	readonly property var weatherState: root.snapshot.weather || ({})
 
+	readonly property var screenState: root.snapshot.screen || ({})
+	readonly property var screenMonitors: root.screenState.monitors || []
+	readonly property string screenRaw: root.screenState.raw || ""
+
 	readonly property var appsEntries: (root.snapshot.apps && root.snapshot.apps.entries) || ({})
 	readonly property var systemState: root.snapshot.system || ({})
 	readonly property var system: root.systemState
