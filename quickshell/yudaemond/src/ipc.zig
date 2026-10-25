@@ -131,6 +131,13 @@ pub const Ipc = struct {
 		if (json.flag(root, "refresh")) {
 			if (self.hooks.refresh) |hook| hook(self.hooks.ctx);
 		}
+
+		if (json.flag(root, "sync")) {
+			const body = self.hooks.snapshot(self.hooks.ctx, self.allocator) catch return;
+			defer self.allocator.free(body);
+
+			sendLine(self.io, client, body);
+		}
 	}
 
 	fn markDead(self: *Ipc, client: *Client) void {

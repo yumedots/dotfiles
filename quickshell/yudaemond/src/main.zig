@@ -75,6 +75,13 @@ pub fn main() !void {
 	try run(io);
 }
 
+fn beat(hub: *hubmod.Hub) void {
+	while (true) {
+		sleep.ms(15_000);
+		hub.publish();
+	}
+}
+
 fn run(io: std.Io) !void {
 	const hub = try allocator.create(hubmod.Hub);
 	hub.* = .{ .allocator = allocator, .io = io };
@@ -128,6 +135,9 @@ fn run(io: std.Io) !void {
 	try github_provider.start();
 
 	hub.publish();
+
+	const heartbeat = try std.Thread.spawn(.{}, beat, .{hub});
+	heartbeat.detach();
 
 	sleep.forever();
 }
