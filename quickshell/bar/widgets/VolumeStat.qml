@@ -1,6 +1,7 @@
 import QtQuick
 import qs.ui
 import qs
+import qs.services
 import "../../tooltips"
 
 BarStat {
@@ -8,20 +9,28 @@ BarStat {
 
 	inkId: "volume"
 
-	readonly property var mix: Yudae.audio
-	readonly property var sink: root.nodeOf(root.mix.sink)
-	readonly property real volume: root.sink ? root.sink.volume : 0
-	readonly property bool isMuted: root.sink ? root.sink.mute === true : false
-
-	function nodeOf(id) {
-		const list = root.mix.nodes || [];
+	readonly property real volume: {
+		const audio = Yudae.audio;
+		const list = audio.nodes || [];
 
 		for (let i = 0; i < list.length; i++) {
-			if (list[i].id === id)
-				return list[i];
+			if (list[i].id === audio.sink)
+				return list[i].volume;
 		}
 
-		return null;
+		return 0;
+	}
+
+	readonly property bool isMuted: {
+		const audio = Yudae.audio;
+		const list = audio.nodes || [];
+
+		for (let i = 0; i < list.length; i++) {
+			if (list[i].id === audio.sink)
+				return list[i].mute === true;
+		}
+
+		return false;
 	}
 
 	onVolumeChanged: root.pingVolume()
