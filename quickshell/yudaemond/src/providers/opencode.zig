@@ -267,6 +267,14 @@ pub const Opencode = struct {
 		const parsed = json.parse(arena.allocator(), body) catch return;
 		const root = parsed.value;
 		const kind = json.textAt(root, "type");
+
+		if (std.mem.eql(u8, kind, "server.connected")) {
+			self.refreshSessions();
+			self.refreshRunning();
+			self.refreshQuestions();
+			return;
+		}
+
 		const data = json.field(root, "data") orelse json.field(root, "properties") orelse return;
 
 		var id = json.textAt(data, "sessionID");
@@ -492,18 +500,24 @@ pub const Opencode = struct {
 		var next: std.ArrayListUnmanaged([]u8) = .empty;
 		var changed = false;
 
+		self.mutex.lockUncancelable(self.io);
+
 		var it = entries.iterator();
 		while (it.next()) |entry| {
 			const id = entry.key_ptr.*;
-			if (self.hasRunning(id)) continue;
+			if (inList(self.running.items, id)) continue;
 
 			const copy = self.allocator.dupe(u8, id) catch continue;
-			next.append(self.allocator, copy) catch continue;
+			next.append(self.allocator, copy) catch {
+				self.allocator.free(copy);
+				continue;
+			};
 			changed = true;
 		}
 
-		self.mutex.lockUncancelable(self.io);
 		if (self.running.items.len != next.items.len) changed = true;
+
+		if (self.clearStaleBusyLocked(next.items)) changed = true;
 
 		for (self.running.items) |old| self.allocator.free(old);
 		self.running.deinit(self.allocator);
@@ -516,15 +530,27 @@ pub const Opencode = struct {
 		}
 	}
 
+	fn clearStaleBusyLocked(self: *Opencode, running: []const []u8) bool {
+		var changed = false;
+
+		var it = self.sessions.iterator();
+		while (it.next()) |entry| {
+			const session = entry.value_ptr.*;
+			if (!isBusy(session.status)) continue;
+			if (inList(running, session.id)) continue;
+
+			setStr(self.allocator, &session.status, "idle") catch {};
+			changed = true;
+		}
+
+		return changed;
+	}
+
 	fn hasRunning(self: *Opencode, id: []const u8) bool {
 		self.mutex.lockUncancelable(self.io);
 		defer self.mutex.unlock(self.io);
 
-		for (self.running.items) |item| {
-			if (std.mem.eql(u8, item, id)) return true;
-		}
-
-		return false;
+		return inList(self.running.items, id);
 	}
 
 	fn refreshQuestions(self: *Opencode) void {
@@ -702,18 +728,12 @@ pub const Opencode = struct {
 
 			if (session.blocked.len > 0) return "blocked";
 			if (session.failure.len > 0) failure = true;
-			if (std.mem.eql(u8, session.status, "busy") or std.mem.eql(u8, session.status, "retry")) working = true;
+			if (isBusy(session.status)) working = true;
 		}
 
 		if (failure) return "error";
 
-		for (self.running.items) |id| {
-			if (self.sessions.get(id)) |session| {
-				if (session.status.len > 0) continue;
-			}
-
-			working = true;
-		}
+		if (self.running.items.len > 0) working = true;
 
 		return if (working) "working" else "idle";
 	}
@@ -794,6 +814,18 @@ pub const Opencode = struct {
 	}
 };
 
+fn isBusy(status: []const u8) bool {
+	return std.mem.eql(u8, status, "busy") or std.mem.eql(u8, status, "retry");
+}
+
+fn inList(items: []const []u8, id: []const u8) bool {
+	for (items) |item| {
+		if (std.mem.eql(u8, item, id)) return true;
+	}
+
+	return false;
+}
+
 fn permissionText(data: json.Value) []const u8 {
 	const message = json.textAt(data, "message");
 	if (message.len > 0) return message;
@@ -816,4 +848,45 @@ test "setStr replaces and frees" {
 
 	try setStr(std.testing.allocator, &slot, "new");
 	try std.testing.expectEqualStrings("new", slot);
+}
+
+test "a running session wins over a stale status" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	var client = http.Client.init(allocator, io);
+	const self = try Opencode.create(allocator, io, &hub, &client);
+
+	try self.running.append(allocator, try allocator.dupe(u8, "ses_a"));
+	const session = try self.sessionFor("ses_a");
+	try setStr(allocator, &session.status, "idle");
+
+	try std.testing.expectEqualStrings("working", self.faceState());
+}
+
+test "the active list clears a stale busy status" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	var client = http.Client.init(allocator, io);
+	const self = try Opencode.create(allocator, io, &hub, &client);
+
+	const stale = try self.sessionFor("ses_stale");
+	try setStr(allocator, &stale.status, "busy");
+	const live = try self.sessionFor("ses_live");
+	try setStr(allocator, &live.status, "busy");
+
+	const running = [_][]u8{@constCast("ses_live")};
+	try std.testing.expect(self.clearStaleBusyLocked(&running));
+	try std.testing.expectEqualStrings("idle", stale.status);
+	try std.testing.expectEqualStrings("busy", live.status);
+	try std.testing.expectEqualStrings("working", self.faceState());
 }

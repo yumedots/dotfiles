@@ -292,6 +292,7 @@ test "lua display state parses" {
 			std.testing.allocator.free(entry.mode);
 		}
 		self.outputs.deinit(std.testing.allocator);
+		std.testing.allocator.free(self.fallback_mode);
 		std.testing.allocator.destroy(self);
 	}
 

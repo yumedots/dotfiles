@@ -177,12 +177,14 @@ pub const Apps = struct {
 
 		const dot = std.mem.lastIndexOfScalar(u8, file_name, '.') orelse file_name.len;
 
+		const command = self.commandOf(exec) catch return null;
+
 		return .{
 			.id = self.allocator.dupe(u8, file_name[0..dot]) catch return null,
 			.name = self.allocator.dupe(u8, name) catch return null,
 			.icon = self.allocator.dupe(u8, icon) catch return null,
-			.exec = self.allocator.dupe(u8, exec) catch return null,
-			.command = self.commandOf(exec) catch return null,
+			.exec = self.allocator.dupe(u8, command) catch return null,
+			.command = command,
 			.terminal = terminal,
 			.wmclass = self.allocator.dupe(u8, wmclass) catch &.{},
 			.comment = self.allocator.dupe(u8, comment) catch &.{},
