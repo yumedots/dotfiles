@@ -141,7 +141,6 @@ pub const Opencode = struct {
 
 	pub fn dismiss(self: *Opencode, id: []const u8) void {
 		self.mutex.lockUncancelable(self.io);
-		defer self.mutex.unlock(self.io);
 
 		var index: usize = 0;
 		while (index < self.done.items.len) {
@@ -155,6 +154,7 @@ pub const Opencode = struct {
 			index += 1;
 		}
 
+		self.mutex.unlock(self.io);
 		self.hub.publish();
 	}
 
@@ -351,13 +351,24 @@ pub const Opencode = struct {
 
 	fn finish(self: *Opencode, id: []const u8) void {
 		self.mutex.lockUncancelable(self.io);
-		defer self.mutex.unlock(self.io);
 
 		const title = self.titleLocked(id);
-		const copy_id = self.allocator.dupe(u8, id) catch return;
-		const copy_title = self.allocator.dupe(u8, if (title.len == 0) "agent" else title) catch return;
+		const copy_id = self.allocator.dupe(u8, id) catch {
+			self.mutex.unlock(self.io);
+			return;
+		};
+		const copy_title = self.allocator.dupe(u8, if (title.len == 0) "agent" else title) catch {
+			self.allocator.free(copy_id);
+			self.mutex.unlock(self.io);
+			return;
+		};
 
-		self.done.insert(self.allocator, 0, .{ .id = copy_id, .title = copy_title, .at = fmt.nowMs(self.io) }) catch return;
+		self.done.insert(self.allocator, 0, .{ .id = copy_id, .title = copy_title, .at = fmt.nowMs(self.io) }) catch {
+			self.allocator.free(copy_id);
+			self.allocator.free(copy_title);
+			self.mutex.unlock(self.io);
+			return;
+		};
 
 		while (self.done.items.len > 20) {
 			const entry = self.done.pop().?;
@@ -365,6 +376,7 @@ pub const Opencode = struct {
 			self.allocator.free(entry.title);
 		}
 
+		self.mutex.unlock(self.io);
 		self.hub.publish();
 	}
 

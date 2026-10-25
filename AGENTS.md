@@ -77,6 +77,7 @@ One daemon owns every non-UI job. QML draws, it does not think.
 - Files over 1000 lines get split by function. A file does one job.
 - Tests only where logic breaks silently (parsers, state merge, protocol framing). No test for a getter. No test frameworks, no fixtures.
 - No comments in code.
+- Never call `hub.publish()` while holding a provider mutex: the snapshot renders that provider and the lock is not reentrant. Unlock, then publish.
 
 Performance gates, measured not guessed:
 
