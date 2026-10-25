@@ -10,6 +10,17 @@ MIN_FREE_MB="${HYPR_TEST_MIN_FREE_MB:-1024}"
 MAX_SHOTS="${HYPR_TEST_MAX_SHOTS:-40}"
 OWNER="${HYPR_TEST_OWNER:-$USER}"
 
+# A nested Hyprland needs the parent display, or it falls back to the DRM
+# backend and dies when the GPU is already in use.
+if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+	for socket in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/wayland-[0-9]*; do
+		[ -S "$socket" ] || continue
+		WAYLAND_DISPLAY=$(basename "$socket")
+		export WAYLAND_DISPLAY
+		break
+	done
+fi
+
 usage() {
 	echo "usage: hypr-test [--id <id>] start|shot|run <cmd> [args...]|stop|list|gc [--all]" >&2
 	echo "  or set HYPR_TEST_ID=<id>; with neither, a single live instance is used" >&2
