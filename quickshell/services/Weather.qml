@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import qs
+import qs.ui
 
 // The weather, read from yudaemond. The daemon watches the places, geocodes
 // them, fetches open-meteo and the nearest station; this only names the code
