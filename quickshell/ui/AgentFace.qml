@@ -148,14 +148,14 @@ Item {
 		// instead of a scratch.
 		const squish = Math.max(0.3, Math.min(1, root.openness * root.blink));
 
-		return Agent.clipSockets(root.body, [
+		return clipSockets(root.body, [
 			{ x: root.bodyWidth / 2 - root.eyeSpacing, y: root.bodyHeight / 2 - root.eyeLift, radiusX: root.eyeWidth, radiusY: root.eyeRadius * squish },
 			{ x: root.bodyWidth / 2 + root.eyeSpacing, y: root.bodyHeight / 2 - root.eyeLift, radiusX: root.eyeWidth, radiusY: root.eyeRadius * squish },
 		], root.eyeMargin);
 	}
 
 	readonly property var sockets: {
-		const slide = Agent.clampShift(root.body, root.fittedSockets, root.eyeX * root.eyeTravel, root.eyeY * root.eyeTravel, root.eyeMargin);
+		const slide = clampShift(root.body, root.fittedSockets, root.eyeX * root.eyeTravel, root.eyeY * root.eyeTravel, root.eyeMargin);
 
 		return root.fittedSockets.map(function (socket) {
 			return { x: socket.x + slide.x, y: socket.y + slide.y, radiusX: socket.radiusX, radiusY: socket.radiusY };
@@ -169,7 +169,7 @@ Item {
 	readonly property var eyePaths: root.sockets.map(function (socket) {
 		const radius = Math.min(socket.radiusX, socket.radiusY);
 
-		return Agent.roundedRectPoints(socket.x, socket.y, socket.radiusX, socket.radiusY, radius, 40);
+		return roundedRectPoints(socket.x, socket.y, socket.radiusX, socket.radiusY, radius, 40);
 	})
 
 	onStateChanged: {
@@ -250,7 +250,7 @@ Item {
 	// so they stay level while the spikes turn.
 	readonly property var body: {
 		const spec = root.shapes[root.fromState] || root.shapes.idle;
-		const from = Agent.shapePoints({
+		const from = shapePoints({
 			width: root.bodyWidth,
 			height: root.bodyHeight,
 			exponent: spec.exponent,
@@ -259,7 +259,7 @@ Item {
 			samples: root.small ? 48 : 160,
 		});
 
-		const to = Agent.shapePoints({
+		const to = shapePoints({
 			width: root.bodyWidth,
 			height: root.bodyHeight,
 			exponent: root.currentShape.exponent,
@@ -268,7 +268,7 @@ Item {
 			samples: root.small ? 48 : 160,
 		});
 
-		return Agent.blendPoints(from, to, root.morph);
+		return blendPoints(from, to, root.morph);
 	}
 
 	// The outline of the body, with the spikes turned on it. The eyes are
@@ -278,7 +278,7 @@ Item {
 		if (!root.live)
 			return root.body;
 
-		return Agent.rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.spin);
+		return rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.spin);
 	}
 
 	// The icon is drawn in body-local space, so it moves with the body.
@@ -319,4 +319,187 @@ Item {
 			subpaths: root.eyePaths
 		}
 	}
+
+const TWO_PI = Math.PI * 2;
+
+function superellipseRadius(angle, exponent) {
+	const cos = Math.abs(Math.cos(angle));
+	const sin = Math.abs(Math.sin(angle));
+
+	return Math.pow(Math.pow(cos, exponent) + Math.pow(sin, exponent), -1 / exponent);
+}
+
+function shapePoints(spec) {
+	const width = Math.max(1, spec.width || 1);
+	const height = Math.max(1, spec.height || 1);
+	const exponent = spec.exponent || 2;
+	const lobes = Math.max(0.5, spec.lobes || 1);
+	const scallop = Math.min(0.9, Math.max(0, spec.scallop === undefined ? 0 : spec.scallop));
+	const depth = Math.min(0.9, scallop * (spec.morph === undefined ? 1 : spec.morph));
+	const samples = Math.max(24, Math.round(spec.samples || 128));
+	const cx = width / 2;
+	const cy = height / 2;
+	const points = [];
+
+	for (let i = 0; i < samples; i++) {
+		const fraction = i / samples;
+		const angle = fraction * TWO_PI - Math.PI / 2;
+		const radius = superellipseRadius(angle, exponent);
+		const phase = ((fraction * lobes) + 0.5) % 1;
+		const wave = 1 - depth * (0.5 - 0.5 * Math.cos(TWO_PI * phase));
+
+		points.push(cx + radius * Math.cos(angle) * cx * wave, cy + radius * Math.sin(angle) * cy * wave);
+	}
+
+	return points;
+}
+
+function blendPoints(from, to, progress) {
+	const amount = Math.max(0, Math.min(1, progress));
+	const points = new Array(from.length);
+
+	for (let i = 0; i < from.length; i++)
+		points[i] = from[i] + (to[i] - from[i]) * amount;
+
+	return points;
+}
+
+function rotatePoints(points, cx, cy, angle) {
+	if (!angle)
+		return points;
+
+	const cos = Math.cos(angle);
+	const sin = Math.sin(angle);
+	const out = new Array(points.length);
+
+	for (let i = 0; i < points.length; i += 2) {
+		const x = points[i] - cx;
+		const y = points[i + 1] - cy;
+
+		out[i] = cx + x * cos - y * sin;
+		out[i + 1] = cy + x * sin + y * cos;
+	}
+
+	return out;
+}
+
+function ellipsePoints(cx, cy, radiusX, radiusY, samples) {
+	const count = Math.max(12, Math.round(samples || 24));
+	const points = [];
+
+	for (let i = 0; i < count; i++) {
+		const angle = (i / count) * TWO_PI;
+		points.push(cx + Math.cos(angle) * radiusX, cy + Math.sin(angle) * radiusY);
+	}
+
+	return points;
+}
+
+function roundedRectPoints(cx, cy, halfWidth, halfHeight, radius, samples) {
+	const count = Math.max(2, Math.round((samples || 40) / 4));
+	const r = Math.min(radius, Math.min(halfWidth, halfHeight));
+	const points = [];
+	const corners = [
+		[cx + halfWidth - r, cy - halfHeight + r, -Math.PI / 2],
+		[cx + halfWidth - r, cy + halfHeight - r, 0],
+		[cx - halfWidth + r, cy + halfHeight - r, Math.PI / 2],
+		[cx - halfWidth + r, cy - halfHeight + r, Math.PI],
+	];
+
+	for (let i = 0; i < corners.length; i++) {
+		const corner = corners[i];
+
+		for (let j = 0; j <= count; j++) {
+			const angle = corner[2] + (j / count) * (Math.PI / 2);
+
+			points.push(corner[0] + Math.cos(angle) * r, corner[1] + Math.sin(angle) * r);
+		}
+	}
+
+	return points;
+}
+
+function clipSockets(outline, sockets, margin) {
+	const inside = function (socket, factor) {
+		return socketInside(outline, socket.x, socket.y, socket.radiusX * factor, socket.radiusY * factor, 24, margin || 0);
+	};
+
+	let low = 0;
+	let high = 1;
+
+	for (let i = 0; i < 12; i++) {
+		const mid = (low + high) / 2;
+
+		if (sockets.every(function (socket) { return inside(socket, mid); }))
+			low = mid;
+		else
+			high = mid;
+	}
+
+	return sockets.map(function (socket) {
+		return {
+			x: socket.x,
+			y: socket.y,
+			radiusX: socket.radiusX * low,
+			radiusY: socket.radiusY * low
+		};
+	});
+}
+
+function socketInside(outline, cx, cy, radiusX, radiusY, samples, margin) {
+	const count = outline.length / 2;
+	const gap = margin || 0;
+	const edge = roundedRectPoints(cx, cy, radiusX - gap, radiusY - gap, Math.min(radiusX, radiusY) - gap, samples || 24);
+
+	for (let i = 0; i < edge.length; i += 2) {
+		const x = edge[i];
+		const y = edge[i + 1];
+
+		let insidePoint = false;
+
+		for (let j = 0, k = count - 1; j < count; k = j++) {
+			const xi = outline[2 * j];
+			const yi = outline[2 * j + 1];
+			const xk = outline[2 * k];
+			const yk = outline[2 * k + 1];
+
+			if ((yi > y) !== (yk > y) && x < (xk - xi) * (y - yi) / (yk - yi) + xi)
+				insidePoint = !insidePoint;
+		}
+
+		if (!insidePoint)
+			return false;
+	}
+
+	return true;
+}
+
+function clampShift(outline, sockets, dx, dy, margin) {
+	const fits = function (t) {
+		for (let i = 0; i < sockets.length; i++) {
+			const socket = sockets[i];
+
+			if (!socketInside(outline, socket.x + dx * t, socket.y + dy * t, socket.radiusX, socket.radiusY, 8, margin || 0))
+				return false;
+		}
+
+		return true;
+	};
+
+	let low = 0;
+	let high = 1;
+
+	for (let i = 0; i < 8; i++) {
+		const mid = (low + high) / 2;
+
+		if (fits(mid))
+			low = mid;
+		else
+			high = mid;
+	}
+
+	return { x: dx * low, y: dy * low };
+}
+
+
 }
