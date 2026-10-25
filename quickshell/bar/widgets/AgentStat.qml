@@ -38,7 +38,7 @@ BarStat {
 			height: parent.height
 
 			size: Math.min(parent.width, parent.height)
-			state: Yudae.connected ? Yudae.state : "idle"
+			state: Yudae.state
 
 			// The bar icon keeps its eyes still. The panel face tracks the cursor.
 			followCursor: false
