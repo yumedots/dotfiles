@@ -1,7 +1,6 @@
 pragma Singleton
 
 import QtQuick
-import qs
 
 QtObject {
 	function mixColor(c1, c2, t) {

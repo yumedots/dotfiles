@@ -13,7 +13,7 @@ BarStat {
 	readonly property var cores: root.source.cores || []
 
 	pct: root.source.pct || 0
-	barColor: Color.mixColor(Config.cpuBase, Config.red, root.pct / 100)
+	barColor: Ink.mixColor(Config.cpuBase, Config.red, root.pct / 100)
 	icon: Config.iconCpu
 	value: Math.round(root.pct) + "%"
 

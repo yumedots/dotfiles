@@ -13,7 +13,7 @@ BarStat {
 	readonly property real usedGB: root.memory ? root.memory.used / 1024 / 1024 : 0
 
 	pct: root.memory ? root.memory.pct : 0
-	barColor: Color.dangerColor(Config.memoryBase, Config.memoryWarn, Config.memoryDanger, Config.memoryWarnAt, Config.memoryDangerAt, root.pct)
+	barColor: Ink.dangerColor(Config.memoryBase, Config.memoryWarn, Config.memoryDanger, Config.memoryWarnAt, Config.memoryDangerAt, root.pct)
 	icon: Config.iconMemory
 	value: root.usedGB.toFixed(1) + "G"
 

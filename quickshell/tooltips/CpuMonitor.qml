@@ -28,11 +28,11 @@ ProcessPanel {
 	rowColor: (value) => root.colorFor(value)
 
 	function colorFor(load) {
-		return Color.mixColors(root.accentInk, root.peakInk, load / 100);
+		return Ink.mixColors(root.accentInk, root.peakInk, load / 100);
 	}
 
 	function blockColor(load) {
-		return Color.mixColors(Config.cpuIdle, root.accentInk, load / 100);
+		return Ink.mixColors(Config.cpuIdle, root.accentInk, load / 100);
 	}
 
 	FileView {

@@ -27,9 +27,3 @@ DayDial 1.0 DayDial.qml
 DynamicIcon 1.0 DynamicIcon.qml
 singleton Handoff 1.0 Handoff.qml
 singleton Input 1.0 Input.qml
-singleton Color 1.0 Color.qml
-singleton Util 1.0 Util.qml
-singleton Network 1.0 Network.qml
-singleton Display 1.0 Display.qml
-singleton System 1.0 System.qml
-singleton Shell 1.0 Shell.qml

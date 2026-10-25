@@ -27,7 +27,7 @@ Item {
 		if (!value || !value.level)
 			return Config.contribEmpty;
 
-		return Color.mixColors(Config.contribEmpty, root.accentInk, Math.min(4, value.level) / 4);
+		return Ink.mixColors(Config.contribEmpty, root.accentInk, Math.min(4, value.level) / 4);
 	}
 
 	function statusLine() {

@@ -24,7 +24,7 @@ Item {
 		: (root.hyprBorder.width !== null ? root.hyprBorder.width : Config.borderFallbackWidth)
 	readonly property real themeWidth: Util.snap(root.wantedWidth, root.scale)
 	readonly property real themeAngle: root.hyprBorder.angle
-	readonly property var edges: Color.gradientEdges(root.themeColors, root.themeAngle, frame.width, frame.height, root.themeWidth)
+	readonly property var edges: Ink.gradientEdges(root.themeColors, root.themeAngle, frame.width, frame.height, root.themeWidth)
 	readonly property real inset: root.themeWidth + root.padding
 
 	readonly property alias contentWidth: body.childrenRect.width
@@ -54,7 +54,7 @@ Item {
 		}
 
 		onDone: function (text) {
-			root.hyprBorder = Color.parseHyprBorder(text);
+			root.hyprBorder = Ink.parseHyprBorder(text);
 		}
 	}
 

@@ -58,7 +58,7 @@ function figureShape(version) {
 	return figureShapes[Math.round(version) - 1] || figureShapes[0];
 }
 
-function outline(width, height, exponent, steps) {
+function baseOutline(width, height, exponent, steps) {
 	const cx = width / 2;
 	const cy = height / 2;
 	const points = [];
@@ -87,7 +87,7 @@ function figurePoints(spec) {
 	const cx = width / 2;
 	const cy = height / 2;
 	const depth = Math.min(0.9, scallop * morph);
-	const base = outline(width, height, exponent, coarseSteps);
+	const base = baseOutline(width, height, exponent, coarseSteps);
 	const lengths = [0];
 
 	for (let i = 0; i < coarseSteps; i++) {

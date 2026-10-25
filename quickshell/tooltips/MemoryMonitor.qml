@@ -26,7 +26,7 @@ ProcessPanel {
 	rowColor: (value) => root.dangerColorFor(root.shareOf(value))
 
 	function dangerColorFor(load) {
-		return Color.dangerColor(root.accentInk, root.warnInk, root.dangerInk, Config.memoryWarnAt, Config.memoryDangerAt, load);
+		return Ink.dangerColor(root.accentInk, root.warnInk, root.dangerInk, Config.memoryWarnAt, Config.memoryDangerAt, load);
 	}
 
 	function usage() {
