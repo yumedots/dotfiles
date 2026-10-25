@@ -262,8 +262,12 @@ QtObject {
 		onConnectedChanged: {
 			root.connected = root.socket.connected;
 
-			if (root.socket.connected and root.gazeWanted)
-				root.send({ gaze: true });
+			if (root.socket.connected) {
+				root.send({ sync: true });
+
+				if (root.gazeWanted)
+					root.send({ gaze: true });
+			}
 		}
 	}
 
