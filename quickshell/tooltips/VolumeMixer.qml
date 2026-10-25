@@ -124,7 +124,13 @@ Item {
 
 		root.keyboard = false;
 		root.focusNode(node);
-		Yudae.audioVolume(node.id, Util.clamp(fraction, 0, Config.mixerMaxVolume));
+
+		const level = Util.clamp(fraction, 0, Config.mixerMaxVolume);
+
+		if (Math.abs(System.nodeVolume(node) - level) < 0.004)
+			return;
+
+		Yudae.audioVolume(node.id, level);
 	}
 
 	function dragFader(node, position, size, vertical, modifiers) {
