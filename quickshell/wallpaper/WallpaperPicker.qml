@@ -136,7 +136,7 @@ PanelWindow {
 		if (root.held === null)
 			return;
 
-		Quickshell.execDetached(Wallpaper.applyCommand(root.held.path, Config, BarInk.bandPx()));
+		Quickshell.execDetached(applyCommand(root.held.path, Config, BarInk.bandPx()));
 		root.saveWallpaper(root.held.path);
 		root.close();
 	}
@@ -146,7 +146,7 @@ PanelWindow {
 			return;
 
 		root.activeWallpaper = image;
-		root.writeFile(root.settingsPath, Wallpaper.settingsText(image, root.wallpaperDir));
+		root.writeFile(root.settingsPath, settingsText(image, root.wallpaperDir));
 	}
 
 	function writeFile(path, text) {
@@ -159,8 +159,8 @@ PanelWindow {
 		command: ["sh", "-c", "cat " + Shell.shellQuote(root.settingsPath) + " 2>/dev/null"]
 
 		onDone: function (text) {
-			root.wallpaperDir = Wallpaper.dirFromText(text) || Config.wallpaperDir;
-			root.activeWallpaper = Wallpaper.wallpaperFromText(text) || "";
+			root.wallpaperDir = dirFromText(text) || Config.wallpaperDir;
+			root.activeWallpaper = wallpaperFromText(text) || "";
 			wallpapersFile.command = root.listWallpapers(root.wallpaperDir);
 			wallpapersFile.running = true;
 		}
@@ -173,7 +173,7 @@ PanelWindow {
 
 		onDone: function (text) {
 			root.listing = text;
-			root.wallpapers = Wallpaper.entries(text);
+			root.wallpapers = entries(text);
 			root.selectActive();
 		}
 	}
@@ -452,5 +452,69 @@ PanelWindow {
 				}
 			}
 		}
+	}
+
+	const extensions = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif"];
+
+	function lastValue(source, key) {
+		const pattern = new RegExp("(?:^|\\n)[ \\t]*(?:local[ \\t]+)?" + key + "[ \\t]*=[ \\t]*[\"']([^\"'\\n]+)[\"']", "g");
+		let match;
+		let found = null;
+
+		while ((match = pattern.exec(source)) !== null)
+			found = match[1];
+
+		return found;
+	}
+
+	function dirFromText(source) {
+		return lastValue(String(source === undefined || source === null ? "" : source), "wallpaperDir");
+	}
+
+	function wallpaperFromText(source) {
+		return lastValue(String(source === undefined || source === null ? "" : source), "wallpaper");
+	}
+
+	function nameOf(path) {
+		const text = String(path === undefined || path === null ? "" : path);
+		const base = text.substring(text.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
+
+		return base.replace(/[-_]+/g, " ").trim() || base;
+	}
+
+	function supported(path) {
+		const text = String(path === undefined || path === null ? "" : path).toLowerCase();
+
+		return extensions.indexOf(text.substring(text.lastIndexOf("."))) >= 0;
+	}
+
+	function entries(text) {
+		return String(text === undefined || text === null ? "" : text)
+			.split("\n")
+			.map(function (line) { return line.trim(); })
+			.filter(function (line) { return line !== "" && supported(line); })
+			.map(function (path) {
+				return { id: "wall:" + path, kind: "wallpaper", name: nameOf(path), keywords: [], path: path, preview: path };
+			});
+	}
+
+	function applyCommand(path, config, band) {
+		const cmd = [
+			"awww", "img",
+			"--transition-type", config.wallpaperTransition,
+			"--transition-duration", String(config.wallpaperTransitionMs / 1000),
+			"--transition-fps", String(config.wallpaperTransitionFps)
+		];
+
+		if (band > 0)
+			cmd.push("--ink-band", String(Math.ceil(band)));
+
+		cmd.push(path);
+		return cmd;
+	}
+
+	function settingsText(image, dir) {
+		return "return {\n    wallpaper = \"" + String(image === undefined || image === null ? "" : image)
+			+ "\",\n    wallpaperDir = \"" + String(dir === undefined || dir === null ? "" : dir) + "\",\n}\n";
 	}
 }
