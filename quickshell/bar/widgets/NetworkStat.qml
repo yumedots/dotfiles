@@ -22,6 +22,9 @@ BarStat {
 	readonly property int bars: Network.signalBars(root.signal)
 	readonly property int wifiStep: Util.clamp(root.bars, 1, 4) - 1
 	readonly property string wifiIcon: Config.networkWifiIcons[root.wifiStep]
+	readonly property string ip: root.net.ip || ""
+	readonly property var dev: ({ device: root.iface, type: root.kind, state: root.linked ? "connected" : "", connection: root.net.ssid || root.iface })
+	readonly property var info: ({ ip: root.net.ip || "", gateway: root.net.gateway || "", dns: root.net.dns || "" })
 
 	property string infoRaw: ""
 	property string wifiRaw: ""
