@@ -109,6 +109,12 @@ Item {
 		}
 	}
 
+	function nodeAt(index) {
+		const list = root.mix.nodes || [];
+
+		return list[index] || null;
+	}
+
 	function nodeOf(id) {
 		for (let i = 0; i < root.nodes.length; i++) {
 			if (root.nodes[i].id === id)
@@ -127,14 +133,34 @@ Item {
 
 		const level = Util.clamp(fraction, 0, Config.mixerMaxVolume);
 
+		if (!isFinite(level))
+			return;
+
 		if (Math.abs(System.nodeVolume(node) - level) < 0.004)
 			return;
 
 		Yudae.audioVolume(node.id, level);
 	}
 
+	function beginDrag(node, size) {
+		root.drag = { id: node ? node.id : -1, size: size };
+	}
+
 	function dragFader(node, position, size, vertical, modifiers) {
+		if (!node || !(size > 0))
+			return;
+
+		if (root.drag.id !== node.id || Math.abs(root.drag.size - size) > 1)
+			return;
+
+		if (position < -4 || position > size + 4)
+			return;
+
 		const fraction = vertical ? 1 - position / size : position / size;
+
+		if (!isFinite(fraction))
+			return;
+
 		const shift = (modifiers & Qt.ShiftModifier) !== 0;
 
 		root.shift = shift;
@@ -222,6 +248,7 @@ Item {
 	}
 
 	property var held: ({})
+	property var drag: ({ id: -1, size: 0 })
 
 	function hold(node, until) {
 		if (node)
@@ -335,7 +362,10 @@ Item {
 				anchors.bottomMargin: -Config.mixerHitPad
 				preventStealing: true
 
-				onPressed: (mouse) => root.dragFader(channel.node, mouse.x, lineFader.width, false, mouse.modifiers)
+				onPressed: (mouse) => {
+					root.beginDrag(channel.node, lineFader.width);
+					root.dragFader(channel.node, mouse.x, lineFader.width, false, mouse.modifiers);
+				}
 				onPositionChanged: (mouse) => root.dragFader(channel.node, mouse.x, lineFader.width, false, mouse.modifiers)
 			}
 		}
@@ -455,7 +485,10 @@ Item {
 				anchors.bottomMargin: -Config.mixerHitPad
 				preventStealing: true
 
-				onPressed: (mouse) => root.dragFader(line.node, mouse.x, lineFader.width, false, mouse.modifiers)
+				onPressed: (mouse) => {
+					root.beginDrag(line.node, lineFader.width);
+					root.dragFader(line.node, mouse.x, lineFader.width, false, mouse.modifiers);
+				}
 				onPositionChanged: (mouse) => root.dragFader(line.node, mouse.x, lineFader.width, false, mouse.modifiers)
 			}
 		}
@@ -503,14 +536,14 @@ Item {
 		}
 
 		Repeater {
-			model: root.nodes
+			model: root.nodes.length
 
 			delegate: Item {
 				id: holder
 
-				required property var modelData
+				required property int index
 
-				readonly property var node: holder.modelData
+				readonly property var node: root.nodeAt(holder.index)
 				readonly property bool shown: System.shownStream(holder.node)
 				readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || System.streamPlaying(holder.node))
 				visible: root.showApps && System.streamVisible(holder.node, Config.mixerOnlyPlaying, root.held)
