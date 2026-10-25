@@ -18,6 +18,7 @@ const network = @import("providers/network.zig");
 const audio = @import("providers/audio.zig");
 const wallpaper = @import("providers/wallpaper.zig");
 const bar = @import("providers/bar.zig");
+const launcher = @import("providers/launcher.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
@@ -45,6 +46,7 @@ pub const Context = struct {
 	audio: *audio.Audio,
 	wallpaper: *wallpaper.Wallpaper,
 	bar: *bar.Bar,
+	launcher: *launcher.Launcher,
 	socket_path: []const u8,
 };
 
@@ -112,6 +114,38 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 
 		if (json.flag(net_cmd, "speed")) context.network.speedTest();
 		if (json.flag(net_cmd, "speedCancel")) context.network.speedCancel();
+
+		return;
+	}
+
+	if (json.field(value, "launcher")) |l_cmd| {
+		if (json.field(l_cmd, "query") != null) {
+			context.launcher.setQuery(
+				json.textAt(l_cmd, "query"),
+				json.textAt(l_cmd, "forced"),
+				json.textAt(l_cmd, "group"),
+			);
+		}
+
+		const pin = json.textAt(l_cmd, "pin");
+		if (pin.len > 0) context.launcher.togglePin(pin);
+
+		const save = json.textAt(l_cmd, "save");
+		if (save.len > 0) context.launcher.saveQuery(save);
+
+		const remember = json.textAt(l_cmd, "remember");
+		if (remember.len > 0) context.launcher.remember(remember);
+
+		const clip = json.textAt(l_cmd, "clip");
+		if (json.field(l_cmd, "clip") != null) context.launcher.previewClip(clip);
+
+		const copy = json.textAt(l_cmd, "copyClip");
+		if (copy.len > 0) context.launcher.copyClip(copy);
+
+		const kill = json.integer(json.field(l_cmd, "kill"));
+		if (kill > 0) context.launcher.killProcess(@intCast(kill));
+
+		if (json.flag(l_cmd, "clips")) context.launcher.refreshClips();
 
 		return;
 	}
@@ -300,6 +334,10 @@ fn run(io: std.Io) !void {
 	const bar_provider = try bar.Bar.create(allocator, io, hub);
 	try hub.add(bar_provider.provider());
 
+	const launcher_provider = try launcher.Launcher.create(allocator, io, hub);
+	launcher_provider.attach(apps_provider, system_provider);
+	try hub.add(launcher_provider.provider());
+
 	screen_provider.attachSettings(settings_provider);
 
 	const context = try allocator.create(Context);
@@ -322,6 +360,7 @@ fn run(io: std.Io) !void {
 		.audio = audio_provider,
 		.wallpaper = wallpaper_provider,
 		.bar = bar_provider,
+		.launcher = launcher_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -350,6 +389,7 @@ fn run(io: std.Io) !void {
 	try audio_provider.start();
 	try wallpaper_provider.start();
 	try bar_provider.start();
+	try launcher_provider.start();
 
 	hub.publish();
 

@@ -10,7 +10,7 @@ const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
 const max_cores = 64;
-const max_top = 48;
+pub const max_top = 48;
 
 fn sanitize(name: []const u8) []const u8 {
 	for (name) |byte| {
@@ -31,6 +31,17 @@ const Process = struct {
 
 	fn name(self: *const Process) []const u8 {
 		return self.comm[0..self.comm_len];
+	}
+};
+
+pub const TopOut = struct {
+	pid: i32,
+	name: [16]u8 = undefined,
+	name_len: usize = 0,
+	cpu: f64,
+
+	pub fn getName(self: *const TopOut) []const u8 {
+		return self.name[0..self.name_len];
 	}
 };
 
@@ -134,6 +145,17 @@ pub const System = struct {
 	fn renderThunk(ctx: *anyopaque, writer: *Writer) anyerror!void {
 		const self: *System = @ptrCast(@alignCast(ctx));
 		try self.render(writer);
+	}
+
+	pub fn topRows(self: *System, out: *[max_top]TopOut) usize {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		for (self.top[0..self.top_count], 0..) |*entry, index| {
+			out[index] = .{ .pid = entry.pid, .name = entry.comm, .name_len = entry.comm_len, .cpu = entry.cpu };
+		}
+
+		return self.top_count;
 	}
 
 	pub fn start(self: *System) !void {
