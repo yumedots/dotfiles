@@ -15,6 +15,7 @@ const apps = @import("providers/apps.zig");
 const screen = @import("providers/screen.zig");
 const settings = @import("providers/settings.zig");
 const network = @import("providers/network.zig");
+const audio = @import("providers/audio.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
@@ -39,6 +40,7 @@ pub const Context = struct {
 	screen: *screen.Screen,
 	settings: *settings.Settings,
 	network: *network.Network,
+	audio: *audio.Audio,
 	socket_path: []const u8,
 };
 
@@ -58,6 +60,24 @@ fn snapshotThunk(ctx: *anyopaque, allocator_: std.mem.Allocator) anyerror![]u8 {
 
 fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	const context: *Context = @ptrCast(@alignCast(ctx));
+
+	if (json.field(value, "audio")) |audio_cmd| {
+		if (json.field(audio_cmd, "volume")) |target| {
+			const id = json.integer(json.field(target, "id"));
+			const level = json.numberAt(target, "level");
+
+			if (id > 0) context.audio.setVolume(id, level);
+		}
+
+		if (json.field(audio_cmd, "mute")) |target| {
+			const id = json.integer(json.field(target, "id"));
+			const muted = json.flag(target, "muted");
+
+			if (id > 0) context.audio.setMute(id, muted);
+		}
+
+		return;
+	}
 
 	if (json.field(value, "network")) |net_cmd| {
 		if (json.flag(net_cmd, "scan")) context.network.scan(true);
@@ -234,6 +254,9 @@ fn run(io: std.Io) !void {
 	const network_provider = try network.Network.create(allocator, io, hub);
 	try hub.add(network_provider.provider());
 
+	const audio_provider = try audio.Audio.create(allocator, io, hub);
+	try hub.add(audio_provider.provider());
+
 	screen_provider.attachSettings(settings_provider);
 
 	const context = try allocator.create(Context);
@@ -253,6 +276,7 @@ fn run(io: std.Io) !void {
 		.screen = screen_provider,
 		.settings = settings_provider,
 		.network = network_provider,
+		.audio = audio_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -278,6 +302,7 @@ fn run(io: std.Io) !void {
 	try screen_provider.start();
 	try settings_provider.start();
 	try network_provider.start();
+	try audio_provider.start();
 
 	hub.publish();
 
