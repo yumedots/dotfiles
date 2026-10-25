@@ -14,6 +14,7 @@ const system = @import("providers/system.zig");
 const apps = @import("providers/apps.zig");
 const screen = @import("providers/screen.zig");
 const settings = @import("providers/settings.zig");
+const network = @import("providers/network.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
@@ -37,6 +38,7 @@ pub const Context = struct {
 	apps: *apps.Apps,
 	screen: *screen.Screen,
 	settings: *settings.Settings,
+	network: *network.Network,
 	socket_path: []const u8,
 };
 
@@ -216,6 +218,9 @@ fn run(io: std.Io) !void {
 	const settings_provider = try settings.Settings.create(allocator, io, hub);
 	try hub.add(settings_provider.provider());
 
+	const network_provider = try network.Network.create(allocator, io, hub);
+	try hub.add(network_provider.provider());
+
 	screen_provider.attachSettings(settings_provider);
 
 	const context = try allocator.create(Context);
@@ -234,6 +239,7 @@ fn run(io: std.Io) !void {
 		.apps = apps_provider,
 		.screen = screen_provider,
 		.settings = settings_provider,
+		.network = network_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -258,6 +264,7 @@ fn run(io: std.Io) !void {
 	try apps_provider.start();
 	try screen_provider.start();
 	try settings_provider.start();
+	try network_provider.start();
 
 	hub.publish();
 
