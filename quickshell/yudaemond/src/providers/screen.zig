@@ -70,6 +70,15 @@ const MonitorOut = struct {
 	scales: []f64,
 };
 
+const GroupOut = struct {
+	label: []const u8,
+	kind: []const u8,
+	options: []const []const u8,
+	selected: i64,
+	shown: []const u8,
+	visible: bool,
+};
+
 const PanelOut = struct {
 	row: i64,
 	step: i64,
@@ -78,6 +87,8 @@ const PanelOut = struct {
 	options: []const []const u8,
 	selected: i64,
 	value: []const u8,
+	selectedRow: []const i64,
+	groups: []GroupOut,
 };
 
 const Out = struct {
@@ -97,6 +108,9 @@ pub const Screen = struct {
 	available: bool = false,
 	scale_min: f64 = 1,
 	scale_max: f64 = 2,
+	title_scale: []u8 = &.{},
+	title_refresh: []u8 = &.{},
+	title_font: []u8 = &.{},
 	row: i64 = 0,
 	step: i64 = 0,
 	fonts: [12]i64 = @splat(0),
@@ -123,6 +137,10 @@ pub const Screen = struct {
 
 		self.scale_min = cfg.number("displayScaleMin", 1);
 		self.scale_max = cfg.number("displayScaleMax", 2);
+
+		self.title_scale = cfg.string("displayScaleTitle", self.allocator) orelse self.allocator.dupe(u8, "Scale") catch &.{};
+		self.title_refresh = cfg.string("displayRefreshTitle", self.allocator) orelse self.allocator.dupe(u8, "Refresh") catch &.{};
+		self.title_font = cfg.string("displayFontTitle", self.allocator) orelse self.allocator.dupe(u8, "Font") catch &.{};
 
 		const fonts = cfg.strings("displayFonts", self.allocator) catch &.{};
 		self.font_count = @min(fonts.len, self.fonts.len);
@@ -331,7 +349,7 @@ pub const Screen = struct {
 		var options: std.ArrayListUnmanaged([]const u8) = .empty;
 
 		if (self.monitors.items.len == 0) {
-			return .{ .row = 0, .step = 0, .rows = &names, .cursor = names[0], .options = &.{}, .selected = -1, .value = "" };
+			return .{ .row = 0, .step = 0, .rows = &names, .cursor = names[0], .options = &.{}, .selected = -1, .value = "", .selectedRow = &.{}, .groups = &.{} };
 		}
 
 		const monitor = &self.monitors.items[0];
@@ -371,6 +389,45 @@ pub const Screen = struct {
 
 		const selected = self.currentLocked(kind, monitor, options.items);
 
+		var groups: std.ArrayListUnmanaged(GroupOut) = .empty;
+		var selected_rows: std.ArrayListUnmanaged(i64) = .empty;
+
+		const kinds = [_][]const u8{ "scale", "refresh", "font" };
+		const titles = [_][]const u8{ self.title_scale, self.title_refresh, self.title_font };
+
+		for (kinds, 0..) |group_kind, i| {
+			const selected_index = self.currentLocked(group_kind, monitor, &.{});
+			var group_options: std.ArrayListUnmanaged([]const u8) = .empty;
+
+			if (std.mem.eql(u8, group_kind, "scale")) {
+				for (options.items) |option| try group_options.append(arena, option);
+			} else if (std.mem.eql(u8, group_kind, "refresh")) {
+				for (monitor.modes.items) |mode| {
+					try group_options.append(arena, try std.fmt.allocPrint(arena, "{d} Hz", .{@as(i64, @intFromFloat(@round(mode.refresh)))}));
+				}
+			} else {
+				for (self.fonts[0..self.font_count]) |size| {
+					try group_options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{size}));
+				}
+			}
+
+			const shown: []const u8 = if (selected_index >= 0 and @as(usize, @intCast(selected_index)) < group_options.items.len)
+				group_options.items[@intCast(selected_index)]
+			else
+				"";
+
+			try groups.append(arena, .{
+				.label = titles[i],
+				.kind = group_kind,
+				.options = group_options.items,
+				.selected = selected_index,
+				.shown = shown,
+				.visible = group_options.items.len > 0,
+			});
+		}
+
+		for (groups.items) |group| try selected_rows.append(arena, group.selected);
+
 		return .{
 			.row = self.row,
 			.step = self.step,
@@ -379,6 +436,8 @@ pub const Screen = struct {
 			.options = options.items,
 			.selected = selected,
 			.value = if (options.items.len == 0) "" else options.items[step],
+			.selectedRow = selected_rows.items,
+			.groups = groups.items,
 		};
 	}
 
