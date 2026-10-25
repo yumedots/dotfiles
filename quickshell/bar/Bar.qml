@@ -145,6 +145,7 @@ PanelWindow {
 
 	Component.onDestruction: BarInk.unregister(bar)
 
+
 	Connections {
 		target: BarInk
 

@@ -10,10 +10,12 @@ const cursor = @import("providers/cursor.zig");
 const daemon = @import("providers/daemon.zig");
 const github = @import("providers/github.zig");
 const weather = @import("providers/weather.zig");
+const system = @import("providers/system.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
 const environ = @import("primitives/environ.zig");
+const exec = @import("primitives/exec.zig");
 
 pub const allocator = std.heap.smp_allocator;
 
@@ -28,6 +30,7 @@ pub const Context = struct {
 	daemon: *daemon.Daemon,
 	github: *github.Github,
 	weather: *weather.Weather,
+	system: *system.System,
 	socket_path: []const u8,
 };
 
@@ -47,6 +50,13 @@ fn snapshotThunk(ctx: *anyopaque, allocator_: std.mem.Allocator) anyerror![]u8 {
 
 fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	const context: *Context = @ptrCast(@alignCast(ctx));
+
+	if (json.field(value, "system")) |system_cmd| {
+		const governor = json.textAt(system_cmd, "governor");
+		if (governor.len > 0) context.system.setGovernor(governor);
+		return;
+	}
+
 	const weather_cmd = json.field(value, "weather") orelse return;
 
 	if (json.field(weather_cmd, "shift")) |step| {
@@ -147,6 +157,9 @@ fn run(io: std.Io) !void {
 	const weather_provider = try weather.Weather.create(allocator, io, hub, client);
 	try hub.add(weather_provider.provider());
 
+	const system_provider = try system.System.create(allocator, io, hub);
+	try hub.add(system_provider.provider());
+
 	const context = try allocator.create(Context);
 	context.* = .{
 		.allocator = allocator,
@@ -159,6 +172,7 @@ fn run(io: std.Io) !void {
 		.daemon = daemon_provider,
 		.github = github_provider,
 		.weather = weather_provider,
+		.system = system_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -179,6 +193,7 @@ fn run(io: std.Io) !void {
 	try cursor_provider.start();
 	try github_provider.start();
 	try weather_provider.start();
+	try system_provider.start();
 
 	hub.publish();
 

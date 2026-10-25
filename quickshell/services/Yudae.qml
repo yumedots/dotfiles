@@ -211,6 +211,13 @@ QtObject {
 
 	readonly property var weatherState: root.snapshot.weather || ({})
 
+	readonly property var systemState: root.snapshot.system || ({})
+	readonly property var system: root.systemState
+
+	function systemCommand(message) {
+		root.send({ cmd: { system: message } });
+	}
+
 	function weather(message) {
 		root.send({ cmd: { weather: message } });
 	}

@@ -14,6 +14,7 @@ test {
 	_ = @import("providers/daemon.zig");
 	_ = @import("providers/github.zig");
 	_ = @import("providers/weather.zig");
+	_ = @import("providers/system.zig");
 	_ = @import("primitives/config.zig");
 	_ = @import("cli.zig");
 	_ = @import("bench.zig");
