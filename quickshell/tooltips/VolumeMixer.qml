@@ -150,16 +150,17 @@ Item {
 		if (!node || !(size > 0))
 			return;
 
-		if (root.drag.id !== node.id || Math.abs(root.drag.size - size) > 1)
+		if (root.drag.id !== node.id)
 			return;
 
-		if (position < -4 || position > size + 4)
+		const base = root.drag.size > 0 ? root.drag.size : size;
+		const at = position * base / size;
+
+		if (!isFinite(at) || at < -4 || at > base + 4)
 			return;
 
-		const fraction = vertical ? 1 - position / size : position / size;
+		const fraction = vertical ? 1 - at / base : at / base;
 
-		if (!isFinite(fraction))
-			return;
 
 		const shift = (modifiers & Qt.ShiftModifier) !== 0;
 
