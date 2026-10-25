@@ -1,15 +1,12 @@
 Config 1.0 config.js
-Util 1.0 lib/util.js
-Color 1.0 lib/color.js
+Util 1.0 ui/Util.qml
+Color 1.0 ui/Color.qml
 Shell 1.0 lib/shell.js
 Parse 1.0 lib/parse.js
 Apps 1.0 lib/apps.js
 Entries 1.0 lib/entries.js
 System 1.0 lib/system.js
-Forecast 1.0 lib/forecast.js
-Contrib 1.0 lib/contrib.js
 BarLayout 1.0 lib/bar-layout.js
-Wallpaper 1.0 lib/wallpaper.js
 Display 1.0 lib/display.js
 Network 1.0 lib/network.js
 singleton Settings 1.0 Settings.qml
