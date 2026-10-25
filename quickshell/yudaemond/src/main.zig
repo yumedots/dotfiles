@@ -99,6 +99,16 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 			if (ssid.len > 0) context.network.connect(ssid, password);
 		}
 
+		if (json.field(net_cmd, "dns")) |target| {
+			const connection = json.textAt(target, "connection");
+			const servers = json.textAt(target, "servers");
+
+			if (connection.len > 0 and servers.len > 0) context.network.setDns(connection, servers);
+		}
+
+		if (json.flag(net_cmd, "speed")) context.network.speedTest();
+		if (json.flag(net_cmd, "speedCancel")) context.network.speedCancel();
+
 		return;
 	}
 

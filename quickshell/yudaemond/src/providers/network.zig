@@ -21,6 +21,12 @@ const HistOut = struct {
 };
 
 const history_len = 60;
+const speed_seconds_text = "10";
+const speed_sample_ms = 200;
+const speed_down_url = "https://speed.cloudflare.com/__down";
+const speed_down_bytes: u64 = 90_000_000;
+const speed_up_url = "https://speed.cloudflare.com/__up";
+const speed_up_bytes: u64 = 25_000_000;
 
 const Wifi = struct {
 	ssid: []u8,
@@ -40,6 +46,16 @@ const WifiOut = struct {
 	inUse: bool,
 };
 
+const Stage = enum { none, down, up };
+
+const SpeedOut = struct {
+	stage: []const u8,
+	live: f64,
+	best: f64,
+	down: f64,
+	up: f64,
+};
+
 const Out = struct {
 	iface: []const u8,
 	kind: []const u8,
@@ -57,6 +73,7 @@ const Out = struct {
 	gateway: []const u8,
 	dns: []const u8,
 	wifi: []WifiOut,
+	speed: SpeedOut,
 };
 
 pub const Network = struct {
@@ -81,6 +98,12 @@ pub const Network = struct {
 	ip: []u8 = &.{},
 	gateway: []u8 = &.{},
 	dns: []u8 = &.{},
+	speed_stage: Stage = .none,
+	speed_live: f64 = 0,
+	speed_best: f64 = 0,
+	speed_down: f64 = 0,
+	speed_up: f64 = 0,
+	speed_cancel: std.atomic.Value(bool) = .init(false),
 	last_rx: u64 = 0,
 	last_tx: u64 = 0,
 	last_at: i64 = 0,
@@ -335,19 +358,25 @@ pub const Network = struct {
 		while (lines.next()) |line| {
 			if (line.len == 0) continue;
 
-			var fields = std.mem.splitScalar(u8, line, ':');
-			const in_use = fields.next() orelse "";
-			const ssid = fields.next() orelse continue;
-			if (ssid.len == 0) continue;
+			var at: usize = 0;
+			const in_use = terseField(line, &at) orelse continue;
+			const ssid_raw = terseField(line, &at) orelse continue;
+			if (ssid_raw.len == 0) continue;
 
-			const signal_text = fields.next() orelse "0";
-			const channel_text = fields.next() orelse "0";
-			const freq_text = fields.next() orelse "0";
-			const security = fields.next() orelse "";
+			const signal_text = terseField(line, &at) orelse "0";
+			const channel_text = terseField(line, &at) orelse "0";
+			const freq_text = terseField(line, &at) orelse "0";
+			const security_raw = terseField(line, &at) orelse "";
+
+			const ssid = unescapeTerse(self.allocator, ssid_raw) catch continue;
+			const security = unescapeTerse(self.allocator, security_raw) catch {
+				self.allocator.free(ssid);
+				continue;
+			};
 
 			next.append(self.allocator, .{
-				.ssid = self.allocator.dupe(u8, ssid) catch continue,
-				.security = self.allocator.dupe(u8, security) catch continue,
+				.ssid = ssid,
+				.security = security,
 				.signal = std.fmt.parseInt(i64, signal_text, 10) catch 0,
 				.channel = std.fmt.parseInt(i64, channel_text, 10) catch 0,
 				.frequency = std.fmt.parseInt(i64, std.mem.trimEnd(u8, freq_text, " "), 10) catch 0,
@@ -363,6 +392,174 @@ pub const Network = struct {
 		self.networks.deinit(self.allocator);
 		self.networks = next;
 		self.mutex.unlock(self.io);
+
+		self.hub.publish();
+	}
+
+	pub fn setDns(self: *Network, connection: []const u8, servers: []const u8) void {
+		var argv: std.ArrayList([]const u8) = .empty;
+		defer argv.deinit(self.allocator);
+
+		for ([_][]const u8{ "nmcli", "connection", "modify", "id", connection, "ipv4.dns", servers, "ipv4.ignore-auto-dns", "yes" }) |arg|
+			argv.append(self.allocator, arg) catch return;
+
+		const result = exec.run(self.io, self.allocator, argv.items) catch return;
+		result.deinit(self.allocator);
+
+		const up = exec.run(self.io, self.allocator, &.{ "nmcli", "connection", "up", "id", connection }) catch return;
+		up.deinit(self.allocator);
+
+		self.sampleAddresses(connection);
+		self.hub.publish();
+	}
+
+	pub fn speedTest(self: *Network) void {
+		self.mutex.lockUncancelable(self.io);
+		const busy = self.speed_stage != .none;
+		if (!busy) {
+			self.speed_stage = .down;
+			self.speed_live = 0;
+			self.speed_best = 0;
+			self.speed_down = 0;
+			self.speed_up = 0;
+			self.speed_cancel.store(false, .monotonic);
+		}
+		self.mutex.unlock(self.io);
+
+		if (busy) return;
+
+		self.hub.publish();
+
+		const thread = std.Thread.spawn(.{}, speedRun, .{self}) catch return;
+		thread.detach();
+	}
+
+	pub fn speedCancel(self: *Network) void {
+		self.speed_cancel.store(true, .monotonic);
+	}
+
+	fn speedRun(self: *Network) void {
+		const down = self.speedPhase(true);
+		self.mutex.lockUncancelable(self.io);
+		const cancelled = self.speed_cancel.load(.monotonic);
+		self.speed_down = down;
+		self.speed_stage = if (cancelled) .none else .up;
+		self.speed_live = 0;
+		self.speed_best = 0;
+		self.mutex.unlock(self.io);
+		self.hub.publish();
+
+		if (cancelled) return;
+
+		const up = self.speedPhase(false);
+		self.mutex.lockUncancelable(self.io);
+		self.speed_up = up;
+		self.speed_stage = .none;
+		self.speed_live = 0;
+		self.speed_best = 0;
+		self.mutex.unlock(self.io);
+		self.hub.publish();
+	}
+
+	fn speedPhase(self: *Network, download: bool) f64 {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+
+		var stop = std.atomic.Value(bool).init(false);
+		const sampler = std.Thread.spawn(.{}, speedSample, .{ self, &stop, download }) catch return 0;
+
+		const url = if (download) speed_down_url else speed_up_url;
+		const bytes = if (download) speed_down_bytes else speed_up_bytes;
+
+		var argv: std.ArrayList([]const u8) = .empty;
+
+		if (download) {
+			const target = std.fmt.allocPrint(allocator, "{s}?bytes={d}", .{ url, bytes }) catch return 0;
+
+			for ([_][]const u8{ "curl", "-s", "-m", speed_seconds_text, "-o", "/dev/null", target }) |arg|
+				argv.append(allocator, arg) catch return 0;
+		} else {
+			const script = std.fmt.allocPrint(allocator, "head -c {d} /dev/zero | curl -s -m {s} -o /dev/null -X POST --data-binary @- '{s}'", .{ bytes, speed_seconds_text, url }) catch return 0;
+
+			for ([_][]const u8{ "sh", "-c", script }) |arg| argv.append(allocator, arg) catch return 0;
+		}
+
+		if (exec.run(self.io, self.allocator, argv.items)) |result| {
+			result.deinit(self.allocator);
+		} else |_| {}
+
+		stop.store(true, .monotonic);
+		sampler.join();
+
+		self.mutex.lockUncancelable(self.io);
+		const best = self.speed_best;
+		self.mutex.unlock(self.io);
+
+		return best;
+	}
+
+	fn speedSample(self: *Network, stop: *std.atomic.Value(bool), download: bool) void {
+		var prev: u64 = 0;
+		var prev_at: i64 = 0;
+
+		while (!stop.load(.monotonic) and !self.speed_cancel.load(.monotonic)) {
+			const bytes = self.counter(download);
+			const now = std.Io.Clock.real.now(self.io).toMilliseconds();
+
+			if (prev_at > 0 and now > prev_at and bytes >= prev) {
+				const seconds = @as(f64, @floatFromInt(now - prev_at)) / 1000.0;
+				const inst = @as(f64, @floatFromInt(bytes - prev)) / seconds;
+
+				if (inst > 0) {
+					self.mutex.lockUncancelable(self.io);
+					self.speed_live = if (self.speed_live > 0) self.speed_live + (inst - self.speed_live) * 0.15 else inst;
+					self.speed_best = @max(self.speed_best, self.speed_live);
+					self.mutex.unlock(self.io);
+
+					self.hub.publish();
+				}
+			}
+
+			prev = bytes;
+			prev_at = now;
+			sleep.ms(speed_sample_ms);
+		}
+	}
+
+	fn counter(self: *Network, download: bool) u64 {
+		self.mutex.lockUncancelable(self.io);
+		const iface = self.allocator.dupe(u8, self.iface) catch {
+			self.mutex.unlock(self.io);
+			return 0;
+		};
+		self.mutex.unlock(self.io);
+		defer self.allocator.free(iface);
+
+		const body = proc.readFile(self.io, self.allocator, "/proc/net/dev") catch return 0;
+		defer self.allocator.free(body);
+
+		var lines = std.mem.splitScalar(u8, body, '\n');
+
+		while (lines.next()) |raw| {
+			const line = std.mem.trim(u8, raw, " \t\r");
+			const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
+			const name = std.mem.trim(u8, line[0..colon], " \t");
+
+			if (iface.len > 0 and !std.mem.eql(u8, name, iface)) continue;
+			if (iface.len == 0 and (std.mem.eql(u8, name, "lo") or std.mem.startsWith(u8, name, "veth"))) continue;
+
+			var fields = std.mem.tokenizeAny(u8, line[colon + 1 ..], " \t");
+			var index: usize = 0;
+
+			while (fields.next()) |field| : (index += 1) {
+				const wanted: usize = if (download) 0 else 8;
+				if (index == wanted) return std.fmt.parseInt(u64, field, 10) catch 0;
+			}
+		}
+
+		return 0;
 	}
 
 	pub fn connect(self: *Network, ssid: []const u8, password: []const u8) void {
@@ -412,6 +609,13 @@ pub const Network = struct {
 			.gateway = self.gateway,
 			.dns = self.dns,
 			.wifi = try wifiOut(arena, self),
+			.speed = .{
+				.stage = if (self.speed_stage == .none) "" else @tagName(self.speed_stage),
+				.live = @round(self.speed_live),
+				.best = @round(self.speed_best),
+				.down = @round(self.speed_down),
+				.up = @round(self.speed_up),
+			},
 		};
 
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
@@ -428,6 +632,44 @@ fn historyOut(arena: Allocator, self: *Network) ![]HistOut {
 	}
 
 	return out.items;
+}
+
+fn terseField(line: []const u8, at: *usize) ?[]const u8 {
+	if (at.* >= line.len) return null;
+
+	const start = at.*;
+	var index = start;
+
+	while (index < line.len) {
+		if (line[index] == '\\' and index + 1 < line.len) {
+			index += 2;
+			continue;
+		}
+
+		if (line[index] == ':') break;
+		index += 1;
+	}
+
+	at.* = index + 1;
+	return line[start..index];
+}
+
+fn unescapeTerse(allocator: Allocator, line: []const u8) ![]u8 {
+	var out: std.ArrayList(u8) = .empty;
+	errdefer out.deinit(allocator);
+
+	var index: usize = 0;
+	while (index < line.len) : (index += 1) {
+		if (line[index] == '\\' and index + 1 < line.len) {
+			index += 1;
+			try out.append(allocator, line[index]);
+			continue;
+		}
+
+		try out.append(allocator, line[index]);
+	}
+
+	return out.toOwnedSlice(allocator);
 }
 
 fn afterColon(line: []const u8) []const u8 {
@@ -458,6 +700,23 @@ fn rateText(allocator: Allocator, rate: f64) ![]u8 {
 	if (rate < 1024 * 1024 * 1024) return std.fmt.allocPrint(allocator, "{d:.1} MiB/s", .{rate / (1024 * 1024)});
 
 	return std.fmt.allocPrint(allocator, "{d:.1} GiB/s", .{rate / (1024 * 1024 * 1024)});
+}
+
+test "nmcli terse lines keep escaped colons inside the ssid" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const line = "*:My\\:Net:80:6:2437:WPA2";
+	var at: usize = 0;
+
+	try std.testing.expectEqualStrings("*", terseField(line, &at).?);
+	const ssid = try unescapeTerse(arena.allocator(), terseField(line, &at).?);
+	try std.testing.expectEqualStrings("My:Net", ssid);
+	try std.testing.expectEqualStrings("80", terseField(line, &at).?);
+	try std.testing.expectEqualStrings("6", terseField(line, &at).?);
+	try std.testing.expectEqualStrings("2437", terseField(line, &at).?);
+	try std.testing.expectEqualStrings("WPA2", terseField(line, &at).?);
+	try std.testing.expect(terseField(line, &at) == null);
 }
 
 test "rates format" {

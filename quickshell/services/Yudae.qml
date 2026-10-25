@@ -235,6 +235,18 @@ QtObject {
 		root.send({ cmd: { network: { connect: { ssid: ssid, password: password || "" } } } });
 	}
 
+	function networkDns(connection, servers) {
+		root.send({ cmd: { network: { dns: { connection: connection, servers: servers } } } });
+	}
+
+	function networkSpeedTest() {
+		root.send({ cmd: { network: { speed: true } } });
+	}
+
+	function networkSpeedCancel() {
+		root.send({ cmd: { network: { speedCancel: true } } });
+	}
+
 	function screenKey(code) {
 		root.send({ cmd: { screen: { keyCode: code } } });
 	}
