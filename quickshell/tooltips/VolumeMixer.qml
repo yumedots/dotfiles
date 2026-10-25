@@ -142,26 +142,27 @@ Item {
 		Yudae.audioVolume(node.id, level);
 	}
 
-	function beginDrag(node, size) {
-		root.drag = { id: node ? node.id : -1, size: size };
+	function beginDrag(node, fader, position) {
+		const origin = fader.mapToItem(root, 0, 0);
+
+		root.drag = { id: node ? node.id : -1, from: origin.x, width: fader.width, last: -1 };
 	}
 
-	function dragFader(node, position, size, vertical, modifiers) {
-		if (!node || !(size > 0))
+	function dragFader(node, fader, position, modifiers) {
+		if (!node || !fader || root.drag.id !== node.id || !(root.drag.width > 0))
 			return;
 
-		if (root.drag.id !== node.id)
+		const at = fader.mapToItem(root, position, 0).x - root.drag.from;
+
+		if (!isFinite(at))
 			return;
 
-		const base = root.drag.size > 0 ? root.drag.size : size;
-		const at = position * base / size;
-
-		if (!isFinite(at) || at < -4 || at > base + 4)
+		if (root.drag.last >= 0 && Math.abs(at - root.drag.last) > root.drag.width / 2)
 			return;
 
-		const fraction = vertical ? 1 - at / base : at / base;
+		root.drag = { id: root.drag.id, from: root.drag.from, width: root.drag.width, last: at };
 
-
+		const fraction = Util.clamp(at / root.drag.width, 0, 1);
 		const shift = (modifiers & Qt.ShiftModifier) !== 0;
 
 		root.shift = shift;
@@ -249,7 +250,7 @@ Item {
 	}
 
 	property var held: ({})
-	property var drag: ({ id: -1, size: 0 })
+	property var drag: ({ id: -1, from: 0, width: 0, last: -1 })
 
 	function hold(node, until) {
 		if (node)
@@ -364,10 +365,10 @@ Item {
 				preventStealing: true
 
 				onPressed: (mouse) => {
-					root.beginDrag(channel.node, lineFader.width);
-					root.dragFader(channel.node, mouse.x, lineFader.width, false, mouse.modifiers);
+					root.beginDrag(channel.node, lineFader, mouse.x);
+					root.dragFader(channel.node, lineFader, mouse.x, mouse.modifiers);
 				}
-				onPositionChanged: (mouse) => root.dragFader(channel.node, mouse.x, lineFader.width, false, mouse.modifiers)
+				onPositionChanged: (mouse) => root.dragFader(channel.node, lineFader, mouse.x, mouse.modifiers)
 			}
 		}
 	}
@@ -487,10 +488,10 @@ Item {
 				preventStealing: true
 
 				onPressed: (mouse) => {
-					root.beginDrag(line.node, lineFader.width);
-					root.dragFader(line.node, mouse.x, lineFader.width, false, mouse.modifiers);
+					root.beginDrag(line.node, lineFader, mouse.x);
+					root.dragFader(line.node, lineFader, mouse.x, mouse.modifiers);
 				}
-				onPositionChanged: (mouse) => root.dragFader(line.node, mouse.x, lineFader.width, false, mouse.modifiers)
+				onPositionChanged: (mouse) => root.dragFader(line.node, lineFader, mouse.x, mouse.modifiers)
 			}
 		}
 	}
