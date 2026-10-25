@@ -30,6 +30,7 @@ BarStat {
 	property string wifiRaw: ""
 	property bool testPending: false
 
+	mode: "icon"
 	barColor: Util.pick(Config.mono, Config.networkBase, Config.networkBaseMono)
 	textColor: root.barColor
 	icon: root.isWifi ? root.wifiIcon : Config.networkLanIcon

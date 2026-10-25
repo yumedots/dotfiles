@@ -508,7 +508,7 @@ const networkForget = "Forget";
 const networkConnect = "Connect";
 const networkScanIcon = "\uf021";
 const networkWifiIcons = ["\u{f08bc}", "\u{f08bd}", "\u{f08be}", "\u{f08bf}"];
-const networkLanIcon = "\u{f0200}";
+const networkLanIcon = "\u{f0e8}";
 const networkLockIcon = "\uf023";
 
 const agentFaceSize = 96;
