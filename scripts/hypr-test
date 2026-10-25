@@ -220,7 +220,7 @@ cmd_start() {
 	git -C "$REPO" worktree add --detach "$wt" HEAD >/dev/null 2>&1 || fail "git worktree add failed"
 	git -C "$REPO" ls-files -z >"$dir/files"
 	git -C "$REPO" ls-files -z --others --exclude-standard >>"$dir/files"
-	rsync -a --from0 --files-from="$dir/files" "$REPO/" "$wt/" || fail "rsync into worktree failed"
+	rsync -a --ignore-missing-args --from0 --files-from="$dir/files" "$REPO/" "$wt/" || fail "rsync into worktree failed"
 	if [ -d "$REPO/quickshell/cache" ]; then
 		mkdir -p "$wt/quickshell"
 		rsync -a "$REPO/quickshell/cache" "$wt/quickshell/" || fail "rsync cache into worktree failed"
