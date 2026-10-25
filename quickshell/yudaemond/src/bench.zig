@@ -158,7 +158,7 @@ fn snapshot(io: Io, allocator: std.mem.Allocator) !Snapshot {
 
 fn fetch(io: Io, allocator: std.mem.Allocator) ?json.Value {
 	const path = proc.socketPath(io, allocator) catch return null;
-	var buffer: [65536]u8 = undefined;
+	var buffer: [1048576]u8 = undefined;
 	var connection = sock.Connection.connect(path, &buffer) catch return null;
 	defer connection.close();
 

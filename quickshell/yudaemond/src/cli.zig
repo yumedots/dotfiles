@@ -26,7 +26,7 @@ pub fn fetch(io: Io) ![]u8 {
 	const path = try proc.socketPath(io, std.heap.smp_allocator);
 	defer std.heap.smp_allocator.free(path);
 
-	var read_buffer: [65536]u8 = undefined;
+	var read_buffer: [1048576]u8 = undefined;
 	var connection = sock.Connection.connect(path, &read_buffer) catch {
 		std.debug.print("yudaemond is not running\n", .{});
 		std.process.exit(2);

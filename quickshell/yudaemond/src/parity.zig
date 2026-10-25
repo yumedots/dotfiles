@@ -131,7 +131,7 @@ fn live(io: Io, w: *std.Io.Writer) !void {
 
 fn fetch(io: Io) ?json.Value {
 	const path = proc.socketPath(io, gpa) catch return null;
-	var buffer: [65536]u8 = undefined;
+	var buffer: [1048576]u8 = undefined;
 	var connection = sock.Connection.connect(path, &buffer) catch return null;
 	defer connection.close();
 

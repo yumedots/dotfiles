@@ -132,7 +132,7 @@ fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.
 
 fn fetch(io: Io, allocator: std.mem.Allocator) ![]const u8 {
 	const path = try proc.socketPath(io, allocator);
-	var buffer: [65536]u8 = undefined;
+	var buffer: [1048576]u8 = undefined;
 	var connection = sock.Connection.connect(path, &buffer) catch return error.DaemonDown;
 	defer connection.close();
 
