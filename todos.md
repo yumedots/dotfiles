@@ -24,16 +24,28 @@ Done and committed:
 - `7ceaa21` volume widget reads the sink from the daemon (it was erroring on a
   missing `import qs.services`, so no OSD and no icon change).
 
+## Done since this file was written
+
+- Latency: 168 ms -> 35-57 ms. The pactl event thread samples itself (serialized
+  by `sample_mutex`) and a `change` event on an audio object patches that node
+  with `wpctl get-volume` instead of a 25 ms `pw-dump`. Idle CPU 6.1% -> 1.4%.
+- Fader drag: three separate bugs. Rows reflowed mid-drag so the fader got
+  coordinates from another layout (values slammed to 0/1); the stream rows were
+  rebuilt on every snapshot (the pressed MouseArea died); every drag message ran
+  `wpctl` on the client's socket thread. Fixed by persisting delegates
+  (`model: nodes.length`), pinning a drag to the size it started with, ignoring
+  out-of-range positions, and a coalescing write queue on a worker thread.
+  Verified with ydotool: 0.95 -> 0.30 tracked 0.8,0.7,0.6,0.5,0.4,0.3, final
+  exactly the pointer position.
+- Volume widget (`VolumeStat`) beside the OSD was missing `import qs.services`,
+  so it errored and never updated; it now binds straight to `Yudae.audio`.
+- `ydotool` is installed and working. Coordinates: `hyprctl cursorpos` shows
+  logical pixels and `ydotool mousemove --absolute X Y` takes X/2, Y/2.
+  `click 0x40` = left down, `0x80` = left up, `0xC0` = full click.
+
 ## Open
 
-1. **Latency**: OSD and mixer still not instant. Daemon measured 168 ms
-   (`wpctl set-volume` -> new snapshot). Comes from the 100 ms loop tick plus
-   `pw-dump`. Plan: sample directly in the `pactl` event thread (serialized by a
-   sample mutex) instead of flagging `dirty` for the loop.
-2. **Fader click/drag unproven**: `ydotool` is available; coordinates can be
-   derived from `hyprctl layers -j`, then `ydotool mousemove --absolute` + click,
-   and `wpctl get-volume` before/after.
-3. **Launcher port (paused by the user)**: `quickshell/yudaemond/src/providers/launcher.zig`
+1. **Launcher port (paused by the user)**: `quickshell/yudaemond/src/providers/launcher.zig`
    exists and runs, wired in `main.zig` (`launcher` command group) and `tests.zig`,
    and `Yudae.qml` does not use it yet, `Launcher.qml` is untouched.
    - daemon side present: modes/groups/saved/apps/rank/usage/pins/clipboard
