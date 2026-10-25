@@ -14,7 +14,7 @@ Item {
 	readonly property string artist: root.player !== null ? root.player.trackArtist : ""
 	readonly property string album: root.player !== null ? root.player.trackAlbum : ""
 	readonly property string art: root.player !== null ? root.player.trackArtUrl : ""
-	readonly property var clock: Media.clock(root.player, root.position)
+	readonly property var clock: Format.clock(root.player, root.position)
 
 	focus: true
 
@@ -28,7 +28,7 @@ Item {
 	}
 
 	function send(action) {
-		const command = Media.command([root.player], action);
+		const command = Format.command([root.player], action);
 
 		if (command.length > 0)
 			Quickshell.execDetached(command);

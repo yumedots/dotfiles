@@ -190,7 +190,7 @@ ShellRoot {
 	}
 
 	function media(action) {
-		const command = Media.command(Mpris.players.values ? Mpris.players.values : [], action);
+		const command = Format.command(Mpris.players.values ? Mpris.players.values : [], action);
 
 		if (command.length > 0)
 			Quickshell.execDetached(command);

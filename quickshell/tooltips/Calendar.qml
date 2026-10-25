@@ -14,11 +14,11 @@ Item {
 	property date today: clock.date
 	property int weekStart: Config.calendarWeekStart
 
-	readonly property string cursorKey: Dates.dateKey(root.cursor)
-	readonly property string todayKey: Dates.dateKey(root.today)
-	readonly property var grid: Dates.monthGrid(root.cursor.getFullYear(), root.cursor.getMonth(), root.weekStart, root.todayKey, root.cursorKey, Config.calendarRows)
-	readonly property var weekdays: Dates.weekdayLabels(root.weekStart)
-	readonly property var meters: Dates.meters(root.today, Config.calendarBirthYear, Config.calendarLifeExpectancy, [Config.calendarIconDay, Config.calendarIconMonth, Config.calendarIconYear, Config.calendarIconLife])
+	readonly property string cursorKey: Format.dateKey(root.cursor)
+	readonly property string todayKey: Format.dateKey(root.today)
+	readonly property var grid: Format.monthGrid(root.cursor.getFullYear(), root.cursor.getMonth(), root.weekStart, root.todayKey, root.cursorKey, Config.calendarRows)
+	readonly property var weekdays: Format.weekdayLabels(root.weekStart)
+	readonly property var meters: Format.meters(root.today, Config.calendarBirthYear, Config.calendarLifeExpectancy, [Config.calendarIconDay, Config.calendarIconMonth, Config.calendarIconYear, Config.calendarIconLife])
 	readonly property real gridWidth: Config.calendarCellWidth * 7
 	readonly property string monthText: Qt.formatDate(new Date(root.cursor.getFullYear(), root.cursor.getMonth(), 1), "MMMM")
 	readonly property string yearText: String(root.cursor.getFullYear())
@@ -51,15 +51,15 @@ Item {
 	}
 
 	function step(days) {
-		root.cursor = Dates.shiftDays(root.cursor, days);
+		root.cursor = Format.shiftDays(root.cursor, days);
 	}
 
 	function stepMonths(months) {
-		root.cursor = Dates.shiftMonths(root.cursor, months);
+		root.cursor = Format.shiftMonths(root.cursor, months);
 	}
 
 	function stepYears(years) {
-		root.cursor = Dates.shiftYears(root.cursor, years);
+		root.cursor = Format.shiftYears(root.cursor, years);
 	}
 
 	Keys.onPressed: function (event) {

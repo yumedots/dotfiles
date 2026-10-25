@@ -9,10 +9,10 @@ BarStat {
 
 	inkId: "media"
 
-	readonly property var player: Media.pickPlayer(Mpris.players.values ? Mpris.players.values : [])
+	readonly property var player: Format.pickPlayer(Mpris.players.values ? Mpris.players.values : [])
 
 	icon: Config.iconApp
-	readonly property bool wanted: Media.hasContent(root.player)
+	readonly property bool wanted: Format.hasContent(root.player)
 	visible: root.wanted
 	popupPreload: true
 

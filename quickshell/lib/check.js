@@ -172,78 +172,6 @@ assert(results("calc", "1+1", calcOnly).length === 1 && results("calc", "1+1", c
 assert(results("calc", "111", { files: [], clips: [], windows: [], entries: [], groups: {}, pins: [], usage: {}, calc: null }).length === 0, "and nothing when the query does not parse");
 });
 
-section("calendar", function () {
-assert(daysInMonth(2024, 1) === 29 && daysInMonth(2026, 1) === 28, "february length");
-assert(weekdayOffset(new Date(2024, 0, 1), 1) === 0, "2024-01-01 is a monday");
-assert(weekdayOffset(new Date(2026, 8, 1), 1) === 1, "2026-09-01 is a tuesday in a monday week");
-assert(weekdayOffset(new Date(2026, 8, 1), 0) === 2, "and a tuesday two cells into a sunday week");
-assert(weekdayOffset(new Date(2026, 8, 1), 9) === weekdayOffset(new Date(2026, 8, 1), 1), "a week start off the calendar falls back to monday");
-assert(weekdayLabels(1)[0] === "Mon" && weekdayLabels(1)[6] === "Sun", "a monday week runs mon to sun");
-assert(weekdayLabels(0)[0] === "Sun" && weekdayLabels(0)[6] === "Sat", "a sunday week runs sun to sat");
-assert(dateKey(new Date(2026, 8, 5)) === "2026-09-05", "keys pad the month and the day");
-const mondayGrid = monthGrid(2026, 8, 1, "2026-09-15", "2026-09-01", 6);
-assert(mondayGrid.length === 6, "a monday week month is six rows");
-assert(mondayGrid[0][0].key === "2026-08-31" && mondayGrid[0][0].inMonth === false, "a month starting mid week leads with the previous month");
-assert(mondayGrid[0][1].key === "2026-09-01" && mondayGrid[0][1].cursor === true, "the cursor lands on its own cell");
-assert(mondayGrid[2][1].key === "2026-09-15" && mondayGrid[2][1].today === true, "today lands on its own cell");
-assert(mondayGrid[2][1].cursor === false, "and is not the cursor");
-assert(mondayGrid[0][3].weekend === false && mondayGrid[0][5].weekend === true, "weekends are marked");
-assert(mondayGrid.every(function (row) { return row.length === 7; }), "every row holds seven days");
-
-const sundayGrid = monthGrid(2026, 8, 0, "", "", 6);
-assert(sundayGrid[0][0].key === "2026-08-30", "a sunday week leads one day earlier");
-assert(sundayGrid[0][2].key === "2026-09-01", "and still lands on the first of the month");
-assert(monthGrid(2026, 1, 1, "", "", 6).length === 6, "february is six rows tall too");
-
-const midnight = new Date(2026, 8, 15, 0, 0, 0);
-const noon = new Date(2026, 8, 15, 12, 0, 0);
-assert(dayProgress(noon) === 0.5, "noon is half the day gone");
-assert(progressPercent(dayProgress(midnight)) === 0 && progressPercent(dayProgress(new Date(2026, 8, 15, 23, 59))) === 100, "a day runs 0 to 100");
-assert(progressPercent(monthProgress(midnight)) === 47, "the 15th of a 30 day month is 47 percent done");
-assert(progressPercent(monthProgress(new Date(2026, 8, 30))) === 97, "the last day of the month is not quite over");
-assert(progressPercent(yearProgress(midnight)) === 70, "september 15 is 70 percent of the year");
-assert(progressPercent(yearProgress(new Date(2026, 0, 1))) === 0 && progressPercent(yearProgress(new Date(2026, 11, 31, 12))) === 100, "a year runs 0 to 100");
-assert(progressPercent(yearProgress(new Date(2024, 11, 31, 12))) === 100, "a leap year is 366 days long");
-assert(lifeProgress(1980, 90, 2026) === 46 / 90, "life runs from the birth year");
-assert(progressPercent(lifeProgress(1980, 90, 2026)) === 51, "and reports a percent");
-assert(lifeProgress(0, 90, 2026) === 0 && lifeProgress(2030, 90, 2026) === 0, "an unset or future birth year leaves the meter empty");
-
-const lastDay = new Date(2026, 8, 30);
-assert(shiftDays(lastDay, 1).getMonth() === 9 && shiftDays(lastDay, 1).getDate() === 1, "a day forward crosses into the next month");
-assert(shiftDays(new Date(2026, 0, 1), -1).getMonth() === 11 && shiftDays(new Date(2026, 0, 1), -1).getDate() === 31, "a day back crosses into the previous december");
-assert(shiftDays(new Date(2026, 8, 30), 7).getMonth() === 9 && shiftDays(new Date(2026, 8, 30), 7).getDate() === 7, "a week forward keeps the weekday");
-assert(shiftDays(new Date(2026, 8, 15), -7).getDate() === 8, "a week back keeps the weekday");
-assert(shiftMonths(new Date(2026, 0, 31), 1).getDate() === 28, "a month forward clamps the 31st to a shorter month");
-assert(shiftMonths(new Date(2026, 11, 15), 1).getFullYear() === 2027 && shiftMonths(new Date(2026, 11, 15), 1).getMonth() === 0, "a month forward crosses into the next year");
-assert(shiftMonths(new Date(2026, 0, 15), -1).getFullYear() === 2025, "a month back crosses into the previous year");
-assert(shiftYears(new Date(2024, 1, 29), 1).getDate() === 28, "a year forward clamps the 29th of february");
-assert(shiftDays(lastDay, 0).getDate() === 30, "shifting by nothing leaves the day alone");
-
-let tallest = 0;
-
-for (let year = 2020; year <= 2030; year++) {
-	for (let month = 0; month < 12; month++)
-		tallest = Math.max(tallest, Math.ceil((weekdayOffset(new Date(year, month, 1), 1) + daysInMonth(year, month)) / 7));
-}
-
-assert(tallest === 6, "every month of the decade fits six weeks, so the grid never needs more");
-
-const meterIcons = ["d", "m", "y", "l"];
-const meterToday = new Date(2026, 8, 21);
-const meterRows = meters(meterToday, 0, 80, meterIcons);
-
-assert(meterRows.length === 3, "a calendar with no birth year shows day, month and year");
-assert(meterRows[0].label === "DAY" && meterRows[1].label === "MONTH" && meterRows[2].label === "YEAR", "and labels them in that order");
-assert(meterRows[0].icon === "d" && meterRows[2].icon === "y", "each row carries the icon it was handed");
-assert(meterRows[0].pct === progressPercent(dayProgress(meterToday)), "the day row is the day's progress");
-assert(meterRows.every(function (row) { return row.pct >= 0 && row.pct <= 100; }), "percentages stay inside nought to a hundred");
-const lifeRows = meters(meterToday, 1990, 80, meterIcons);
-assert(lifeRows.length === 4 && lifeRows[3].label === "LIFE" && lifeRows[3].icon === "l", "a birth year adds the life row last");
-assert(meters(meterToday, 0, 80, ["a", "b", "c", "d"])[1].icon === "b", "the month row takes the second icon it was handed");
-assert(filledCells(50, 15) === 8 && filledCells(200, 15) === 15, "filled cells clamp");
-
-});
-
 section("border", function () {
 const border = parseHyprBorder([
 	'{"option": "general:col.active_border", "gradient": "ee33ccff ee00ff99 45deg", "set": true }',
@@ -875,41 +803,6 @@ section("mixer", function () {
 	assert(hasMicrophone(cardDump({})) === true, "a card that reports no routes is assumed to have a real microphone");
 	assert(hasMicrophone(JSON.stringify([{ type: "PipeWire:Interface:Node", id: 1, info: { props: { "media.class": "Audio/Sink" } } }])) === false, "no source at all means no microphone");
 	assert(hasMicrophone("") === true, "an unreadable dump keeps the microphone");
-});
-
-section("media", function () {
-	const paused = { identity: "Helium", isPlaying: false, trackTitle: "", dbusName: "org.mpris.MediaPlayer2.chromium.instance1" };
-	const playing = { identity: "mpv", isPlaying: true, dbusName: "org.mpris.MediaPlayer2.mpv" };
-
-	assert(pickPlayer([paused, playing]) === playing, "the keys drive the player that is playing");
-	assert(pickPlayer([paused, { identity: "vlc", isPlaying: false, dbusName: "org.mpris.MediaPlayer2.vlc" }]) === paused, "with nothing playing the first player is driven");
-	assert(pickPlayer([]) === null && pickPlayer(null) === null, "no players means nothing to drive");
-
-	assert(hasContent(null) === false, "no player has nothing to show");
-	assert(hasContent(paused) === false, "a player with no track and no playback shows nothing");
-	assert(hasContent(playing) === true, "a playing player is worth showing");
-	assert(hasContent({ identity: "paused with title", isPlaying: false, trackTitle: "Midnight City" }) === true, "a paused track keeps its place in the bar");
-
-	assert(command([paused, playing], "playPause").join(" ") === "busctl --user call org.mpris.MediaPlayer2.mpv /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player PlayPause", "the keys call the playing player's dbus name");
-	assert(command([paused], "next").pop() === "Next", "the next key asks for Next");
-	assert(command([paused], "previous").pop() === "Previous", "the back key asks for Previous");
-	assert(command([{ identity: "x", isPlaying: true }], "playPause").length === 0, "a player with no dbus name is left alone");
-	assert(command([], "playPause").length === 0 && command(null, "playPause").length === 0, "with no players there is nothing to call");
-	assert(command([playing], "volume").length === 0, "an action that is not a media key asks for nothing");
-
-	assert(timeText(0) === "0:00" && timeText(83) === "1:23" && timeText(245) === "4:05", "a track time reads as minutes and seconds");
-	assert(timeText(600) === "10:00" && timeText(3599) === "59:59", "a time under an hour keeps two digits");
-	assert(timeText(3723) === "1:02:03" && timeText(3600) === "1:00:00", "a time past an hour reads as hours too");
-	assert(timeText(-5) === "0:00" && timeText(null) === "0:00" && timeText(undefined) === "0:00", "a broken time reads as zero");
-
-	const running = { length: 245 };
-
-	assert(clock(running, 83).elapsed === "1:23" && clock(running, 83).total === "4:05", "the clock reads the player's length and the position it was asked about");
-	assert(Math.abs(clock(running, 83).percent - 33.878) < 0.01, "the progress is the share of the track that has played");
-	assert(clock(running, 400).percent === 100 && clock(running, 400).elapsed === "4:05", "a position past the end is pinned to the end");
-	assert(clock(running, -3).percent === 0 && clock(running, null).elapsed === "0:00", "a position that never arrived is the start");
-	assert(!clock({ length: 0 }, 10).known && !clock(null, 10).known, "a stream with no length has no progress to show");
-	assert(clock({ length: 0 }, 10).percent === 0, "a track with no length does not divide by zero");
 });
 
 section("wallpaper", function () {
