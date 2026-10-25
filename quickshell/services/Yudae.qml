@@ -227,6 +227,14 @@ QtObject {
 	readonly property var screenGroups: root.screenPanel.groups || []
 	readonly property string screenRaw: root.screenState.raw || ""
 
+	function networkScan() {
+		root.send({ cmd: { network: { scan: true } } });
+	}
+
+	function networkConnect(ssid, password) {
+		root.send({ cmd: { network: { connect: { ssid: ssid, password: password || "" } } } });
+	}
+
 	function screenKey(code) {
 		root.send({ cmd: { screen: { keyCode: code } } });
 	}

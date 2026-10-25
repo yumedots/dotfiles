@@ -22,6 +22,24 @@ const HistOut = struct {
 
 const history_len = 60;
 
+const Wifi = struct {
+	ssid: []u8,
+	security: []u8,
+	signal: i64,
+	channel: i64,
+	frequency: i64,
+	in_use: bool,
+};
+
+const WifiOut = struct {
+	ssid: []const u8,
+	security: []const u8,
+	signal: i64,
+	channel: i64,
+	frequency: i64,
+	inUse: bool,
+};
+
 const Out = struct {
 	iface: []const u8,
 	kind: []const u8,
@@ -35,6 +53,10 @@ const Out = struct {
 	linkSpeed: i64,
 	peak: f64,
 	history: []HistOut,
+	ip: []const u8,
+	gateway: []const u8,
+	dns: []const u8,
+	wifi: []WifiOut,
 };
 
 pub const Network = struct {
@@ -55,6 +77,10 @@ pub const Network = struct {
 	history: [history_len]Hist = @splat(.{ .down = 0, .up = 0 }),
 	history_count: usize = 0,
 	history_start: usize = 0,
+	networks: std.ArrayListUnmanaged(Wifi) = .empty,
+	ip: []u8 = &.{},
+	gateway: []u8 = &.{},
+	dns: []u8 = &.{},
 	last_rx: u64 = 0,
 	last_tx: u64 = 0,
 	last_at: i64 = 0,
@@ -92,7 +118,7 @@ pub const Network = struct {
 		while (true) {
 			self.sample();
 
-			if (tick % 5 == 0) self.describe();
+			if (tick % 15 == 0) self.describe();
 
 			tick += 1;
 			sleep_unused.ms(1000);
@@ -229,11 +255,14 @@ pub const Network = struct {
 		self.mutex.unlock(self.io);
 		defer self.allocator.free(iface);
 
+		if (iface.len > 0) self.sampleAddresses(iface);
+
 		if (!wifi or iface.len == 0) {
 			self.mutex.lockUncancelable(self.io);
 			self.setStr(&self.ssid, "");
 			self.signal = 0;
 			self.mutex.unlock(self.io);
+			self.hub.publish();
 			return;
 		}
 
@@ -261,6 +290,95 @@ pub const Network = struct {
 		self.signal = percent;
 		self.mutex.unlock(self.io);
 
+		self.scan(false);
+
+		self.hub.publish();
+	}
+
+	fn sampleAddresses(self: *Network, iface: []const u8) void {
+		const result = exec.run(self.io, self.allocator, &.{ "nmcli", "-t", "-f", "IP4.ADDRESS,IP4.GATEWAY,IP4.DNS", "device", "show", iface }) catch return;
+		defer result.deinit(self.allocator);
+
+		var ip: []const u8 = "";
+		var gateway: []const u8 = "";
+		var dns: []const u8 = "";
+
+		var lines = std.mem.splitScalar(u8, result.out, '\n');
+		while (lines.next()) |line| {
+			if (std.mem.startsWith(u8, line, "IP4.ADDRESS")) ip = afterColon(line);
+			if (std.mem.startsWith(u8, line, "IP4.GATEWAY")) gateway = afterColon(line);
+			if (std.mem.startsWith(u8, line, "IP4.DNS")) dns = afterColon(line);
+		}
+
+		self.mutex.lockUncancelable(self.io);
+		self.setStr(&self.ip, ip);
+		self.setStr(&self.gateway, gateway);
+		self.setStr(&self.dns, dns);
+		self.mutex.unlock(self.io);
+	}
+
+	pub fn scan(self: *Network, rescan: bool) void {
+		var argv: std.ArrayList([]const u8) = .empty;
+		defer argv.deinit(self.allocator);
+
+		const base = [_][]const u8{ "nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,CHAN,FREQ,SECURITY", "device", "wifi", "list" };
+		for (base) |arg| argv.append(self.allocator, arg) catch return;
+		if (rescan) argv.append(self.allocator, "--rescan") catch {};
+		if (rescan) argv.append(self.allocator, "yes") catch {};
+
+		const result = exec.run(self.io, self.allocator, argv.items) catch return;
+		defer result.deinit(self.allocator);
+
+		var next: std.ArrayListUnmanaged(Wifi) = .empty;
+		var lines = std.mem.splitScalar(u8, result.out, '\n');
+
+		while (lines.next()) |line| {
+			if (line.len == 0) continue;
+
+			var fields = std.mem.splitScalar(u8, line, ':');
+			const in_use = fields.next() orelse "";
+			const ssid = fields.next() orelse continue;
+			if (ssid.len == 0) continue;
+
+			const signal_text = fields.next() orelse "0";
+			const channel_text = fields.next() orelse "0";
+			const freq_text = fields.next() orelse "0";
+			const security = fields.next() orelse "";
+
+			next.append(self.allocator, .{
+				.ssid = self.allocator.dupe(u8, ssid) catch continue,
+				.security = self.allocator.dupe(u8, security) catch continue,
+				.signal = std.fmt.parseInt(i64, signal_text, 10) catch 0,
+				.channel = std.fmt.parseInt(i64, channel_text, 10) catch 0,
+				.frequency = std.fmt.parseInt(i64, std.mem.trimEnd(u8, freq_text, " "), 10) catch 0,
+				.in_use = std.mem.eql(u8, std.mem.trim(u8, in_use, " "), "*"),
+			}) catch continue;
+		}
+
+		self.mutex.lockUncancelable(self.io);
+		for (self.networks.items) |entry| {
+			self.allocator.free(entry.ssid);
+			self.allocator.free(entry.security);
+		}
+		self.networks.deinit(self.allocator);
+		self.networks = next;
+		self.mutex.unlock(self.io);
+	}
+
+	pub fn connect(self: *Network, ssid: []const u8, password: []const u8) void {
+		var argv: std.ArrayList([]const u8) = .empty;
+		defer argv.deinit(self.allocator);
+
+		for ([_][]const u8{ "nmcli", "device", "wifi", "connect", ssid }) |arg| argv.append(self.allocator, arg) catch return;
+		if (password.len > 0) {
+			argv.append(self.allocator, "password") catch {};
+			argv.append(self.allocator, password) catch {};
+		}
+
+		const result = exec.run(self.io, self.allocator, argv.items) catch return;
+		result.deinit(self.allocator);
+
+		self.describe();
 		self.hub.publish();
 	}
 
@@ -290,6 +408,10 @@ pub const Network = struct {
 			.linkSpeed = self.link_speed,
 			.peak = @round(self.peak),
 			.history = try historyOut(arena, self),
+			.ip = self.ip,
+			.gateway = self.gateway,
+			.dns = self.dns,
+			.wifi = try wifiOut(arena, self),
 		};
 
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
@@ -303,6 +425,28 @@ fn historyOut(arena: Allocator, self: *Network) ![]HistOut {
 	for (0..self.history_count) |index| {
 		const entry = self.history[(start + index) % history_len];
 		try out.append(arena, .{ .down = @round(entry.down), .up = @round(entry.up) });
+	}
+
+	return out.items;
+}
+
+fn afterColon(line: []const u8) []const u8 {
+	const at = std.mem.indexOfScalar(u8, line, ':') orelse return "";
+	return std.mem.trim(u8, line[at + 1 ..], " \t\r");
+}
+
+fn wifiOut(arena: Allocator, self: *Network) ![]WifiOut {
+	var out: std.ArrayListUnmanaged(WifiOut) = .empty;
+
+	for (self.networks.items) |entry| {
+		try out.append(arena, .{
+			.ssid = entry.ssid,
+			.security = entry.security,
+			.signal = entry.signal,
+			.channel = entry.channel,
+			.frequency = entry.frequency,
+			.inUse = entry.in_use,
+		});
 	}
 
 	return out.items;

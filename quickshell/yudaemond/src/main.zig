@@ -59,6 +59,19 @@ fn snapshotThunk(ctx: *anyopaque, allocator_: std.mem.Allocator) anyerror![]u8 {
 fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	const context: *Context = @ptrCast(@alignCast(ctx));
 
+	if (json.field(value, "network")) |net_cmd| {
+		if (json.flag(net_cmd, "scan")) context.network.scan(true);
+
+		if (json.field(net_cmd, "connect")) |target| {
+			const ssid = json.textAt(target, "ssid");
+			const password = json.textAt(target, "password");
+
+			if (ssid.len > 0) context.network.connect(ssid, password);
+		}
+
+		return;
+	}
+
 	if (json.field(value, "screen")) |screen_cmd| {
 		const key = json.textAt(screen_cmd, "key");
 		if (key.len > 0) context.screen.key(key);
