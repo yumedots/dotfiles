@@ -209,6 +209,12 @@ QtObject {
 		root.send({ gaze: root.gazeWanted });
 	}
 
+	readonly property var weatherState: root.snapshot.weather || ({})
+
+	function weather(message) {
+		root.send({ cmd: { weather: message } });
+	}
+
 	function dismiss(id) {
 		root.send({ dismiss: id });
 	}

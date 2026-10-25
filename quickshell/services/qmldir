@@ -7,4 +7,3 @@ singleton Notifications 1.0 Notifications.qml
 singleton Github 1.0 Github.qml
 singleton Yudae 1.0 Yudae.qml
 singleton Weather 1.0 Weather.qml
-WeatherSlot 1.0 WeatherSlot.qml
