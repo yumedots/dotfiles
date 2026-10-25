@@ -59,6 +59,7 @@ pub const Audio = struct {
 	io: Io,
 	hub: *Hub,
 	mutex: std.Io.Mutex = .init,
+	sample_mutex: std.Io.Mutex = .init,
 	scratch: std.heap.ArenaAllocator,
 	nodes: std.ArrayListUnmanaged(Node) = .empty,
 	sink: i64 = 0,
@@ -118,6 +119,8 @@ pub const Audio = struct {
 		const fd = child.stdout.?.handle;
 
 		var chunk: [1024]u8 = undefined;
+		var line: [256]u8 = undefined;
+		var used: usize = 0;
 
 		while (true) {
 			var fds = [_]std.posix.pollfd{.{ .fd = fd, .events = std.posix.POLL.IN, .revents = 0 }};
@@ -128,28 +131,89 @@ pub const Audio = struct {
 			const count = std.posix.read(fd, &chunk) catch break;
 			if (count == 0) break;
 
-			self.dirty.store(true, .monotonic);
+			for (chunk[0..count]) |byte| {
+				if (byte == '\n') {
+					self.onEvent(line[0..used]);
+					used = 0;
+					continue;
+				}
+
+				if (used < line.len) {
+					line[used] = byte;
+					used += 1;
+				}
+			}
 		}
+	}
+
+	fn onEvent(self: *Audio, line: []const u8) void {
+		if (!streamObject(line)) return;
+
+		if (std.mem.indexOf(u8, line, "'change' on ") != null) {
+			if (eventId(line)) |id| {
+				if (self.patchVolume(id)) return;
+			}
+		}
+
+		self.sampleSerial();
+	}
+
+	fn patchVolume(self: *Audio, id: i64) bool {
+		const id_text = std.fmt.allocPrint(self.allocator, "{d}", .{id}) catch return false;
+		defer self.allocator.free(id_text);
+
+		const result = exec.run(self.io, self.allocator, &.{ "wpctl", "get-volume", id_text }) catch return false;
+		defer result.deinit(self.allocator);
+
+		if (result.code != 0) return false;
+
+		const marker = std.mem.indexOf(u8, result.out, "Volume:") orelse return false;
+		const text = std.mem.trim(u8, result.out[marker + "Volume:".len ..], " \n\r");
+		const stop = std.mem.indexOfAny(u8, text, " \n\r") orelse text.len;
+		const level = std.fmt.parseFloat(f64, text[0..stop]) catch return false;
+		const muted = std.mem.indexOf(u8, result.out, "[MUTED]") != null;
+
+		self.mutex.lockUncancelable(self.io);
+		var found = false;
+
+		for (self.nodes.items) |*node| {
+			if (node.id != id) continue;
+
+			node.volume = @round(level * 1000) / 1000;
+			node.mute = muted;
+			found = true;
+		}
+
+		self.mutex.unlock(self.io);
+
+		if (found) self.hub.publish();
+
+		return found;
 	}
 
 	fn loop(self: *Audio) void {
 		var tick: usize = 0;
 
 		while (true) {
-			const watched = self.watch.load(.monotonic);
-			const changed = self.dirty.swap(false, .monotonic);
-
-			if (changed or watched or tick % 50 == 0) self.sample();
+			if (self.dirty.swap(false, .monotonic)) self.sampleSerial();
+			if (tick % 5 == 0) self.sampleSerial();
 
 			tick +%= 1;
-			sleep.ms(100);
+			sleep.ms(1000);
 		}
 	}
 
 	pub fn setWatch(self: *Audio, watched: bool) void {
 		const was = self.watch.swap(watched, .monotonic);
 
-		if (watched and !was) self.dirty.store(true, .monotonic);
+		if (watched and !was) self.sampleSerial();
+	}
+
+	fn sampleSerial(self: *Audio) void {
+		self.sample_mutex.lockUncancelable(self.io);
+		defer self.sample_mutex.unlock(self.io);
+
+		self.sample();
 	}
 
 	fn freeNode(self: *Audio, node: Node) void {
@@ -342,7 +406,17 @@ pub const Audio = struct {
 	}
 
 	pub fn setVolume(self: *Audio, id: i64, fraction: f64) void {
-		const text = std.fmt.allocPrint(self.allocator, "{d}%", .{@as(i64, @intFromFloat(@round(fraction * 100)))}) catch return;
+		const level = std.math.clamp(fraction, 0, 1);
+
+		self.mutex.lockUncancelable(self.io);
+		for (self.nodes.items) |*node| {
+			if (node.id == id) node.volume = level;
+		}
+		self.mutex.unlock(self.io);
+
+		self.hub.publish();
+
+		const text = std.fmt.allocPrint(self.allocator, "{d}%", .{@as(i64, @intFromFloat(@round(level * 100)))}) catch return;
 		defer self.allocator.free(text);
 
 		const id_text = std.fmt.allocPrint(self.allocator, "{d}", .{id}) catch return;
@@ -350,18 +424,22 @@ pub const Audio = struct {
 
 		const result = exec.run(self.io, self.allocator, &.{ "wpctl", "set-volume", id_text, text }) catch return;
 		result.deinit(self.allocator);
-
-		self.sample();
 	}
 
 	pub fn setMute(self: *Audio, id: i64, mute: bool) void {
+		self.mutex.lockUncancelable(self.io);
+		for (self.nodes.items) |*node| {
+			if (node.id == id) node.mute = mute;
+		}
+		self.mutex.unlock(self.io);
+
+		self.hub.publish();
+
 		const id_text = std.fmt.allocPrint(self.allocator, "{d}", .{id}) catch return;
 		defer self.allocator.free(id_text);
 
 		const result = exec.run(self.io, self.allocator, &.{ "wpctl", "set-mute", id_text, if (mute) "1" else "0" }) catch return;
 		result.deinit(self.allocator);
-
-		self.sample();
 	}
 
 	pub fn setDefault(self: *Audio, id: i64) void {
@@ -371,7 +449,7 @@ pub const Audio = struct {
 		const result = exec.run(self.io, self.allocator, &.{ "wpctl", "set-default", id_text }) catch return;
 		result.deinit(self.allocator);
 
-		self.sample();
+		self.dirty.store(true, .monotonic);
 	}
 
 	fn render(self: *Audio, writer: *Writer) !void {
@@ -416,6 +494,27 @@ pub const Audio = struct {
 		}, .{})});
 	}
 };
+
+fn streamObject(line: []const u8) bool {
+	const kinds = [_][]const u8{ "on sink #", "on sink-input #", "on source #", "on source-output #" };
+
+	for (kinds) |kind| {
+		if (std.mem.indexOf(u8, line, kind) != null) return true;
+	}
+
+	return false;
+}
+
+fn eventId(line: []const u8) ?i64 {
+	const at = std.mem.indexOfScalar(u8, line, '#') orelse return null;
+	const rest = line[at + 1 ..];
+
+	var stop: usize = 0;
+	while (stop < rest.len and rest[stop] >= '0' and rest[stop] <= '9') stop += 1;
+	if (stop == 0) return null;
+
+	return std.fmt.parseInt(i64, rest[0..stop], 10) catch null;
+}
 
 const dump_fixture =
 	\\[
@@ -471,4 +570,17 @@ test "pw-dump maps to the mixer shape" {
 	const mic = audio.nodes.items[1];
 	try std.testing.expect(mic.mute);
 	try std.testing.expectEqual(@as(f64, 1), mic.volume);
+}
+
+test "only audio objects wake the mixer" {
+	try std.testing.expect(streamObject("Event 'change' on sink #52"));
+	try std.testing.expect(streamObject("Event 'new' on sink-input #118"));
+	try std.testing.expect(!streamObject("Event 'change' on client #90"));
+	try std.testing.expect(!streamObject("Event 'remove' on module #12"));
+}
+
+test "a pactl event carries the node id" {
+	try std.testing.expectEqual(@as(?i64, 52), eventId("Event 'change' on sink #52"));
+	try std.testing.expectEqual(@as(?i64, 118), eventId("Event 'change' on sink-input #118"));
+	try std.testing.expectEqual(@as(?i64, null), eventId("Event 'change' on server"));
 }
