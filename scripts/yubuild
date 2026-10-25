@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+set -eu
+
+root="$(cd "$(dirname "$0")/.." && pwd)/quickshell/yudaemond"
+cache="$root/.zig-cache"
+cap="${YUDA_BUILD_CACHE_MB:-300}"
+log="$root/bench/build.jsonl"
+
+mkdir -p "$root/bench"
+
+cd "$root"
+
+start=$(date +%s%N)
+zig build -Drelease=true --cache-dir "$cache" "$@"
+end=$(date +%s%N)
+
+ms=$(( (end - start) / 1000000 ))
+binary="$root/zig-out/bin/yudaemond"
+bin_size=$(stat -c %s "$binary" 2>/dev/null || echo 0)
+cache_size=$(du -sm "$cache" 2>/dev/null | cut -f1)
+out_size=$(du -sm "$root/zig-out" 2>/dev/null | cut -f1)
+global_size=$(du -sm "$HOME/.cache/zig" 2>/dev/null | cut -f1)
+
+printf '%s\n' "{\"at\":$(date +%s),\"ms\":$ms,\"binary\":$bin_size,\"cache_mb\":${cache_size:-0},\"out_mb\":${out_size:-0},\"global_mb\":${global_size:-0}}" >> "$log"
+printf 'build %sms  binary %sB  cache %sMB  out %sMB  global %sMB\n' "$ms" "$bin_size" "${cache_size:-0}" "${out_size:-0}" "${global_size:-0}"
+
+if [ "${cache_size:-0}" -gt "$cap" ]; then
+	rm -rf "$cache"
+	printf 'pruned cache over %sMB\n' "$cap"
+fi
