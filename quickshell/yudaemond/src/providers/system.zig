@@ -141,13 +141,19 @@ pub const System = struct {
 		sleep.ms(150);
 		self.sampleCpu();
 
+		var tick: usize = 0;
+
 		while (true) {
 			sleep.ms(1850);
+			tick += 1;
+
 			self.sampleCpu();
 			self.sampleMemory();
 			self.sampleBattery();
 			self.sampleGovernors();
-			self.sampleProcesses();
+
+			if (tick % 3 == 0) self.sampleProcesses();
+
 			self.hub.publish();
 		}
 	}

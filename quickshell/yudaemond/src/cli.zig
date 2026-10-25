@@ -79,7 +79,7 @@ pub fn doctor(io: Io, args: []const []const u8) !void {
 	}
 
 	if (json.field(parsed.value, "weather")) |provider| {
-		try w.print("weather   {s}\n", .{if (json.flag(provider, "ready")) "up  " else "down"});
+		try w.print("weather   {s}\n", .{if (json.integer(json.field(provider, "fetched")) > 0) "up  " else "down"});
 	}
 
 	if (json.field(parsed.value, "github")) |provider| {
