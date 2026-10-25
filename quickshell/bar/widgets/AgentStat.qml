@@ -6,7 +6,7 @@ import "../../tooltips"
 
 // The agent face, rendered as a topbar widget.
 //
-// The face shows the state of the OpenCode agent: idle, working, blocked, or
+// The face shows the state of the agent: idle, working, blocked, or
 // error. It blinks on its own and keeps its eyes still, so the bar stays calm.
 // Clicking the face opens a panel with a bigger face that does follow the
 // cursor, the work that is going on, and the subscription the agent runs on.
@@ -38,7 +38,7 @@ BarStat {
 			height: parent.height
 
 			size: Math.min(parent.width, parent.height)
-			state: OpenCode.state
+			state: Yudae.connected ? Yudae.state : "idle"
 
 			// The bar icon keeps its eyes still. The panel face tracks the cursor.
 			followCursor: false

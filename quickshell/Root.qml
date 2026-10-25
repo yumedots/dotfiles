@@ -258,6 +258,10 @@ ShellRoot {
 			launcherWindow.stepWindows({ left: -1, right: 1, up: -launcherWindow.windowColumns, down: launcherWindow.windowColumns }[direction] || 0);
 		}
 
+		function agent() {
+			shellRoot.openWidget("agent", true);
+		}
+
 		function cpu() {
 			shellRoot.openWidget("cpu", true);
 		}

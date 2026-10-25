@@ -49,23 +49,29 @@ Item {
 	}
 
 	// Why the plans are missing, when nothing could be read.
-	readonly property string planError: OpenCode.usageError !== "" ? OpenCode.usageError : OpenCode.codexError
+	readonly property string planError: Yudae.usageError !== "" ? Yudae.usageError : Yudae.codexError
 
 	// The panel is on screen. Every time it opens the plan is asked for again,
 	// so the windows of the allowance are current and not whatever was left
 	// from the last time it was looked at.
 	readonly property bool open: root.source ? root.source.popupVisible : true
 
-	onOpenChanged: if (root.open) {
-		OpenCode.fetchUsage();
-		OpenCode.fetchCodex();
+	onOpenChanged: {
+		Yudae.watchGaze(root.open);
+
+		if (root.open) {
+			Yudae.fetchUsage();
+			Yudae.fetchCodex();
+		}
 	}
+
+	Component.onCompleted: Yudae.watchGaze(root.open)
 
 	// The marks are drawn at the size of the screen, so a small svg stays
 	// sharp instead of being scaled up from a small raster.
 	readonly property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
 
-	readonly property string state: OpenCode.state
+	readonly property string state: Yudae.state
 	readonly property string stateText: root.state === "working"
 		? Config.agentWorkingText
 		: root.state === "blocked"
@@ -99,17 +105,17 @@ Item {
 	readonly property real gazeArm: Config.agentFaceSize * 0.55
 
 	readonly property real gazeX: {
-		if (!Cursor.valid)
+		if (!Yudae.cursor.valid)
 			return 0;
 
-		return Math.tanh((Cursor.x - root.faceCenter.x) / root.gazeArm);
+		return Math.tanh((Yudae.cursor.x - root.faceCenter.x) / root.gazeArm);
 	}
 
 	readonly property real gazeY: {
-		if (!Cursor.valid)
+		if (!Yudae.cursor.valid)
 			return 0;
 
-		return Math.tanh((Cursor.y - root.faceCenter.y) / root.gazeArm);
+		return Math.tanh((Yudae.cursor.y - root.faceCenter.y) / root.gazeArm);
 	}
 
 	implicitWidth: Config.agentPanelWidth + 2 * Config.agentPanelPadding
@@ -123,7 +129,7 @@ Item {
 
 	// The message the agent is asking about, and the one that was put away.
 	// A new message comes back on its own.
-	property string detail: OpenCode.detailText
+	property string detail: Yudae.detailText
 	property string dismissedDetail: ""
 
 	readonly property bool detailHidden: root.detail !== "" && root.dismissedDetail === root.detail;
@@ -205,7 +211,7 @@ Item {
 
 				clip: true
 				spacing: 2
-				model: OpenCode.doneSessions
+				model: Yudae.doneSessions
 
 				delegate: AgentRow {
 					required property var modelData
@@ -217,7 +223,7 @@ Item {
 					title: modelData.title
 					dismissable: true
 
-					onDismissed: OpenCode.dismiss(modelData.id)
+					onDismissed: Yudae.dismiss(modelData.id)
 				}
 			}
 
@@ -262,9 +268,10 @@ Item {
 					gazeX: root.gazeX
 					gazeY: root.gazeY
 
-					// The face is only turned while the panel is open, so a
-					// face that nobody sees costs nothing.
+					// The face only moves while the panel is open, so a face
+					// that nobody sees costs nothing.
 					live: root.source ? root.source.popupVisible : true
+					paused: root.source ? !root.source.popupVisible : false
 
 					// The card behind the panel is flat, so the eyes are
 					// painted in it and the body can turn on its own.
@@ -346,7 +353,7 @@ Item {
 
 						Braille {
 							visible: root.state === "working"
-							running: root.state === "working"
+							running: root.state === "working" && root.open
 							ink: Config.muted
 						}
 
@@ -354,7 +361,7 @@ Item {
 							font.family: Config.fontFamily
 							font.pixelSize: Settings.fontSize
 							color: root.state === "error" ? Config.red : Config.muted
-							text: OpenCode.connected ? root.stateText : "OpenCode offline"
+							text: Yudae.online ? root.stateText : "OpenCode offline"
 						}
 					}
 				}
@@ -419,7 +426,7 @@ Item {
 
 				clip: true
 				spacing: 2
-				model: OpenCode.working
+				model: Yudae.working
 
 				delegate: AgentRow {
 					required property var modelData
@@ -489,7 +496,7 @@ Item {
 					// One block for each plan the shell knows about: its
 					// name, and the windows of what is left of it.
 					Repeater {
-						model: OpenCode.plans
+						model: Yudae.plans
 
 						delegate: Column {
 							id: planBlock
@@ -604,7 +611,7 @@ Item {
 
 					Text {
 						width: parent.width
-						visible: OpenCode.plans.length === 0 && root.planError !== ""
+						visible: Yudae.plans.length === 0 && root.planError !== ""
 						elide: Text.ElideRight
 
 						font.family: Config.fontFamily

@@ -5,7 +5,6 @@ singleton AppIcons 1.0 AppIcons.qml
 singleton BarInk 1.0 BarInk.qml
 singleton Notifications 1.0 Notifications.qml
 singleton Github 1.0 Github.qml
-singleton OpenCode 1.0 OpenCode.qml
-singleton Cursor 1.0 Cursor.qml
+singleton Yudae 1.0 Yudae.qml
 singleton Weather 1.0 Weather.qml
 WeatherSlot 1.0 WeatherSlot.qml
