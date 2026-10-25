@@ -10,6 +10,7 @@ pub const Hooks = struct {
 	snapshot: *const fn (ctx: *anyopaque, allocator: Allocator) anyerror![]u8,
 	dismiss: ?*const fn (ctx: *anyopaque, id: []const u8) void = null,
 	refresh: ?*const fn (ctx: *anyopaque) void = null,
+	command: ?*const fn (ctx: *anyopaque, value: json.Value) void = null,
 };
 
 pub const Client = struct {
@@ -130,6 +131,10 @@ pub const Ipc = struct {
 
 		if (json.flag(root, "refresh")) {
 			if (self.hooks.refresh) |hook| hook(self.hooks.ctx);
+		}
+
+		if (json.field(root, "cmd")) |value| {
+			if (self.hooks.command) |hook| hook(self.hooks.ctx, value);
 		}
 
 		if (json.flag(root, "sync")) {

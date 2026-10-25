@@ -9,7 +9,9 @@ const codex = @import("providers/codex.zig");
 const cursor = @import("providers/cursor.zig");
 const daemon = @import("providers/daemon.zig");
 const github = @import("providers/github.zig");
+const weather = @import("providers/weather.zig");
 const cli = @import("cli.zig");
+const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
 const environ = @import("primitives/environ.zig");
 
@@ -25,6 +27,7 @@ pub const Context = struct {
 	cursor: *cursor.Cursor,
 	daemon: *daemon.Daemon,
 	github: *github.Github,
+	weather: *weather.Weather,
 	socket_path: []const u8,
 };
 
@@ -42,11 +45,48 @@ fn snapshotThunk(ctx: *anyopaque, allocator_: std.mem.Allocator) anyerror![]u8 {
 	return context.hub.snapshot(allocator_);
 }
 
+fn commandThunk(ctx: *anyopaque, value: json.Value) void {
+	const context: *Context = @ptrCast(@alignCast(ctx));
+	const weather_cmd = json.field(value, "weather") orelse return;
+
+	if (json.field(weather_cmd, "shift")) |step| {
+		context.weather.shift(json.integer(step));
+		return;
+	}
+
+	if (json.field(weather_cmd, "focus")) |at| {
+		context.weather.focus(@intCast(json.integer(at)));
+		return;
+	}
+
+	if (json.field(weather_cmd, "search")) |query| {
+		context.weather.search(json.text(query));
+		return;
+	}
+
+	if (json.field(weather_cmd, "dismiss")) |_| {
+		context.weather.dismissSuggestions();
+		return;
+	}
+
+	const pick = json.field(weather_cmd, "choose") orelse json.field(weather_cmd, "add") orelse return;
+	const label = json.textAt(pick, "label");
+	const lat = json.numberAt(pick, "lat");
+	const lon = json.numberAt(pick, "lon");
+
+	if (json.field(weather_cmd, "add") != null) {
+		context.weather.add(label, lat, lon);
+	} else {
+		context.weather.choose(label, lat, lon);
+	}
+}
+
 fn refreshThunk(ctx: *anyopaque) void {
 	const context: *Context = @ptrCast(@alignCast(ctx));
 	context.opencode.refreshAll();
 	context.codex.refresh();
 	context.github.refresh();
+	context.weather.search("");
 }
 
 pub fn main() !void {
@@ -104,6 +144,9 @@ fn run(io: std.Io) !void {
 	const github_provider = try github.Github.create(allocator, io, hub, client);
 	try hub.add(github_provider.provider());
 
+	const weather_provider = try weather.Weather.create(allocator, io, hub, client);
+	try hub.add(weather_provider.provider());
+
 	const context = try allocator.create(Context);
 	context.* = .{
 		.allocator = allocator,
@@ -115,6 +158,7 @@ fn run(io: std.Io) !void {
 		.cursor = cursor_provider,
 		.daemon = daemon_provider,
 		.github = github_provider,
+		.weather = weather_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -125,6 +169,7 @@ fn run(io: std.Io) !void {
 		.snapshot = snapshotThunk,
 		.dismiss = dismissThunk,
 		.refresh = refreshThunk,
+		.command = commandThunk,
 	});
 
 	try hub.ipc.?.start();
@@ -133,6 +178,7 @@ fn run(io: std.Io) !void {
 	try codex_provider.start();
 	try cursor_provider.start();
 	try github_provider.start();
+	try weather_provider.start();
 
 	hub.publish();
 
