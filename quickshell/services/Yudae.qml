@@ -213,7 +213,28 @@ QtObject {
 
 	readonly property var screenState: root.snapshot.screen || ({})
 	readonly property var screenMonitors: root.screenState.monitors || []
+	readonly property int screenPrimary: root.screenState.primary || 0
+	readonly property var screenActive: root.screenMonitors[root.screenPrimary] || null
+	readonly property var settingsState: root.snapshot.settings || ({})
+	readonly property int settingsFontSize: root.settingsState.fontSize || 0
+	readonly property int settingsIconSize: root.settingsState.iconSize || 0
+	readonly property string settingsRecord: root.settingsState.record || ""
+
+	readonly property var screenPanel: root.screenState.panel || ({})
+	readonly property var screenGroups: root.screenPanel.groups || []
 	readonly property string screenRaw: root.screenState.raw || ""
+
+	function screenKey(code) {
+		root.send({ cmd: { screen: { keyCode: code } } });
+	}
+
+	function screenPick(kind, value) {
+		root.send({ cmd: { screen: { pick: { kind: kind, value: value } } } });
+	}
+
+	function screenDetect() {
+		root.send({ cmd: { screen: { detect: true } } });
+	}
 
 	readonly property var appsEntries: (root.snapshot.apps && root.snapshot.apps.entries) || ({})
 	readonly property var systemState: root.snapshot.system || ({})

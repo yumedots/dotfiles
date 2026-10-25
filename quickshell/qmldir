@@ -6,7 +6,6 @@ singleton Parse 1.0 ui/Parse.qml
 singleton Apps 1.0 ui/Apps.qml
 singleton Entries 1.0 ui/Entries.qml
 singleton System 1.0 ui/System.qml
-singleton Display 1.0 ui/Display.qml
 singleton Network 1.0 ui/Network.qml
 singleton Settings 1.0 Settings.qml
 Root 1.0 Root.qml

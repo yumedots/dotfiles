@@ -61,6 +61,18 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		const key = json.textAt(screen_cmd, "key");
 		if (key.len > 0) context.screen.key(key);
 
+		const code = json.field(screen_cmd, "keyCode");
+		if (code) |value_code| context.screen.keyCode(json.integer(value_code));
+
+		if (json.field(screen_cmd, "pick")) |pick| {
+			const kind = json.textAt(pick, "kind");
+			const choice = json.textAt(pick, "value");
+
+			if (kind.len > 0) context.screen.pick(kind, choice);
+		}
+
+		if (json.flag(screen_cmd, "detect")) context.screen.detect();
+
 		return;
 	}
 
