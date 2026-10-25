@@ -16,6 +16,8 @@ test {
 	_ = @import("providers/weather.zig");
 	_ = @import("providers/system.zig");
 	_ = @import("providers/apps.zig");
+	_ = @import("providers/screen.zig");
+	_ = @import("primitives/hypr.zig");
 	_ = @import("primitives/config.zig");
 	_ = @import("cli.zig");
 	_ = @import("bench.zig");

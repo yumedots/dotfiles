@@ -12,6 +12,7 @@ const github = @import("providers/github.zig");
 const weather = @import("providers/weather.zig");
 const system = @import("providers/system.zig");
 const apps = @import("providers/apps.zig");
+const screen = @import("providers/screen.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
@@ -33,6 +34,7 @@ pub const Context = struct {
 	weather: *weather.Weather,
 	system: *system.System,
 	apps: *apps.Apps,
+	screen: *screen.Screen,
 	socket_path: []const u8,
 };
 
@@ -165,6 +167,9 @@ fn run(io: std.Io) !void {
 	const apps_provider = try apps.Apps.create(allocator, io, hub);
 	try hub.add(apps_provider.provider());
 
+	const screen_provider = try screen.Screen.create(allocator, io, hub);
+	try hub.add(screen_provider.provider());
+
 	const context = try allocator.create(Context);
 	context.* = .{
 		.allocator = allocator,
@@ -179,6 +184,7 @@ fn run(io: std.Io) !void {
 		.weather = weather_provider,
 		.system = system_provider,
 		.apps = apps_provider,
+		.screen = screen_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -201,6 +207,7 @@ fn run(io: std.Io) !void {
 	try weather_provider.start();
 	try system_provider.start();
 	try apps_provider.start();
+	try screen_provider.start();
 
 	hub.publish();
 
