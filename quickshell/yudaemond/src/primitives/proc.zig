@@ -51,8 +51,20 @@ pub fn envFrom(block: []const u8, key: []const u8) ?[]const u8 {
 	return null;
 }
 
+var environ_block: ?[]const u8 = null;
+var environ_lock: std.Io.Mutex = .init;
+
+pub fn environ(io: Io, allocator: Allocator) ?[]const u8 {
+	environ_lock.lockUncancelable(io);
+	defer environ_lock.unlock(io);
+
+	if (environ_block == null) environ_block = readFile(io, allocator, "/proc/self/environ") catch null;
+
+	return environ_block;
+}
+
 pub fn env(io: Io, allocator: Allocator, key: []const u8) ?[]const u8 {
-	const block = readFile(io, allocator, "/proc/self/environ") catch return null;
+	const block = environ(io, allocator) orelse return null;
 	return envFrom(block, key);
 }
 

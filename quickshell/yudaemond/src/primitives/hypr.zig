@@ -6,7 +6,6 @@ const Io = std.Io;
 
 pub fn request(io: Io, allocator: Allocator, command: []const u8) ![]u8 {
 	const signature = proc.env(io, allocator, "HYPRLAND_INSTANCE_SIGNATURE") orelse return error.NoHyprland;
-	defer allocator.free(signature);
 
 	const runtime = proc.runtimeDir(io, allocator);
 	const path = try std.fmt.allocPrint(allocator, "{s}/hypr/{s}/.socket.sock", .{ runtime, signature });
@@ -40,7 +39,6 @@ pub fn request(io: Io, allocator: Allocator, command: []const u8) ![]u8 {
 
 pub fn monitorPath(io: Io, allocator: Allocator) ?[]u8 {
 	const signature = proc.env(io, allocator, "HYPRLAND_INSTANCE_SIGNATURE") orelse return null;
-	defer allocator.free(signature);
 
 	const runtime = proc.runtimeDir(io, allocator);
 	return std.fmt.allocPrint(allocator, "{s}/hypr/{s}/.socket2.sock", .{ runtime, signature }) catch null;
