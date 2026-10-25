@@ -80,7 +80,14 @@ pub const Apps = struct {
 		const user = std.fmt.allocPrint(self.allocator, "{s}/.local/share/applications", .{home}) catch return;
 		defer self.allocator.free(user);
 
-		self.scanDir(user, &found);
+		self.scanDir(user, &found, 0);
+		self.scanDir("/var/lib/flatpak/exports/share/applications", &found, 0);
+
+		const flatpak_user = std.fmt.allocPrint(self.allocator, "{s}/.local/share/flatpak/exports/share/applications", .{home}) catch "";
+		if (flatpak_user.len > 0) {
+			defer self.allocator.free(flatpak_user);
+			self.scanDir(flatpak_user, &found, 0);
+		}
 
 		const data_dirs = proc.env(self.io, self.allocator, "XDG_DATA_DIRS") orelse "/usr/local/share:/usr/share";
 		var dirs = std.mem.splitScalar(u8, data_dirs, ':');
@@ -91,7 +98,7 @@ pub const Apps = struct {
 			const path = std.fmt.allocPrint(self.allocator, "{s}/applications", .{dir}) catch continue;
 			defer self.allocator.free(path);
 
-			self.scanDir(path, &found);
+			self.scanDir(path, &found, 0);
 		}
 
 		self.mutex.lockUncancelable(self.io);
@@ -113,20 +120,25 @@ pub const Apps = struct {
 		if (entry.comment.len > 0) self.allocator.free(entry.comment);
 	}
 
-	fn scanDir(self: *Apps, path: []const u8, out: *std.ArrayListUnmanaged(Entry)) void {
+	fn scanDir(self: *Apps, path: []const u8, out: *std.ArrayListUnmanaged(Entry), depth: usize) void {
 		var dir = std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true }) catch return;
 		defer dir.close(self.io);
 
 		var it = dir.iterate();
 
 		while (it.next(self.io) catch null) |item| {
-			if (item.kind != .file) continue;
+			const child = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ path, item.name }) catch continue;
+			defer self.allocator.free(child);
+
+			if (item.kind == .directory) {
+				if (depth < 5) self.scanDir(child, out, depth + 1);
+				continue;
+			}
+
+			if (item.kind != .file and item.kind != .sym_link) continue;
 			if (!std.mem.endsWith(u8, item.name, ".desktop")) continue;
 
-			const file = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ path, item.name }) catch continue;
-			defer self.allocator.free(file);
-
-			if (self.parseEntry(file, item.name)) |entry| {
+			if (self.parseEntry(child, item.name)) |entry| {
 				out.append(self.allocator, entry) catch continue;
 			}
 		}
