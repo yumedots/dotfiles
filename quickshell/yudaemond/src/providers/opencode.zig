@@ -554,13 +554,6 @@ pub const Opencode = struct {
 		return changed;
 	}
 
-	fn hasRunning(self: *Opencode, id: []const u8) bool {
-		self.mutex.lockUncancelable(self.io);
-		defer self.mutex.unlock(self.io);
-
-		return inList(self.running.items, id);
-	}
-
 	fn refreshQuestions(self: *Opencode) void {
 		const url = self.baseUrl(self.allocator) orelse return;
 		defer self.allocator.free(url);
