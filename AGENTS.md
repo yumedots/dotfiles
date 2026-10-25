@@ -55,10 +55,47 @@ Visual verification: hypr-test section below.
 
 Verify every Hyprland, quickshell and dotfile change with scripts/hypr-test. It runs a private nested Hyprland + quickshell on a worktree copy of this repo, so your real session is never touched. A change is not verified until it has been seen through it.
 
-- Edit files here in the repo. Test only with scripts/hypr-test, never with hyprctl or input against the real session.
+- Edit files here in the repo. Test only with scripts/hypr-test, never with hyprctl or input against the real session, except the final smoke test the user explicitly allowed (wtype and `hyprctl dispatch movecursor` only).
 - `scripts/hypr-test start` — nested Hyprland + quickshell on the worktree copy (fails if one is already running).
 - `scripts/hypr-test shot` — screenshot of the test instance, prints the png path.
 - `scripts/hypr-test run <cmd...>` — run hyprctl/qs/ipc against the test instance only.
 - `scripts/hypr-test stop` — kill it and remove the worktree. Always stop when done.
 - Loop: shot, act via run, shot, verify. On errors the script prints the quickshell log — read it instead of guessing.
 - If you cannot see images, hand the png to a vision subagent instead of guessing.
+
+
+# Shell backend: yudaemond
+
+One daemon owns every non-UI job. QML draws, it does not think.
+
+- Nothing non-UI in QML: no curl, no Process for data, no JSON parsing, no state machines. If it is not pixels, it belongs in `quickshell/yudaemond/`.
+- QML consumes state from `services/Yudae.qml` (unix socket, one JSON object per line). Full snapshot, no patch protocol.
+- UI follows the same rules as the backend: no file over 1000 lines, split by function, shared pieces become primitives.
+- Zig stdlib only. No third-party deps, no cgo, no vendored libs. C/C++ only for the Hyprland cursor plugin.
+- Another language is allowed only when it wins on LOC, speed or RAM, and only with the user's explicit yes first.
+- Used twice -> primitive, own file (`yudaemond/src/primitives/`, `quickshell/ui/`).
+- Files over 1000 lines get split by function. A file does one job.
+- Tests only where logic breaks silently (parsers, state merge, protocol framing). No test for a getter. No test frameworks, no fixtures.
+- No comments in code.
+
+Performance gates, measured not guessed:
+
+- `scripts/yubuild` prints build time and build-folder size after every build, and prunes the local cache over 300MB.
+- `yudaemond bench` records binary size, start time (fork to socket ready), idle RSS, idle CPU over 60s, shell total RSS, and the top RAM/CPU hoggers with deltas against `bench/baseline.json`.
+- Budgets: incremental build under 2s, cold build under 20s, binary under 3MB, start under 10ms, idle RSS under 8MB, zero subprocess spawns at steady state.
+- An optimization that breaks parity does not count. Re-run bench after every change that touches a hot path.
+
+Agent tooling is mandatory, not optional:
+
+- `yudaemond --json state` - current state, no QML needed.
+- `yudaemond doctor` - per provider reachability and reasons.
+- `yudaemond bench --json` - the numbers above, machine readable.
+- `yudaemond parity` - old QML vs daemon state comparison.
+- `yudaemond mcp` - stdio JSON-RPC server: state, providers, bench, parity, hypr_start, hypr_shot, hypr_run, hypr_stop, qs_log.
+- Agents never guess a command; these are the entry points.
+
+Lifecycle:
+
+- `systemd/user/yudaemond.service` lives in the repo: `PartOf=graphical-session.target`, `Type=notify`, `Restart=always`.
+- Daemon dies -> read the log, fix the root cause, restart. Never revert working daemon code to get a green run.
+- Quickshell restart must not require a daemon restart, and the daemon restart must not require a shell restart.
