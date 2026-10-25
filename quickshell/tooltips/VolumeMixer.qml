@@ -230,16 +230,9 @@ Item {
 		property bool appIcon: false
 		property bool muted: false
 		property real volume: 0
-		property string iconSource: ""
-
-		function refreshIcon() {
-			channel.lastEpoch = root.iconEpoch;
-			channel.iconSource = root.iconFor(channel.node);
-		}
+		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node, root.iconEpoch) : ""
 
 		readonly property bool selected: System.sameNode(channel.node, root.selectedNode)
-		property int lastEpoch: -1
-		onAppIconChanged: if (channel.appIcon) channel.refreshIcon()
 		readonly property int percent: Math.round(channel.volume * 100)
 		readonly property real level: Util.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(channel.level * Config.mixerStepCount) - 1

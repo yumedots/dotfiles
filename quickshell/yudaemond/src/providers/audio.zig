@@ -65,6 +65,7 @@ pub const Audio = struct {
 	source: i64 = 0,
 	has_input: bool = false,
 	watch: std.atomic.Value(bool) = .init(false),
+	dirty: std.atomic.Value(bool) = .init(true),
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Audio {
 		const self = try allocator.create(Audio);
@@ -90,23 +91,65 @@ pub const Audio = struct {
 	pub fn start(self: *Audio) !void {
 		const thread = try std.Thread.spawn(.{}, loop, .{self});
 		thread.detach();
+
+		const events = try std.Thread.spawn(.{}, subscribe, .{self});
+		events.detach();
+	}
+
+	fn subscribe(self: *Audio) void {
+		while (true) {
+			self.follow();
+			sleep.ms(5000);
+		}
+	}
+
+	fn follow(self: *Audio) void {
+		const child = std.process.spawn(self.io, .{
+			.argv = &.{ "stdbuf", "-oL", "pactl", "subscribe" },
+			.stdin = .ignore,
+			.stdout = .pipe,
+			.stderr = .ignore,
+		}) catch return;
+
+		defer if (child.id) |id| {
+			_ = std.posix.kill(id, std.posix.SIG.KILL) catch {};
+		};
+
+		const fd = child.stdout.?.handle;
+
+		var chunk: [1024]u8 = undefined;
+
+		while (true) {
+			var fds = [_]std.posix.pollfd{.{ .fd = fd, .events = std.posix.POLL.IN, .revents = 0 }};
+
+			const ready = std.posix.poll(&fds, 1000) catch break;
+			if (ready == 0) continue;
+
+			const count = std.posix.read(fd, &chunk) catch break;
+			if (count == 0) break;
+
+			self.dirty.store(true, .monotonic);
+		}
 	}
 
 	fn loop(self: *Audio) void {
 		var tick: usize = 0;
 
 		while (true) {
-			if (tick % 5 == 0 or self.watch.load(.monotonic)) self.sample();
+			const watched = self.watch.load(.monotonic);
+			const changed = self.dirty.swap(false, .monotonic);
+
+			if (changed or watched or tick % 50 == 0) self.sample();
 
 			tick +%= 1;
-			sleep.ms(1000);
+			sleep.ms(100);
 		}
 	}
 
 	pub fn setWatch(self: *Audio, watched: bool) void {
 		const was = self.watch.swap(watched, .monotonic);
 
-		if (watched and !was) self.sample();
+		if (watched and !was) self.dirty.store(true, .monotonic);
 	}
 
 	fn freeNode(self: *Audio, node: Node) void {
@@ -206,13 +249,21 @@ pub const Audio = struct {
 				if (json.field(params, "Props")) |props_list| {
 					if (json.list(props_list).len > 0) {
 						const first = json.list(props_list)[0];
-						if (json.field(first, "volume")) |value| {
-							switch (value) {
-								.integer, .float, .number_string => volume = json.number(value),
-								.array => {
-									for (json.list(value)) |channel| volume = @max(volume, json.number(channel));
-								},
-								else => {},
+
+						if (json.field(first, "channelVolumes")) |channels| {
+							for (json.list(channels)) |channel| volume = @max(volume, json.number(channel));
+							volume = std.math.cbrt(volume);
+						}
+
+						if (volume == 0) {
+							if (json.field(first, "volume")) |value| {
+								switch (value) {
+									.integer, .float, .number_string => volume = json.number(value),
+									.array => {
+										for (json.list(value)) |channel| volume = @max(volume, json.number(channel));
+									},
+									else => {},
+								}
 							}
 						}
 
@@ -379,6 +430,9 @@ const dump_fixture =
 	\\ {"id":54,"type":"PipeWire:Interface:Node","info":{"state":"suspended","props":{
 	\\   "media.class":"Audio/Source","node.name":"mic","node.description":"Mic","device.id":7},
 	\\   "params":{"Props":[{"volume":1.0,"mute":true}]}}},
+	\\ {"id":60,"type":"PipeWire:Interface:Node","info":{"state":"running","props":{
+	\\   "media.class":"Stream/Output/Audio","node.name":"browser","application.name":"Browser"},
+	\\   "params":{"Props":[{"volume":1.0,"channelVolumes":[0.064,0.064],"mute":false}]}}},
 	\\ {"id":68,"type":"PipeWire:Interface:Node","info":{"state":"running","props":{
 	\\   "media.class":"Stream/Output/Audio","node.name":"player","application.name":"Player",
 	\\   "application.process.id":1234},"params":{"Props":[{"volume":0.25,"mute":false}]}}}
@@ -398,12 +452,15 @@ test "pw-dump maps to the mixer shape" {
 
 	try std.testing.expect(audio.apply(dump_fixture));
 
-	try std.testing.expectEqual(@as(usize, 3), audio.nodes.items.len);
+	try std.testing.expectEqual(@as(usize, 4), audio.nodes.items.len);
 	try std.testing.expectEqual(@as(i64, 52), audio.sink);
 	try std.testing.expectEqual(@as(i64, 54), audio.source);
 	try std.testing.expectEqual(false, audio.has_input);
 
-	const player = audio.nodes.items[2];
+	const browser = audio.nodes.items[2];
+	try std.testing.expectEqual(@as(f64, 0.4), browser.volume);
+
+	const player = audio.nodes.items[3];
 	try std.testing.expect(player.is_stream);
 	try std.testing.expect(!player.is_sink);
 	try std.testing.expectEqualStrings("Player", player.app);

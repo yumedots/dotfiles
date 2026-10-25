@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell.Services.Pipewire
 import qs.ui
 import qs
 import "../../tooltips"
@@ -9,9 +8,24 @@ BarStat {
 
 	inkId: "volume"
 
-	readonly property var sink: Pipewire.defaultAudioSink
-	readonly property real volume: root.sink && root.sink.audio ? root.sink.audio.volume : 0
-	readonly property bool isMuted: root.sink && root.sink.audio ? root.sink.audio.muted : false
+	readonly property var mix: Yudae.audio
+	readonly property var sink: root.nodeOf(root.mix.sink)
+	readonly property real volume: root.sink ? root.sink.volume : 0
+	readonly property bool isMuted: root.sink ? root.sink.mute === true : false
+
+	function nodeOf(id) {
+		const list = root.mix.nodes || [];
+
+		for (let i = 0; i < list.length; i++) {
+			if (list[i].id === id)
+				return list[i];
+		}
+
+		return null;
+	}
+
+	onVolumeChanged: root.pingVolume()
+	onIsMutedChanged: root.pingVolume()
 
 	pct: root.volume * 100
 	barColor: Config.volumeBase
@@ -54,28 +68,12 @@ BarStat {
 			root.osd = false;
 	}
 
-	Connections {
-		target: root.sink ? root.sink.audio : null
-
-		function onVolumeChanged() {
-			if (target) root.pingVolume();
-		}
-
-		function onMutedChanged() {
-			if (target) root.pingVolume();
-		}
-	}
-
 	Timer {
 		id: osdTimer
 
 		interval: Config.volumeOsdMs
 
 		onTriggered: root.closePopup()
-	}
-
-	PwObjectTracker {
-		objects: [Pipewire.defaultAudioSink]
 	}
 
 	popupContent: Component {
