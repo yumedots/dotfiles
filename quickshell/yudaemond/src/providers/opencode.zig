@@ -97,6 +97,7 @@ pub const Opencode = struct {
 	connect_error: []u8 = &.{},
 	usage_error: []u8 = &.{},
 	plan_title: []u8 = &.{},
+	resync: std.atomic.Value(bool) = .init(false),
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub, client: *http.Client) !*Opencode {
 		const self = try allocator.create(Opencode);
@@ -269,9 +270,7 @@ pub const Opencode = struct {
 		const kind = json.textAt(root, "type");
 
 		if (std.mem.eql(u8, kind, "server.connected")) {
-			self.refreshSessions();
-			self.refreshRunning();
-			self.refreshQuestions();
+			self.resync.store(true, .release);
 			return;
 		}
 
@@ -435,7 +434,11 @@ pub const Opencode = struct {
 			sleep.ms(1000);
 			tick += 1;
 
-			if (tick % 10 == 0) {
+			if (self.resync.swap(false, .acquire)) {
+				self.refreshSessions();
+				self.refreshRunning();
+				self.refreshQuestions();
+			} else if (tick % 10 == 0) {
 				self.refreshRunning();
 				self.refreshQuestions();
 			}
@@ -498,24 +501,29 @@ pub const Opencode = struct {
 		};
 
 		var next: std.ArrayListUnmanaged([]u8) = .empty;
-		var changed = false;
 
 		self.mutex.lockUncancelable(self.io);
 
 		var it = entries.iterator();
 		while (it.next()) |entry| {
 			const id = entry.key_ptr.*;
-			if (inList(self.running.items, id)) continue;
 
 			const copy = self.allocator.dupe(u8, id) catch continue;
 			next.append(self.allocator, copy) catch {
 				self.allocator.free(copy);
 				continue;
 			};
-			changed = true;
 		}
 
-		if (self.running.items.len != next.items.len) changed = true;
+		var changed = self.running.items.len != next.items.len;
+
+		if (!changed) {
+			for (next.items) |id| {
+				if (inList(self.running.items, id)) continue;
+				changed = true;
+				break;
+			}
+		}
 
 		if (self.clearStaleBusyLocked(next.items)) changed = true;
 

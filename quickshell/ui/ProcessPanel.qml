@@ -23,7 +23,7 @@ Item {
 	property bool showProcessList: true
 	property alias viz: vizColumn.data
 
-	property var allProcs: []
+	readonly property var allProcs: panel.psField === "rss" ? (Yudae.system.byMem || []) : (Yudae.system.byCpu || [])
 	property var heldProcs: []
 	property string filter: ""
 
@@ -62,8 +62,6 @@ Item {
 			panel.forceActiveFocus();
 	}
 
-	Component.onCompleted: if (panel.showProcessList) topProcesses.reload()
-
 	Keys.onPressed: function (event) {
 		if (panel.searching)
 			return;
@@ -81,29 +79,7 @@ Item {
 		}
 	}
 
-	Request {
-		id: topProcesses
-
-		command: ["ps", "-eo", panel.psField + "=,pid=,comm:16=,args=", "--sort=-" + panel.psField]
-
-		function reload() {
-			if (!topProcesses.running)
-				topProcesses.running = true;
-		}
-
-		onDone: function (text) {
-			panel.allProcs = System.parseTopProcesses(text);
-			panel.heldProcs = System.holdProcessOrder(panel.heldProcs, System.topProcesses(panel.allProcs, Config.psIgnore));
-		}
-	}
-
-	Timer {
-		interval: Config.cpuPollMs * 2
-		running: panel.onScreen && panel.showProcessList
-		repeat: true
-		triggeredOnStart: true
-		onTriggered: topProcesses.reload()
-	}
+	onAllProcsChanged: panel.heldProcs = System.holdProcessOrder(panel.heldProcs, System.topProcesses(panel.allProcs, Config.psIgnore))
 
 	Column {
 		id: column

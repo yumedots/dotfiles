@@ -10,7 +10,7 @@ const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
 const max_cores = 64;
-const max_top = 10;
+const max_top = 48;
 
 fn sanitize(name: []const u8) []const u8 {
 	for (name) |byte| {
@@ -36,9 +36,9 @@ const Process = struct {
 
 const ProcessOut = struct {
 	pid: i32,
-	comm: []const u8,
-	cpu: f64,
-	rssKb: i64,
+	name: []const u8,
+	cmd: []const u8,
+	value: f64,
 };
 
 const CpuOut = struct {
@@ -76,6 +76,8 @@ const Out = struct {
 	memory: MemoryOut,
 	battery: BatteryOut,
 	processes: []ProcessOut,
+	byCpu: []ProcessOut,
+	byMem: []ProcessOut,
 };
 
 pub const System = struct {
@@ -106,6 +108,8 @@ pub const System = struct {
 	governor: []u8 = &.{},
 	top: [max_top]Process = @splat(.{}),
 	top_count: usize = 0,
+	mem_top: [max_top]Process = @splat(.{}),
+	mem_count: usize = 0,
 	previous: std.AutoHashMapUnmanaged(i32, i64) = .empty,
 	last_cpu: [max_cores + 1][4]i64 = undefined,
 	last_cpu_count: usize = 0,
@@ -314,6 +318,8 @@ pub const System = struct {
 		var next: std.AutoHashMapUnmanaged(i32, i64) = .empty;
 		var top: [max_top]Process = @splat(.{});
 		var top_count: usize = 0;
+		var mem_top: [max_top]Process = @splat(.{});
+		var mem_count: usize = 0;
 
 		for (list) |*entry| {
 			const before = self.previous.get(entry.pid) orelse entry.ticks;
@@ -332,6 +338,7 @@ pub const System = struct {
 			};
 
 			insertTop(&top, &top_count, candidate);
+			insertTopByMem(&mem_top, &mem_count, candidate);
 		}
 
 		self.previous.deinit(self.allocator);
@@ -340,7 +347,24 @@ pub const System = struct {
 		self.mutex.lockUncancelable(self.io);
 		self.top = top;
 		self.top_count = top_count;
+		self.mem_top = mem_top;
+		self.mem_count = mem_count;
 		self.mutex.unlock(self.io);
+	}
+
+	fn insertTopByMem(list: *[max_top]Process, count: *usize, candidate: Process) void {
+		var at: usize = 0;
+
+		while (at < count.* and list[at].rss_kb >= candidate.rss_kb) : (at += 1) {}
+
+		if (at >= max_top) return;
+
+		const limit = @min(count.*, max_top - 1);
+		var index = limit;
+		while (index > at) : (index -= 1) list[index] = list[index - 1];
+
+		list[at] = candidate;
+		if (count.* < max_top) count.* += 1;
 	}
 
 	fn insertTop(list: *[max_top]Process, count: *usize, candidate: Process) void {
@@ -405,9 +429,19 @@ pub const System = struct {
 		for (self.top[0..self.top_count]) |*entry| {
 			try processes.append(arena, .{
 				.pid = entry.pid,
-				.comm = entry.name(),
-				.cpu = @round(entry.cpu * 10) / 10,
-				.rssKb = entry.rss_kb,
+				.name = entry.name(),
+				.cmd = entry.name(),
+				.value = @round(entry.cpu * 10) / 10,
+			});
+		}
+
+		var by_mem: std.ArrayListUnmanaged(ProcessOut) = .empty;
+		for (self.mem_top[0..self.mem_count]) |*entry| {
+			try by_mem.append(arena, .{
+				.pid = entry.pid,
+				.name = entry.name(),
+				.cmd = entry.name(),
+				.value = @floatFromInt(entry.rss_kb),
 			});
 		}
 
@@ -437,6 +471,8 @@ pub const System = struct {
 				.state = self.battery_state,
 			},
 			.processes = processes.items,
+			.byCpu = processes.items,
+			.byMem = by_mem.items,
 		};
 
 		try writer.print("{f}", .{std.json.fmt(out, .{})});

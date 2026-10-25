@@ -46,7 +46,7 @@ pub const Client = struct {
 			.response_writer = &out.writer,
 			.headers = headers,
 			.extra_headers = extra,
-			.keep_alive = true,
+			.keep_alive = false,
 		});
 
 		return .{ .status = result.status, .body = try out.toOwnedSlice() };
