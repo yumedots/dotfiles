@@ -3,6 +3,7 @@ const hubmod = @import("../hub.zig");
 const hypr = @import("../primitives/hypr.zig");
 const json = @import("../primitives/json.zig");
 const sleep = @import("../primitives/sleep.zig");
+const config = @import("../primitives/config.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -65,6 +66,7 @@ const MonitorOut = struct {
 	workspace: []const u8,
 	modes: []ModeOut,
 	resolutions: []ResOut,
+	scales: []f64,
 };
 
 const Out = struct {
@@ -81,6 +83,8 @@ pub const Screen = struct {
 	monitors: std.ArrayListUnmanaged(Monitor) = .empty,
 	raw: []u8 = &.{},
 	available: bool = false,
+	scale_min: f64 = 1,
+	scale_max: f64 = 2,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Screen {
 		const self = try allocator.create(Screen);
@@ -91,7 +95,17 @@ pub const Screen = struct {
 			.scratch = std.heap.ArenaAllocator.init(allocator),
 		};
 
+		self.loadConfig();
+
 		return self;
+	}
+
+	fn loadConfig(self: *Screen) void {
+		const cfg = config.Config.load(self.io, self.allocator) catch return;
+		defer cfg.deinit();
+
+		self.scale_min = cfg.number("displayScaleMin", 1);
+		self.scale_max = cfg.number("displayScaleMax", 2);
 	}
 
 	pub fn provider(self: *Screen) hubmod.Provider {
@@ -233,6 +247,14 @@ pub const Screen = struct {
 				found.?.refreshes = refreshes.items;
 			}
 
+			var scales: std.ArrayListUnmanaged(f64) = .empty;
+			const scale_steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
+
+			for (scale_steps) |value| {
+				if (value < self.scale_min or value > self.scale_max) continue;
+				try scales.append(arena, value);
+			}
+
 			try monitors.append(arena, .{
 				.id = monitor.id,
 				.name = monitor.name,
@@ -251,6 +273,7 @@ pub const Screen = struct {
 				.workspace = monitor.workspace,
 				.modes = modes.items,
 				.resolutions = resolutions.items,
+				.scales = scales.items,
 			});
 		}
 
