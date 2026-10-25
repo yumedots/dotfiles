@@ -17,7 +17,7 @@ Item {
 	readonly property var focused: root.rawSlots[root.index] || ({})
 
 	readonly property int code: root.focused.code === undefined ? -1 : root.focused.code
-	readonly property var codeInfo: Forecast.weatherCodeInfo(root.code, Config.weatherCodes, Config.weatherIcon)
+	readonly property var codeInfo: Format.weatherCodeInfo(root.code, Config.weatherCodes, Config.weatherIcon)
 	readonly property string icon: root.codeInfo.glyph
 	readonly property string description: root.codeInfo.name
 

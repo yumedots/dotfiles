@@ -22,7 +22,7 @@ Item {
 	readonly property bool loading: root.now.loading === true
 	readonly property string savedPlace: String(Weather.places[Weather.index] || "").split(",")[0].trim()
 	readonly property string placeName: root.now.place ? root.now.place : root.savedPlace
-	readonly property var temp: Forecast.splitTemp(root.now.temp || "")
+	readonly property var temp: Format.splitTemp(root.now.temp || "")
 	readonly property string tempValue: root.loading || root.temp.value === "" ? "--" : root.temp.value
 	readonly property string tempUnit: root.loading ? "" : root.temp.unit
 	readonly property var match: root.bestMatch()
@@ -109,7 +109,7 @@ Item {
 	}
 
 	function dayTempText(row) {
-		return Forecast.splitTemp(row.tempMax).value + "° " + Forecast.splitTemp(row.tempMin).value + "°";
+		return Format.splitTemp(row.tempMax).value + "° " + Format.splitTemp(row.tempMin).value + "°";
 	}
 
 	function syncSuggest() {
@@ -724,7 +724,7 @@ Item {
 							font.pixelSize: Config.weatherDayGlyphSize
 							color: Config.foreground
 							text: dayCell.row
-								? Forecast.weatherCodeInfo(dayCell.row.code, Config.weatherCodes, Config.weatherIcon).glyph
+								? Format.weatherCodeInfo(dayCell.row.code, Config.weatherCodes, Config.weatherIcon).glyph
 								: Config.weatherLoadingIcon
 						}
 
