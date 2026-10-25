@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell.Io
 import qs
 import qs.ui
 import qs.services
@@ -10,50 +9,30 @@ BarStat {
 
 	inkId: "network"
 
-	property var prev: null
-	property var counts: ({})
-	property var history: []
-	property string netRaw: ""
-	property string devRaw: ""
-	property string infoRaw: ""
-	property string wifiRaw: ""
-	property real peak: 1
-	property bool scanned: false
-	property bool testPending: false
-
-	readonly property var devs: Network.parseDevs(root.devRaw)
-	readonly property var dev: Network.pickDev(root.devs)
-	readonly property string iface: root.dev ? root.dev.device : ""
-	readonly property string kind: root.dev ? root.dev.type : ""
+	readonly property var net: Yudae.network
+	readonly property string iface: root.net.iface || ""
+	readonly property string kind: root.net.kind || ""
 	readonly property bool isWifi: root.kind === "wifi"
-	readonly property var rates: Network.rateBetween(root.prev, root.counts, root.iface, Config.networkPollMs / 1000)
-	readonly property real down: root.rates.down
-	readonly property real up: root.rates.up
-	readonly property var info: Network.deviceInfo(root.infoRaw)
-	readonly property string ip: root.info.ip
-	readonly property int signal: Network.currentSignal(root.wifiRaw)
+	readonly property bool linked: root.net.connected === true
+	readonly property real down: root.net.down || 0
+	readonly property real up: root.net.up || 0
+	readonly property var history: root.net.history || []
+	readonly property real peak: root.net.peak || 1
+	readonly property int signal: root.net.signal || 0
 	readonly property int bars: Network.signalBars(root.signal)
-	readonly property bool linked: root.dev !== null && root.dev.state.indexOf("connected") === 0
 	readonly property int wifiStep: Util.clamp(root.bars, 1, 4) - 1
 	readonly property string wifiIcon: Config.networkWifiIcons[root.wifiStep]
+
+	property string infoRaw: ""
+	property string wifiRaw: ""
+	property bool testPending: false
 
 	barColor: Util.pick(Config.mono, Config.networkBase, Config.networkBaseMono)
 	textColor: root.barColor
 	icon: root.isWifi ? root.wifiIcon : Config.networkLanIcon
 
-	function handleNet(text) {
-		const now = Network.parseRates(text);
-
-		root.prev = root.counts;
-		root.counts = now;
-
-		pushHistory();
-	}
-
-	function refresh() {
-		netFile.reload();
-		devRun.reload();
-	}
+	onIfaceChanged: refreshInfo()
+	onPopupVisibleChanged: if (root.popupVisible) scan()
 
 	function refreshInfo() {
 		if (root.iface === "")
@@ -89,58 +68,6 @@ BarStat {
 		root.testPending = false;
 	}
 
-	onIfaceChanged: refreshInfo()
-	onPopupVisibleChanged: {
-		if (root.popupVisible)
-			root.scan();
-	}
-
-	function pushHistory() {
-		const next = root.history.concat([{ down: root.down, up: root.up }]);
-
-		root.history = next.slice(Math.max(0, next.length - Config.networkHistory));
-		root.peak = Math.max(1, root.down, root.up, root.peak * 0.98);
-	}
-
-	Component.onCompleted: {
-		refresh();
-		devRun.reload();
-	}
-
-	FileView {
-		id: netFile
-
-		path: "/proc/net/dev"
-		blockLoading: true
-
-		onLoaded: root.handleNet(netFile.text())
-	}
-
-	Timer {
-		interval: Config.networkPollMs
-		running: true
-		repeat: true
-		triggeredOnStart: true
-
-		onTriggered: {
-			netFile.reload();
-			devRun.reload();
-		}
-	}
-
-	Request {
-		id: devRun
-
-		command: ["nmcli", "-t", "-e", "no", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"]
-
-		function reload() {
-			if (!devRun.running)
-				devRun.running = true;
-		}
-
-		onDone: function (text) { root.devRaw = text; }
-	}
-
 	Request {
 		id: infoRun
 
@@ -154,8 +81,6 @@ BarStat {
 
 	Request {
 		id: wifiRun
-
-		command: Network.listCommand()
 
 		function reload() {
 			if (!wifiRun.running)

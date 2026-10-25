@@ -215,6 +215,8 @@ QtObject {
 	readonly property var screenMonitors: root.screenState.monitors || []
 	readonly property int screenPrimary: root.screenState.primary || 0
 	readonly property var screenActive: root.screenMonitors[root.screenPrimary] || null
+	readonly property var networkState: root.snapshot.network || ({})
+
 	readonly property var settingsState: root.snapshot.settings || ({})
 	readonly property int settingsFontSize: root.settingsState.fontSize || 0
 	readonly property int settingsIconSize: root.settingsState.iconSize || 0

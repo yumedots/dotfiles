@@ -10,6 +10,18 @@ const Io = std.Io;
 const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
+const Hist = struct {
+	down: f64,
+	up: f64,
+};
+
+const HistOut = struct {
+	down: f64,
+	up: f64,
+};
+
+const history_len = 60;
+
 const Out = struct {
 	iface: []const u8,
 	kind: []const u8,
@@ -21,6 +33,8 @@ const Out = struct {
 	downText: []const u8,
 	upText: []const u8,
 	linkSpeed: i64,
+	peak: f64,
+	history: []HistOut,
 };
 
 pub const Network = struct {
@@ -37,6 +51,10 @@ pub const Network = struct {
 	up: f64 = 0,
 	connected: bool = false,
 	link_speed: i64 = 0,
+	peak: f64 = 1,
+	history: [history_len]Hist = @splat(.{ .down = 0, .up = 0 }),
+	history_count: usize = 0,
+	history_start: usize = 0,
 	last_rx: u64 = 0,
 	last_tx: u64 = 0,
 	last_at: i64 = 0,
@@ -128,6 +146,12 @@ pub const Network = struct {
 		self.last_rx = rx;
 		self.last_tx = tx;
 		self.last_at = now;
+
+		self.history[self.history_start] = .{ .down = self.down, .up = self.up };
+		self.history_start = (self.history_start + 1) % history_len;
+		if (self.history_count < history_len) self.history_count += 1;
+
+		self.peak = @max(1, @max(self.down, @max(self.up, self.peak * 0.98)));
 		self.mutex.unlock(self.io);
 
 		self.hub.publish();
@@ -264,11 +288,25 @@ pub const Network = struct {
 			.downText = try rateText(arena, self.down),
 			.upText = try rateText(arena, self.up),
 			.linkSpeed = self.link_speed,
+			.peak = @round(self.peak),
+			.history = try historyOut(arena, self),
 		};
 
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
+
+fn historyOut(arena: Allocator, self: *Network) ![]HistOut {
+	var out: std.ArrayListUnmanaged(HistOut) = .empty;
+	const start = (self.history_start + history_len - self.history_count) % history_len;
+
+	for (0..self.history_count) |index| {
+		const entry = self.history[(start + index) % history_len];
+		try out.append(arena, .{ .down = @round(entry.down), .up = @round(entry.up) });
+	}
+
+	return out.items;
+}
 
 fn rateText(allocator: Allocator, rate: f64) ![]u8 {
 	if (rate < 1024) return std.fmt.allocPrint(allocator, "{d} B/s", .{@as(i64, @intFromFloat(rate))});
