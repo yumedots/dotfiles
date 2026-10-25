@@ -334,7 +334,7 @@ pub const Screen = struct {
 			return .{ .row = 0, .step = 0, .rows = &names, .cursor = names[0], .options = &.{}, .selected = -1, .value = "" };
 		}
 
-		const monitor = self.monitors.items[0];
+		const monitor = &self.monitors.items[0];
 		const kind = names[@intCast(@mod(self.row, 4))];
 
 		if (std.mem.eql(u8, kind, "scale")) {
@@ -369,15 +369,82 @@ pub const Screen = struct {
 		const step: usize = if (options.items.len == 0) 0 else @intCast(@mod(self.step, @as(i64, @intCast(options.items.len))));
 		self.step = @intCast(step);
 
+		const selected = self.currentLocked(kind, monitor, options.items);
+
 		return .{
 			.row = self.row,
 			.step = self.step,
 			.rows = &names,
 			.cursor = kind,
 			.options = options.items,
-			.selected = if (options.items.len == 0) -1 else @intCast(step),
+			.selected = selected,
 			.value = if (options.items.len == 0) "" else options.items[step],
 		};
+	}
+
+	fn currentLocked(self: *Screen, kind: []const u8, monitor: *Monitor, options: []const []const u8) i64 {
+		_ = options;
+
+		if (std.mem.eql(u8, kind, "scale")) {
+			var best: i64 = -1;
+			var best_delta: f64 = 1e9;
+			const steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
+			var index: i64 = 0;
+
+			for (steps) |value| {
+				if (value < self.scale_min or value > self.scale_max) continue;
+
+				const delta = @abs(value - monitor.scale);
+				if (delta < best_delta) {
+					best_delta = delta;
+					best = index;
+				}
+
+				index += 1;
+			}
+
+			return best;
+		}
+
+		if (std.mem.eql(u8, kind, "refresh")) {
+			for (monitor.modes.items, 0..) |mode, i| {
+				if (mode.width == monitor.width and mode.height == monitor.height and @abs(mode.refresh - monitor.refresh) < 0.5) return @intCast(i);
+			}
+
+			return 0;
+		}
+
+		if (std.mem.eql(u8, kind, "font")) {
+			const target = if (self.settings) |target_settings| target_settings.font_size else 0;
+
+			for (self.fonts[0..self.font_count], 0..) |size, i| {
+				if (size == target) return @intCast(i);
+			}
+
+			return 0;
+		}
+
+		var index: i64 = 0;
+		var seen: std.ArrayListUnmanaged(ResSize) = .empty;
+		defer seen.deinit(self.allocator);
+
+		for (monitor.modes.items) |mode| {
+			var found = false;
+			for (seen.items) |item| {
+				if (item.width == mode.width and item.height == mode.height) {
+					found = true;
+					break;
+				}
+			}
+
+			if (found) continue;
+			seen.append(self.allocator, .{ .width = mode.width, .height = mode.height }) catch return 0;
+
+			if (mode.width == monitor.width and mode.height == monitor.height) return index;
+			index += 1;
+		}
+
+		return 0;
 	}
 
 	fn render(self: *Screen, writer: *Writer) !void {
