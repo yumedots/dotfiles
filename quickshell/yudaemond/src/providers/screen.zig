@@ -393,19 +393,25 @@ pub const Screen = struct {
 
 		if (kind == 0) {
 			defer self.reloadHyprland();
-			const steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
-			var options: [8]f64 = undefined;
+
+			const grid: i64 = 120;
+			const low: i64 = @intFromFloat(@ceil(self.scale_min * @as(f64, @floatFromInt(grid))));
+			const high: i64 = @intFromFloat(@floor(self.scale_max * @as(f64, @floatFromInt(grid))));
+
+			var valid: [256]f64 = undefined;
 			var count: usize = 0;
 
-			for (steps) |value| {
-				if (value < self.scale_min or value > self.scale_max) continue;
-				options[count] = value;
+			var candidate = low;
+			while (candidate <= high and count < valid.len) : (candidate += 1) {
+				if (@rem(monitor.width * grid, candidate) != 0) continue;
+				if (@rem(monitor.height * grid, candidate) != 0) continue;
+
+				valid[count] = @as(f64, @floatFromInt(candidate)) / @as(f64, @floatFromInt(grid));
 				count += 1;
 			}
 
 			if (count == 0) return;
-			const chosen = options[step % count];
-			target.setOutput(monitor.name, null, if (@abs(chosen - 1.33) < 0.001) 1.333333 else chosen);
+			target.setOutput(monitor.name, null, valid[step % count]);
 		} else if (kind == 1) {
 			defer self.reloadHyprland();
 			var modes: std.ArrayListUnmanaged(Mode) = .empty;
@@ -559,15 +565,28 @@ pub const Screen = struct {
 		};
 	}
 
+	fn scaleOptions(self: *Screen, arena: Allocator, monitor: *Monitor) ![]const []const u8 {
+		var options: std.ArrayListUnmanaged([]const u8) = .empty;
+		const grid: i64 = 120;
+		const low: i64 = @intFromFloat(@ceil(self.scale_min * @as(f64, @floatFromInt(grid))));
+		const high: i64 = @intFromFloat(@floor(self.scale_max * @as(f64, @floatFromInt(grid))));
+
+		var step = low;
+		while (step <= high) : (step += 1) {
+			if (!scaleValid(monitor.width, monitor.height, step)) continue;
+
+			const value = @as(f64, @floatFromInt(step)) / @as(f64, @floatFromInt(grid));
+			try options.append(arena, try std.fmt.allocPrint(arena, "{d:.4}", .{value}));
+		}
+
+		return options.items;
+	}
+
 	fn optionsFor(self: *Screen, arena: Allocator, monitor: *Monitor, kind: []const u8) ![]const []const u8 {
 		var options: std.ArrayListUnmanaged([]const u8) = .empty;
 
 		if (std.mem.eql(u8, kind, "scale")) {
-			const steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
-			for (steps) |value| {
-				if (value < self.scale_min or value > self.scale_max) continue;
-				try options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{value}));
-			}
+			for (try self.scaleOptions(arena, monitor)) |value| try options.append(arena, value);
 		} else if (std.mem.eql(u8, kind, "refresh")) {
 			var modes: std.ArrayListUnmanaged(Mode) = .empty;
 			for (monitor.modes.items) |mode| {
@@ -596,12 +615,17 @@ pub const Screen = struct {
 		if (std.mem.eql(u8, kind, "scale")) {
 			var best: i64 = -1;
 			var best_delta: f64 = 1e9;
-			const steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
 			var index: i64 = 0;
 
-			for (steps) |value| {
-				if (value < self.scale_min or value > self.scale_max) continue;
+			const grid: i64 = 120;
+			const low: i64 = @intFromFloat(@ceil(self.scale_min * @as(f64, @floatFromInt(grid))));
+			const high: i64 = @intFromFloat(@floor(self.scale_max * @as(f64, @floatFromInt(grid))));
 
+			var candidate = low;
+			while (candidate <= high) : (candidate += 1) {
+				if (!scaleValid(monitor.width, monitor.height, candidate)) continue;
+
+				const value = @as(f64, @floatFromInt(candidate)) / @as(f64, @floatFromInt(grid));
 				const delta = @abs(value - monitor.scale);
 				if (delta < best_delta) {
 					best_delta = delta;
@@ -786,6 +810,13 @@ fn byRefreshDesc(_: void, a: ModeOut, b: ModeOut) bool {
 	return a.refresh > b.refresh;
 }
 
+fn scaleValid(width: i64, height: i64, step: i64) bool {
+	const grid: i64 = 120;
+	if (step <= 0) return false;
+
+	return @rem(width * grid, step) == 0 and @rem(height * grid, step) == 0;
+}
+
 fn workspaceString(workspace: json.Value) []const u8 {
 	const name = json.textAt(workspace, "name");
 	if (name.len > 0) return name;
@@ -809,6 +840,13 @@ fn parseMode(label: []const u8) ?Mode {
 	const refresh = std.fmt.parseFloat(f64, refresh_text[0..cut]) catch return null;
 
 	return .{ .width = width, .height = height, .refresh = refresh };
+}
+
+test "scales that hyprland accepts" {
+	try std.testing.expect(scaleValid(2560, 1440, 160));
+	try std.testing.expect(!scaleValid(2560, 1440, 180));
+	try std.testing.expect(scaleValid(1920, 1080, 120));
+	try std.testing.expect(!scaleValid(2560, 1440, 0));
 }
 
 test "modes parse from hyprctl labels" {
