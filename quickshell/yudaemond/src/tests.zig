@@ -29,4 +29,5 @@ test {
 	_ = @import("parity.zig");
 	_ = @import("mcp.zig");
 	_ = @import("primitives/exec.zig");
+	_ = @import("primitives/calc.zig");
 }

@@ -8,7 +8,7 @@ const Io = std.Io;
 const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
-const Entry = struct {
+pub const Entry = struct {
 	id: []u8,
 	name: []u8,
 	icon: []u8,
@@ -19,7 +19,7 @@ const Entry = struct {
 	comment: []u8 = &.{},
 };
 
-const EntryOut = struct {
+pub const EntryOut = struct {
 	id: []const u8,
 	name: []const u8,
 	icon: []const u8,
@@ -57,6 +57,15 @@ pub const Apps = struct {
 	fn renderThunk(ctx: *anyopaque, writer: *Writer) anyerror!void {
 		const self: *Apps = @ptrCast(@alignCast(ctx));
 		try self.render(writer);
+	}
+
+	/// Hands the parsed entries to `callback` while the list is locked for the
+	/// duration of the call. The slice is valid only inside the callback.
+	pub fn view(self: *Apps, ctx: anytype, callback: fn (@TypeOf(ctx), []const Entry) void) void {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		callback(ctx, self.entries.items);
 	}
 
 	pub fn start(self: *Apps) !void {
@@ -283,4 +292,67 @@ fn stripFieldCodes(allocator: Allocator, token: []const u8) ![]u8 {
 	}
 
 	return out.toOwnedSlice(allocator);
+}
+
+test "the desktop scan walks nested dirs, skips hidden entries and stops at the depth limit" {
+	const io = std.Io.Threaded.global_single_threaded.io();
+
+	var hub: hubmod.Hub = .{ .allocator = std.testing.allocator, .io = io };
+	const self = try Apps.create(std.testing.allocator, io, &hub);
+	defer {
+		for (self.entries.items) |entry| self.freeEntry(entry);
+		self.entries.deinit(std.testing.allocator);
+		self.scratch.deinit();
+		std.testing.allocator.destroy(self);
+	}
+
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+
+	const visible =
+		"[Desktop Entry]\n" ++
+		"Name=Top App\n" ++
+		"Icon=top\n" ++
+		"Exec=/bin/top %U\n";
+
+	try tmp.dir.writeFile(io, .{ .sub_path = "Top.desktop", .data = visible });
+	try tmp.dir.createDirPath(io, "sub/deeper/one/two/three/four");
+	try tmp.dir.writeFile(io, .{ .sub_path = "sub/Nested.desktop", .data = visible });
+	try tmp.dir.writeFile(io, .{ .sub_path = "sub/notes.txt", .data = "not a desktop file" });
+	try tmp.dir.writeFile(io, .{ .sub_path = "sub/Hidden.desktop", .data =
+		"[Desktop Entry]\n" ++
+		"Name=Hidden App\n" ++
+		"Exec=/bin/hidden\n" ++
+		"Hidden=true\n" });
+	try tmp.dir.writeFile(io, .{ .sub_path = "sub/deeper/one/two/three/four/Missed.desktop", .data = visible });
+
+	var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+	const len = try tmp.dir.realPath(io, &buffer);
+
+	var out: std.ArrayListUnmanaged(Entry) = .empty;
+	defer {
+		for (out.items) |entry| self.freeEntry(entry);
+		out.deinit(std.testing.allocator);
+	}
+
+	self.scanDir(buffer[0..len], &out, 0);
+
+	try std.testing.expectEqual(@as(usize, 2), out.items.len);
+
+	var ids: [2][]const u8 = undefined;
+	for (out.items, 0..) |entry, index| ids[index] = entry.id;
+
+	std.mem.sort([]const u8, &ids, {}, struct {
+		fn less(_: void, a: []const u8, b: []const u8) bool {
+			return std.mem.lessThan(u8, a, b);
+		}
+	}.less);
+
+	try std.testing.expectEqualStrings("Nested", ids[0]);
+	try std.testing.expectEqualStrings("Top", ids[1]);
+
+	for (out.items) |entry| {
+		try std.testing.expectEqualStrings("Top App", entry.name);
+		try std.testing.expectEqualStrings("/bin/top", entry.command);
+	}
 }
