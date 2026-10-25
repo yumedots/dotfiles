@@ -39,7 +39,7 @@ Shape {
 		}
 	}
 
-const figureShapes = [
+readonly property var figureShapes: [
 	{ exponent: 4 },
 	{ exponent: 2, lobes: 9, scallop: 0.16 },
 	{ exponent: 2, lobes: 3, scallop: 0.28 },
@@ -52,7 +52,7 @@ const figureShapes = [
 	{ exponent: 8, lobes: 8, scallop: 0.12 }
 ];
 
-const coarseSteps = 512;
+readonly property int coarseSteps: 512;
 
 function figureShape(version) {
 	return figureShapes[Math.round(version) - 1] || figureShapes[0];

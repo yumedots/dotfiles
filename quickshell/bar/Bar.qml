@@ -12,8 +12,8 @@ PanelWindow {
 	required property var modelData
 	screen: modelData
 
-	property var layout: BarLayout.barLayoutEmpty()
-	readonly property var parsed: BarLayout.parseBarLayout(layoutFile.text())
+	property var layout: barLayoutEmpty()
+	readonly property var parsed: parseBarLayout(layoutFile.text())
 	property var widgets: ({})
 
 	onParsedChanged: if (bar.parsed !== null) bar.layout = bar.parsed
@@ -335,5 +335,46 @@ PanelWindow {
 			model: bar.layout.right
 			delegate: slotDelegate
 		}
+	}
+
+	function barLayoutEmpty() {
+		return {
+			position: "top",
+			transparent: false,
+			centerAnchor: "",
+			left: [],
+			center: [],
+			right: []
+		};
+	}
+
+	function parseBarLayout(text) {
+		let data;
+
+		try {
+			data = JSON.parse(String(text === undefined || text === null ? "" : text));
+		} catch (error) {
+			return null;
+		}
+
+		const bar = data && typeof data === "object" && data.bar && typeof data.bar === "object" ? data.bar : {};
+		const layout = bar.layout && typeof bar.layout === "object" ? bar.layout : {};
+		const slot = function (name) {
+			const list = layout[name];
+
+			if (!Array.isArray(list))
+				return [];
+
+			return list.filter(function (entry) { return entry && typeof entry.id === "string" && entry.id !== ""; });
+		};
+
+		return {
+			position: bar.position === "bottom" ? "bottom" : "top",
+			transparent: bar.transparent === true,
+			centerAnchor: typeof bar.centerAnchor === "string" ? bar.centerAnchor : "",
+			left: slot("left"),
+			center: slot("center"),
+			right: slot("right")
+		};
 	}
 }

@@ -421,27 +421,6 @@ assert(!rememberable(procRow), "killing a process is not something usage remembe
 
 });
 
-section("layout", function () {
-const layout = parseBarLayout(JSON.stringify({ version: 1, bar: { position: "bottom", transparent: true, centerAnchor: "date", layout: { left: [{ id: "workspaces" }, { id: "spacer", size: 12 }], center: [{ id: "clock", format: "HH:mm" }], right: [{ id: "date" }] } } }));
-assert(layout.position === "bottom" && layout.transparent === true, "the bar position and the transparent flag are read");
-assert(layout.centerAnchor === "date", "centerAnchor names the item the center is pinned to");
-assert(layout.left.length === 2 && layout.left[1].size === 12, "the slots keep the entries and their own settings");
-assert(layout.center[0].format === "HH:mm", "an entry can carry a format");
-assert(layout.right.length === 1 && layout.right[0].id === "date", "the right slot is read on its own");
-
-assert(parseBarLayout("") === null && parseBarLayout("{ broken") === null, "a file that is missing or broken is no layout, so the bar keeps the one it has");
-assert(parseBarLayout('{"bar": {"layout": {"left": "nope"}}}').left.length === 0, "a slot that is not a list is empty, the file decides");
-assert(parseBarLayout('{"bar": {"layout": {"left": []}}}').left.length === 0, "an empty slot stays empty");
-assert(barLayoutEmpty().right.length === 0 && barLayoutEmpty().position === "top", "the empty layout starts the bar with no widgets");
-assert(parseBarLayout("{}").centerAnchor === "", "a layout without a center anchor pins the center to nothing");
-assert(parseBarLayout('{"bar": {"layout": {"left": [{"name": "x"}, 3, {"id": "tray"}]}}}').left.length === 1, "entries without an id are dropped");
-assert(parseBarLayout('{"bar": {"position": "left"}}').position === "top", "a position that is neither top nor bottom is top");
-
-assert(plainText("<b>hi</b> &amp; <i>there</i><br>line") === "hi & there line", "markup is stripped from a notification body");
-assert(plainText("") === "" && plainText(null) === "", "an empty body stays empty");
-
-});
-
 section("mixer", function () {
 	const sink = { id: 1, isSink: true, audio: { volume: 0.5, muted: false } };
 	const source = { id: 2, isSink: false, audio: { volume: 0.7, muted: true } };

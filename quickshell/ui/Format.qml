@@ -3,9 +3,9 @@ pragma Singleton
 import QtQuick
 
 QtObject {
-	const objectPath = "/org/mpris/MediaPlayer2";
-	const playerInterface = "org.mpris.MediaPlayer2.Player";
-	const methods = { playPause: "PlayPause", next: "Next", previous: "Previous" };
+	readonly property string objectPath: "/org/mpris/MediaPlayer2";
+	readonly property string playerInterface: "org.mpris.MediaPlayer2.Player";
+	readonly property var methods: ({ playPause: "PlayPause", next: "Next", previous: "Previous" });
 
 	function hasContent(player) {
 		if (!player)

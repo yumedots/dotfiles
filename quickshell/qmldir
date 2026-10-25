@@ -6,7 +6,6 @@ Parse 1.0 lib/parse.js
 Apps 1.0 lib/apps.js
 Entries 1.0 lib/entries.js
 System 1.0 lib/system.js
-BarLayout 1.0 lib/bar-layout.js
 Display 1.0 lib/display.js
 Network 1.0 lib/network.js
 singleton Settings 1.0 Settings.qml

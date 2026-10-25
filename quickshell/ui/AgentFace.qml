@@ -320,7 +320,7 @@ Item {
 		}
 	}
 
-const TWO_PI = Math.PI * 2;
+readonly property real twoPi: Math.PI * 2;
 
 function superellipseRadius(angle, exponent) {
 	const cos = Math.abs(Math.cos(angle));
@@ -343,10 +343,10 @@ function shapePoints(spec) {
 
 	for (let i = 0; i < samples; i++) {
 		const fraction = i / samples;
-		const angle = fraction * TWO_PI - Math.PI / 2;
+		const angle = fraction * twoPi - Math.PI / 2;
 		const radius = superellipseRadius(angle, exponent);
 		const phase = ((fraction * lobes) + 0.5) % 1;
-		const wave = 1 - depth * (0.5 - 0.5 * Math.cos(TWO_PI * phase));
+		const wave = 1 - depth * (0.5 - 0.5 * Math.cos(twoPi * phase));
 
 		points.push(cx + radius * Math.cos(angle) * cx * wave, cy + radius * Math.sin(angle) * cy * wave);
 	}
@@ -388,7 +388,7 @@ function ellipsePoints(cx, cy, radiusX, radiusY, samples) {
 	const points = [];
 
 	for (let i = 0; i < count; i++) {
-		const angle = (i / count) * TWO_PI;
+		const angle = (i / count) * twoPi;
 		points.push(cx + Math.cos(angle) * radiusX, cy + Math.sin(angle) * radiusY);
 	}
 

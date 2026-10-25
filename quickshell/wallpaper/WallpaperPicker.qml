@@ -454,7 +454,7 @@ PanelWindow {
 		}
 	}
 
-	const extensions = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif"];
+	readonly property var extensions: [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif"];
 
 	function lastValue(source, key) {
 		const pattern = new RegExp("(?:^|\\n)[ \\t]*(?:local[ \\t]+)?" + key + "[ \\t]*=[ \\t]*[\"']([^\"'\\n]+)[\"']", "g");
