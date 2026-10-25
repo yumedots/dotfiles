@@ -1,7 +1,5 @@
 import QtQuick
-import Quickshell
 import Quickshell.Hyprland
-import Quickshell.Services.Pipewire
 import qs.ui
 import qs
 import qs.services
@@ -9,14 +7,14 @@ import qs.services
 Item {
 	id: root
 
-	readonly property var nodes: Pipewire.nodes.values ? Pipewire.nodes.values : []
-	readonly property var sink: Pipewire.defaultAudioSink ? Pipewire.defaultAudioSink : System.firstDevice(root.nodes, false)
-	readonly property var source: Pipewire.defaultAudioSource ? Pipewire.defaultAudioSource : System.firstDevice(root.nodes, true)
+	readonly property var mix: Yudae.audio
+	readonly property var nodes: root.mix.nodes || []
+	readonly property var sink: root.nodeOf(root.mix.sink) || System.firstDevice(root.nodes, false)
+	readonly property var source: root.nodeOf(root.mix.source) || System.firstDevice(root.nodes, true)
 	readonly property bool onScreen: root.Window.window ? root.Window.window.visible : false
+	readonly property bool hasInput: root.mix.hasInput === true
+	readonly property bool recording: System.recordingStream(root.nodes)
 
-	property var runningOutput: []
-	property var runningInput: []
-	property bool hasInput: false
 	property string picker: ""
 	property int targetIndex: 0
 	property int pickerIndex: 0
@@ -29,6 +27,8 @@ Item {
 	property bool compact: false
 	property int iconEpoch: 0
 	readonly property bool showApps: root.hasApps && !root.compact
+
+	onOnScreenChanged: Yudae.audioWatch(root.onScreen)
 
 	onShownChanged: if (!root.shown) {
 		root.keyboard = false;
@@ -46,11 +46,13 @@ Item {
 		id: nodeRefreshTimer
 
 		interval: 1000
-		onTriggered: root.bumpIcons()
+		onTriggered: {
+			root.held = System.pruneHolds(root.held, Date.now());
+			root.bumpIcons();
+		}
 	}
 
 	onNodesChanged: nodeRefreshTimer.restart()
-	onRunningOutputChanged: nodeRefreshTimer.restart()
 
 	Timer {
 		id: refreshTimer
@@ -61,8 +63,7 @@ Item {
 
 	readonly property real contentWidth: Config.mixerWidth
 	readonly property var devices: root.picker === "" ? [] : root.sortedDevices(root.picker === "input")
-	readonly property bool hasApps: System.anyStreamVisible(root.nodes, root.runningOutput, Config.mixerOnlyPlaying, root.held)
-	readonly property bool recording: root.runningInput.length > 0
+	readonly property bool hasApps: System.anyStreamVisible(root.nodes, Config.mixerOnlyPlaying, root.held)
 	readonly property var steps: Array(Config.mixerStepCount).fill(1)
 
 	implicitWidth: root.contentWidth + Config.mixerPadding * 2
@@ -80,7 +81,7 @@ Item {
 		if (root.hasInput && root.source)
 			list.push(root.source);
 
-		return list.concat(System.streamNodes(root.nodes, root.runningOutput, Config.mixerOnlyPlaying));
+		return list.concat(System.streamNodes(root.nodes, Config.mixerOnlyPlaying));
 	}
 
 	property bool keyboard: false
@@ -108,10 +109,22 @@ Item {
 		}
 	}
 
+	function nodeOf(id) {
+		for (let i = 0; i < root.nodes.length; i++) {
+			if (root.nodes[i].id === id)
+				return root.nodes[i];
+		}
+
+		return null;
+	}
+
 	function setFader(node, fraction) {
+		if (!node)
+			return;
+
 		root.keyboard = false;
 		root.focusNode(node);
-		System.setNodeVolume(node, fraction, Config.mixerMaxVolume);
+		Yudae.audioVolume(node.id, Util.clamp(fraction, 0, Config.mixerMaxVolume));
 	}
 
 	function dragFader(node, position, size, vertical, modifiers) {
@@ -125,10 +138,10 @@ Item {
 	function nudgeVolume(step) {
 		const node = root.selectedNode;
 
-		if (!node || !node.audio)
+		if (!node)
 			return;
 
-		node.audio.volume = Util.clamp(node.audio.volume + step, 0, Config.mixerMaxVolume);
+		root.setFader(node, Util.clamp(System.nodeVolume(node) + step, 0, Config.mixerMaxVolume));
 	}
 
 	Keys.onPressed: function (event) {
@@ -150,10 +163,10 @@ Item {
 	}
 
 	function toggleMute(node) {
-		if (!node || !node.audio)
+		if (!node)
 			return;
 
-		node.audio.muted = !node.audio.muted;
+		Yudae.audioMute(node.id, !System.nodeMuted(node));
 	}
 
 	function sortedDevices(input) {
@@ -197,24 +210,9 @@ Item {
 		if (!node)
 			return;
 
-		if (direction === "input")
-			Pipewire.preferredDefaultAudioSource = node;
-		else
-			Pipewire.preferredDefaultAudioSink = node;
+		Yudae.audioDefault(node.id);
 
 		root.picker = "";
-	}
-
-	PwObjectTracker {
-		objects: [root.sink, root.source]
-	}
-
-	Timer {
-		interval: Config.mixerPollMs
-		running: root.onScreen
-		repeat: true
-		triggeredOnStart: true
-		onTriggered: if (!streamPoll.running) streamPoll.running = true
 	}
 
 	property var held: ({})
@@ -222,19 +220,6 @@ Item {
 	function hold(node, until) {
 		if (node)
 			root.held = System.holdStream(root.held, node.id, until);
-	}
-
-	Request {
-		id: streamPoll
-
-		command: ["pw-dump"]
-
-		onDone: function (text) {
-			root.runningOutput = System.parseRunningStreams(text, "output");
-			root.runningInput = System.parseRunningStreams(text, "input");
-			root.hasInput = System.hasMicrophone(text);
-			root.held = System.pruneHolds(root.held, Date.now());
-		}
 	}
 
 	component MixChannel: Item {
@@ -519,7 +504,7 @@ Item {
 		}
 
 		Repeater {
-			model: Pipewire.nodes
+			model: root.nodes
 
 			delegate: Item {
 				id: holder
@@ -528,8 +513,8 @@ Item {
 
 				readonly property var node: holder.modelData
 				readonly property bool shown: System.shownStream(holder.node)
-				readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || System.streamPlaying(holder.node, root.runningOutput))
-				visible: root.showApps && System.streamVisible(holder.node, root.runningOutput, Config.mixerOnlyPlaying, root.held)
+				readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || System.streamPlaying(holder.node))
+				visible: root.showApps && System.streamVisible(holder.node, Config.mixerOnlyPlaying, root.held)
 				width: parent.width
 				height: channel.implicitHeight
 				clip: true
@@ -537,10 +522,6 @@ Item {
 				onActiveChanged: {
 					if (!holder.active)
 						root.hold(holder.node, Date.now() + Config.mixerHoldMs);
-				}
-
-				PwObjectTracker {
-					objects: holder.node && holder.node.isStream ? [holder.node] : []
 				}
 
 				MixChannel {
@@ -567,10 +548,6 @@ Item {
 		Rectangle {
 			anchors.fill: parent
 			color: Config.surface
-		}
-
-		PwObjectTracker {
-			objects: root.devices
 		}
 
 		Column {

@@ -247,6 +247,25 @@ QtObject {
 		root.send({ cmd: { screen: { detect: true } } });
 	}
 
+	readonly property var audio: root.snapshot.audio || ({})
+	readonly property var audioNodes: root.audio.nodes || []
+
+	function audioVolume(id, level) {
+		root.send({ cmd: { audio: { volume: { id: id, level: level } } } });
+	}
+
+	function audioMute(id, muted) {
+		root.send({ cmd: { audio: { mute: { id: id, muted: muted } } } });
+	}
+
+	function audioDefault(id) {
+		root.send({ cmd: { audio: { default: { id: id } } } });
+	}
+
+	function audioWatch(on) {
+		root.send({ cmd: { audio: { watch: { on: on === true } } } });
+	}
+
 	readonly property var appsEntries: (root.snapshot.apps && root.snapshot.apps.entries) || ({})
 	readonly property var systemState: root.snapshot.system || ({})
 	readonly property var system: root.systemState

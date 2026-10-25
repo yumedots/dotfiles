@@ -30,56 +30,23 @@ function streamIds(props) {
 	return ids.filter(function (id) { return id; }).map(String);
 }
 
-function parseRunningStreams(text, direction) {
-	let dump;
-
-	try {
-		dump = JSON.parse(text);
-	} catch (error) {
-		return [];
-	}
-
-	const wanted = direction === "input" ? "Stream/Input" : "Stream/Output";
-	const ids = [];
-
-	(dump || []).forEach(function (object) {
-		if (!object || object.type !== "PipeWire:Interface:Node")
-			return;
-
-		const info = object.info || {};
-		const props = info.props || {};
-
-		if (String(props["media.class"] || "").indexOf(wanted) < 0)
-			return;
-		if (info.state !== "running")
-			return;
-
-		ids.push(object.id);
-	});
-
-	return ids;
-}
-
 function inputStream(node) {
-	if (!node)
-		return false;
-
-	return isInputStream(node.isStream, node.properties ? node.properties["media.class"] : "");
+	return !!node && String(node.class || "").indexOf("Input") >= 0;
 }
 
 function shownStream(node) {
-	return !!node && node.ready && node.isStream && !inputStream(node);
+	return !!node && node.ready === true && node.isStream === true && !inputStream(node);
 }
 
-function streamPlaying(node, running) {
-	return node ? (running || []).indexOf(node.id) >= 0 : false;
+function streamPlaying(node) {
+	return !!node && node.running === true;
 }
 
-function streamNodes(nodes, running, onlyPlaying) {
+function streamNodes(nodes, onlyPlaying) {
 	const list = [];
 
 	(nodes || []).forEach(function (node) {
-		if (shownStream(node) && (!onlyPlaying || streamPlaying(node, running)))
+		if (shownStream(node) && (!onlyPlaying || streamPlaying(node)))
 			list.push(node);
 	});
 
@@ -90,13 +57,19 @@ function streamHeld(node, held) {
 	return !!node && !!held && held[node.id] !== undefined;
 }
 
-function streamVisible(node, running, onlyPlaying, held) {
-	return shownStream(node) && (streamHeld(node, held) || !onlyPlaying || streamPlaying(node, running));
+function streamVisible(node, onlyPlaying, held) {
+	return shownStream(node) && (streamHeld(node, held) || !onlyPlaying || streamPlaying(node));
 }
 
-function anyStreamVisible(nodes, running, onlyPlaying, held) {
+function anyStreamVisible(nodes, onlyPlaying, held) {
 	return (nodes || []).some(function (node) {
-		return streamVisible(node, running, onlyPlaying, held);
+		return streamVisible(node, onlyPlaying, held);
+	});
+}
+
+function recordingStream(nodes) {
+	return (nodes || []).some(function (node) {
+		return !!node && node.isStream === true && node.running === true && inputStream(node);
 	});
 }
 
@@ -104,7 +77,7 @@ function audioDevices(nodes, input) {
 	const found = [];
 
 	(nodes || []).forEach(function (node) {
-		if (!node || node.isStream || !node.audio || node.isSink === !!input)
+		if (!node || node.isStream || node.isSink === !!input)
 			return;
 
 		found.push(node);
@@ -117,47 +90,6 @@ function firstDevice(nodes, input) {
 	const found = audioDevices(nodes, input);
 
 	return found.length > 0 ? found[0] : null;
-}
-
-function routeAvailable(route) {
-	return !!route && route.direction === "Input" && route.available !== "no";
-}
-
-function hasMicrophone(text) {
-	let dump;
-
-	try {
-		dump = JSON.parse(text);
-	} catch (error) {
-		return true;
-	}
-
-	const routes = {};
-	const sources = [];
-
-	(dump || []).forEach(function (object) {
-		if (!object || !object.type)
-			return;
-
-		const info = object.info || {};
-
-		if (object.type === "PipeWire:Interface:Device") {
-			const params = info.params || {};
-
-			routes[object.id] = params.EnumRoute || null;
-		} else if (object.type === "PipeWire:Interface:Node") {
-			const props = info.props || {};
-
-			if (String(props["media.class"] || "").indexOf("Audio/Source") >= 0)
-				sources.push(props["device.id"]);
-		}
-	});
-
-	return sources.some(function (id) {
-		const found = routes[id];
-
-		return found === null || found === undefined ? true : found.some(routeAvailable);
-	});
 }
 
 function holdStream(held, id, until) {
@@ -201,20 +133,11 @@ function sortedDevices(nodes, input, active) {
 }
 
 function nodeMuted(node) {
-	return !!(node && node.audio && node.audio.muted);
+	return !!(node && node.mute);
 }
 
 function nodeVolume(node) {
-	return node && node.audio ? node.audio.volume : 0;
-}
-
-function setNodeVolume(node, fraction, max) {
-	const volume = Math.min(Math.max(fraction, 0), 1) * max;
-
-	if (node && node.audio)
-		node.audio.volume = volume;
-
-	return volume;
+	return node && node.volume !== undefined ? node.volume : 0;
 }
 
 function cpuSample(fields) {

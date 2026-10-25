@@ -76,6 +76,16 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 			if (id > 0) context.audio.setMute(id, muted);
 		}
 
+		if (json.field(audio_cmd, "default")) |target| {
+			const id = json.integer(json.field(target, "id"));
+
+			if (id > 0) context.audio.setDefault(id);
+		}
+
+		if (json.field(audio_cmd, "watch")) |target| {
+			context.audio.setWatch(json.flag(target, "on"));
+		}
+
 		return;
 	}
 
