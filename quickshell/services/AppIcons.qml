@@ -8,7 +8,7 @@ import qs
 Item {
 	id: root
 
-	property var entries: Apps.desktopEntries(DesktopEntries.applications.values)
+	property var entries: Yudae.appsEntries
 	property var icons: ({})
 
 	// The icon listing as it was read, so the same text is not parsed twice.
