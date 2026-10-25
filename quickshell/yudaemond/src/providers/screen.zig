@@ -86,6 +86,7 @@ const PanelOut = struct {
 	step: i64,
 	rows: []const []const u8,
 	cursor: []const u8,
+	keyboard: bool,
 	options: []const []const u8,
 	selected: i64,
 	value: []const u8,
@@ -116,6 +117,7 @@ pub const Screen = struct {
 	title_font: []u8 = &.{},
 	row: i64 = 0,
 	step: i64 = 0,
+	keyboard: bool = false,
 	fonts: [12]i64 = @splat(0),
 	font_count: usize = 0,
 	settings: ?*settings.Settings = null,
@@ -145,13 +147,12 @@ pub const Screen = struct {
 		self.title_refresh = cfg.string("displayRefreshTitle", self.allocator) orelse self.allocator.dupe(u8, "Refresh") catch &.{};
 		self.title_font = cfg.string("displayFontTitle", self.allocator) orelse self.allocator.dupe(u8, "Font") catch &.{};
 
-		const fonts = cfg.strings("displayFonts", self.allocator) catch &.{};
+		const fonts = cfg.numbers("displayFonts", self.allocator) catch &.{};
 		self.font_count = @min(fonts.len, self.fonts.len);
 
-		for (fonts[0..self.font_count], 0..) |value, i| {
-			self.fonts[i] = std.fmt.parseInt(i64, value, 10) catch 0;
-			self.allocator.free(value);
-		}
+		for (fonts[0..self.font_count], 0..) |value, i| self.fonts[i] = value;
+
+		if (fonts.len > 0) self.allocator.free(fonts);
 
 		if (self.font_count == 0) {
 			self.fonts[0] = 12;
@@ -356,6 +357,7 @@ pub const Screen = struct {
 	}
 
 	pub fn key(self: *Screen, name: []const u8) void {
+		self.keyboard = true;
 		if (std.mem.eql(u8, name, "up")) {
 			self.row = @mod(self.row - 1 + 4, 4);
 			self.step = 0;
@@ -402,8 +404,21 @@ pub const Screen = struct {
 			if (count == 0) return;
 			target.setOutput(monitor.name, null, options[step % count]);
 		} else if (kind == 1) {
-			if (monitor.modes.items.len == 0) return;
-			const mode = monitor.modes.items[step % monitor.modes.items.len];
+			var modes: std.ArrayListUnmanaged(Mode) = .empty;
+			defer modes.deinit(self.allocator);
+
+			for (monitor.modes.items) |mode| {
+				if (mode.width == monitor.width and mode.height == monitor.height) modes.append(self.allocator, mode) catch {};
+			}
+
+			std.mem.sort(Mode, modes.items, {}, struct {
+				fn less(_: void, a: Mode, b: Mode) bool {
+					return a.refresh > b.refresh;
+				}
+			}.less);
+
+			if (modes.items.len == 0) return;
+			const mode = modes.items[step % modes.items.len];
 
 			const text = std.fmt.allocPrint(self.allocator, "{d}x{d}@{d:.2}Hz", .{ mode.width, mode.height, mode.refresh }) catch return;
 			defer self.allocator.free(text);
@@ -453,7 +468,7 @@ pub const Screen = struct {
 		var options: std.ArrayListUnmanaged([]const u8) = .empty;
 
 		if (self.monitors.items.len == 0) {
-			return .{ .row = 0, .step = 0, .rows = &names, .cursor = names[0], .options = &.{}, .selected = -1, .value = "", .selectedRow = &.{}, .groups = &.{} };
+			return .{ .row = 0, .step = 0, .rows = &names, .cursor = names[0], .keyboard = false, .options = &.{}, .selected = -1, .value = "", .selectedRow = &.{}, .groups = &.{} };
 		}
 
 		const monitor = &self.monitors.items[0];
@@ -466,11 +481,9 @@ pub const Screen = struct {
 				try options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{value}));
 			}
 		} else if (std.mem.eql(u8, kind, "refresh")) {
-			for (monitor.modes.items) |mode| {
-				try options.append(arena, try std.fmt.allocPrint(arena, "{d} Hz", .{@as(i64, @intFromFloat(@round(mode.refresh)))}));
-			}
+			for (try self.optionsFor(arena, monitor, "refresh")) |option| try options.append(arena, option);
 		} else if (std.mem.eql(u8, kind, "font")) {
-			for (self.fonts[0..self.font_count]) |size| try options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{size}));
+			for (try self.optionsFor(arena, monitor, "font")) |option| try options.append(arena, option);
 		} else {
 			var seen: std.ArrayListUnmanaged(ResSize) = .empty;
 			for (monitor.modes.items) |mode| {
@@ -503,17 +516,8 @@ pub const Screen = struct {
 			const selected_index = self.currentLocked(group_kind, monitor, &.{});
 			var group_options: std.ArrayListUnmanaged([]const u8) = .empty;
 
-			if (std.mem.eql(u8, group_kind, "scale")) {
-				for (options.items) |option| try group_options.append(arena, option);
-			} else if (std.mem.eql(u8, group_kind, "refresh")) {
-				for (monitor.modes.items) |mode| {
-					try group_options.append(arena, try std.fmt.allocPrint(arena, "{d} Hz", .{@as(i64, @intFromFloat(@round(mode.refresh)))}));
-				}
-			} else {
-				for (self.fonts[0..self.font_count]) |size| {
-					try group_options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{size}));
-				}
-			}
+			const built = try self.optionsFor(arena, monitor, group_kind);
+			for (built) |option| try group_options.append(arena, option);
 
 			const shown: []const u8 = if (selected_index >= 0 and @as(usize, @intCast(selected_index)) < group_options.items.len)
 				group_options.items[@intCast(selected_index)]
@@ -537,12 +541,44 @@ pub const Screen = struct {
 			.step = self.step,
 			.rows = &names,
 			.cursor = kind,
+			.keyboard = self.keyboard,
 			.options = options.items,
 			.selected = selected,
 			.value = if (options.items.len == 0) "" else options.items[step],
 			.selectedRow = selected_rows.items,
 			.groups = groups.items,
 		};
+	}
+
+	fn optionsFor(self: *Screen, arena: Allocator, monitor: *Monitor, kind: []const u8) ![]const []const u8 {
+		var options: std.ArrayListUnmanaged([]const u8) = .empty;
+
+		if (std.mem.eql(u8, kind, "scale")) {
+			const steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
+			for (steps) |value| {
+				if (value < self.scale_min or value > self.scale_max) continue;
+				try options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{value}));
+			}
+		} else if (std.mem.eql(u8, kind, "refresh")) {
+			var modes: std.ArrayListUnmanaged(Mode) = .empty;
+			for (monitor.modes.items) |mode| {
+				if (mode.width == monitor.width and mode.height == monitor.height) try modes.append(arena, mode);
+			}
+
+			std.mem.sort(Mode, modes.items, {}, struct {
+				fn less(_: void, a: Mode, b: Mode) bool {
+					return a.refresh > b.refresh;
+				}
+			}.less);
+
+			for (modes.items) |mode| {
+				try options.append(arena, try std.fmt.allocPrint(arena, "{d} Hz", .{@as(i64, @intFromFloat(@round(mode.refresh)))}));
+			}
+		} else if (std.mem.eql(u8, kind, "font")) {
+			for (self.fonts[0..self.font_count]) |size| try options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{size}));
+		}
+
+		return options.items;
 	}
 
 	fn currentLocked(self: *Screen, kind: []const u8, monitor: *Monitor, options: []const []const u8) i64 {
@@ -570,8 +606,23 @@ pub const Screen = struct {
 		}
 
 		if (std.mem.eql(u8, kind, "refresh")) {
-			for (monitor.modes.items, 0..) |mode, i| {
-				if (mode.width == monitor.width and mode.height == monitor.height and @abs(mode.refresh - monitor.refresh) < 0.5) return @intCast(i);
+			var index: i64 = 0;
+			var modes: std.ArrayListUnmanaged(Mode) = .empty;
+			defer modes.deinit(self.allocator);
+
+			for (monitor.modes.items) |mode| {
+				if (mode.width == monitor.width and mode.height == monitor.height) modes.append(self.allocator, mode) catch {};
+			}
+
+			std.mem.sort(Mode, modes.items, {}, struct {
+				fn less(_: void, a: Mode, b: Mode) bool {
+					return a.refresh > b.refresh;
+				}
+			}.less);
+
+			for (modes.items) |mode| {
+				if (@abs(mode.refresh - monitor.refresh) < 0.5) return index;
+				index += 1;
 			}
 
 			return 0;

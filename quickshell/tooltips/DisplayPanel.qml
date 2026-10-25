@@ -32,7 +32,7 @@ Item {
 	focus: true
 
 	onShownChanged: if (root.shown) resList.reset()
-	onCursorStepChanged: resList.ensureVisible(root.resolutionCursor)
+	onCursorStepChanged: if (root.resolutionCursor >= 0) resList.ensureVisible(root.resolutionCursor)
 
 	Keys.onPressed: Yudae.screenKey(event.key)
 
@@ -221,7 +221,7 @@ Item {
 				options: modelData.options
 				selected: modelData.selected
 				shown: modelData.shown
-				cursor: root.currentRow === modelData.kind ? root.cursorStep : -1
+				cursor: root.panel.keyboard === true && root.currentRow === modelData.kind ? root.cursorStep : -1
 				visible: modelData.visible
 			}
 		}

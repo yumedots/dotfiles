@@ -57,6 +57,23 @@ pub const Config = struct {
 		return allocator.dupe(u8, value[start + 1 .. end]) catch null;
 	}
 
+	pub fn numbers(self: Config, name: []const u8, allocator: Allocator) ![]i64 {
+		const value = self.raw(name) orelse return &.{};
+		const open = std.mem.indexOfScalar(u8, value, '[') orelse return &.{};
+		const close = std.mem.indexOfScalarPos(u8, value, open, ']') orelse return &.{};
+
+		var out: std.ArrayList(i64) = .empty;
+		errdefer out.deinit(allocator);
+
+		var parts = std.mem.tokenizeAny(u8, value[open + 1 .. close], " ,\t");
+		while (parts.next()) |part| {
+			const parsed = std.fmt.parseInt(i64, part, 10) catch continue;
+			try out.append(allocator, parsed);
+		}
+
+		return out.toOwnedSlice(allocator);
+	}
+
 	pub fn strings(self: Config, name: []const u8, allocator: Allocator) ![][]u8 {
 		const value = self.raw(name) orelse return &.{};
 		const open = std.mem.indexOfScalar(u8, value, '[') orelse return &.{};
