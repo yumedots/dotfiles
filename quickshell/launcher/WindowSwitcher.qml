@@ -97,7 +97,10 @@ Item {
 		x: Util.clamp(switcher.index * switcher.cell + (switcher.cell - width) / 2, 0, grid.width - width)
 		anchors.top: grid.bottom
 		anchors.topMargin: Config.windowsLabelGap
+		height: Math.ceil(font.pixelSize * 1.35)
+		verticalAlignment: Text.AlignVCenter
 		horizontalAlignment: Text.AlignHCenter
+		wrapMode: Text.NoWrap
 		elide: Text.ElideRight
 		font.family: Config.fontFamily
 		font.pixelSize: Config.windowsTitleSize
