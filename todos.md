@@ -56,6 +56,14 @@ Done and committed:
 
 ## Open
 
+0. **Wire `windows` into the daemon** (blocked only on `InkAwww`, which owns `main.zig` and
+   `tests.zig` right now). `providers/windows.zig` is committed (`c4d70ad`) but not registered.
+   Add: the import, `windows: *windows.Windows` in `Context`, create + `hub.add` + `.windows =`
+   + `start()` in `run()`, the `commandThunk` branch for `{cmd:{windows:{focus,launch}}}`
+   (lines are in the WindowsPort report), and `_ = @import("providers/windows.zig");` in
+   `tests.zig`. Then `zig build test`, restart, and check `yudaemond state | jq .windows.list`.
+
+
 0. ~~**Ink and awww belong to the daemon.**~~ done: `5298b12` (daemon) + `c985c82` (QML).
    `providers/ink.zig` owns `bar-ink.json`, the band/bare command, the `awww` apply and its
    supervision, and samples the ink from the cached 1280px preview (ffmpeg crop of the top
