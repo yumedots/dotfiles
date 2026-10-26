@@ -285,6 +285,22 @@ QtObject {
 		root.send({ cmd: { launcher: { save: query } } });
 	}
 
+	function launcherClips() {
+		root.send({ cmd: { launcher: { clips: true } } });
+	}
+
+	function launcherClip(id) {
+		root.send({ cmd: { launcher: { clip: id || "" } } });
+	}
+
+	function launcherCopyClip(id) {
+		root.send({ cmd: { launcher: { copyClip: id } } });
+	}
+
+	function launcherKill(pid) {
+		root.send({ cmd: { launcher: { kill: pid } } });
+	}
+
 	function launcherRemember(id) {
 		root.send({ cmd: { launcher: { remember: id } } });
 	}

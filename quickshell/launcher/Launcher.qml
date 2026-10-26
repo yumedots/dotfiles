@@ -14,12 +14,12 @@ PanelWindow {
 
 	property bool shown: false
 	property string query: ""
-	property var pins: []
-	property string terminal: ""
-	property var usage: ({})
-	property var procs: []
-	property var procRows: []
-	property var saved: []
+	readonly property var pins: root.data.pins || []
+	readonly property string terminal: root.data.terminal || ""
+
+
+
+
 	property string group: ""
 	property string forced: ""
 	property var pointer: null
@@ -28,16 +28,16 @@ PanelWindow {
 	readonly property int windowColumns: windowsGrid.columns
 	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
 	readonly property string winName: root.windows && root.results.length > 0 ? root.results[root.winCurrent].name : ""
-	property var clips: []
-	property var clipList: []
-	property string clipSources: ""
+
+
+
 	property bool windows: false
 	property int winIndex: 0
 	property string pendingFocus: ""
-	property string clipPreviewText: ""
 	property string clipPreviewId: ""
-	property bool clipPreviewLoading: false
-	property string clipPreviewPath: ""
+	readonly property string clipPreviewText: root.data.clip ? String(root.data.clip.text || "") : ""
+	readonly property string clipPreviewPath: root.data.clip && root.data.clip.path ? "file://" + root.data.clip.path : ""
+	readonly property bool clipPreviewLoading: root.clipPreviewId !== "" && root.clipPreviewText === "" && root.clipPreviewPath === ""
 	readonly property bool isClipboard: root.mode === "clipboard"
 
 	readonly property var prefix: Apps.detectPrefix(root.query, Entries.modeMarks(Config.launcherModes))
@@ -123,14 +123,7 @@ PanelWindow {
 		}
 	}
 
-	Component.onCompleted: {
-		clipsList.running = true;
-		pinsFile.running = true;
-		usageFile.running = true;
-		terminalFile.running = true;
-		savedFile.running = true;
-		procList.running = true;
-	}
+	Component.onCompleted: Yudae.launcherQuery(root.query, root.forced, root.group)
 
 	function open(mode) {
 		if (mode !== undefined)
@@ -433,81 +426,15 @@ PanelWindow {
 	}
 
 	function copyClip(id) {
-		const command = "out=$(mktemp) && cliphist decode " + Shell.shellQuote(id) + " > \"$out\" && [ -s \"$out\" ] && wl-copy < \"$out\"; rm -f \"$out\"";
-
-		Quickshell.execDetached(["sh", "-c", command]);
+		Yudae.launcherCopyClip(id);
 	}
 
 	function decodeClip(clipId) {
-		if (!clipId) {
-			root.clipPreviewText = "";
-			root.clipPreviewId = "";
-			root.clipPreviewLoading = false;
-			root.clipPreviewPath = "";
-			return;
-		}
-		if (root.clipPreviewId === clipId && (root.clipPreviewText !== "" || root.clipPreviewPath !== ""))
+		if (root.clipPreviewId === clipId && clipId !== "")
 			return;
 
-		const entry = root.clipEntry(clipId);
-
-		root.clipPreviewId = clipId;
-		root.clipPreviewLoading = true;
-		root.clipPreviewPath = "";
-
-		if (entry && entry.image) {
-			clipImageReq.clipId = clipId;
-			clipImageReq.command = root.clipImageCommand(clipId);
-			clipImageReq.running = true;
-			return;
-		}
-
-		clipDecodeReq.clipId = clipId;
-		clipDecodeReq.command = ["sh", "-c", "cliphist decode " + Shell.shellQuote(clipId) + " 2>/dev/null"];
-		clipDecodeReq.running = true;
-	}
-
-	// PNG/JPEG/... bytes picked from the last "[[ binary data … fmt WxH ]]" placeholder.
-	function clipImagePath(clipId) {
-		return Quickshell.env("XDG_RUNTIME_DIR") + "/qs-clip-" + clipId + ".png";
-	}
-
-	function clipImageCommand(clipId) {
-		const out = root.clipImagePath(clipId);
-
-		return ["sh", "-c", "[ -s " + Shell.shellQuote(out) + " ] || { rm -f " + Shell.shellQuote(out) + " && cliphist decode " + Shell.shellQuote(clipId) + " >" + Shell.shellQuote(out) + " 2>/dev/null; }"];
-	}
-
-	function clipEntry(clipId) {
-		for (let i = 0; i < root.clips.length; i++) {
-			if (root.clips[i] && root.clips[i].clipId === clipId)
-				return root.clips[i];
-		}
-
-		return null;
-	}
-
-	function buildClips() {
-		const next = Entries.clipEntries(root.clipList, Parse.parseClipboardSources(root.clipSources));
-		const keyOf = function (list) {
-			return list.map(function (clip) { return clip.clipId + "|" + clip.appId; }).join("\n");
-		};
-
-		if (keyOf(next) !== keyOf(root.clips))
-			root.clips = next;
-
-		if (root.isClipboard)
-			Qt.callLater(root.decodeCurrentClip);
-	}
-
-	function decodeCurrentClip() {
-		if (!root.isClipboard)
-			return;
-		const entry = root.results[list.currentIndex >= 0 ? list.currentIndex : 0];
-		if (entry && entry.clipId)
-			root.decodeClip(entry.clipId);
-		else
-			root.decodeClip("");
+		root.clipPreviewId = clipId || "";
+		Yudae.launcherClip(clipId || "");
 	}
 
 	function scrollPreview(delta) {
@@ -532,7 +459,7 @@ PanelWindow {
 		if (!entry || entry.kind !== "proc")
 			return;
 
-		Quickshell.execDetached(System.killCommand(entry.pid, Config.procKillSignal));
+		Yudae.launcherKill(entry.pid);
 	}
 
 	function activate(entry) {
@@ -610,85 +537,19 @@ PanelWindow {
 		if (root.mode === "wallpaper")
 			root.openWallpaper();
 		else if (root.mode === "clipboard") {
-			clipSourcesFile.reload();
-			clipsList.running = true;
+			Yudae.launcherClips();
 		}
 	}
 
-	Request {
-		id: pinsFile
 
-		command: Shell.readCommand(root.stateDir + "/pins.txt")
 
-		onDone: function (text) {
-			root.pins = Apps.pinnedFromText(text);
-		}
-	}
 
-	Request {
-		id: usageFile
 
-		command: Shell.readCommand(root.stateDir + "/usage.txt")
 
-		onDone: function (text) {
-			root.usage = Apps.parseUsage(text);
-		}
-	}
 
-	Request {
-		id: savedFile
 
-		command: Shell.readCommand(root.stateDir + "/entries.txt")
 
-		onDone: function (text) {
-			root.saved = Entries.customEntries(text);
-		}
-	}
 
-	Request {
-		id: terminalFile
-
-		command: Shell.readCommand(root.terminalConfig)
-
-		onDone: function (text) {
-			root.terminal = Apps.terminalName(text);
-		}
-	}
-
-	Request {
-		id: clipsList
-
-		command: ["sh", "-c", "cliphist list 2>/dev/null | head -n " + Config.launcherMaxResults]
-
-		onDone: function (text) {
-			root.clipList = Parse.parseClipboardList(text);
-			root.buildClips();
-		}
-	}
-
-	Request {
-		id: procList
-
-		command: ["ps", "-eo", "pcpu=,pid=,comm:16=,args=", "--sort=-pcpu"]
-
-		function reload() {
-			if (!procList.running)
-				procList.running = true;
-		}
-
-		onDone: function (text) {
-			root.procs = System.parseTopProcesses(text);
-			root.procRows = System.holdProcessOrder(root.procRows, System.filterProcesses(root.procs, Config.psIgnore, "", Config.launcherMaxResults));
-		}
-	}
-
-	Timer {
-		interval: Config.cpuPollMs * 2
-		running: root.shown && root.mode === "procs"
-		repeat: true
-		triggeredOnStart: true
-		onTriggered: procList.reload()
-	}
 
 	FileView {
 		id: versionsFile
@@ -713,56 +574,9 @@ PanelWindow {
 		}
 	}
 
-	FileView {
-		id: clipSourcesFile
 
-		path: root.stateDir + "/clip-apps.txt"
-		preload: true
-		watchChanges: true
-		printErrors: false
 
-		onFileChanged: clipSourcesFile.reload()
-		onLoaded: {
-			root.clipSources = clipSourcesFile.text();
-			root.buildClips();
-		}
-	}
 
-	Request {
-		id: clipDecodeReq
-
-		property string clipId: ""
-
-		command: ["sh", "-c", "cliphist decode " + Shell.shellQuote(clipId) + " 2>/dev/null"]
-
-		onDone: function (text) {
-			if (clipDecodeReq.clipId !== "" && clipDecodeReq.clipId !== root.clipPreviewId)
-				return;
-
-			root.clipPreviewText = text;
-			root.clipPreviewLoading = false;
-
-			if (typeof previewFlick !== "undefined" && previewFlick)
-				previewFlick.contentY = 0;
-		}
-	}
-
-	Request {
-		id: clipImageReq
-
-		property string clipId: ""
-
-		command: ["sh", "-c", "true"]
-
-		onDone: function (text) {
-			if (clipImageReq.clipId === "" || clipImageReq.clipId !== root.clipPreviewId)
-				return;
-
-			root.clipPreviewText = "";
-			root.clipPreviewPath = "file://" + root.clipImagePath(clipImageReq.clipId);
-			root.clipPreviewLoading = false;
-		}
-	}
 
 	MouseArea {
 		id: backdrop
