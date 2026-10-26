@@ -126,6 +126,11 @@ Item {
 		if (label.indexOf(typed) === 0)
 			return;
 
+		if (typed.length < 2) {
+			weatherSearch.stop();
+			return;
+		}
+
 		weatherSearch.restart();
 	}
 
@@ -158,19 +163,20 @@ Item {
 	}
 
 	function commitPlace() {
-		const label = root.query.trim();
-		const exact = root.match !== null && String(root.match.name).toLowerCase() === label.toLowerCase();
+		const row = root.match;
+
+		if (row === null || String(row.label || "").trim() === "")
+			return;
+
+		const label = String(row.label);
 		const adding = root.adding;
 
 		root.stopEdit();
 
-		if (label === "")
-			return;
-
 		if (adding)
-			Weather.add(label, exact ? root.match.lat : 0, exact ? root.match.lon : 0);
+			Weather.add(label, row.lat, row.lon);
 		else
-			Weather.choose(label, exact ? root.match.lat : 0, exact ? root.match.lon : 0);
+			Weather.choose(label, row.lat, row.lon);
 	}
 
 	function pick(row) {
@@ -493,7 +499,6 @@ Item {
 					color: Config.foreground
 					selectionColor: Config.launcherHighlight
 					selectedTextColor: Config.launcherHighlightText
-					text: root.query
 
 					onTextEdited: {
 						root.query = nameInput.text;

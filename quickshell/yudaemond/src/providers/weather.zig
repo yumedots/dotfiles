@@ -555,7 +555,7 @@ pub const Weather = struct {
 	}
 
 	pub fn choose(self: *Weather, label: []const u8, lat: f64, lon: f64) void {
-		if (label.len == 0) return;
+		if (!usablePlace(label)) return;
 
 		self.mutex.lockUncancelable(self.io);
 		const at = self.index;
@@ -578,7 +578,7 @@ pub const Weather = struct {
 	}
 
 	pub fn add(self: *Weather, label: []const u8, lat: f64, lon: f64) void {
-		if (label.len == 0) return;
+		if (!usablePlace(label)) return;
 
 		self.mutex.lockUncancelable(self.io);
 
@@ -789,6 +789,16 @@ pub const Weather = struct {
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
+
+fn usablePlace(label: []const u8) bool {
+	var count: usize = 0;
+
+	for (label) |byte| {
+		if (byte != ' ') count += 1;
+	}
+
+	return count >= 2 and std.mem.trim(u8, label, " ").len > 0;
+}
 
 fn value_at(value: json.Value, key: []const u8, index: usize) f64 {
 	const rows = json.listAt(value, key);
