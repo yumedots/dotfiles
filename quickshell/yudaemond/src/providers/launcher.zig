@@ -669,14 +669,14 @@ pub const Launcher = struct {
 				self.appsView(arena, search, &rows) catch {};
 			}
 
-			return self.rank(arena, rows.items, search);
+			return self.rank(arena, rows.items, search, false);
 		}
 
 		self.modeRows(arena, mode, search, &rows) catch {};
 		self.savedRows(arena, &rows) catch {};
 		self.appsView(arena, search, &rows) catch {};
 
-		return self.rank(arena, rows.items, search);
+		return self.rank(arena, rows.items, search, true);
 	}
 
 	fn modeRows(self: *Launcher, arena: Allocator, mode: []const u8, search: []const u8, rows: *std.ArrayListUnmanaged(Row)) !void {
@@ -800,11 +800,11 @@ pub const Launcher = struct {
 		}
 	}
 
-	fn rank(self: *Launcher, arena: Allocator, rows: []Row, search: []const u8) []Row {
+	fn rank(self: *Launcher, arena: Allocator, rows: []Row, search: []const u8, home: bool) []Row {
 		var kept: std.ArrayListUnmanaged(Row) = .empty;
 
 		for (rows) |row| {
-			if (search.len == 0) {
+			if (search.len == 0 and home) {
 				if (std.mem.eql(u8, row.kind, "app") and self.pinIndex(row.id) < 0) continue;
 
 				kept.append(arena, row) catch continue;
