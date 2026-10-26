@@ -561,36 +561,10 @@ pub const Launcher = struct {
 	}
 
 	pub fn previewClip(self: *Launcher, id: []const u8) void {
-		self.mutex.lockUncancelable(self.io);
-		var image = false;
-		for (self.clips.items) |entry| {
-			if (std.mem.eql(u8, entry.id, id)) image = std.mem.eql(u8, entry.kind, "image");
-		}
-		self.mutex.unlock(self.io);
-
 		if (id.len == 0) {
 			self.mutex.lockUncancelable(self.io);
 			self.setStr(&self.clip_text, "");
 			self.setStr(&self.clip_path, "");
-			self.mutex.unlock(self.io);
-			self.hub.publish();
-			return;
-		}
-
-		if (image) {
-			const path = std.fmt.allocPrint(self.allocator, "{s}/qs-clip-{s}.png", .{ proc.runtimeDir(self.io, self.allocator), id }) catch return;
-			defer self.allocator.free(path);
-
-			const script = std.fmt.allocPrint(self.allocator, "[ -s '{s}' ] || cliphist decode {s} > '{s}' 2>/dev/null", .{ path, id, path }) catch return;
-			defer self.allocator.free(script);
-
-			if (exec.run(self.io, self.allocator, &.{ "sh", "-c", script })) |result| {
-				result.deinit(self.allocator);
-			} else |_| {}
-
-			self.mutex.lockUncancelable(self.io);
-			self.setStr(&self.clip_text, "");
-			self.setStr(&self.clip_path, path);
 			self.mutex.unlock(self.io);
 			self.hub.publish();
 			return;
@@ -601,6 +575,24 @@ pub const Launcher = struct {
 
 		const result = exec.run(self.io, self.allocator, &.{ "sh", "-c", script }) catch return;
 		defer result.deinit(self.allocator);
+
+		if (imageMagic(result.out)) |extension| {
+			const path = std.fmt.allocPrint(self.allocator, "{s}/qs-clip-{s}.{s}", .{ proc.runtimeDir(self.io, self.allocator), id, extension }) catch return;
+			defer self.allocator.free(path);
+
+			if (std.Io.Dir.cwd().createFile(self.io, path, .{ .truncate = true })) |file| {
+				file.writeStreamingAll(self.io, result.out) catch {};
+				file.close(self.io);
+			} else |_| {}
+
+			self.mutex.lockUncancelable(self.io);
+			self.setStr(&self.clip_text, "");
+			self.setStr(&self.clip_path, path);
+			self.mutex.unlock(self.io);
+
+			self.hub.publish();
+			return;
+		}
 
 		const text = result.out[0..@min(result.out.len, preview_bytes)];
 
@@ -1048,6 +1040,16 @@ fn lowerAlloc(arena: Allocator, text: []const u8) ![]const u8 {
 	}
 
 	return out;
+}
+
+fn imageMagic(body: []const u8) ?[]const u8 {
+	if (body.len > 8 and std.mem.eql(u8, body[0..8], &[_]u8{ 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a })) return "png";
+	if (body.len > 3 and body[0] == 0xff and body[1] == 0xd8 and body[2] == 0xff) return "jpg";
+	if (body.len > 6 and (std.mem.startsWith(u8, body, "GIF87a") or std.mem.startsWith(u8, body, "GIF89a"))) return "gif";
+	if (body.len > 12 and std.mem.startsWith(u8, body, "RIFF") and std.mem.eql(u8, body[8..12], "WEBP")) return "webp";
+	if (body.len > 2 and body[0] == 'B' and body[1] == 'M') return "bmp";
+
+	return null;
 }
 
 fn imageFormat(preview: []const u8) []const u8 {
