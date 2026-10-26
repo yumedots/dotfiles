@@ -67,7 +67,7 @@ Item {
 				return rows[i];
 		}
 
-		return rows[0];
+		return null;
 	}
 
 	function ghostText() {
@@ -116,9 +116,6 @@ Item {
 				out.push(rows[i]);
 		}
 
-		if (out.length === 0)
-			out.push(rows[0]);
-
 		return out;
 	}
 
@@ -150,7 +147,7 @@ Item {
 		if (label.indexOf(typed) === 0)
 			return;
 
-		if (typed.length < 2) {
+		if (typed.length < 3) {
 			weatherSearch.stop();
 			return;
 		}

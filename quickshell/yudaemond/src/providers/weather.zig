@@ -72,6 +72,7 @@ const Suggest = struct {
 	name: []u8,
 	lat: f64,
 	lon: f64,
+	population: i64 = 0,
 };
 
 const SuggestOut = struct {
@@ -506,8 +507,15 @@ pub const Weather = struct {
 				.name = self.allocator.dupe(u8, name) catch continue,
 				.lat = json.numberAt(entry, "latitude"),
 				.lon = json.numberAt(entry, "longitude"),
+				.population = json.integer(json.field(entry, "population")),
 			}) catch continue;
 		}
+
+		std.mem.sort(Suggest, next.items, {}, struct {
+			fn bigger(_: void, a: Suggest, b: Suggest) bool {
+				return a.population > b.population;
+			}
+		}.bigger);
 
 		self.mutex.lockUncancelable(self.io);
 		for (self.suggestions.items) |item| {
