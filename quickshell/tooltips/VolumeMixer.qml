@@ -194,9 +194,6 @@ Item {
 
 		const ids = System.streamIds(node.props);
 
-		if (node.iconName)
-			ids.push(node.iconName);
-
 		return AppIcons.iconOf(ids[0], ids.slice(1));
 	}
 
@@ -351,7 +348,6 @@ Item {
 		property bool recording: false
 		property real volume: 0
 		property var onActivate
-		readonly property string icon: line.node && line.node.iconName ? AppIcons.iconOf(line.node.iconName) : ""
 
 		readonly property bool selected: System.sameNode(line.node, root.selectedNode)
 		readonly property real level: Util.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
@@ -396,19 +392,10 @@ Item {
 			width: Config.mixerDeviceIconSize
 			height: Config.mixerDeviceIconSize
 
-			AppIcon {
-				anchors.centerIn: parent
-				implicitSize: Config.mixerIconSize
-				visible: line.icon !== ""
-				opacity: line.muted ? 0.45 : 1
-				source: line.icon
-			}
-
 			Text {
 				id: lineGlyph
 
 				anchors.centerIn: parent
-				visible: line.icon === ""
 				font.family: Config.fontFamily
 				font.pixelSize: Config.mixerDeviceIconSize
 				color: line.muted ? Config.muted : Config.foreground

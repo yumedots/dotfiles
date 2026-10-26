@@ -26,7 +26,6 @@ const Node = struct {
 	description: []u8,
 	binary: []u8,
 	pid: []u8,
-	icon_name: []u8,
 	volume: f64,
 	mute: bool,
 	is_stream: bool,
@@ -50,7 +49,6 @@ const NodeOut = struct {
 	app: []const u8,
 	class: []const u8,
 	description: []const u8,
-	iconName: []const u8,
 	volume: f64,
 	mute: bool,
 	isStream: bool,
@@ -286,7 +284,6 @@ pub const Audio = struct {
 		self.allocator.free(node.description);
 		self.allocator.free(node.binary);
 		self.allocator.free(node.pid);
-		self.allocator.free(node.icon_name);
 		self.allocator.free(node.state);
 	}
 
@@ -431,7 +428,6 @@ pub const Audio = struct {
 				.description = self.allocator.dupe(u8, description) catch continue,
 				.binary = self.allocator.dupe(u8, json.textAt(props, "application.process.binary")) catch continue,
 				.pid = self.pidOf(props),
-				.icon_name = self.allocator.dupe(u8, json.textAt(props, "device.icon-name")) catch continue,
 				.volume = @round(volume * 1000) / 1000,
 				.mute = mute,
 				.is_stream = std.mem.startsWith(u8, class, "Stream/"),
@@ -551,7 +547,6 @@ pub const Audio = struct {
 				.app = node.app,
 				.class = node.class,
 				.description = node.description,
-				.iconName = node.icon_name,
 				.volume = node.volume,
 				.mute = node.mute,
 				.isStream = node.is_stream,
