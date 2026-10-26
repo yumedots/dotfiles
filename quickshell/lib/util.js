@@ -69,16 +69,3 @@ function wrap(index, delta, count) {
 	return ((index + delta) % count + count) % count;
 }
 
-function pageCount(contentWidth, viewWidth, step) {
-	if (viewWidth <= 0 || step <= 0 || contentWidth <= viewWidth)
-		return 1;
-
-	return Math.ceil((contentWidth - viewWidth) / step) + 1;
-}
-
-function pageOffset(page, contentWidth, viewWidth, step) {
-	const last = Math.max(0, contentWidth - viewWidth);
-	const wanted = Math.max(0, Math.floor(page)) * step;
-
-	return clamp(wanted, 0, last);
-}

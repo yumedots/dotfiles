@@ -1,26 +1,5 @@
 .pragma library
 
-function isOutputStream(isStream, mediaClass) {
-	if (!isStream)
-		return false;
-
-	return String(mediaClass === undefined || mediaClass === null ? "" : mediaClass).indexOf("Input") < 0;
-}
-
-function isInputStream(isStream, mediaClass) {
-	if (!isStream)
-		return false;
-
-	return String(mediaClass === undefined || mediaClass === null ? "" : mediaClass).indexOf("Input") >= 0;
-}
-
-function streamId(props) {
-	const values = props || {};
-	const binary = String(values["application.process.binary"] || "");
-
-	return String(values["node.name"] || values["application.name"] || binary.substring(binary.lastIndexOf("/") + 1));
-}
-
 function streamIds(props) {
 	const values = props || {};
 	const binary = String(values["application.process.binary"] || "");
@@ -140,68 +119,6 @@ function nodeVolume(node) {
 	return node && node.volume !== undefined ? node.volume : 0;
 }
 
-function cpuSample(fields) {
-	let total = 0;
-	let idle = 0;
-
-	for (let i = 1; i < fields.length; i++) {
-		const n = parseFloat(fields[i]);
-
-		if (isNaN(n))
-			continue;
-
-		total += n;
-		if (i === 4 || i === 5)
-			idle += n;
-	}
-
-	return { total: total, idle: idle };
-}
-
-function parseCpuStat(text) {
-	const out = { total: { total: 0, idle: 0 }, cores: [] };
-
-	String(text || "").split("\n").forEach(function (line) {
-		const fields = line.trim().split(/\s+/);
-
-		if (fields[0] !== "cpu" && !/^cpu[0-9]+$/.test(fields[0]))
-			return;
-
-		if (fields[0] === "cpu")
-			out.total = cpuSample(fields);
-		else
-			out.cores.push(cpuSample(fields));
-	});
-
-	return out;
-}
-
-function cpuLoad(now, before) {
-	if (!now || !before)
-		return 0;
-
-	const dt = now.total - before.total;
-
-	if (dt <= 0)
-		return 0;
-
-	return Math.min(Math.max(100 * (1 - (now.idle - before.idle) / dt), 0), 100);
-}
-
-function cpuPercents(prev, now) {
-	const out = { all: 0, cores: [] };
-
-	if (!now || !now.cores)
-		return out;
-
-	out.all = cpuLoad(now.total, prev ? prev.total : null);
-	out.cores = now.cores.map(function (core, i) {
-		return cpuLoad(core, prev && prev.cores && prev.cores[i] ? prev.cores[i] : null);
-	});
-
-	return out;
-}
-
 function parseCpuInfo(text) {
 	const info = { model: "", cores: 0, threads: 0, mhz: 0, cache: 0 };
 
@@ -248,28 +165,6 @@ function cpuSpecLine(info) {
 	return parts.join(" · ");
 }
 
-function parseTopProcesses(text) {
-	const psCommWidth = 16;
-	const out = [];
-
-	String(text || "").split("\n").forEach(function (line) {
-		const match = /^\s*([0-9]+(?:\.[0-9]+)?)\s+([0-9]+)\s+(.+?)\s*$/.exec(line);
-
-		if (!match)
-			return;
-
-		const rest = match[3];
-		const name = rest.slice(0, psCommWidth).trim();
-
-		if (name === "")
-			return;
-
-		out.push({ name: name, pid: parseInt(match[2], 10), value: parseFloat(match[1]), cmd: rest.slice(psCommWidth).trim() });
-	});
-
-	return out;
-}
-
 function filterProcesses(procs, ignore, query, max) {
 	const skip = ignore || [];
 	const wanted = String(query === undefined || query === null ? "" : query).toLowerCase();
@@ -288,30 +183,6 @@ function killCommand(pid, signal) {
 	return ["kill", signal || "-9", String(pid)];
 }
 
-function parseBattery(text) {
-	const vals = {};
-
-	String(text || "").split("\n").forEach(function (line) {
-		const at = line.indexOf("=");
-
-		if (at < 0)
-			return;
-
-		vals[line.substring(0, at).trim()] = line.substring(at + 1).trim();
-	});
-
-	if (vals["POWER_SUPPLY_PRESENT"] === "0" || vals["POWER_SUPPLY_CAPACITY"] === undefined)
-		return null;
-
-	const state = vals["POWER_SUPPLY_STATUS"] || "Unknown";
-
-	return {
-		pct: parseFloat(vals["POWER_SUPPLY_CAPACITY"]) || 0,
-		charging: state === "Charging" || state === "Full",
-		full: state === "Full"
-	};
-}
-
 function batteryIcon(battery, icons) {
 	if (!battery)
 		return icons.plug;
@@ -326,68 +197,6 @@ function batteryIcon(battery, icons) {
 		: p >= 30 ? icons.mid
 		: p >= 10 ? icons.low
 		: icons.alert;
-}
-
-function cpuGovernors(text) {
-	const line = String(text || "").split("\n").filter(function (row) { return /\w/.test(row); }).pop();
-
-	if (line === undefined || line.indexOf(":") >= 0)
-		return [];
-
-	return line.replace(/\[|\]/g, "").split(/\s+/).filter(function (word) { return /\w/.test(word); });
-}
-
-function currentGovernor(text) {
-	const hit = String(text || "").split("\n").find(function (row) { return row.indexOf("[") >= 0; });
-
-	return hit ? /\[([a-z_-]+)\]/.exec(hit)[1] : "";
-}
-
-function governorCommand(governor) {
-	return ["sh", "-c", "echo '" + governor + "' | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor"];
-}
-
-function parseMeminfo(text) {
-	const vals = {};
-
-	String(text || "").split("\n").forEach(function (line) {
-		const at = line.indexOf(":");
-
-		if (at < 0)
-			return;
-
-		vals[line.substring(0, at).trim()] = parseFloat(line.substring(at + 1)) || 0;
-	});
-
-	const total = vals["MemTotal"] || 0;
-	const available = vals["MemAvailable"] || (vals["MemFree"] || 0) + (vals["Buffers"] || 0) + (vals["Cached"] || 0);
-	const used = Math.max(0, total - available);
-	const cached = vals["Cached"] || 0;
-	const buffers = vals["Buffers"] || 0;
-	const swapTotal = vals["SwapTotal"] || 0;
-	const swapUsed = Math.max(0, swapTotal - (vals["SwapFree"] || 0));
-	const pool = total + swapTotal;
-	const committed = used + swapUsed;
-
-	return {
-		total: total,
-		used: used,
-		available: available,
-		cached: cached,
-		buffers: buffers,
-		swapTotal: swapTotal,
-		swapUsed: swapUsed,
-		pool: pool,
-		committed: committed,
-		ramFree: Math.max(0, total - used - cached - buffers),
-		swapFree: Math.max(0, swapTotal - swapUsed),
-		free: Math.max(0, pool - committed - cached - buffers),
-		pct: pool > 0 ? 100 * committed / pool : 0
-	};
-}
-
-function gbText(kb) {
-	return (kb / 1024 / 1024).toFixed(1) + " GB";
 }
 
 function sizeText(kb) {

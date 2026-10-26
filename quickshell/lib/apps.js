@@ -45,14 +45,6 @@ function iconNames(names) {
 	return out;
 }
 
-function cleanExec(value) {
-	return String(value === undefined || value === null ? "" : value)
-		.replace(/%[uUfFiIcCkK]/g, "")
-		.replace(/%%/g, "%")
-		.replace(/\s+/g, " ")
-		.trim();
-}
-
 function launchCommand(entry, appId, terminal) {
 	const line = entry && entry.execLine ? entry.execLine : (entry && entry.exec ? entry.exec : appId);
 
@@ -60,66 +52,6 @@ function launchCommand(entry, appId, terminal) {
 		return [terminal, "-e", "sh", "-c", line];
 
 	return ["sh", "-c", line];
-}
-
-function terminalName(text) {
-	const source = String(text === undefined || text === null ? "" : text);
-	const match = /(?:^|\n)[ \t]*(?:local[ \t]+)?\$?terminal[ \t]*=[ \t]*["']?([^"'\s]+)["']?/.exec(source);
-
-	return match ? match[1] : "";
-}
-
-function togglePin(pins, appId) {
-	const kept = pins.filter(function (id) { return id.toLowerCase() !== appId.toLowerCase(); });
-
-	if (kept.length === pins.length)
-		kept.push(appId);
-
-	return kept;
-}
-
-function pinnedFromText(text) {
-	return (text || "").split("\n").map(function (line) { return line.trim(); }).filter(function (line) { return line !== ""; });
-}
-
-
-function lookupApp(entries, name) {
-	if (!name)
-		return null;
-
-	const wanted = name.toLowerCase();
-	const usable = function (entry) {
-		return entry && entry.icon;
-	};
-
-	if (usable(entries[name]))
-		return entries[name];
-
-	const keys = Object.keys(entries);
-	const fields = ["id", "wmclass", "exec", "name"];
-
-	for (let i = 0; i < fields.length; i++) {
-		for (let j = 0; j < keys.length; j++) {
-			const entry = entries[keys[j]];
-
-			if (usable(entry) && entry[fields[i]] && entry[fields[i]].toLowerCase() === wanted)
-				return entry;
-		}
-	}
-
-	const tail = /(\d{3,})$/.exec(wanted);
-
-	if (tail) {
-		for (let j = 0; j < keys.length; j++) {
-			const entry = entries[keys[j]];
-			const iconTail = entry && entry.icon ? /(\d{3,})$/.exec(entry.icon) : null;
-
-			if (iconTail && iconTail[1] === tail[1])
-				return entry;
-		}
-	}
-
-	return null;
 }
 
 function windowAppCandidates(toplevel, terminals) {

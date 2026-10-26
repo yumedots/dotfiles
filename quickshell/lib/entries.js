@@ -122,43 +122,6 @@ function commandEntries(items) {
 	});
 }
 
-function clipEntries(list, sources) {
-	return (list || []).map(function (entry) {
-		const appId = sources && entry.id ? sources[entry.id] || "" : "";
-
-		return {
-			id: "clip:" + entry.id,
-			kind: "clip",
-			name: entry.kind === "image" ? "Image" : entry.text,
-			keywords: [],
-			clipId: entry.id,
-			image: entry.kind === "image",
-			format: entry.format || "",
-			appId: appId
-		};
-	});
-}
-
-function procEntries(list) {
-	return (list || []).map(function (proc) {
-		return {
-			id: "proc:" + proc.pid,
-			kind: "proc",
-			name: proc.name,
-			keywords: [proc.cmd],
-			appId: proc.name,
-			pid: proc.pid,
-			value: proc.value
-		};
-	});
-}
-
-function fileEntries(paths) {
-	return (paths || []).map(function (path) {
-		return { id: "file:" + path, kind: "file", name: path, keywords: [], path: path };
-	});
-}
-
 function customEntries(text) {
 	return String(text === undefined || text === null ? "" : text).split("\n").map(function (line) {
 		const parts = line.split("\t");
