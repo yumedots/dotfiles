@@ -24,8 +24,6 @@ PanelWindow {
 	readonly property int columns: Math.max(1, Config.wallpaperColumns)
 	readonly property real heroWidth: Config.wallpaperStageWidth
 	readonly property real heroHeight: Math.round(root.heroWidth / Config.wallpaperPreviewRatio)
-	readonly property real loaderWidth: Math.round(root.heroWidth * (root.screen ? root.screen.devicePixelRatio : 1))
-	readonly property real tilePixel: Math.max(1, (root.screen ? root.screen.devicePixelRatio : 1) * 1.15)
 	readonly property real shelfWidth: Config.wallpaperPickerWidth - Config.wallpaperStageWidth - Config.wallpaperSectionGap
 	readonly property real gridWidth: root.shelfWidth - Config.scrollbarWidth - Config.wallpaperTileGap
 	readonly property real cell: root.gridWidth / root.columns
@@ -67,6 +65,8 @@ PanelWindow {
 	}
 
 	property string heroPath: ""
+	property string heroThumb: ""
+	property string heroPreview: ""
 	property bool tilesOn: false
 
 	onCurrentIndexChanged: {
@@ -80,7 +80,7 @@ PanelWindow {
 		if (!root.shown)
 			return;
 
-		root.heroPath = root.held === null ? "" : root.held.path;
+		root.setHero();
 		root.tilesOn = false;
 		tileTimer.restart();
 	}
@@ -96,7 +96,14 @@ PanelWindow {
 		id: heroTimer
 
 		interval: 140
-		onTriggered: root.heroPath = root.held === null ? "" : root.held.path
+		onTriggered: root.setHero()
+	}
+
+	function setHero() {
+		const entry = root.held;
+		root.heroPath = entry === null ? "" : entry.path;
+		root.heroThumb = entry !== null && entry.thumb ? entry.thumb : root.heroPath;
+		root.heroPreview = entry !== null && entry.preview ? entry.preview : root.heroPath;
 	}
 
 	function reveal() {
@@ -234,8 +241,7 @@ PanelWindow {
 						cache: true
 						asynchronous: true
 						retainWhileLoading: true
-						sourceSize.width: 320
-						source: root.heroPath === "" ? "" : "file://" + root.heroPath
+						source: root.heroThumb === "" ? "" : "file://" + root.heroThumb
 					}
 
 					Image {
@@ -246,9 +252,8 @@ PanelWindow {
 						cache: true
 						asynchronous: true
 						retainWhileLoading: true
-						sourceSize.width: Math.min(root.loaderWidth, 1024)
 						opacity: status === Image.Ready ? 1 : 0
-						source: root.heroPath === "" ? "" : "file://" + root.heroPath
+						source: root.heroPreview === "" ? "" : "file://" + root.heroPreview
 
 						Behavior on opacity {
 							NumberAnimation {
@@ -333,9 +338,7 @@ PanelWindow {
 								asynchronous: true
 								retainWhileLoading: true
 								opacity: cell.current ? 1 : Config.wallpaperTileDim
-								sourceSize.width: Math.round(tile.width * root.tilePixel)
-								sourceSize.height: Math.round(tile.height * root.tilePixel)
-								source: root.tilesOn ? "file://" + cell.modelData.path : ""
+								source: root.tilesOn ? "file://" + (cell.modelData.thumb || cell.modelData.path) : ""
 
 								Behavior on opacity {
 									NumberAnimation {
