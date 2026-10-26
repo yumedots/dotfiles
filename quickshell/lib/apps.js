@@ -1,21 +1,5 @@
 .pragma library
 
-function commandWord(title) {
-	const word = (title || "").split(" ")[0].replace(/:$/, "");
-
-	if (!word || word.indexOf("/") >= 0 || word.indexOf("~") >= 0)
-		return "";
-
-	return word.toLowerCase();
-}
-
-function terminalAppId(cls, title, terminals) {
-	if (terminals.indexOf(String(cls).toLowerCase()) < 0)
-		return cls;
-
-	return commandWord(title);
-}
-
 function cleanName(name) {
 	const value = String(name === undefined || name === null ? "" : name).trim();
 
@@ -43,29 +27,6 @@ function iconNames(names) {
 	});
 
 	return out;
-}
-
-function launchCommand(entry, appId, terminal) {
-	const line = entry && entry.execLine ? entry.execLine : (entry && entry.exec ? entry.exec : appId);
-
-	if (entry && entry.terminal)
-		return [terminal, "-e", "sh", "-c", line];
-
-	return ["sh", "-c", line];
-}
-
-function windowAppCandidates(toplevel, terminals) {
-	const info = toplevel && toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
-	const className = info.class || "";
-
-	return { className: className, word: terminalAppId(className, info.title || "", terminals) };
-}
-
-function realWindows(toplevels) {
-	return (toplevels || []).filter(function (toplevel) {
-		const info = toplevel.lastIpcObject;
-		return Boolean(info) && info.workspace !== undefined;
-	});
 }
 
 function detectPrefix(query, marks) {

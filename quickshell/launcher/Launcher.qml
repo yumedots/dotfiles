@@ -1,7 +1,6 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.ui
 import qs
@@ -14,8 +13,7 @@ PanelWindow {
 
 	property bool shown: false
 	property string query: ""
-	readonly property var pins: root.data.pins || []
-	readonly property string terminal: root.data.terminal || ""
+	readonly property var pins: root.state.pins || []
 
 
 
@@ -33,10 +31,9 @@ PanelWindow {
 
 	property bool windows: false
 	property int winIndex: 0
-	property string pendingFocus: ""
 	property string clipPreviewId: ""
-	readonly property string clipPreviewText: root.data.clip ? String(root.data.clip.text || "") : ""
-	readonly property string clipPreviewPath: root.data.clip && root.data.clip.path ? "file://" + root.data.clip.path : ""
+	readonly property string clipPreviewText: root.state.clip ? String(root.state.clip.text || "") : ""
+	readonly property string clipPreviewPath: root.state.clip && root.state.clip.path ? "file://" + root.state.clip.path : ""
 	readonly property bool clipPreviewLoading: root.clipPreviewId !== "" && root.clipPreviewText === "" && root.clipPreviewPath === ""
 	readonly property bool isClipboard: root.mode === "clipboard"
 
@@ -46,10 +43,9 @@ PanelWindow {
 	readonly property string home: Quickshell.env("HOME")
 	readonly property string terminalConfig: Config.launcherTerminalConfig.replace("~", root.home)
 	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
-	readonly property var versions: Yudae.versions || ({})
 	readonly property var appEntries: Entries.appEntries(AppIcons.entries, Config.launcherIgnoreApps, Config.launcherAppAliases)
-	readonly property var data: Yudae.launcher
-	readonly property var results: root.windows ? root.windowResults() : (root.data.results || [])
+	readonly property var state: Yudae.launcher
+	readonly property var results: root.windows ? root.windowResults() : (root.state.results || [])
 
 	function windowResults() {
 		const typed = root.search.toLowerCase();
@@ -95,34 +91,6 @@ PanelWindow {
 
 	visible: alwaysMapped || root.shown || card.opacity > 0
 
-	onVisibleChanged: {
-		if (root.visible || root.pendingFocus === "")
-			return;
-
-		const address = root.pendingFocus;
-
-		root.pendingFocus = "";
-		root.focusWindow(address);
-	}
-
-	Timer {
-		id: pendingFocusTimer
-
-		interval: 30
-		repeat: true
-
-		onTriggered: {
-			if (root.pendingFocus === "") {
-				pendingFocusTimer.stop();
-				return;
-			}
-
-			const address = root.pendingFocus;
-			root.pendingFocus = "";
-			root.focusWindow(address);
-		}
-	}
-
 	Component.onCompleted: Yudae.launcherQuery(root.query, root.forced, root.group)
 
 	function open(mode) {
@@ -130,12 +98,10 @@ PanelWindow {
 			root.windows = false;
 
 		root.query = "";
-		root.pendingFocus = "";
 		root.group = "";
 		root.forced = mode || "";
 		root.pointer = null;
 		list.currentIndex = 0;
-		Hyprland.refreshToplevels();
 		root.shown = true;
 		root.winIndex = root.windows ? 1 : 0;
 		Qt.callLater(function () {
@@ -155,9 +121,6 @@ PanelWindow {
 
 	function close() {
 		root.shown = false;
-
-		if (root.pendingFocus !== "")
-			pendingFocusTimer.restart();
 	}
 
 	function settle() {
@@ -190,37 +153,17 @@ PanelWindow {
 	}
 
 	function windowEntries() {
-		const all = Apps.realWindows(Hyprland.toplevels.values ? Hyprland.toplevels.values : []);
-		const values = all.filter(function (toplevel) {
-			const info = toplevel.lastIpcObject;
-			if (!info || !info.workspace) return false;
-
-			const match = String(info.workspace.name || "").match(/^v?(\d+)(?:\.(\d+))?$/);
-			if (!match) return false;
-
-			const slot = parseInt(match[1], 10);
-			const version = match[2] ? parseInt(match[2], 10) : 1;
-
-			return version === (root.versions[slot] || 1);
-		});
-
-		return values.map(function (toplevel) {
-			const info = toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
-			const candidates = Apps.windowAppCandidates(toplevel, Config.terminalClasses);
-			const appId = candidates.word && AppIcons.iconOf(candidates.word) ? candidates.word : candidates.className;
-
+		return (Yudae.windows || []).map(function (info) {
 			return {
-				id: "win:" + toplevel.address,
+				id: info.id,
 				kind: "window",
-				name: info.title || candidates.className,
-				appId: appId,
-				keywords: [candidates.className],
-				address: toplevel.address,
+				name: info.title || info.appId,
+				appId: info.appId,
+				keywords: [info.appId],
+				address: info.address,
 				workspace: info.workspace,
-				focus: info.focusHistoryID === undefined ? 999 : info.focusHistoryID
+				focus: info.focus
 			};
-		}).sort(function (a, b) {
-			return a.focus - b.focus;
 		});
 	}
 
@@ -448,11 +391,7 @@ PanelWindow {
 	}
 
 	function focusWindow(address) {
-		const target = address.indexOf("0x") === 0 ? address : "0x" + address;
-
-		Hyprland.dispatch(Hyprland.usingLua
-			? "hl.dsp.focus({ window = \"address:" + target + "\" })"
-			: "focuswindow address:" + target);
+		Yudae.windowFocus(address);
 	}
 
 	function killProc(entry) {
@@ -497,24 +436,9 @@ PanelWindow {
 			return;
 
 		if (entry.kind === "app")
-			Quickshell.execDetached(Apps.launchCommand(entry, entry.appId, root.terminal));
-		else if (entry.kind === "window") {
-			const ws = entry.workspace;
-			const name = ws && ws.name ? String(ws.name) : "";
-			const addr = entry.address.indexOf("0x") === 0 ? entry.address : "0x" + entry.address;
-			const match = name.match(/^v?(\d+)(?:\.(\d+))?$/);
-
-			if (match && Hyprland.usingLua) {
-				const slot = parseInt(match[1], 10);
-				const version = match[2] ? parseInt(match[2], 10) : 1;
-				const code = "require(\"versions\").visit(" + slot + "," + version + "); hl.dispatch(hl.dsp.focus({window = \"address:" + addr + "\"}))";
-				Quickshell.execDetached(["sh", "-c", "hyprctl eval '" + code + "'"]);
-			} else if (match) {
-				Quickshell.execDetached(["sh", "-c", "hyprctl dispatch focuswindow address:" + addr]);
-			} else {
-				root.pendingFocus = entry.address;
-			}
-		}
+			Yudae.windowLaunch(entry.appId);
+		else if (entry.kind === "window")
+			root.focusWindow(entry.address);
 		else if (entry.kind === "command" || entry.kind === "action" || entry.kind === "saved")
 			Quickshell.execDetached(["sh", "-c", entry.command]);
 		else if (entry.kind === "calc")
@@ -871,7 +795,6 @@ PanelWindow {
 
 			visible: root.windows
 			results: root.windows ? root.results : []
-			entries: root.windowEntries()
 			index: root.winCurrent
 			title: root.winName
 			emptyMessage: root.emptyText()

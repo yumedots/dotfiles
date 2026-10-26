@@ -7,7 +7,6 @@ Item {
 	id: switcher
 
 	required property var results
-	required property var entries
 	required property int index
 	required property string title
 	required property string emptyMessage
@@ -70,23 +69,6 @@ Item {
 			font.pixelSize: Config.launcherFontSize
 			color: Config.muted
 			text: switcher.emptyMessage
-		}
-	}
-
-	Item {
-		opacity: 0
-		width: 0
-		height: 0
-
-		Repeater {
-			model: switcher.entries
-
-			delegate: AppIcon {
-				required property var modelData
-
-				implicitSize: Config.windowsIconSize
-				source: modelData.appId ? AppIcons.iconOf(modelData.appId) : ""
-			}
 		}
 	}
 
