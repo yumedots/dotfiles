@@ -57,6 +57,12 @@ pub const Icons = struct {
 			self.walkIcons(&files, &ranks, user_icons, 0);
 		}
 
+		const user_flatpak = std.fmt.allocPrint(self.allocator, "{s}/.local/share/flatpak/exports/share/icons", .{home}) catch "";
+		if (user_flatpak.len > 0) {
+			defer self.allocator.free(user_flatpak);
+			self.walkIcons(&files, &ranks, user_flatpak, 0);
+		}
+
 		const user_pixmaps = std.fmt.allocPrint(self.allocator, "{s}/.local/share/pixmaps", .{home}) catch "";
 		if (user_pixmaps.len > 0) {
 			defer self.allocator.free(user_pixmaps);
