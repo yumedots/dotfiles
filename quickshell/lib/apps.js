@@ -167,70 +167,9 @@ function rankEntries(entries, query, pins, usage) {
 	return kept.map(function (item) { return item.entry; });
 }
 
-function parseUsage(text) {
-	const usage = {};
-
-	String(text || "").split("\n").forEach(function (line) {
-		const parts = line.split("\t");
-
-		if (parts.length < 2 || !parts[0])
-			return;
-
-		const count = parseInt(parts[1], 10);
-		const last = parts.length > 2 ? parseInt(parts[2], 10) : 0;
-
-		usage[parts[0]] = { count: isNaN(count) ? 0 : count, last: isNaN(last) ? 0 : last };
-	});
-
-	return usage;
-}
-
-function formatUsage(usage, max) {
-	const kept = Object.keys(usage || {}).map(function (id) {
-		return { id: id, count: usage[id].count, last: usage[id].last };
-	});
-
-	const capped = max > 0 && kept.length > max
-		? kept.sort(function (a, b) { return (b.last - a.last) || (b.count - a.count); }).slice(0, max)
-		: kept;
-
-	return capped.sort(function (a, b) { return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0); }).map(function (entry) {
-		return entry.id + "\t" + entry.count + "\t" + entry.last;
-	}).join("\n");
-}
-
-function bumpUsage(usage, id, now) {
-	const next = {};
-
-	Object.keys(usage || {}).forEach(function (key) {
-		next[key] = { count: usage[key].count, last: usage[key].last };
-	});
-
-	next[id] = { count: (next[id] ? next[id].count : 0) + 1, last: now };
-
-	return next;
-}
-
 function home(entries, pins) {
 	return (entries || []).filter(function (entry) {
 		return entry.kind !== "app" || (pins || []).indexOf(entry.id) >= 0;
 	});
 }
 
-function results(mode, search, state) {
-	if (mode === "files")
-		return state.files;
-	if (mode === "clipboard")
-		return state.clips;
-	if (mode === "calc")
-		return state.calc === null ? [] : [state.calc];
-	if (mode === "windows")
-		return search === "" ? state.windows : rankEntries(state.windows, search, [], {});
-	if (mode.indexOf("group:") === 0)
-		return rankEntries((state.groups || {})[mode.substring(6)] || [], search, state.pins, state.usage);
-
-	const source = search === "" ? home(state.entries, state.pins) : state.entries;
-	const ranked = rankEntries(source, search, state.pins, state.usage);
-
-	return state.calc === null ? ranked : [state.calc].concat(ranked);
-}

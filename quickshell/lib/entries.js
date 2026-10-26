@@ -33,12 +33,6 @@ function modeInfo(mode, config) {
 	return null;
 }
 
-function markOf(mode, config) {
-	const info = modeInfo(mode, config);
-
-	return info && info.mark ? info.mark : "";
-}
-
 function modeEntries(modes) {
 	return (modes || []).map(function (mode) {
 		return {
@@ -122,48 +116,6 @@ function commandEntries(items) {
 	});
 }
 
-function customEntries(text) {
-	return String(text === undefined || text === null ? "" : text).split("\n").map(function (line) {
-		const parts = line.split("\t");
-		const name = (parts[0] || "").trim();
-
-		if (name === "")
-			return null;
-
-		return {
-			id: "saved:" + name,
-			kind: "saved",
-			name: name,
-			command: parts.length > 1 ? parts.slice(1).join("\t") : name,
-			keywords: []
-		};
-	}).filter(function (entry) { return entry !== null; });
-}
-
-function formatCustom(list) {
-	return (list || []).map(function (entry) { return entry.name + "\t" + entry.command; }).join("\n");
-}
-
-function toggleCustom(list, query) {
-	const name = String(query === undefined || query === null ? "" : query).trim();
-	const kept = (list || []).filter(function (entry) { return entry.name !== name; });
-
-	if (name === "")
-		return list || [];
-
-	if (kept.length === (list || []).length) {
-		kept.push({
-			id: "saved:" + name,
-			kind: "saved",
-			name: name,
-			command: name,
-			keywords: []
-		});
-	}
-
-	return kept;
-}
-
 function glyphOf(entry, config) {
 	if (!entry)
 		return "";
@@ -190,10 +142,3 @@ function rememberable(entry) {
 	return Boolean(entry) && kinds.indexOf(entry.kind) >= 0;
 }
 
-function all(config, apps, saved) {
-	return modeEntries(config.launcherModes)
-		.concat(groupEntries(config.launcherGroups))
-		.concat(saved || [])
-		.concat(commandEntries(config.launcherCommands))
-		.concat(apps || []);
-}

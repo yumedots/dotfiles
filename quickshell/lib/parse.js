@@ -14,12 +14,3 @@ function plainText(html) {
 		.trim();
 }
 
-function parseClipboardImage(preview) {
-	const match = /^\[\[\s*binary data\s+.*?\b(png|jpe?g|gif|webp|bmp|ico|tiff?)\s+(\d+)\s*x\s*(\d+).*?\]\]$/i.exec(preview || "");
-
-	if (!match)
-		return "";
-
-	return match[1].toLowerCase();
-}
-
