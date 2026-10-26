@@ -48,17 +48,16 @@ PanelWindow {
 	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
 	property var versions: ({})
 	readonly property var appEntries: Entries.appEntries(AppIcons.entries, Config.launcherIgnoreApps, Config.launcherAppAliases)
-	readonly property var results: root.mode === "procs"
-		? Entries.procEntries(System.filterProcesses(root.procRows, Config.psIgnore, root.search, Config.launcherMaxResults))
-		: Apps.results(root.mode, root.search, {
-		clips: root.clips,
-		windows: root.windowEntries(),
-		entries: Entries.all(Config, root.appEntries, root.saved),
-		groups: ({ apps: root.appEntries }),
-		pins: root.pins,
-		usage: root.usage,
-		calc: Parse.calcEntry(root.search)
-	})
+	readonly property var data: Yudae.launcher
+	readonly property var results: root.windows ? root.windowResults() : (root.data.results || [])
+
+	function windowResults() {
+		const typed = root.search.toLowerCase();
+
+		return root.windowEntries().filter(function (entry) {
+			return typed === "" || String(entry.name).toLowerCase().indexOf(typed) >= 0;
+		});
+	}
 	readonly property int listHeight: Config.launcherMaxRows * Config.launcherRowHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
 
@@ -398,8 +397,7 @@ PanelWindow {
 		if (root.query === "" || root.windows)
 			return;
 
-		root.saved = Entries.toggleCustom(root.saved, root.query);
-		root.writeFile(root.stateDir + "/entries.txt", Entries.formatCustom(root.saved));
+		Yudae.launcherSave(root.query);
 	}
 
 	function writeFile(path, text) {
@@ -417,19 +415,17 @@ PanelWindow {
 	}
 
 	function remember(entry) {
-		if (!Entries.rememberable(entry))
+		if (!entry || entry.kind === "calc" || entry.kind === "window" || entry.kind === "proc" || entry.kind === "clip")
 			return;
 
-		root.usage = Apps.bumpUsage(root.usage, entry.id, Date.now());
-		root.writeFile(root.stateDir + "/usage.txt", Apps.formatUsage(root.usage, Config.launcherUsageMax));
+		Yudae.launcherRemember(entry.id);
 	}
 
 	function pin(entry) {
 		if (!Entries.rememberable(entry))
 			return;
 
-		root.pins = Apps.togglePin(root.pins, entry.id);
-		root.writeFile(root.stateDir + "/pins.txt", root.pins.join("\n"));
+		Yudae.launcherPin(entry.id);
 	}
 
 	function copy(text) {
@@ -605,8 +601,11 @@ PanelWindow {
 		root.close();
 	}
 
+	onSearchChanged: Yudae.launcherQuery(root.query, root.forced, root.group)
+
 	onModeChanged: {
 		list.currentIndex = 0;
+		Yudae.launcherQuery(root.query, root.forced, root.group);
 
 		if (root.mode === "wallpaper")
 			root.openWallpaper();

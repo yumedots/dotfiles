@@ -271,6 +271,23 @@ QtObject {
 	}
 
 	readonly property var icons: root.snapshot.icons || ({})
+	readonly property var launcher: root.snapshot.launcher || ({})
+
+	function launcherQuery(query, forced, group) {
+		root.send({ cmd: { launcher: { query: query || "", forced: forced || "", group: group || "" } } });
+	}
+
+	function launcherPin(id) {
+		root.send({ cmd: { launcher: { pin: id } } });
+	}
+
+	function launcherSave(query) {
+		root.send({ cmd: { launcher: { save: query } } });
+	}
+
+	function launcherRemember(id) {
+		root.send({ cmd: { launcher: { remember: id } } });
+	}
 	readonly property var bar: root.snapshot.bar || ({})
 	readonly property var wallpaper: root.snapshot.wallpaper || ({})
 
