@@ -16,9 +16,10 @@ ShellRoot {
 	property string role: "main"
 	property double hyprBootAt: Date.now()
 	readonly property bool isLauncher: role === "launcher"
+	readonly property string launcherPath: Quickshell.shellDir + "/launcherShell.qml"
 
 	function toLauncher(fn, arg) {
-		const cmd = ["quickshell", "ipc", "-p", Quickshell.env("HOME") + "/.config/quickshell/launcherShell.qml", "call", "shell", fn];
+		const cmd = ["quickshell", "ipc", "-p", shellRoot.launcherPath, "call", "shell", fn];
 
 		if (arg !== undefined && arg !== null)
 			cmd.push(arg);
