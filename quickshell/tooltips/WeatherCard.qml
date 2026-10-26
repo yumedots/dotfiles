@@ -578,10 +578,66 @@ Item {
 			}
 		}
 
+		Repeater {
+			model: root.editing ? root.suggestionRows : []
+
+			delegate: Item {
+				id: suggestRow
+
+				required property var modelData
+				required property int index
+
+				readonly property bool chosen: suggestRow.index === root.pickIndex
+
+				width: card.width
+				height: suggestMetrics.height + Config.weatherCardGap
+
+				Highlight {
+					active: suggestRow.chosen || suggestHit.containsMouse
+				}
+
+				Text {
+					id: suggestName
+
+					anchors.left: parent.left
+					anchors.leftMargin: Config.weatherCardGap
+					anchors.verticalCenter: parent.verticalCenter
+					width: Math.min(implicitWidth, suggestRow.width * 0.55)
+					elide: Text.ElideRight
+					font.family: Config.fontFamily
+					font.pixelSize: Config.weatherPlaceSize
+					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.foreground
+					text: String(suggestRow.modelData.name || "")
+				}
+
+				Text {
+					anchors.left: suggestName.right
+					anchors.leftMargin: Config.weatherCardGap
+					anchors.right: parent.right
+					anchors.rightMargin: Config.weatherCardGap
+					anchors.verticalCenter: parent.verticalCenter
+					elide: Text.ElideRight
+					font.family: Config.fontFamily
+					font.pixelSize: Config.weatherPlaceSize
+					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.muted
+					text: root.regionOf(suggestRow.modelData)
+				}
+
+				MouseArea {
+					id: suggestHit
+
+					anchors.fill: parent
+					hoverEnabled: true
+
+					onEntered: root.pickIndex = suggestRow.index
+					onClicked: root.pick(suggestRow.modelData)
+				}
+			}
+		}
+
 		Item {
 			id: hero
 
-			visible: !root.editing
 			width: card.width
 			height: tempBox.height
 
@@ -727,7 +783,6 @@ Item {
 		Rectangle {
 			id: separator
 
-			visible: !root.editing
 			width: card.width
 			height: Config.weatherSeparator
 			color: Config.weatherSeparatorColor
@@ -736,7 +791,6 @@ Item {
 		Item {
 			id: daysSection
 
-			visible: !root.editing
 			width: card.width
 			height: root.dayHeight
 
@@ -801,62 +855,6 @@ Item {
 							text: dayCell.row ? root.dayTempText(dayCell.row) : ""
 						}
 					}
-				}
-			}
-		}
-		Repeater {
-			model: root.editing ? root.suggestionRows : []
-
-			delegate: Item {
-				id: suggestRow
-
-				required property var modelData
-				required property int index
-
-				readonly property bool chosen: suggestRow.index === root.pickIndex
-
-				width: card.width
-				height: suggestMetrics.height + Config.weatherCardGap
-
-				Highlight {
-					active: suggestRow.chosen || suggestHit.containsMouse
-				}
-
-				Text {
-					id: suggestName
-
-					anchors.left: parent.left
-					anchors.leftMargin: Config.weatherCardGap
-					anchors.verticalCenter: parent.verticalCenter
-					width: Math.min(implicitWidth, suggestRow.width * 0.55)
-					elide: Text.ElideRight
-					font.family: Config.fontFamily
-					font.pixelSize: Config.weatherPlaceSize
-					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.foreground
-					text: String(suggestRow.modelData.name || "")
-				}
-
-				Text {
-					anchors.left: suggestName.right
-					anchors.leftMargin: Config.weatherCardGap
-					anchors.right: parent.right
-					anchors.rightMargin: Config.weatherCardGap
-					anchors.verticalCenter: parent.verticalCenter
-					elide: Text.ElideRight
-					font.family: Config.fontFamily
-					font.pixelSize: Config.weatherPlaceSize
-					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.muted
-					text: root.regionOf(suggestRow.modelData)
-				}
-
-				MouseArea {
-					id: suggestHit
-
-					anchors.fill: parent
-					hoverEnabled: true
-
-					onEntered: root.pickIndex = suggestRow.index
-					onClicked: root.pick(suggestRow.modelData)
 				}
 			}
 		}
