@@ -272,6 +272,16 @@ QtObject {
 
 	readonly property var icons: root.snapshot.icons || ({})
 	readonly property var launcher: root.snapshot.launcher || ({})
+	readonly property var ink: root.snapshot.ink || ({})
+	readonly property var windows: root.snapshot.windows ? (root.snapshot.windows.list || []) : []
+
+	function windowLaunch(id) {
+		root.send({ cmd: { windows: { launch: id } } });
+	}
+
+	function windowFocus(address) {
+		root.send({ cmd: { windows: { focus: address } } });
+	}
 
 	function launcherQuery(query, forced, group) {
 		root.send({ cmd: { launcher: { query: query || "", forced: forced || "", group: group || "" } } });
