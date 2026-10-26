@@ -21,7 +21,18 @@ Done and committed:
 - `89a223c` `primitives/calc.zig` + `apps.view()` + desktop recursion test.
 - `598fea3` mixer shows real volume (channelVolumes cube root) and follows
   `pactl subscribe`; app icons refresh through a live binding.
-- `7ceaa21` volume widget reads the sink from the daemon (it was erroring on a
+- `7ceaa21` volume widget reads the sink from the daemon
+- mixer: real volume (cube root of channelVolumes), event-driven updates (35-57 ms),
+  one publish per change, drag mapped in card space with a jump filter, wpctl writes
+  queued off the client thread, two daemon crashes fixed (ipc use-after-free,
+  launcher arena) - `4b9a3fd f8ab1bb 317c72a 873c9e1 e4dc988`
+- icons: one resolver in the daemon (`primitives/icons.zig` + `providers/icons.zig`,
+  `icons` snapshot section) used by `AppIcons.qml` for the mixer, launcher, window
+  switcher, notifications and tray; case-insensitive desktop ids + category fallback
+  - `23d0eb7 298f495 a943184`
+- weather: the inline place editor commits the matched suggestion, needs 3 letters,
+  ranks by population, keeps the card visible, suggestions live in the card -
+  `304555f 43b68fc 10e0fba 5a86b41` (it was erroring on a
   missing `import qs.services`, so no OSD and no icon change).
 
 ## Done since this file was written
@@ -45,20 +56,26 @@ Done and committed:
 
 ## Open
 
-1. **Launcher port (paused by the user)**: `quickshell/yudaemond/src/providers/launcher.zig`
-   exists and runs, wired in `main.zig` (`launcher` command group) and `tests.zig`,
-   and `Yudae.qml` does not use it yet, `Launcher.qml` is untouched.
-   - daemon side present: modes/groups/saved/apps/rank/usage/pins/clipboard
-     list+preview+copy/procs/kill, snapshot key `launcher`
-     (`mode`, `prompt`, `query`, `terminal`, `pins`, `results`, `clip{text,path}`).
-   - still to do: QML rewrite of `Launcher.qml` (1079 lines, must go under 1000)
-     to consume `Yudae.launcher` and send `{cmd:{launcher:{query,forced,group}}}`,
-     `pin`, `save`, `remember`, `clips`, `clip`, `copyClip`, `kill`; window
-     switcher stays on Hyprland toplevels; drop `lib/apps.js`/`entries.js`/
-     `parse.js` leftovers once nothing uses them.
-   - tests still missing: launcher pins/usage round trip through the files.
-4. Not started: nothing else. `Root.qml` has no backend data left (only the
-   qmldir hot-reload FileView and Hyprland events).
+1. **Launcher QML** (the only real port left). `quickshell/yudaemond/src/providers/launcher.zig`
+   is written, wired and tested (`111eeaa`) and emits the `launcher` snapshot section
+   (`mode`, `prompt`, `query`, `terminal`, `pins`, `results`, `clip{text,path}`), but
+   `quickshell/launcher/Launcher.qml` (1089 lines, over the 1000 rule) still uses
+   `lib/apps.js`, `lib/entries.js` and `lib/parse.js` and never reads `Yudae.launcher`.
+   To finish: bind the rows to `Yudae.launcher.results`, send
+   `{cmd:{launcher:{query,forced,group}}}` on every keystroke/mode change, plus
+   `pin`, `save`, `remember`, `clips`, `clip`, `copyClip`, `kill`; keep the window
+   switcher on Hyprland toplevels; split the file under 1000 lines; then delete the
+   JS left-overs.
+2. **Launcher tests**: pins/usage round trip through `cache/launcher/*.txt`.
+3. **Wallpaper apply never executed.** The picker, scan, thumbnails, keyboard and
+   the saved-settings write are done and verified; `awww img --ink-band` is only
+   code-reviewed because it would change the real wallpaper from the systemd daemon.
+   Test it once in a real session (pick a wallpaper, check the desktop + settings.lua).
+4. **Display rapid changes.** A single scale/refresh change applies in ~250 ms
+   via `hyprctl eval hl.monitor(...)`, and the panel now shows the value it applied.
+   Two changes within ~1 s still lose the second one while the mode switch is in
+   flight. Needs a pending flag in the panel that ignores a second pick until the
+   first lands (or a queue in `screen.zig`).
 
 ## Verify each port
 
