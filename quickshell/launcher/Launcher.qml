@@ -121,6 +121,8 @@ PanelWindow {
 
 	function close() {
 		root.shown = false;
+		Yudae.launcherQuery("", "", "");
+		Yudae.launcherQuery("", "", "");
 	}
 
 	function settle() {
