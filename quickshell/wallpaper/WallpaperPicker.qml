@@ -25,6 +25,7 @@ PanelWindow {
 	readonly property real heroWidth: Config.wallpaperStageWidth
 	readonly property real heroHeight: Math.round(root.heroWidth / Config.wallpaperPreviewRatio)
 	readonly property real loaderWidth: Math.round(root.heroWidth * (root.screen ? root.screen.devicePixelRatio : 1))
+	readonly property real tilePixel: Math.max(1, (root.screen ? root.screen.devicePixelRatio : 1) * 1.15)
 	readonly property real shelfWidth: Config.wallpaperPickerWidth - Config.wallpaperStageWidth - Config.wallpaperSectionGap
 	readonly property real gridWidth: root.shelfWidth - Config.scrollbarWidth - Config.wallpaperTileGap
 	readonly property real cell: root.gridWidth / root.columns
@@ -65,14 +66,37 @@ PanelWindow {
 		root.selectActive();
 	}
 
-	onWallpapersChanged: {
-		if (root.wallpapers.length > 0)
-			preloader.preloadAround(root.currentIndex);
-	}
+	property string heroPath: ""
+	property bool tilesOn: false
 
 	onCurrentIndexChanged: {
 		root.reveal();
-		preloader.preloadAround(root.currentIndex);
+
+		if (root.shown || card.opacity > 0)
+			heroTimer.restart();
+	}
+
+	onShownChanged: {
+		if (!root.shown)
+			return;
+
+		root.heroPath = root.held === null ? "" : root.held.path;
+		root.tilesOn = false;
+		tileTimer.restart();
+	}
+
+	Timer {
+		id: tileTimer
+
+		interval: 140
+		onTriggered: root.tilesOn = true
+	}
+
+	Timer {
+		id: heroTimer
+
+		interval: 140
+		onTriggered: root.heroPath = root.held === null ? "" : root.held.path
 	}
 
 	function reveal() {
@@ -130,38 +154,6 @@ PanelWindow {
 		root.close();
 	}
 
-
-	Item {
-		id: preloader
-
-		enabled: false
-		opacity: 0
-
-		property var preloadComponents: []
-
-		function preloadAround(index) {
-			for (var i = 0; i < preloadComponents.length; i++) {
-				preloadComponents[i].destroy();
-			}
-			preloadComponents = [];
-
-			for (var offset = -3; offset <= 3; offset++) {
-				var idx = index + offset;
-				if (idx >= 0 && idx < root.wallpapers.length) {
-					var comp = Qt.createQmlObject('
-						import QtQuick;
-						Image {
-							source: "file://" + root.wallpapers[' + idx + '].path;
-							sourceSize.width: ' + root.loaderWidth + ';
-							cache: true;
-							asynchronous: true;
-						}
-					', preloader, "preload_" + idx);
-					preloadComponents.push(comp);
-				}
-			}
-		}
-	}
 
 	Rectangle {
 		id: scrim
@@ -235,6 +227,18 @@ PanelWindow {
 					color: Config.launcherSearchBox
 
 					Image {
+						id: heroQuick
+
+						anchors.fill: parent
+						fillMode: Image.PreserveAspectCrop
+						cache: true
+						asynchronous: true
+						retainWhileLoading: true
+						sourceSize.width: 320
+						source: root.heroPath === "" ? "" : "file://" + root.heroPath
+					}
+
+					Image {
 						id: heroShot
 
 						anchors.fill: parent
@@ -242,8 +246,15 @@ PanelWindow {
 						cache: true
 						asynchronous: true
 						retainWhileLoading: true
-						sourceSize.width: root.loaderWidth
-						source: root.held === null ? "" : "file://" + root.held.path
+						sourceSize.width: Math.min(root.loaderWidth, 1024)
+						opacity: status === Image.Ready ? 1 : 0
+						source: root.heroPath === "" ? "" : "file://" + root.heroPath
+
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+							}
+						}
 					}
 
 					Text {
@@ -322,9 +333,9 @@ PanelWindow {
 								asynchronous: true
 								retainWhileLoading: true
 								opacity: cell.current ? 1 : Config.wallpaperTileDim
-								sourceSize.width: Math.round(tile.width * Config.wallpaperTileDouble)
-								sourceSize.height: Math.round(tile.height * Config.wallpaperTileDouble)
-								source: "file://" + cell.modelData.path
+								sourceSize.width: Math.round(tile.width * root.tilePixel)
+								sourceSize.height: Math.round(tile.height * root.tilePixel)
+								source: root.tilesOn ? "file://" + cell.modelData.path : ""
 
 								Behavior on opacity {
 									NumberAnimation {
