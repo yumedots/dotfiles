@@ -56,7 +56,17 @@ Done and committed:
 
 ## Open
 
-0. **Process pairing (launcher <-> shell), owned by the daemon.** The launcher is a separate
+0. **Ink and awww belong to the daemon.** `quickshell/services/BarInk.qml` still does the ink
+   work in QML: it measures the bar height, passes `--ink-band` to `awww img`, samples the
+   wallpaper's colours, persists `cache/bar-ink.json`, and runs its own Processes. We own
+   both ends (the daemon, and awww which lives under `~/`), so the daemon should: keep the
+   band height (the bar reports its height once as a number), spawn and supervise `awww`
+   (apply a wallpaper, keep the daemon alive, expose its state), compute the ink colours
+   from the rendered wallpaper preview it already caches (no second decode), persist the
+   bar-ink state itself, and publish `ink` in the snapshot. Then `BarInk.qml` shrinks to a
+   read-only view of that section and loses every Process/FileView.
+
+1. **Process pairing (launcher <-> shell), owned by the daemon.** The launcher is a separate
    `quickshell -p launcherShell.qml` process (kept apart for tearing reasons). Today nothing
    watches the pair: kill the shell and the launcher lingers; kill the launcher and the shell
    keeps a dead IPC target. Wanted: `providers/supervisor.zig` that finds both pids
@@ -67,7 +77,7 @@ Done and committed:
    talking to nothing. Keep it process-based, no subprocess per second beyond the poll.
 
 
-1. **Launcher QML** (the only real port left). `quickshell/yudaemond/src/providers/launcher.zig`
+2. **Launcher QML** (the only real port left). `quickshell/yudaemond/src/providers/launcher.zig`
    is written, wired and tested (`111eeaa`) and emits the `launcher` snapshot section
    (`mode`, `prompt`, `query`, `terminal`, `pins`, `results`, `clip{text,path}`), but
    `quickshell/launcher/Launcher.qml` (1089 lines, over the 1000 rule) still uses
@@ -77,12 +87,12 @@ Done and committed:
    `pin`, `save`, `remember`, `clips`, `clip`, `copyClip`, `kill`; keep the window
    switcher on Hyprland toplevels; split the file under 1000 lines; then delete the
    JS left-overs.
-2. **Launcher tests**: pins/usage round trip through `cache/launcher/*.txt`.
-3. **Wallpaper apply never executed.** The picker, scan, thumbnails, keyboard and
+3. **Launcher tests**: pins/usage round trip through `cache/launcher/*.txt`.
+4. **Wallpaper apply never executed.** The picker, scan, thumbnails, keyboard and
    the saved-settings write are done and verified; `awww img --ink-band` is only
    code-reviewed because it would change the real wallpaper from the systemd daemon.
    Test it once in a real session (pick a wallpaper, check the desktop + settings.lua).
-4. **Display rapid changes.** A single scale/refresh change applies in ~250 ms
+5. **Display rapid changes.** A single scale/refresh change applies in ~250 ms
    via `hyprctl eval hl.monitor(...)`, and the panel now shows the value it applied.
    Two changes within ~1 s still lose the second one while the mode switch is in
    flight. Needs a pending flag in the panel that ignores a second pick until the
