@@ -215,7 +215,6 @@ const wallpaperSectionGap = 16;
 const wallpaperColumns = 3;
 const wallpaperTileGap = 8;
 const wallpaperNameSize = 13;
-const wallpaperHoverScale = 1.04;
 const wallpaperTileDim = 0.6;
 const wallpaperThumbJobs = 4;
 const wallpaperThumbQuality = 82;

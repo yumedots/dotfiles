@@ -254,12 +254,6 @@ PanelWindow {
 						retainWhileLoading: true
 						opacity: status === Image.Ready ? 1 : 0
 						source: root.heroPreview === "" ? "" : "file://" + root.heroPreview
-
-						Behavior on opacity {
-							NumberAnimation {
-								duration: Config.wallpaperFadeMs
-							}
-						}
 					}
 
 					Text {
@@ -320,14 +314,7 @@ PanelWindow {
 							width: root.tileWidth
 							height: root.tileHeight
 							color: Config.launcherSearchBox
-							scale: cell.current ? Config.wallpaperHoverScale : 1
 
-							Behavior on scale {
-								NumberAnimation {
-									duration: Config.wallpaperFadeMs
-									easing.type: Easing.OutCubic
-								}
-							}
 
 							Image {
 								id: thumb
@@ -339,13 +326,6 @@ PanelWindow {
 								retainWhileLoading: true
 								opacity: cell.current ? 1 : Config.wallpaperTileDim
 								source: root.tilesOn ? "file://" + (cell.modelData.thumb || cell.modelData.path) : ""
-
-								Behavior on opacity {
-									NumberAnimation {
-										duration: Config.wallpaperFadeMs
-										easing.type: Easing.OutCubic
-									}
-								}
 							}
 
 							Rectangle {
