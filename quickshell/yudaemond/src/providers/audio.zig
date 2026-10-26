@@ -455,6 +455,24 @@ pub const Audio = struct {
 		}
 
 		self.mutex.lockUncancelable(self.io);
+
+		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
+
+		for (next.items) |*node| {
+			for (self.nodes.items) |old| {
+				if (old.id != node.id) continue;
+
+				node.pending = old.pending;
+				node.pending_until = old.pending_until;
+
+				if (old.pending >= 0 and now < old.pending_until) node.volume = old.pending;
+			}
+		}
+
+		const changed = !sameNodes(self.nodes.items, next.items, self.sink, sink) or
+			self.source != source or
+			self.has_input != (sources_seen and has_input);
+
 		for (self.nodes.items) |node| self.freeNode(node);
 		self.nodes.deinit(self.allocator);
 		self.nodes = next;
@@ -463,7 +481,7 @@ pub const Audio = struct {
 		self.has_input = sources_seen and has_input;
 		self.mutex.unlock(self.io);
 
-		return true;
+		return changed;
 	}
 
 	pub fn setVolume(self: *Audio, id: i64, fraction: f64) void {
@@ -555,6 +573,22 @@ pub const Audio = struct {
 	}
 };
 
+fn sameNodes(a: []const Node, b: []const Node, sink_a: i64, sink_b: i64) bool {
+	if (a.len != b.len or sink_a != sink_b) return false;
+
+	for (a, b) |old, new| {
+		if (old.id != new.id) return false;
+		if (old.mute != new.mute) return false;
+		if (old.is_stream != new.is_stream or old.is_sink != new.is_sink) return false;
+		if (@abs(old.volume - new.volume) > 0.0005) return false;
+		if (!std.mem.eql(u8, old.state, new.state)) return false;
+		if (!std.mem.eql(u8, old.name, new.name)) return false;
+		if (!std.mem.eql(u8, old.app, new.app)) return false;
+	}
+
+	return true;
+}
+
 fn streamObject(line: []const u8) bool {
 	const kinds = [_][]const u8{ "on sink #", "on sink-input #", "on source #", "on source-output #" };
 
@@ -593,7 +627,7 @@ test "pw-dump maps to the mixer shape" {
 
 	var audio: Audio = .{
 		.allocator = arena.allocator(),
-		.io = undefined,
+		.io = std.Io.Threaded.global_single_threaded.io(),
 		.hub = undefined,
 		.scratch = std.heap.ArenaAllocator.init(std.testing.allocator),
 	};
