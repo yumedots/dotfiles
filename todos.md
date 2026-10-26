@@ -56,7 +56,12 @@ Done and committed:
 
 ## Open
 
-0. **Ink and awww belong to the daemon.** `quickshell/services/BarInk.qml` still does the ink
+0. ~~**Ink and awww belong to the daemon.**~~ done: `5298b12` (daemon) + `c985c82` (QML).
+   `providers/ink.zig` owns `bar-ink.json`, the band/bare command, the `awww` apply and its
+   supervision, and samples the ink from the cached 1280px preview (ffmpeg crop of the top
+   band, mean colour blended toward white/black). `BarInk.qml` is 186 -> 64 lines with no
+   Process, FileView or writes, same public API. Live: `{"bare":true,"band":33,"inks":{"DP-2":"#3a280a"}}`.
+   Original note: `quickshell/services/BarInk.qml` still does the ink
    work in QML: it measures the bar height, passes `--ink-band` to `awww img`, samples the
    wallpaper's colours, persists `cache/bar-ink.json`, and runs its own Processes. We own
    both ends (the daemon, and awww which lives under `~/`), so the daemon should: keep the
