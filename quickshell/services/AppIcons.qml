@@ -38,7 +38,7 @@ Item {
 		if (path !== undefined)
 			return path;
 
-		Yudae.iconsWantPid(pid);
+		root.askPid(pid);
 
 		return "";
 	}
@@ -48,18 +48,37 @@ Item {
 	}
 
 	function ask(names) {
+		const now = Date.now();
 		const missing = [];
 
 		for (let i = 0; i < names.length; i++) {
 			const name = names[i];
 
-			if (name && root.asked[name] === undefined) {
-				root.asked[name] = true;
-				missing.push(name);
-			}
+			if (!name)
+				continue;
+
+			const at = root.asked[name];
+
+			if (at !== undefined && (root.resolved[name] !== undefined || now - at < 2000))
+				continue;
+
+			root.asked[name] = now;
+			missing.push(name);
 		}
 
 		if (missing.length > 0)
 			Yudae.iconsWant(missing);
+	}
+
+	function askPid(pid) {
+		const key = "pid:" + pid;
+		const now = Date.now();
+		const at = root.asked[key];
+
+		if (at !== undefined && now - at < 2000)
+			return;
+
+		root.asked[key] = now;
+		Yudae.iconsWantPid(pid);
 	}
 }
