@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs
 
 Item {
@@ -10,18 +9,16 @@ Item {
 
 	visible: false
 
-	property bool bare: false
-	property bool wantsBare: false
 	property bool fading: false
-	property var inks: ({})
 	property var bareBars: []
 	property var bars: []
-	property int savedBand: 0
+	property var inks: ({})
 
+	readonly property var state: Yudae.ink || ({})
+	readonly property bool bare: state.bare === true
+	readonly property bool wantsBare: root.bare
+	readonly property int savedBand: state.band || 0
 	readonly property int fadeMs: Config.wallpaperTransitionMs
-	readonly property string statePath: Quickshell.shellDir + "/cache/bar-ink.json"
-	readonly property string settingsPath: Quickshell.shellDir + "/cache/settings.lua"
-	readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR")
 
 	function key(bar) {
 		return bar && bar.screen ? bar.screen.name : "";
@@ -42,8 +39,7 @@ Item {
 
 		root.fade();
 		root.bareBars = bar !== null ? [bar] : [];
-		root.bare = true;
-		root.persist();
+		root.send(true);
 	}
 
 	function toggleAll(all) {
@@ -54,8 +50,7 @@ Item {
 
 		root.fade();
 		root.bareBars = (all || []).slice();
-		root.bare = true;
-		root.persist();
+		root.send(true);
 	}
 
 	function ensure(bar) {
@@ -63,30 +58,28 @@ Item {
 			return;
 
 		root.bareBars = root.bareBars.concat([bar]);
-		root.bare = true;
+
+		if (!root.bare)
+			root.send(true);
 	}
 
 	function register(bar) {
-		if (bar && root.bars.indexOf(bar) < 0) {
+		if (bar && root.bars.indexOf(bar) < 0)
 			root.bars = root.bars.concat([bar]);
-		}
 	}
 
 	function unregister(bar) {
 		root.bars = root.bars.filter(function (b) { return b !== bar; });
 	}
 
-	function persist() {
-		stateWrite.running = false;
-		stateWrite.command = Shell.writeCommand(root.statePath, JSON.stringify({ bare: root.bare, band: root.bandPx() || root.savedBand }));
-		stateWrite.running = true;
-	}
-
 	function stop() {
 		root.fade();
-		root.bare = false;
 		root.bareBars = [];
-		root.persist();
+		root.send(false);
+	}
+
+	function send(bare) {
+		Yudae.send({ cmd: { ink: { band: root.bandPx(), bare: bare } } });
 	}
 
 	function bandPx() {
@@ -102,15 +95,13 @@ Item {
 		return Math.ceil(px) || root.savedBand;
 	}
 
-	function setInk(name, text) {
-		const color = text === "white" ? "#ffffff" : text === "black" ? "#000000" : "";
+	function syncInks() {
+		const next = root.state.inks || ({});
+		const keys = Object.keys(next);
 
-		if (color === "" || root.inks[name] === color)
+		if (keys.length === Object.keys(root.inks).length && keys.every(function (name) { return root.inks[name] === next[name]; }))
 			return;
 
-		const next = Object.assign({}, root.inks);
-
-		next[name] = color;
 		root.fade();
 		root.inks = next;
 	}
@@ -120,6 +111,8 @@ Item {
 		fadeTimer.restart();
 	}
 
+	onStateChanged: root.syncInks()
+
 	Timer {
 		id: fadeTimer
 
@@ -128,59 +121,5 @@ Item {
 		running: false
 
 		onTriggered: root.fading = false
-	}
-
-	Instantiator {
-		model: root.bars
-
-		delegate: FileView {
-			required property var modelData
-
-			path: modelData.screen ? root.runtimeDir + "/awww-ink-" + modelData.screen.name : ""
-			watchChanges: true
-			printErrors: false
-
-			onFileChanged: reload()
-			onLoaded: root.setInk(modelData.screen.name, text().trim())
-		}
-	}
-
-	Process {
-		id: stateWrite
-	}
-
-	FileView {
-		id: stateFile
-
-		path: root.statePath
-		blockLoading: true
-		printErrors: false
-
-		onLoaded: {
-			try {
-				const state = JSON.parse(stateFile.text());
-
-				root.wantsBare = state.bare === true;
-				root.savedBand = state.band || 0;
-			} catch (e) {
-				root.wantsBare = false;
-			}
-		}
-	}
-
-	FileView {
-		id: settingsFile
-
-		path: root.settingsPath
-		blockLoading: true
-		printErrors: false
-		watchChanges: true
-
-		onFileChanged: settingsFile.reload()
-	}
-
-	Component.onCompleted: {
-		stateFile.reload();
-		settingsFile.reload();
 	}
 }
