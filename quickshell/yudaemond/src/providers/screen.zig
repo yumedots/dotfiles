@@ -73,6 +73,11 @@ const MonitorOut = struct {
 	scales: []f64,
 };
 
+const Apply = struct {
+	kind: []u8,
+	value: []u8,
+};
+
 const GroupOut = struct {
 	label: []const u8,
 	kind: []const u8,
@@ -88,6 +93,7 @@ const PanelOut = struct {
 	rows: []const []const u8,
 	cursor: []const u8,
 	keyboard: bool,
+	pending: bool,
 	options: []const []const u8,
 	selected: i64,
 	value: []const u8,
@@ -119,6 +125,9 @@ pub const Screen = struct {
 	row: i64 = 0,
 	step: i64 = 0,
 	keyboard: bool = false,
+	apply_mutex: std.Io.Mutex = .init,
+	queued: ?Apply = null,
+	pending: std.atomic.Value(bool) = .init(false),
 	fonts: [12]i64 = @splat(0),
 	font_count: usize = 0,
 	settings: ?*settings.Settings = null,
@@ -175,6 +184,64 @@ pub const Screen = struct {
 	pub fn start(self: *Screen) !void {
 		const thread = try std.Thread.spawn(.{}, loop, .{self});
 		thread.detach();
+
+		const apply_thread = try std.Thread.spawn(.{}, applyLoop, .{self});
+		apply_thread.detach();
+	}
+
+	fn applyLoop(self: *Screen) void {
+		while (true) {
+			const item = self.takeApply() orelse {
+				if (self.clearPending()) self.hub.publish();
+				sleep.ms(10);
+				continue;
+			};
+
+			self.applyValue(item.kind, item.value);
+
+			self.allocator.free(item.kind);
+			self.allocator.free(item.value);
+
+			self.hub.publish();
+		}
+	}
+
+	fn takeApply(self: *Screen) ?Apply {
+		self.apply_mutex.lockUncancelable(self.io);
+		defer self.apply_mutex.unlock(self.io);
+
+		const item = self.queued;
+		self.queued = null;
+		return item;
+	}
+
+	fn clearPending(self: *Screen) bool {
+		self.apply_mutex.lockUncancelable(self.io);
+		defer self.apply_mutex.unlock(self.io);
+
+		if (self.queued != null) return false;
+
+		return self.pending.swap(false, .monotonic);
+	}
+
+	fn queueApply(self: *Screen, kind: []const u8, value: []const u8) void {
+		const kind_copy = self.allocator.dupe(u8, kind) catch return;
+		const value_copy = self.allocator.dupe(u8, value) catch {
+			self.allocator.free(kind_copy);
+			return;
+		};
+
+		self.apply_mutex.lockUncancelable(self.io);
+
+		if (self.queued) |old| {
+			self.allocator.free(old.kind);
+			self.allocator.free(old.value);
+		}
+
+		self.queued = .{ .kind = kind_copy, .value = value_copy };
+		self.pending.store(true, .monotonic);
+
+		self.apply_mutex.unlock(self.io);
 	}
 
 	fn loop(self: *Screen) void {
@@ -335,7 +402,7 @@ pub const Screen = struct {
 			} else |_| {}
 		}
 
-		self.applyValue(kind, value);
+		self.queueApply(kind, value);
 		self.hub.publish();
 	}
 
@@ -403,7 +470,7 @@ pub const Screen = struct {
 			const mode = std.fmt.allocPrint(arena.allocator(), "{d}x{d}@{d:.2}", .{ snap.width, snap.height, snap.refresh }) catch return;
 			self.applyMonitor(snap.name, mode, number);
 
-			if (!self.waitApplied(snap.name, null, number)) self.reload();
+			if (!self.waitApplied(snap.name, null, number, 60)) self.reload();
 
 			self.poll();
 			return;
@@ -431,7 +498,7 @@ pub const Screen = struct {
 			target.setOutput(snap.name, text, null);
 			self.applyMonitor(snap.name, text, snap.scale);
 
-			if (!self.waitApplied(snap.name, mode.refresh, null)) self.reload();
+			if (!self.waitApplied(snap.name, mode.refresh, null, 40)) self.reload();
 
 			self.poll();
 			return;
@@ -451,7 +518,9 @@ pub const Screen = struct {
 		target.setOutput(snap.name, text, null);
 		self.applyMonitor(snap.name, text, snap.scale);
 
-		if (!self.waitApplied(snap.name, mode.refresh, null)) self.reload();
+		const jump: usize = if (mode.width != snap.width or mode.height != snap.height) 80 else 40;
+
+		if (!self.waitApplied(snap.name, mode.refresh, null, jump)) self.reload();
 
 		self.poll();
 	}
@@ -473,7 +542,7 @@ pub const Screen = struct {
 		const step: usize = @intCast(@mod(self.step, @as(i64, @intCast(options.len))));
 		self.step = @intCast(step);
 
-		self.applyValue(kind, options[step]);
+		self.queueApply(kind, options[step]);
 	}
 
 	pub fn detect(self: *Screen) void {
@@ -534,10 +603,10 @@ pub const Screen = struct {
 		return null;
 	}
 
-	fn waitApplied(self: *Screen, name: []const u8, refresh: ?f64, scale: ?f64) bool {
+	fn waitApplied(self: *Screen, name: []const u8, refresh: ?f64, scale: ?f64, limit: usize) bool {
 		var tries: usize = 0;
 
-		while (tries < 40) : (tries += 1) {
+		while (tries < limit) : (tries += 1) {
 			if (self.liveState(name)) |live| {
 				const refresh_ok = if (refresh) |want| @abs(live.refresh - want) < 1.0 else true;
 				const scale_ok = if (scale) |want| @abs(live.scale - want) < 0.01 else true;
@@ -564,9 +633,10 @@ pub const Screen = struct {
 		var options: std.ArrayListUnmanaged([]const u8) = .empty;
 
 		const kind = names[@intCast(@mod(self.row, 4))];
+		const pending = self.pending.load(.monotonic);
 
 		const snap = self.focusedSnapLocked(arena) orelse {
-			return .{ .row = 0, .step = 0, .rows = &names, .cursor = names[0], .keyboard = false, .options = &.{}, .selected = -1, .value = "", .selectedRow = &.{}, .groups = &.{} };
+			return .{ .row = 0, .step = 0, .rows = &names, .cursor = names[0], .keyboard = false, .pending = pending, .options = &.{}, .selected = -1, .value = "", .selectedRow = &.{}, .groups = &.{} };
 		};
 
 		for (try self.optionsFor(arena, snap, kind)) |option| try options.append(arena, option);
@@ -574,7 +644,7 @@ pub const Screen = struct {
 		const step: usize = if (options.items.len == 0) 0 else @intCast(@mod(self.step, @as(i64, @intCast(options.items.len))));
 		self.step = @intCast(step);
 
-		const selected = self.currentLocked(kind, snap, options.items);
+		const selected: i64 = if (pending) @intCast(step) else self.currentLocked(kind, snap, options.items);
 
 		var groups: std.ArrayListUnmanaged(GroupOut) = .empty;
 		var selected_rows: std.ArrayListUnmanaged(i64) = .empty;
@@ -583,11 +653,15 @@ pub const Screen = struct {
 		const titles = [_][]const u8{ self.title_scale, self.title_refresh, self.title_font };
 
 		for (kinds, 0..) |group_kind, i| {
-			const selected_index = self.currentLocked(group_kind, snap, &.{});
 			var group_options: std.ArrayListUnmanaged([]const u8) = .empty;
 
 			const built = try self.optionsFor(arena, snap, group_kind);
 			for (built) |option| try group_options.append(arena, option);
+
+			const selected_index: i64 = if (pending and std.mem.eql(u8, group_kind, kind) and group_options.items.len > 0)
+				@intCast(step)
+			else
+				self.currentLocked(group_kind, snap, &.{});
 
 			const shown: []const u8 = if (selected_index >= 0 and @as(usize, @intCast(selected_index)) < group_options.items.len)
 				group_options.items[@intCast(selected_index)]
@@ -612,6 +686,7 @@ pub const Screen = struct {
 			.rows = &names,
 			.cursor = kind,
 			.keyboard = self.keyboard,
+			.pending = pending,
 			.options = options.items,
 			.selected = selected,
 			.value = if (options.items.len == 0) "" else options.items[step],
@@ -927,4 +1002,26 @@ test "modes parse from hyprctl labels" {
 	try std.testing.expectEqual(@as(i64, 1440), mode.height);
 	try std.testing.expectApproxEqAbs(@as(f64, 165), mode.refresh, 0.01);
 	try std.testing.expect(parseMode("nonsense") == null);
+}
+
+test "the newest pick replaces the queued one" {
+	const io = std.Io.Threaded.global_single_threaded.io();
+	const arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	var screen: Screen = .{ .allocator = std.testing.allocator, .io = io, .hub = undefined, .scratch = arena };
+
+	screen.queueApply("scale", "1.0000");
+	screen.queueApply("scale", "1.6667");
+
+	try std.testing.expect(screen.pending.load(.monotonic));
+
+	const item = screen.takeApply() orelse return error.NoPick;
+	defer std.testing.allocator.free(item.kind);
+	defer std.testing.allocator.free(item.value);
+
+	try std.testing.expectEqualStrings("scale", item.kind);
+	try std.testing.expectEqualStrings("1.6667", item.value);
+	try std.testing.expect(screen.takeApply() == null);
+	try std.testing.expect(screen.clearPending());
+	try std.testing.expect(!screen.pending.load(.monotonic));
+	try std.testing.expect(!screen.clearPending());
 }
