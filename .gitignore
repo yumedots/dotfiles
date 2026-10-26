@@ -51,3 +51,6 @@ herdr/
 
 # qBittorrent
 qBittorrent/
+
+# Wine 
+/menus/
