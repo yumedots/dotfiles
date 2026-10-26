@@ -28,6 +28,7 @@ test {
 	_ = @import("primitives/limits.zig");
 	_ = @import("providers/subscriptions.zig");
 	_ = @import("providers/supervisor.zig");
+	_ = @import("providers/versions.zig");
 	_ = @import("primitives/hypr.zig");
 	_ = @import("primitives/config.zig");
 	_ = @import("cli.zig");

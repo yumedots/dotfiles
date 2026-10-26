@@ -22,6 +22,7 @@ const launcher = @import("providers/launcher.zig");
 const icons = @import("providers/icons.zig");
 const subscriptions = @import("providers/subscriptions.zig");
 const supervisor = @import("providers/supervisor.zig");
+const versions = @import("providers/versions.zig");
 const iconsmod = @import("primitives/icons.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
@@ -54,6 +55,7 @@ pub const Context = struct {
 	icons: *icons.Icons,
 	subscriptions: *subscriptions.Subscriptions,
 	supervisor: *supervisor.Supervisor,
+	versions: *versions.Versions,
 	socket_path: []const u8,
 };
 
@@ -352,6 +354,9 @@ fn run(io: std.Io) !void {
 	const bar_provider = try bar.Bar.create(allocator, io, hub);
 	try hub.add(bar_provider.provider());
 
+	const versions_provider = try versions.Versions.create(allocator, io, hub);
+	try hub.add(versions_provider.provider());
+
 	const supervisor_provider = try supervisor.Supervisor.create(allocator, io, hub);
 	try hub.add(supervisor_provider.provider());
 
@@ -392,6 +397,7 @@ fn run(io: std.Io) !void {
 		.icons = icons_provider,
 		.subscriptions = subscriptions_provider,
 		.supervisor = supervisor_provider,
+		.versions = versions_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -424,6 +430,7 @@ fn run(io: std.Io) !void {
 	try icons_provider.start();
 	try subscriptions_provider.start();
 	try supervisor_provider.start();
+	try versions_provider.start();
 
 	hub.publish();
 

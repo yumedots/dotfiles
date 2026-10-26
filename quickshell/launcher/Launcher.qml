@@ -46,7 +46,7 @@ PanelWindow {
 	readonly property string home: Quickshell.env("HOME")
 	readonly property string terminalConfig: Config.launcherTerminalConfig.replace("~", root.home)
 	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
-	property var versions: ({})
+	readonly property var versions: Yudae.versions || ({})
 	readonly property var appEntries: Entries.appEntries(AppIcons.entries, Config.launcherIgnoreApps, Config.launcherAppAliases)
 	readonly property var data: Yudae.launcher
 	readonly property var results: root.windows ? root.windowResults() : (root.data.results || [])
@@ -551,28 +551,7 @@ PanelWindow {
 
 
 
-	FileView {
-		id: versionsFile
 
-		path: Quickshell.shellDir + "/cache/versions.json"
-		preload: true
-		watchChanges: true
-		printErrors: false
-
-		onFileChanged: versionsFile.reload()
-		onLoaded: {
-			const text = versionsFile.text();
-
-			if (text === "")
-				return;
-
-			try {
-				root.versions = JSON.parse(text);
-			} catch (e) {
-				root.versions = ({});
-			}
-		}
-	}
 
 
 
