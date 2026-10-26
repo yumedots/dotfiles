@@ -414,7 +414,7 @@ QtObject {
 			onRead: function (line) { root.receive(line); }
 		}
 
-		onConnectedChanged: {
+		onConnectionStateChanged: {
 			root.connected = root.socket.connected;
 
 			if (root.socket.connected) {

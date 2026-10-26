@@ -162,6 +162,8 @@ fn fetch(io: Io, allocator: std.mem.Allocator) ?json.Value {
 	var connection = sock.Connection.connect(path, &buffer) catch return null;
 	defer connection.close();
 
+	connection.writeLine(sock.sync) catch return null;
+
 	const line = connection.readLine() catch return null;
 	const body = line orelse return null;
 

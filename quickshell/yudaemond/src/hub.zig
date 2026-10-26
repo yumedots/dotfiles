@@ -39,13 +39,22 @@ pub const Hub = struct {
 		return out.toOwnedSlice();
 	}
 
+	pub fn syncSnapshot(self: *Hub, allocator: Allocator) ![]u8 {
+		_ = self.revision.fetchAdd(1, .monotonic);
+		return self.snapshot(allocator);
+	}
+
 	pub fn publish(self: *Hub) void {
 		_ = self.revision.fetchAdd(1, .monotonic);
 
+		const t0 = fmt.nowMs(self.io);
 		const body = self.snapshot(self.allocator) catch return;
 		defer self.allocator.free(body);
+		const t1 = fmt.nowMs(self.io);
 
 		if (self.ipc) |server| server.broadcast(body);
+		const t2 = fmt.nowMs(self.io);
+		if (t2 - t0 > 100) std.debug.print("DBG publish snapshot={d} broadcast={d} rev={d}\n", .{ t1 - t0, t2 - t1, self.revision.load(.monotonic) });
 	}
 
 	pub fn publishGaze(self: *Hub, x: f64, y: f64) void {

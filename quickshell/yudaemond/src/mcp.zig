@@ -136,6 +136,8 @@ fn fetch(io: Io, allocator: std.mem.Allocator) ![]const u8 {
 	var connection = sock.Connection.connect(path, &buffer) catch return error.DaemonDown;
 	defer connection.close();
 
+	try connection.writeLine(sock.sync);
+
 	const line = try connection.readLine();
 	return line orelse error.NoState;
 }

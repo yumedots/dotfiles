@@ -3,6 +3,8 @@ const linux = std.os.linux;
 
 pub const Allocator = std.mem.Allocator;
 
+pub const sync = "{\"sync\":true}";
+
 pub fn failed(result: usize) bool {
 	return @as(isize, @bitCast(result)) < 0;
 }
@@ -38,13 +40,24 @@ pub const Server = struct {
 		const result = linux.accept4(self.fd, null, null, linux.SOCK.CLOEXEC);
 		if (failed(result)) return error.AcceptFailed;
 
-		return @intCast(result);
+		const fd: i32 = @intCast(result);
+		tune(fd);
+
+		return fd;
 	}
 
 	pub fn close(self: Server) void {
 		_ = linux.close(self.fd);
 	}
 };
+
+fn tune(fd: i32) void {
+	const timeout: linux.timeval = .{ .sec = 0, .usec = 100_000 };
+	const size: i32 = 1 << 20;
+
+	_ = linux.setsockopt(fd, linux.SOL.SOCKET, linux.SO.SNDTIMEO, std.mem.asBytes(&timeout), @sizeOf(linux.timeval));
+	_ = linux.setsockopt(fd, linux.SOL.SOCKET, linux.SO.SNDBUF, std.mem.asBytes(&size), @sizeOf(i32));
+}
 
 pub const Connection = struct {
 	fd: i32,

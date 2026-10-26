@@ -78,6 +78,11 @@ fn snapshotThunk(ctx: *anyopaque, allocator_: std.mem.Allocator) anyerror![]u8 {
 	return context.hub.snapshot(allocator_);
 }
 
+fn syncThunk(ctx: *anyopaque, allocator_: std.mem.Allocator) anyerror![]u8 {
+	const context: *Context = @ptrCast(@alignCast(ctx));
+	return context.hub.syncSnapshot(allocator_);
+}
+
 fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	const context: *Context = @ptrCast(@alignCast(ctx));
 
@@ -321,7 +326,7 @@ pub fn main() !void {
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudaemond [run|state|doctor|bench|parity|mcp]\n", .{});
+		std.debug.print("usage: yudaemond [run|state|doctor|bench [widgets]|parity|mcp]\n", .{});
 		return;
 	}
 
@@ -445,6 +450,7 @@ fn run(io: std.Io) !void {
 	hub.ipc = try ipc.Ipc.init(allocator, io, context.socket_path, .{
 		.ctx = context,
 		.snapshot = snapshotThunk,
+		.sync = syncThunk,
 		.dismiss = dismissThunk,
 		.refresh = refreshThunk,
 		.command = commandThunk,

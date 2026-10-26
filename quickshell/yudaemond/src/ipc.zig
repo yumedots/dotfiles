@@ -8,6 +8,7 @@ pub const Allocator = std.mem.Allocator;
 pub const Hooks = struct {
 	ctx: *anyopaque,
 	snapshot: *const fn (ctx: *anyopaque, allocator: Allocator) anyerror![]u8,
+	sync: ?*const fn (ctx: *anyopaque, allocator: Allocator) anyerror![]u8 = null,
 	dismiss: ?*const fn (ctx: *anyopaque, id: []const u8) void = null,
 	refresh: ?*const fn (ctx: *anyopaque) void = null,
 	command: ?*const fn (ctx: *anyopaque, value: json.Value) void = null,
@@ -19,6 +20,7 @@ pub const Client = struct {
 	write_mutex: std.Io.Mutex = .init,
 	alive: bool = true,
 	gaze: bool = false,
+	rev: u64 = 0,
 };
 
 pub const Ipc = struct {
@@ -75,11 +77,6 @@ pub const Ipc = struct {
 				continue;
 			};
 			self.mutex.unlock(self.io);
-
-			const body = self.hooks.snapshot(self.hooks.ctx, self.allocator) catch "";
-			defer if (body.len > 0) self.allocator.free(body);
-
-			if (body.len > 0) sendLine(self.io, client, body);
 
 			const thread = std.Thread.spawn(.{}, readLoop, .{ self, client }) catch continue;
 			thread.detach();
@@ -138,7 +135,8 @@ pub const Ipc = struct {
 		}
 
 		if (json.flag(root, "sync")) {
-			const body = self.hooks.snapshot(self.hooks.ctx, self.allocator) catch return;
+			const hook = self.hooks.sync orelse self.hooks.snapshot;
+			const body = hook(self.hooks.ctx, self.allocator) catch return;
 			defer self.allocator.free(body);
 
 			sendLine(self.io, client, body);
@@ -208,12 +206,27 @@ fn sendLine(io: Io, client: *Client, line: []const u8) void {
 	client.write_mutex.lockUncancelable(io);
 	defer client.write_mutex.unlock(io);
 
+	if (bodyRev(line)) |rev| {
+		if (rev < client.rev) return;
+		client.rev = rev;
+	}
+
 	sock.writeAll(client.fd, line) catch {
 		drop(client);
 		return;
 	};
 
 	sock.writeAll(client.fd, "\n") catch drop(client);
+}
+
+fn bodyRev(line: []const u8) ?u64 {
+	const head = "{\"rev\":";
+	if (!std.mem.startsWith(u8, line, head)) return null;
+
+	const rest = line[head.len..];
+	const end = std.mem.indexOfScalar(u8, rest, ',') orelse return null;
+
+	return std.fmt.parseInt(u64, rest[0..end], 10) catch null;
 }
 
 fn drop(client: *Client) void {
@@ -241,4 +254,43 @@ test "gaze lines stay valid json" {
 
 	const parsed = try json.parse(arena.allocator(), line);
 	try std.testing.expectEqualStrings("gaze", json.textAt(parsed.value, "t"));
+}
+
+var probe_count: i64 = 0;
+
+fn probeSnapshot(ctx: *anyopaque, allocator: Allocator) anyerror![]u8 {
+	_ = ctx;
+	return std.fmt.allocPrint(allocator, "{{\"rev\":1,\"bumped\":{d}}}", .{probe_count});
+}
+
+fn probeCommand(ctx: *anyopaque, value: json.Value) void {
+	_ = ctx;
+	probe_count = json.integer(json.field(value, "bump"));
+}
+
+test "a fresh connection is answered after the commands it sent" {
+	const io = std.testing.io;
+	const allocator = std.heap.smp_allocator;
+
+	probe_count = 0;
+
+	const path = try std.fmt.allocPrint(allocator, "/tmp/yudae-ipc-{d}.sock", .{std.os.linux.getpid()});
+	defer allocator.free(path);
+
+	const server = try Ipc.init(allocator, io, path, .{
+		.ctx = @ptrFromInt(1),
+		.snapshot = probeSnapshot,
+		.command = probeCommand,
+	});
+	try server.start();
+
+	var buffer: [4096]u8 = undefined;
+	var connection = try sock.Connection.connect(path, &buffer);
+	defer connection.close();
+
+	try connection.writeLine("{\"cmd\":{\"bump\":7}}");
+	try connection.writeLine(sock.sync);
+
+	const line = (try connection.readLine()) orelse return error.NoReply;
+	try std.testing.expectEqualStrings("{\"rev\":1,\"bumped\":7}", line);
 }
