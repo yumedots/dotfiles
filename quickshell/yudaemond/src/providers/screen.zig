@@ -181,7 +181,7 @@ pub const Screen = struct {
 		self.poll();
 
 		while (true) {
-			sleep.ms(3000);
+			sleep.ms(500);
 			self.poll();
 		}
 	}
@@ -252,6 +252,46 @@ pub const Screen = struct {
 		monitor.modes.deinit(self.allocator);
 	}
 
+	const Snap = struct {
+		name: []const u8,
+		width: i64,
+		height: i64,
+		refresh: f64,
+		scale: f64,
+		modes: []const Mode,
+	};
+
+	fn focusedSnap(self: *Screen, arena: Allocator) ?Snap {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		return self.focusedSnapLocked(arena);
+	}
+
+	fn focusedSnapLocked(self: *Screen, arena: Allocator) ?Snap {
+		if (self.monitors.items.len == 0) return null;
+
+		var monitor: *Monitor = &self.monitors.items[0];
+		for (self.monitors.items) |*entry| {
+			if (entry.focused) {
+				monitor = entry;
+				break;
+			}
+		}
+
+		const modes = arena.alloc(Mode, monitor.modes.items.len) catch return null;
+		@memcpy(modes, monitor.modes.items);
+
+		return .{
+			.name = arena.dupe(u8, monitor.name) catch return null,
+			.width = monitor.width,
+			.height = monitor.height,
+			.refresh = monitor.refresh,
+			.scale = monitor.scale,
+			.modes = modes,
+		};
+	}
+
 	pub fn attachSettings(self: *Screen, target: *settings.Settings) void {
 		self.settings = target;
 	}
@@ -279,70 +319,161 @@ pub const Screen = struct {
 
 		self.row = row;
 		self.step = 0;
+		self.keyboard = false;
 
-		var options = self.panelOptions(self.allocator, kind) catch return;
-		defer {
-			for (options.items) |option| self.allocator.free(option);
-			options.deinit(self.allocator);
-		}
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
 
-		for (options.items, 0..) |option, i| {
-			if (std.mem.eql(u8, option, value)) {
-				self.step = @intCast(i);
-				break;
-			}
-		}
-
-		self.apply();
-	}
-
-	fn panelOptions(self: *Screen, allocator: Allocator, kind: []const u8) !std.ArrayListUnmanaged([]u8) {
-		var options: std.ArrayListUnmanaged([]u8) = .empty;
-
-		if (self.monitors.items.len == 0) return options;
-
-		var monitor = &self.monitors.items[0];
-		for (self.monitors.items) |*entry| {
-			if (entry.focused) {
-				monitor = entry;
-				break;
-			}
-		}
-
-		if (std.mem.eql(u8, kind, "scale")) {
-			const steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
-			for (steps) |value| {
-				if (value < self.scale_min or value > self.scale_max) continue;
-				try options.append(allocator, try std.fmt.allocPrint(allocator, "{d}", .{value}));
-			}
-		} else if (std.mem.eql(u8, kind, "refresh")) {
-			for (monitor.modes.items) |mode| {
-				try options.append(allocator, try std.fmt.allocPrint(allocator, "{d} Hz", .{@as(i64, @intFromFloat(@round(mode.refresh)))}));
-			}
-		} else if (std.mem.eql(u8, kind, "font")) {
-			for (self.fonts[0..self.font_count]) |size| {
-				try options.append(allocator, try std.fmt.allocPrint(allocator, "{d}", .{size}));
-			}
-		} else {
-			var seen: std.ArrayListUnmanaged(ResSize) = .empty;
-			defer seen.deinit(allocator);
-
-			for (monitor.modes.items) |mode| {
-				var found = false;
-				for (seen.items) |item| {
-					if (item.width == mode.width and item.height == mode.height) {
-						found = true;
+		if (self.focusedSnap(arena.allocator())) |snap| {
+			if (self.optionsFor(arena.allocator(), snap, kind)) |options| {
+				for (options, 0..) |option, index| {
+					if (std.mem.eql(u8, option, value)) {
+						self.step = @intCast(index);
 						break;
 					}
 				}
-				if (found) continue;
-
-				try seen.append(allocator, .{ .width = mode.width, .height = mode.height });
-				try options.append(allocator, try std.fmt.allocPrint(allocator, "{d}x{d}", .{ mode.width, mode.height }));
-			}
+			} else |_| {}
 		}
 
-		return options;
+		self.applyValue(kind, value);
+		self.hub.publish();
+	}
+
+	fn bestMode(self: *Screen, monitor: *Monitor, width: i64, height: i64) ?Mode {
+		_ = self;
+		var best: ?Mode = null;
+
+		for (monitor.modes.items) |mode| {
+			if (mode.width != width or mode.height != height) continue;
+			if (best == null or mode.refresh > best.?.refresh) best = mode;
+		}
+
+		return best;
+	}
+
+	fn refreshOf(text: []const u8) ?f64 {
+		var index: usize = 0;
+
+		while (index < text.len and (text[index] == ' ' or text[index] == '\t')) index += 1;
+
+		const from = index;
+		while (index < text.len and text[index] >= '0' and text[index] <= '9') index += 1;
+		if (index == from) return null;
+
+		return std.fmt.parseFloat(f64, text[from..index]) catch null;
+	}
+
+	fn sizeOf(text: []const u8) ?struct { width: i64, height: i64 } {
+		const x = std.mem.indexOfScalar(u8, text, 'x') orelse return null;
+
+		const width = std.fmt.parseInt(i64, std.mem.trim(u8, text[0..x], " "), 10) catch return null;
+		const height = std.fmt.parseInt(i64, std.mem.trim(u8, text[x + 1 ..], " "), 10) catch return null;
+
+		if (width <= 0 or height <= 0) return null;
+
+		return .{ .width = width, .height = height };
+	}
+
+	fn settingsTarget(self: *Screen, monitor: *Monitor) ?*settings.Settings {
+		const target = self.settings orelse return null;
+		if (monitor.name.len == 0) return null;
+		return target;
+	}
+
+	fn applyValue(self: *Screen, kind: []const u8, value: []const u8) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const snap = self.focusedSnap(arena.allocator()) orelse return;
+		const target = self.settings orelse return;
+		if (snap.name.len == 0) return;
+
+		if (std.mem.eql(u8, kind, "font")) {
+			const size = std.fmt.parseInt(i64, std.mem.trim(u8, value, " "), 10) catch return;
+			target.setFontSize(size);
+			return;
+		}
+
+		if (std.mem.eql(u8, kind, "scale")) {
+			const number = std.fmt.parseFloat(f64, std.mem.trim(u8, value, " ")) catch return;
+			if (number <= 0) return;
+
+			target.setOutput(snap.name, null, number);
+
+			const mode = std.fmt.allocPrint(arena.allocator(), "{d}x{d}@{d:.2}", .{ snap.width, snap.height, snap.refresh }) catch return;
+			self.applyMonitor(snap.name, mode, number);
+
+			if (!self.waitApplied(snap.name, null, number)) self.reload();
+
+			self.poll();
+			return;
+		}
+
+		if (std.mem.eql(u8, kind, "refresh")) {
+			const wanted = refreshOf(value) orelse return;
+
+			var best: ?Mode = null;
+			var best_delta: f64 = 1e9;
+
+			for (snap.modes) |mode| {
+				if (mode.width != snap.width or mode.height != snap.height) continue;
+
+				const delta = @abs(@round(mode.refresh) - wanted);
+				if (delta < best_delta) {
+					best_delta = delta;
+					best = mode;
+				}
+			}
+
+			const mode = best orelse return;
+			const text = std.fmt.allocPrint(arena.allocator(), "{d}x{d}@{d:.2}Hz", .{ mode.width, mode.height, mode.refresh }) catch return;
+
+			target.setOutput(snap.name, text, null);
+			self.applyMonitor(snap.name, text, snap.scale);
+
+			if (!self.waitApplied(snap.name, mode.refresh, null)) self.reload();
+
+			self.poll();
+			return;
+		}
+
+		const size = sizeOf(value) orelse return;
+
+		var best: ?Mode = null;
+		for (snap.modes) |mode| {
+			if (mode.width != size.width or mode.height != size.height) continue;
+			if (best == null or mode.refresh > best.?.refresh) best = mode;
+		}
+
+		const mode = best orelse return;
+		const text = std.fmt.allocPrint(arena.allocator(), "{d}x{d}@{d:.2}Hz", .{ mode.width, mode.height, mode.refresh }) catch return;
+
+		target.setOutput(snap.name, text, null);
+		self.applyMonitor(snap.name, text, snap.scale);
+
+		if (!self.waitApplied(snap.name, mode.refresh, null)) self.reload();
+
+		self.poll();
+	}
+
+	fn apply(self: *Screen) void {
+		if (self.monitors.items.len == 0) return;
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const snap = self.focusedSnap(arena.allocator()) orelse return;
+
+		const names = [_][]const u8{ "scale", "refresh", "font", "resolution" };
+		const kind = names[@intCast(@mod(self.row, 4))];
+		const options = self.optionsFor(arena.allocator(), snap, kind) catch return;
+
+		if (options.len == 0) return;
+
+		const step: usize = @intCast(@mod(self.step, @as(i64, @intCast(options.len))));
+		self.step = @intCast(step);
+
+		self.applyValue(kind, options[step]);
 	}
 
 	pub fn detect(self: *Screen) void {
@@ -376,105 +507,55 @@ pub const Screen = struct {
 		self.hub.publish();
 	}
 
-	fn apply(self: *Screen) void {
-		const target = self.settings orelse return;
-		if (self.monitors.items.len == 0) return;
-
-		var monitor = &self.monitors.items[0];
-		for (self.monitors.items) |*entry| {
-			if (entry.focused) {
-				monitor = entry;
-				break;
-			}
-		}
-
-		const kind = @mod(self.row, 4);
-		const step: usize = if (self.step < 0) 0 else @intCast(self.step);
-
-		if (kind == 0) {
-			defer self.reloadHyprland();
-
-			const grid: i64 = 120;
-			const low: i64 = @intFromFloat(@ceil(self.scale_min * @as(f64, @floatFromInt(grid))));
-			const high: i64 = @intFromFloat(@floor(self.scale_max * @as(f64, @floatFromInt(grid))));
-
-			var valid: [256]f64 = undefined;
-			var count: usize = 0;
-
-			var candidate = low;
-			while (candidate <= high and count < valid.len) : (candidate += 1) {
-				if (@rem(monitor.width * grid, candidate) != 0) continue;
-				if (@rem(monitor.height * grid, candidate) != 0) continue;
-
-				valid[count] = @as(f64, @floatFromInt(candidate)) / @as(f64, @floatFromInt(grid));
-				count += 1;
-			}
-
-			if (count == 0) return;
-			target.setOutput(monitor.name, null, valid[step % count]);
-		} else if (kind == 1) {
-			defer self.reloadHyprland();
-			var modes: std.ArrayListUnmanaged(Mode) = .empty;
-			defer modes.deinit(self.allocator);
-
-			for (monitor.modes.items) |mode| {
-				if (mode.width == monitor.width and mode.height == monitor.height) modes.append(self.allocator, mode) catch {};
-			}
-
-			std.mem.sort(Mode, modes.items, {}, struct {
-				fn less(_: void, a: Mode, b: Mode) bool {
-					return a.refresh > b.refresh;
-				}
-			}.less);
-
-			if (modes.items.len == 0) return;
-			const mode = modes.items[step % modes.items.len];
-
-			const text = std.fmt.allocPrint(self.allocator, "{d}x{d}@{d:.2}Hz", .{ mode.width, mode.height, mode.refresh }) catch return;
-			defer self.allocator.free(text);
-
-			target.setOutput(monitor.name, text, null);
-		} else if (kind == 2) {
-			if (self.font_count == 0) return;
-			target.setFontSize(self.fonts[step % self.font_count]);
-		} else {
-			if (monitor.modes.items.len == 0) return;
-
-			var sizes: [16]struct { width: i64, height: i64 } = undefined;
-			var count: usize = 0;
-
-			for (monitor.modes.items) |mode| {
-				var seen = false;
-				for (sizes[0..count]) |size| {
-					if (size.width == mode.width and size.height == mode.height) {
-						seen = true;
-						break;
-					}
-				}
-				if (seen or count == sizes.len) continue;
-
-				sizes[count] = .{ .width = mode.width, .height = mode.height };
-				count += 1;
-			}
-
-			if (count == 0) return;
-			const picked = sizes[step % count];
-
-			var best = monitor.modes.items[0];
-			for (monitor.modes.items) |mode| {
-				if (mode.width != picked.width or mode.height != picked.height) continue;
-				if (mode.refresh > best.refresh) best = mode;
-			}
-
-			const text = std.fmt.allocPrint(self.allocator, "{d}x{d}@{d:.2}Hz", .{ best.width, best.height, best.refresh }) catch return;
-			defer self.allocator.free(text);
-
-			target.setOutput(monitor.name, text, null);
-		}
+	fn currentMode(self: *Screen, monitor: *Monitor) ![]u8 {
+		return std.fmt.allocPrint(self.allocator, "{d}x{d}@{d:.2}", .{ monitor.width, monitor.height, monitor.refresh });
 	}
 
-	fn reloadHyprland(self: *Screen) void {
+	fn reload(self: *Screen) void {
 		const result = exec.run(self.io, self.allocator, &.{ "hyprctl", "reload" }) catch return;
+		result.deinit(self.allocator);
+	}
+
+	fn liveState(self: *Screen, name: []const u8) ?struct { refresh: f64, scale: f64 } {
+		const body = hypr.request(self.io, self.allocator, "j/monitors") catch return null;
+		defer self.allocator.free(body);
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const parsed = json.parse(arena.allocator(), body) catch return null;
+
+		for (json.list(parsed.value)) |entry| {
+			if (!std.mem.eql(u8, json.textAt(entry, "name"), name)) continue;
+
+			return .{ .refresh = json.numberAt(entry, "refreshRate"), .scale = json.numberAt(entry, "scale") };
+		}
+
+		return null;
+	}
+
+	fn waitApplied(self: *Screen, name: []const u8, refresh: ?f64, scale: ?f64) bool {
+		var tries: usize = 0;
+
+		while (tries < 40) : (tries += 1) {
+			if (self.liveState(name)) |live| {
+				const refresh_ok = if (refresh) |want| @abs(live.refresh - want) < 1.0 else true;
+				const scale_ok = if (scale) |want| @abs(live.scale - want) < 0.01 else true;
+
+				if (refresh_ok and scale_ok) return true;
+			}
+
+			sleep.ms(80);
+		}
+
+		return false;
+	}
+
+	fn applyMonitor(self: *Screen, name: []const u8, mode: []const u8, scale: f64) void {
+		const script = std.fmt.allocPrint(self.allocator, "hl.monitor({{output=\"{s}\", mode=\"{s}\", position=\"auto\", scale=\"{d:.4}\"}})", .{ name, mode, scale }) catch return;
+		defer self.allocator.free(script);
+
+		const result = exec.run(self.io, self.allocator, &.{ "hyprctl", "eval", script }) catch return;
 		result.deinit(self.allocator);
 	}
 
@@ -482,44 +563,18 @@ pub const Screen = struct {
 		const names = [_][]const u8{ "scale", "refresh", "font", "resolution" };
 		var options: std.ArrayListUnmanaged([]const u8) = .empty;
 
-		if (self.monitors.items.len == 0) {
-			return .{ .row = 0, .step = 0, .rows = &names, .cursor = names[0], .keyboard = false, .options = &.{}, .selected = -1, .value = "", .selectedRow = &.{}, .groups = &.{} };
-		}
-
-		const monitor = &self.monitors.items[0];
 		const kind = names[@intCast(@mod(self.row, 4))];
 
-		if (std.mem.eql(u8, kind, "scale")) {
-			const steps = [_]f64{ 1.0, 1.25, 1.33, 1.5, 1.75, 2.0 };
-			for (steps) |value| {
-				if (value < self.scale_min or value > self.scale_max) continue;
-				try options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{value}));
-			}
-		} else if (std.mem.eql(u8, kind, "refresh")) {
-			for (try self.optionsFor(arena, monitor, "refresh")) |option| try options.append(arena, option);
-		} else if (std.mem.eql(u8, kind, "font")) {
-			for (try self.optionsFor(arena, monitor, "font")) |option| try options.append(arena, option);
-		} else {
-			var seen: std.ArrayListUnmanaged(ResSize) = .empty;
-			for (monitor.modes.items) |mode| {
-				var found = false;
-				for (seen.items) |item| {
-					if (item.width == mode.width and item.height == mode.height) {
-						found = true;
-						break;
-					}
-				}
-				if (found) continue;
+		const snap = self.focusedSnapLocked(arena) orelse {
+			return .{ .row = 0, .step = 0, .rows = &names, .cursor = names[0], .keyboard = false, .options = &.{}, .selected = -1, .value = "", .selectedRow = &.{}, .groups = &.{} };
+		};
 
-				try seen.append(arena, .{ .width = mode.width, .height = mode.height });
-				try options.append(arena, try std.fmt.allocPrint(arena, "{d}x{d}", .{ mode.width, mode.height }));
-			}
-		}
+		for (try self.optionsFor(arena, snap, kind)) |option| try options.append(arena, option);
 
 		const step: usize = if (options.items.len == 0) 0 else @intCast(@mod(self.step, @as(i64, @intCast(options.items.len))));
 		self.step = @intCast(step);
 
-		const selected = self.currentLocked(kind, monitor, options.items);
+		const selected = self.currentLocked(kind, snap, options.items);
 
 		var groups: std.ArrayListUnmanaged(GroupOut) = .empty;
 		var selected_rows: std.ArrayListUnmanaged(i64) = .empty;
@@ -528,10 +583,10 @@ pub const Screen = struct {
 		const titles = [_][]const u8{ self.title_scale, self.title_refresh, self.title_font };
 
 		for (kinds, 0..) |group_kind, i| {
-			const selected_index = self.currentLocked(group_kind, monitor, &.{});
+			const selected_index = self.currentLocked(group_kind, snap, &.{});
 			var group_options: std.ArrayListUnmanaged([]const u8) = .empty;
 
-			const built = try self.optionsFor(arena, monitor, group_kind);
+			const built = try self.optionsFor(arena, snap, group_kind);
 			for (built) |option| try group_options.append(arena, option);
 
 			const shown: []const u8 = if (selected_index >= 0 and @as(usize, @intCast(selected_index)) < group_options.items.len)
@@ -565,7 +620,7 @@ pub const Screen = struct {
 		};
 	}
 
-	fn scaleOptions(self: *Screen, arena: Allocator, monitor: *Monitor) ![]const []const u8 {
+	fn scaleOptions(self: *Screen, arena: Allocator, monitor: Snap) ![]const []const u8 {
 		var options: std.ArrayListUnmanaged([]const u8) = .empty;
 		const grid: i64 = 120;
 		const low: i64 = @intFromFloat(@ceil(self.scale_min * @as(f64, @floatFromInt(grid))));
@@ -582,14 +637,14 @@ pub const Screen = struct {
 		return options.items;
 	}
 
-	fn optionsFor(self: *Screen, arena: Allocator, monitor: *Monitor, kind: []const u8) ![]const []const u8 {
+	fn optionsFor(self: *Screen, arena: Allocator, monitor: Snap, kind: []const u8) ![]const []const u8 {
 		var options: std.ArrayListUnmanaged([]const u8) = .empty;
 
 		if (std.mem.eql(u8, kind, "scale")) {
 			for (try self.scaleOptions(arena, monitor)) |value| try options.append(arena, value);
 		} else if (std.mem.eql(u8, kind, "refresh")) {
 			var modes: std.ArrayListUnmanaged(Mode) = .empty;
-			for (monitor.modes.items) |mode| {
+			for (monitor.modes) |mode| {
 				if (mode.width == monitor.width and mode.height == monitor.height) try modes.append(arena, mode);
 			}
 
@@ -604,12 +659,29 @@ pub const Screen = struct {
 			}
 		} else if (std.mem.eql(u8, kind, "font")) {
 			for (self.fonts[0..self.font_count]) |size| try options.append(arena, try std.fmt.allocPrint(arena, "{d}", .{size}));
+		} else {
+			var seen: std.ArrayListUnmanaged(ResSize) = .empty;
+
+			for (monitor.modes) |mode| {
+				var found = false;
+				for (seen.items) |item| {
+					if (item.width == mode.width and item.height == mode.height) {
+						found = true;
+						break;
+					}
+				}
+
+				if (found) continue;
+
+				try seen.append(arena, .{ .width = mode.width, .height = mode.height });
+				try options.append(arena, try std.fmt.allocPrint(arena, "{d}x{d}", .{ mode.width, mode.height }));
+			}
 		}
 
 		return options.items;
 	}
 
-	fn currentLocked(self: *Screen, kind: []const u8, monitor: *Monitor, options: []const []const u8) i64 {
+	fn currentLocked(self: *Screen, kind: []const u8, monitor: Snap, options: []const []const u8) i64 {
 		_ = options;
 
 		if (std.mem.eql(u8, kind, "scale")) {
@@ -643,7 +715,7 @@ pub const Screen = struct {
 			var modes: std.ArrayListUnmanaged(Mode) = .empty;
 			defer modes.deinit(self.allocator);
 
-			for (monitor.modes.items) |mode| {
+			for (monitor.modes) |mode| {
 				if (mode.width == monitor.width and mode.height == monitor.height) modes.append(self.allocator, mode) catch {};
 			}
 
@@ -675,7 +747,7 @@ pub const Screen = struct {
 		var seen: std.ArrayListUnmanaged(ResSize) = .empty;
 		defer seen.deinit(self.allocator);
 
-		for (monitor.modes.items) |mode| {
+		for (monitor.modes) |mode| {
 			var found = false;
 			for (seen.items) |item| {
 				if (item.width == mode.width and item.height == mode.height) {

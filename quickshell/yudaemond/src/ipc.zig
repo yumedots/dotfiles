@@ -180,12 +180,24 @@ pub const Ipc = struct {
 	}
 
 	fn sendAll(self: *Ipc, line: []const u8, gaze_only: bool) void {
+		var targets: [64]*Client = undefined;
+		var count: usize = 0;
+
 		self.mutex.lockUncancelable(self.io);
-		defer self.mutex.unlock(self.io);
 
 		for (self.clients.items) |client| {
+			if (count == targets.len) break;
 			if (!client.alive) continue;
 			if (gaze_only and !client.gaze) continue;
+
+			targets[count] = client;
+			count += 1;
+		}
+
+		self.mutex.unlock(self.io);
+
+		for (targets[0..count]) |client| {
+			if (!client.alive) continue;
 
 			sendLine(self.io, client, line);
 		}
