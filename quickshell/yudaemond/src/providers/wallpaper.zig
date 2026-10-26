@@ -342,22 +342,6 @@ pub const Wallpaper = struct {
 		return allocator.dupe(u8, self.active) catch null;
 	}
 
-	pub fn previewFor(self: *Wallpaper, allocator: Allocator, path: []const u8) ?[]u8 {
-		self.mutex.lockUncancelable(self.io);
-		defer self.mutex.unlock(self.io);
-
-		for (self.entries.items) |entry| {
-			if (!std.mem.eql(u8, entry.path, path)) continue;
-
-			const source = if (entry.preview.len > 0) entry.preview else entry.thumb;
-			if (source.len == 0) return null;
-
-			return allocator.dupe(u8, source) catch null;
-		}
-
-		return null;
-	}
-
 	pub fn save(self: *Wallpaper, path: []const u8) void {
 		const settings = settingsPath(self.io, self.allocator) catch return;
 		defer self.allocator.free(settings);
