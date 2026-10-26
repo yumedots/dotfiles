@@ -215,8 +215,7 @@ function glyphOf(entry, config) {
 		clip: config.launcherIconClipboard,
 		calc: config.launcherIconCalc,
 		wallpaper: config.launcherIconWallpaper,
-		proc: config.launcherIconProcess,
-		app: config.launcherIconFallback
+		proc: config.launcherIconProcess
 	};
 
 	return kinds[entry.kind] || "";

@@ -158,6 +158,13 @@ PanelWindow {
 		anchors.fill: parent
 		color: Config.surface
 		opacity: root.shown ? Config.wallpaperScrim : 0
+
+		Behavior on opacity {
+			NumberAnimation {
+				duration: Config.wallpaperScrimMs
+				easing.type: Easing.OutCubic
+			}
+		}
 	}
 
 	MouseArea {
@@ -183,6 +190,13 @@ PanelWindow {
 		opacity: root.shown ? 1 : 0
 		visible: root.configured && (root.shown || opacity > 0)
 		focus: true
+
+		Behavior on opacity {
+			NumberAnimation {
+				duration: Config.wallpaperScrimMs
+				easing.type: Easing.OutCubic
+			}
+		}
 
 		Keys.onPressed: function (event) {
 			Input.wallpaper(event, root);
@@ -230,6 +244,12 @@ PanelWindow {
 						retainWhileLoading: true
 						opacity: status === Image.Ready ? 1 : 0
 						source: root.heroPreview === "" ? "" : "file://" + root.heroPreview
+
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+							}
+						}
 					}
 
 					Text {
@@ -290,7 +310,14 @@ PanelWindow {
 							width: root.tileWidth
 							height: root.tileHeight
 							color: Config.launcherSearchBox
+							scale: cell.current ? Config.wallpaperHoverScale : 1
 
+							Behavior on scale {
+								NumberAnimation {
+									duration: Config.wallpaperFadeMs
+									easing.type: Easing.OutCubic
+								}
+							}
 
 							Image {
 								id: thumb
@@ -302,6 +329,13 @@ PanelWindow {
 								retainWhileLoading: true
 								opacity: cell.current ? 1 : Config.wallpaperTileDim
 								source: "file://" + (cell.modelData.thumb || cell.modelData.path)
+
+								Behavior on opacity {
+									NumberAnimation {
+										duration: Config.wallpaperFadeMs
+										easing.type: Easing.OutCubic
+									}
+								}
 							}
 
 							Rectangle {

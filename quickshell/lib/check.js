@@ -86,7 +86,6 @@ assert(glyphOf({ kind: "command" }, modeConfig) === "c", "a command falls back t
 assert(glyphOf({ kind: "saved" }, modeConfig) === "c", "so does a saved entry");
 assert(glyphOf({ kind: "file" }, modeConfig) === "f" && glyphOf({ kind: "clip" }, modeConfig) === "k", "files and clips have their own");
 assert(glyphOf({ kind: "proc" }, modeConfig) === "p", "so do process rows");
-assert(glyphOf({ kind: "app", appId: "noicon" }, modeConfig) === "P" && glyphOf({ kind: "window", appId: "noicon" }, modeConfig) === "w", "rows whose app has no desktop icon fall back to a nerd font glyph");
 assert(glyphOf({ kind: "mode" }, modeConfig) === "" && glyphOf(null, modeConfig) === "", "a mode carries its glyph from the config, nothing invents one");
 assert(rememberable({ kind: "saved" }) && rememberable({ kind: "app" }) && !rememberable({ kind: "mode" }) && !rememberable({ kind: "group" }), "usage counts what gets launched, not what navigates");
 
