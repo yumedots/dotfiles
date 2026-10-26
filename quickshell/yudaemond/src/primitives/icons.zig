@@ -64,12 +64,12 @@ pub const Icons = struct {
 		}
 
 		for ([_][]const u8{ "/usr/share/applications", "/usr/local/share/applications", "/var/lib/flatpak/exports/share/applications" }) |dir|
-			self.walkDesktop(&desktop, dir, 0);
+			self.walkDesktop(&desktop, &files, dir, 0);
 
 		const user_apps = std.fmt.allocPrint(self.allocator, "{s}/.local/share/applications", .{home}) catch "";
 		if (user_apps.len > 0) {
 			defer self.allocator.free(user_apps);
-			self.walkDesktop(&desktop, user_apps, 0);
+			self.walkDesktop(&desktop, &files, user_apps, 0);
 		}
 
 		self.mutex.lockUncancelable(self.io);
@@ -159,7 +159,7 @@ pub const Icons = struct {
 		}
 	}
 
-	fn walkDesktop(self: *Icons, desktop: *std.StringHashMapUnmanaged([]u8), path: []const u8, depth: usize) void {
+	fn walkDesktop(self: *Icons, desktop: *std.StringHashMapUnmanaged([]u8), files: *std.StringHashMapUnmanaged([]u8), path: []const u8, depth: usize) void {
 		var dir = std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true }) catch return;
 		defer dir.close(self.io);
 
@@ -170,7 +170,7 @@ pub const Icons = struct {
 			defer self.allocator.free(child);
 
 			if (item.kind == .directory) {
-				if (depth < 4) self.walkDesktop(desktop, child, depth + 1);
+				if (depth < 4) self.walkDesktop(desktop, files, child, depth + 1);
 				continue;
 			}
 
@@ -180,12 +180,21 @@ pub const Icons = struct {
 			defer self.allocator.free(body);
 
 			const icon = entryIcon(body) orelse continue;
-			const id = item.name[0 .. item.name.len - ".desktop".len];
+			const stem = item.name[0 .. item.name.len - ".desktop".len];
+
+			var lower_buf: [160]u8 = undefined;
+			const id = lowercase(stem, &lower_buf);
 
 			if (desktop.contains(id)) continue;
 
+			var resolved = icon;
+
+			if (files.get(resolved) == null) {
+				if (categoryIcon(files, body)) |generic| resolved = generic;
+			}
+
 			const key = self.allocator.dupe(u8, id) catch continue;
-			const value = self.allocator.dupe(u8, icon) catch {
+			const value = self.allocator.dupe(u8, resolved) catch {
 				self.allocator.free(key);
 				continue;
 			};
@@ -324,6 +333,57 @@ fn rankOf(path: []const u8) u32 {
 	}
 
 	return rank;
+}
+
+fn categoryIcon(files: *std.StringHashMapUnmanaged([]u8), body: []const u8) ?[]const u8 {
+	const categories = entryValue(body, "Categories") orelse return null;
+	const names = [_]struct { match: []const u8, icon: []const u8 }{
+		.{ .match = "Terminal", .icon = "utilities-terminal" },
+		.{ .match = "WebBrowser", .icon = "web-browser" },
+		.{ .match = "AudioVideo", .icon = "multimedia-player" },
+		.{ .match = "Audio", .icon = "multimedia-player" },
+		.{ .match = "Video", .icon = "multimedia-player" },
+		.{ .match = "Development", .icon = "applications-development" },
+		.{ .match = "Graphics", .icon = "applications-graphics" },
+		.{ .match = "Game", .icon = "applications-games" },
+		.{ .match = "Office", .icon = "x-office-document" },
+		.{ .match = "Network", .icon = "applications-internet" },
+		.{ .match = "Utility", .icon = "applications-utilities" },
+		.{ .match = "System", .icon = "applications-system" },
+	};
+
+	for (names) |entry| {
+		if (std.mem.indexOf(u8, categories, entry.match) == null) continue;
+		if (files.get(entry.icon)) |_| return entry.icon;
+	}
+
+	return null;
+}
+
+fn entryValue(body: []const u8, wanted: []const u8) ?[]const u8 {
+	var in_entry = false;
+
+	var lines = std.mem.splitScalar(u8, body, '\n');
+
+	while (lines.next()) |raw| {
+		const line = std.mem.trim(u8, raw, " \t\r");
+
+		if (line.len == 0 or line[0] == '#' or line[0] == ';') continue;
+
+		if (line[0] == '[') {
+			in_entry = std.mem.eql(u8, line, "[Desktop Entry]");
+			continue;
+		}
+
+		if (!in_entry) continue;
+
+		const split = std.mem.indexOfScalar(u8, line, '=') orelse continue;
+		const key = std.mem.trim(u8, line[0..split], " \t");
+
+		if (std.mem.eql(u8, key, wanted)) return std.mem.trim(u8, line[split + 1 ..], " \t");
+	}
+
+	return null;
 }
 
 fn entryIcon(body: []const u8) ?[]const u8 {
