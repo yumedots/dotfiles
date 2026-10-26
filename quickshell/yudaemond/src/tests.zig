@@ -21,6 +21,7 @@ test {
 	_ = @import("providers/network.zig");
 	_ = @import("providers/audio.zig");
 	_ = @import("providers/wallpaper.zig");
+	_ = @import("providers/ink.zig");
 	_ = @import("providers/bar.zig");
 	_ = @import("providers/launcher.zig");
 	_ = @import("providers/icons.zig");

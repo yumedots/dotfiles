@@ -11,9 +11,6 @@ const Hub = hubmod.Hub;
 
 const default_dir = "~/Documents/Wallpaper";
 const max_depth = 2;
-const transition = "fade";
-const transition_ms = 400;
-const transition_fps = 60;
 const extensions = [_][]const u8{ ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif" };
 
 const cache_root = ".cache/quickshell/wallpaper";
@@ -336,37 +333,32 @@ pub const Wallpaper = struct {
 		}
 	}
 
-	pub fn apply(self: *Wallpaper, path: []const u8, band: f64) void {
-		if (path.len == 0) return;
+	pub fn activePath(self: *Wallpaper, allocator: Allocator) ?[]u8 {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
 
-		var arena = std.heap.ArenaAllocator.init(self.allocator);
-		defer arena.deinit();
+		if (self.active.len == 0) return null;
 
-		const allocator = arena.allocator();
-
-		const duration = std.fmt.allocPrint(allocator, "{d:.3}", .{@as(f64, @floatFromInt(transition_ms)) / 1000.0}) catch return;
-		const fps = std.fmt.allocPrint(allocator, "{d}", .{transition_fps}) catch return;
-
-		var argv: std.ArrayList([]const u8) = .empty;
-
-		for ([_][]const u8{ "awww", "img", "--transition-type", transition, "--transition-duration", duration, "--transition-fps", fps }) |arg|
-			argv.append(allocator, arg) catch return;
-
-		if (band > 0) {
-			const text = std.fmt.allocPrint(allocator, "{d}", .{@as(i64, @intFromFloat(@ceil(band)))}) catch return;
-			argv.append(allocator, "--ink-band") catch return;
-			argv.append(allocator, text) catch return;
-		}
-
-		argv.append(allocator, path) catch return;
-
-		const result = exec.run(self.io, self.allocator, argv.items) catch return;
-		result.deinit(self.allocator);
-
-		self.save(path);
+		return allocator.dupe(u8, self.active) catch null;
 	}
 
-	fn save(self: *Wallpaper, path: []const u8) void {
+	pub fn previewFor(self: *Wallpaper, allocator: Allocator, path: []const u8) ?[]u8 {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		for (self.entries.items) |entry| {
+			if (!std.mem.eql(u8, entry.path, path)) continue;
+
+			const source = if (entry.preview.len > 0) entry.preview else entry.thumb;
+			if (source.len == 0) return null;
+
+			return allocator.dupe(u8, source) catch null;
+		}
+
+		return null;
+	}
+
+	pub fn save(self: *Wallpaper, path: []const u8) void {
 		const settings = settingsPath(self.io, self.allocator) catch return;
 		defer self.allocator.free(settings);
 

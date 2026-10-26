@@ -17,6 +17,7 @@ const settings = @import("providers/settings.zig");
 const network = @import("providers/network.zig");
 const audio = @import("providers/audio.zig");
 const wallpaper = @import("providers/wallpaper.zig");
+const ink = @import("providers/ink.zig");
 const bar = @import("providers/bar.zig");
 const launcher = @import("providers/launcher.zig");
 const icons = @import("providers/icons.zig");
@@ -50,6 +51,7 @@ pub const Context = struct {
 	network: *network.Network,
 	audio: *audio.Audio,
 	wallpaper: *wallpaper.Wallpaper,
+	ink: *ink.Ink,
 	bar: *bar.Bar,
 	launcher: *launcher.Launcher,
 	icons: *icons.Icons,
@@ -170,12 +172,23 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		return;
 	}
 
+	if (json.field(value, "ink")) |ink_cmd| {
+		const band = json.integer(json.field(ink_cmd, "band"));
+		const bare = if (json.field(ink_cmd, "bare") != null) json.flag(ink_cmd, "bare") else null;
+
+		context.ink.set(band, bare);
+		return;
+	}
+
 	if (json.field(value, "wallpaper")) |wp_cmd| {
 		if (json.field(wp_cmd, "apply")) |target| {
 			const path = json.textAt(target, "path");
-			const band = json.numberAt(target, "band");
+			const band = json.integer(json.field(target, "band"));
 
-			if (path.len > 0) context.wallpaper.apply(path, band);
+			if (path.len > 0) {
+				context.wallpaper.save(path);
+				context.ink.apply(path, band);
+			}
 		}
 
 		if (json.flag(wp_cmd, "scan")) context.wallpaper.reload();
@@ -351,6 +364,10 @@ fn run(io: std.Io) !void {
 	const wallpaper_provider = try wallpaper.Wallpaper.create(allocator, io, hub);
 	try hub.add(wallpaper_provider.provider());
 
+	const ink_provider = try ink.Ink.create(allocator, io, hub);
+	ink_provider.attach(wallpaper_provider);
+	try hub.add(ink_provider.provider());
+
 	const bar_provider = try bar.Bar.create(allocator, io, hub);
 	try hub.add(bar_provider.provider());
 
@@ -392,6 +409,7 @@ fn run(io: std.Io) !void {
 		.network = network_provider,
 		.audio = audio_provider,
 		.wallpaper = wallpaper_provider,
+		.ink = ink_provider,
 		.bar = bar_provider,
 		.launcher = launcher_provider,
 		.icons = icons_provider,
@@ -425,6 +443,7 @@ fn run(io: std.Io) !void {
 	try network_provider.start();
 	try audio_provider.start();
 	try wallpaper_provider.start();
+	try ink_provider.start();
 	try bar_provider.start();
 	try launcher_provider.start();
 	try icons_provider.start();
