@@ -92,7 +92,12 @@ Done and committed:
    the saved-settings write are done and verified; `awww img --ink-band` is only
    code-reviewed because it would change the real wallpaper from the systemd daemon.
    Test it once in a real session (pick a wallpaper, check the desktop + settings.lua).
-5. **Display rapid changes.** A single scale/refresh change applies in ~250 ms
+5. ~~**Display rapid changes.**~~ done: `467e556` - one apply worker owns every
+   `hyprctl eval`, picks land in a single-slot queue (newest replaces the waiting one),
+   `panel.pending` is true while a change is in flight and the panel shows the queued
+   value. Verified with two mouse clicks 300 ms apart (60 Hz then 240 Hz, both applied
+   in order); the user's 279.96 Hz / 1.3333 scale and `display.lua` were restored byte
+   for byte. Original note: A single scale/refresh change applies in ~250 ms
    via `hyprctl eval hl.monitor(...)`, and the panel now shows the value it applied.
    Two changes within ~1 s still lose the second one while the mode switch is in
    flight. Needs a pending flag in the panel that ignores a second pick until the
