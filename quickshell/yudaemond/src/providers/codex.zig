@@ -4,6 +4,7 @@ const http = @import("../primitives/http.zig");
 const json = @import("../primitives/json.zig");
 const proc = @import("../primitives/proc.zig");
 const watch = @import("../primitives/watch.zig");
+const limitmod = @import("../primitives/limits.zig");
 const fmt = @import("../primitives/fmt.zig");
 const sleep = @import("../primitives/sleep.zig");
 const setStr = @import("opencode.zig").setStr;
@@ -78,6 +79,17 @@ pub const Codex = struct {
 
 		const poll = try std.Thread.spawn(.{}, pollLoop, .{self});
 		poll.detach();
+	}
+
+	pub fn refreshPlan(self: *Codex) void {
+		self.refresh();
+	}
+
+	pub fn planOut(self: *Codex, arena: Allocator) limitmod.Plan {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		return limitmod.copy(arena, self.plan, self.failure, self.limits.items) catch .{};
 	}
 
 	pub fn refresh(self: *Codex) void {

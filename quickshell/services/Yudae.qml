@@ -31,26 +31,37 @@ QtObject {
 	readonly property string codexError: root.codex.failure || ""
 	readonly property bool online: root.opencode.connected === true
 
-	readonly property string planError: root.usageError !== "" ? root.usageError : root.codexError
+	readonly property string planError: {
+		for (let i = 0; i < root.subscriptions.length; i++) {
+			const entry = root.subscriptions[i];
+
+			if (entry.failure && entry.failure !== "")
+				return entry.failure;
+		}
+
+		return "";
+	}
 
 	readonly property var doneSessions: root.opencode.done || []
 
+	readonly property var subscriptions: root.snapshot.subscriptions ? (root.snapshot.subscriptions.list || []) : []
+
 	readonly property var plans: {
 		const out = [];
-		const own = root.opencode.plan;
 
-		if (own && own.limits && own.limits.length > 0)
-			out.push({ title: Config.agentPlanName, icon: Config.agentPlanIcon, limits: own.limits, error: "" });
+		for (let i = 0; i < root.subscriptions.length; i++) {
+			const entry = root.subscriptions[i];
 
-		const other = root.codex;
+			if (!entry.limits || entry.limits.length === 0)
+				continue;
 
-		if (other.limits && other.limits.length > 0)
 			out.push({
-				title: "ChatGPT" + (other.plan ? " " + other.plan.charAt(0).toUpperCase() + other.plan.substring(1) : ""),
-				icon: "",
-				limits: other.limits,
-				error: "",
+				title: entry.id === "opencode" ? Config.agentPlanName : entry.title + (entry.plan ? " " + entry.plan : ""),
+				icon: entry.id === "opencode" ? Config.agentPlanIcon : "",
+				limits: entry.limits,
+				error: entry.failure || "",
 			});
+		}
 
 		return out;
 	}

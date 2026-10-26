@@ -20,6 +20,7 @@ const wallpaper = @import("providers/wallpaper.zig");
 const bar = @import("providers/bar.zig");
 const launcher = @import("providers/launcher.zig");
 const icons = @import("providers/icons.zig");
+const subscriptions = @import("providers/subscriptions.zig");
 const iconsmod = @import("primitives/icons.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
@@ -50,6 +51,7 @@ pub const Context = struct {
 	bar: *bar.Bar,
 	launcher: *launcher.Launcher,
 	icons: *icons.Icons,
+	subscriptions: *subscriptions.Subscriptions,
 	socket_path: []const u8,
 };
 
@@ -261,7 +263,7 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 fn refreshThunk(ctx: *anyopaque) void {
 	const context: *Context = @ptrCast(@alignCast(ctx));
 	context.opencode.refreshAll();
-	context.codex.refresh();
+	context.subscriptions.refresh();
 	context.github.refresh();
 	context.weather.search("");
 }
@@ -348,6 +350,9 @@ fn run(io: std.Io) !void {
 	const bar_provider = try bar.Bar.create(allocator, io, hub);
 	try hub.add(bar_provider.provider());
 
+	const subscriptions_provider = try subscriptions.Subscriptions.create(allocator, io, hub, opencode_provider, codex_provider);
+	try hub.add(subscriptions_provider.provider());
+
 	const icon_resolver = try iconsmod.Icons.create(allocator, io);
 	const icons_provider = try icons.Icons.create(allocator, io, hub, icon_resolver);
 	try hub.add(icons_provider.provider());
@@ -380,6 +385,7 @@ fn run(io: std.Io) !void {
 		.bar = bar_provider,
 		.launcher = launcher_provider,
 		.icons = icons_provider,
+		.subscriptions = subscriptions_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -410,6 +416,7 @@ fn run(io: std.Io) !void {
 	try bar_provider.start();
 	try launcher_provider.start();
 	try icons_provider.start();
+	try subscriptions_provider.start();
 
 	hub.publish();
 

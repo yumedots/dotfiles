@@ -4,6 +4,7 @@ const http = @import("../primitives/http.zig");
 const json = @import("../primitives/json.zig");
 const proc = @import("../primitives/proc.zig");
 const watch = @import("../primitives/watch.zig");
+const limitmod = @import("../primitives/limits.zig");
 const fmt = @import("../primitives/fmt.zig");
 const sleep = @import("../primitives/sleep.zig");
 
@@ -632,6 +633,17 @@ pub const Opencode = struct {
 		}
 
 		return out.toOwnedSlice(self.allocator) catch &.{};
+	}
+
+	pub fn refreshPlan(self: *Opencode) void {
+		self.refreshUsage();
+	}
+
+	pub fn planOut(self: *Opencode, arena: Allocator) limitmod.Plan {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		return limitmod.copy(arena, self.plan_title, self.usage_error, self.limits.items) catch .{};
 	}
 
 	fn refreshUsage(self: *Opencode) void {
