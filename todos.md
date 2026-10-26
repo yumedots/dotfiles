@@ -56,6 +56,17 @@ Done and committed:
 
 ## Open
 
+0. **Process pairing (launcher <-> shell), owned by the daemon.** The launcher is a separate
+   `quickshell -p launcherShell.qml` process (kept apart for tearing reasons). Today nothing
+   watches the pair: kill the shell and the launcher lingers; kill the launcher and the shell
+   keeps a dead IPC target. Wanted: `providers/supervisor.zig` that finds both pids
+   (`comm == quickshell`; the launcher by `cmdline` containing `launcherShell.qml`), polls
+   every 2 s, and when one disappears sends SIGTERM to the other (and restarts the launcher
+   when the shell is alive but the launcher is gone). Also useful: expose both states in the
+   snapshot (`supervisor: { shell, launcher }`) so the QML can warn instead of silently
+   talking to nothing. Keep it process-based, no subprocess per second beyond the poll.
+
+
 1. **Launcher QML** (the only real port left). `quickshell/yudaemond/src/providers/launcher.zig`
    is written, wired and tested (`111eeaa`) and emits the `launcher` snapshot section
    (`mode`, `prompt`, `query`, `terminal`, `pins`, `results`, `clip{text,path}`), but
