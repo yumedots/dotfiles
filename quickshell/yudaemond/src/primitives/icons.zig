@@ -204,6 +204,10 @@ pub const Icons = struct {
 
 		if (std.mem.indexOfScalar(u8, name, '/') != null) return name;
 
+		var lower_buf: [160]u8 = undefined;
+		const trimmed = if (std.mem.endsWith(u8, name, ".desktop")) name[0 .. name.len - ".desktop".len] else name;
+		const lower = lowercase(trimmed, &lower_buf);
+
 		self.mutex.lockUncancelable(self.io);
 		defer self.mutex.unlock(self.io);
 
@@ -215,6 +219,17 @@ pub const Icons = struct {
 		}
 
 		if (self.fallback(name)) |path| return path;
+
+		if (!std.mem.eql(u8, lower, name)) {
+			if (self.files.get(lower)) |path| return path;
+
+			if (self.desktop.get(lower)) |icon| {
+				if (self.files.get(icon)) |path| return path;
+				if (self.fallback(icon)) |path| return path;
+			}
+
+			if (self.fallback(lower)) |path| return path;
+		}
 
 		return "";
 	}
@@ -273,6 +288,14 @@ pub const Icons = struct {
 		return "";
 	}
 };
+
+fn lowercase(name: []const u8, buffer: []u8) []const u8 {
+	const len = @min(name.len, buffer.len);
+
+	for (name[0..len], 0..) |byte, index| buffer[index] = std.ascii.toLower(byte);
+
+	return buffer[0..len];
+}
 
 fn extensionOf(name: []const u8) ?[]const u8 {
 	for (extensions) |extension| {

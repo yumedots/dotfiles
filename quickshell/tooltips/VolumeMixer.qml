@@ -192,7 +192,7 @@ Item {
 		if (!node)
 			return "";
 
-		const ids = System.streamIds(node.properties);
+		const ids = System.streamIds(node.props);
 
 		if (node.iconName)
 			ids.push(node.iconName);
