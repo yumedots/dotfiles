@@ -24,12 +24,14 @@ const icons = @import("providers/icons.zig");
 const subscriptions = @import("providers/subscriptions.zig");
 const supervisor = @import("providers/supervisor.zig");
 const versions = @import("providers/versions.zig");
+const windows = @import("providers/windows.zig");
 const iconsmod = @import("primitives/icons.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
 const environ = @import("primitives/environ.zig");
 const exec = @import("primitives/exec.zig");
+const fmtmod = @import("primitives/fmt.zig");
 
 pub const allocator = std.heap.smp_allocator;
 
@@ -58,6 +60,7 @@ pub const Context = struct {
 	subscriptions: *subscriptions.Subscriptions,
 	supervisor: *supervisor.Supervisor,
 	versions: *versions.Versions,
+	windows: *windows.Windows,
 	socket_path: []const u8,
 };
 
@@ -180,14 +183,28 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		return;
 	}
 
+	if (json.field(value, "windows")) |wi_cmd| {
+		const focus = json.textAt(wi_cmd, "focus");
+		if (focus.len > 0) context.windows.focus(focus);
+
+		const launch = json.textAt(wi_cmd, "launch");
+		if (launch.len > 0) context.windows.launch(launch);
+
+		return;
+	}
+
 	if (json.field(value, "wallpaper")) |wp_cmd| {
 		if (json.field(wp_cmd, "apply")) |target| {
 			const path = json.textAt(target, "path");
 			const band = json.integer(json.field(target, "band"));
 
 			if (path.len > 0) {
+				const t0 = fmtmod.nowMs(context.io);
 				context.wallpaper.save(path);
+				const t1 = fmtmod.nowMs(context.io);
 				context.ink.apply(path, band);
+				const t2 = fmtmod.nowMs(context.io);
+				std.debug.print("DBG cmd save={d} apply={d}\n", .{ t1 - t0, t2 - t1 });
 			}
 		}
 
@@ -374,6 +391,9 @@ fn run(io: std.Io) !void {
 	const versions_provider = try versions.Versions.create(allocator, io, hub);
 	try hub.add(versions_provider.provider());
 
+	const windows_provider = try windows.Windows.create(allocator, io, hub);
+	try hub.add(windows_provider.provider());
+
 	const supervisor_provider = try supervisor.Supervisor.create(allocator, io, hub);
 	try hub.add(supervisor_provider.provider());
 
@@ -416,6 +436,7 @@ fn run(io: std.Io) !void {
 		.subscriptions = subscriptions_provider,
 		.supervisor = supervisor_provider,
 		.versions = versions_provider,
+		.windows = windows_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -450,6 +471,7 @@ fn run(io: std.Io) !void {
 	try subscriptions_provider.start();
 	try supervisor_provider.start();
 	try versions_provider.start();
+	try windows_provider.start();
 
 	hub.publish();
 

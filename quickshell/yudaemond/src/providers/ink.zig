@@ -1,8 +1,8 @@
 const std = @import("std");
 const hubmod = @import("../hub.zig");
 const exec = @import("../primitives/exec.zig");
-const hypr = @import("../primitives/hypr.zig");
 const json = @import("../primitives/json.zig");
+const fmt = @import("../primitives/fmt.zig");
 const proc = @import("../primitives/proc.zig");
 const sleep = @import("../primitives/sleep.zig");
 const wallpaper = @import("wallpaper.zig");
@@ -13,15 +13,18 @@ const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
 const state_file = ".config/quickshell/cache/bar-ink.json";
-const sample_bin = "/usr/bin/ffmpeg";
 const daemon_bin = "/usr/bin/awww-daemon";
-const transition = "fade";
-const transition_ms = 400;
-const transition_fps = 60;
+const black_ink = "#101010";
+const white_ink = "#ffffff";
 
 const State = struct {
 	bare: bool,
 	band: i64,
+};
+
+const Reading = struct {
+	output: []const u8,
+	word: []const u8,
 };
 
 pub const Ink = struct {
@@ -29,14 +32,11 @@ pub const Ink = struct {
 	io: Io,
 	hub: *Hub,
 	mutex: std.Io.Mutex = .init,
-	scratch: std.heap.ArenaAllocator,
 	bare: bool = false,
 	band: i64 = 0,
 	inks: std.StringHashMapUnmanaged([]u8) = .empty,
 	wallpaper: ?*wallpaper.Wallpaper = null,
-	sampled: []u8 = &.{},
-	sampled_band: i64 = -1,
-	wake: std.Io.Semaphore = .{},
+	generation: std.atomic.Value(u64) = .init(0),
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Ink {
 		const self = try allocator.create(Ink);
@@ -44,7 +44,6 @@ pub const Ink = struct {
 			.allocator = allocator,
 			.io = io,
 			.hub = hub,
-			.scratch = std.heap.ArenaAllocator.init(allocator),
 		};
 
 		return self;
@@ -66,54 +65,53 @@ pub const Ink = struct {
 	pub fn start(self: *Ink) !void {
 		self.load();
 
-		const sampler = try std.Thread.spawn(.{}, loop, .{self});
-		sampler.detach();
-
 		const keeper = try std.Thread.spawn(.{}, keepDaemon, .{self});
 		keeper.detach();
 
-		self.wake.post(self.io);
-	}
-
-	fn loop(self: *Ink) void {
-		while (true) {
-			self.wake.waitUncancelable(self.io);
-
-			var tries: usize = 0;
-			while (tries < 20) : (tries += 1) {
-				if (self.refresh()) break;
-				sleep.ms(1000);
-			}
-		}
+		if (self.bare) self.reapply();
 	}
 
 	pub fn set(self: *Ink, band: i64, bare: ?bool) void {
 		self.mutex.lockUncancelable(self.io);
+		const changed = band > 0 and self.band != band;
 		if (band > 0) self.band = band;
 		if (bare) |flag| self.bare = flag;
 		self.mutex.unlock(self.io);
 
 		self.persist();
-		self.wake.post(self.io);
 		self.hub.publish();
+
+		if (changed) self.reapply();
 	}
 
 	pub fn apply(self: *Ink, path: []const u8, band: i64) void {
 		if (path.len == 0) return;
 
-		if (band > 0) {
-			self.mutex.lockUncancelable(self.io);
-			const changed = self.band != band;
-			self.band = band;
-			self.mutex.unlock(self.io);
+		self.mutex.lockUncancelable(self.io);
+		const changed = band > 0 and self.band != band;
+		if (band > 0) self.band = band;
+		self.mutex.unlock(self.io);
 
-			if (changed) self.persist();
-		}
+		if (changed) self.persist();
 
-		self.wake.post(self.io);
+		self.sync(path);
+	}
 
+	fn reapply(self: *Ink) void {
+		const source = self.wallpaper orelse return;
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const path = source.activePath(arena.allocator()) orelse return;
+		self.sync(path);
+	}
+
+	fn sync(self: *Ink, path: []const u8) void {
 		const copy = self.allocator.dupe(u8, path) catch return;
-		const thread = std.Thread.spawn(.{}, show, .{ self, copy }) catch {
+		const generation = self.generation.fetchAdd(1, .monotonic) + 1;
+
+		const thread = std.Thread.spawn(.{}, show, .{ self, copy, generation }) catch {
 			self.allocator.free(copy);
 			return;
 		};
@@ -121,29 +119,10 @@ pub const Ink = struct {
 		thread.detach();
 	}
 
-	fn show(self: *Ink, path: []u8) void {
+	fn show(self: *Ink, path: []u8, generation: u64) void {
 		defer self.allocator.free(path);
 
-		var arena = std.heap.ArenaAllocator.init(self.allocator);
-		defer arena.deinit();
-
-		const allocator = arena.allocator();
-
-		const duration = std.fmt.allocPrint(allocator, "{d:.3}", .{@as(f64, @floatFromInt(transition_ms)) / 1000.0}) catch return;
-		const fps = std.fmt.allocPrint(allocator, "{d}", .{transition_fps}) catch return;
-
-		const argv = [_][]const u8{
-			"awww", "img",       "--transition-type", transition,
-			"--transition-duration", duration, "--transition-fps", fps,
-			path,
-		};
-
-		const result = exec.run(self.io, self.allocator, &argv) catch return;
-		result.deinit(self.allocator);
-	}
-
-	fn refresh(self: *Ink) bool {
-		const source = self.wallpaper orelse return true;
+		if (self.generation.load(.monotonic) != generation) return;
 
 		self.mutex.lockUncancelable(self.io);
 		const band = self.band;
@@ -154,102 +133,75 @@ pub const Ink = struct {
 
 		const allocator = arena.allocator();
 
-		const path = source.activePath(allocator) orelse return true;
-		if (path.len == 0) return true;
+		var argv: std.ArrayListUnmanaged([]const u8) = .empty;
 
-		const preview = source.previewFor(allocator, path) orelse return false;
-		if (std.mem.eql(u8, preview, self.sampled) and band == self.sampled_band) return true;
+		argv.appendSlice(allocator, &.{ "awww", "img", "--transition-type", "fade", "--transition-duration", "0.4", "--transition-fps", "60" }) catch return;
 
-		var names: std.ArrayListUnmanaged([]u8) = .empty;
-		defer {
-			for (names.items) |name| self.allocator.free(name);
-			names.deinit(self.allocator);
+		if (band > 0) {
+			const rows = std.fmt.allocPrint(allocator, "{d}", .{band}) catch return;
+			argv.appendSlice(allocator, &.{ "--ink-band", rows }) catch return;
 		}
 
-		self.screens(&names);
-		if (names.items.len == 0) return false;
+		argv.append(allocator, path) catch return;
 
-		const rgb = self.sample(preview, band) orelse return false;
-
-		self.store(preview, band, names.items, rgb);
-		return true;
-	}
-
-	fn screens(self: *Ink, out: *std.ArrayListUnmanaged([]u8)) void {
-		var arena = std.heap.ArenaAllocator.init(self.allocator);
-		defer arena.deinit();
-
-		const allocator = arena.allocator();
-
-		const body = hypr.request(self.io, allocator, "j/monitors") catch return;
-		const parsed = json.parse(allocator, body) catch return;
-
-		for (json.list(parsed.value)) |entry| {
-			const name = json.textAt(entry, "name");
-			if (name.len == 0 or json.flag(entry, "disabled")) continue;
-
-			out.append(self.allocator, self.allocator.dupe(u8, name) catch continue) catch {};
-		}
-	}
-
-	fn sample(self: *Ink, preview: []const u8, band: i64) ?[3]u8 {
-		var arena = std.heap.ArenaAllocator.init(self.allocator);
-		defer arena.deinit();
-
-		const strip = if (band > 0)
-			std.fmt.allocPrint(arena.allocator(), "min(ih\\,max(1\\,{d}))", .{@min(band, 512)}) catch return null
-		else
-			"ih*5/100";
-
-		const filter = std.fmt.allocPrint(arena.allocator(), "crop=iw:{s}:0:0,scale=1:1", .{strip}) catch return null;
-
-		const argv = [_][]const u8{
-			sample_bin, "-v", "error", "-i", preview, "-vf", filter,
-			"-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
-		};
-
-		const result = exec.run(self.io, self.allocator, &argv) catch return null;
+		const started = fmt.nowMs(self.io);
+		const result = exec.run(self.io, self.allocator, argv.items) catch return;
 		defer result.deinit(self.allocator);
+		std.debug.print("DBG t={d} img code={d} ms={d}\n", .{ fmt.nowMs(self.io), result.code, fmt.nowMs(self.io) - started });
 
-		if (result.code != 0 or result.out.len < 3) return null;
-		return .{ result.out[0], result.out[1], result.out[2] };
+		if (result.code != 0) return;
+
+		self.collect(band, generation);
 	}
 
-	fn store(self: *Ink, preview: []const u8, band: i64, names: []const []u8, rgb: [3]u8) void {
-		const colour = inkColor(rgb);
+	fn collect(self: *Ink, band: i64, generation: u64) void {
+		if (band <= 0) return;
+
+		if (self.generation.load(.monotonic) != generation) return;
+
+		const started2 = fmt.nowMs(self.io);
+		const result = exec.run(self.io, self.allocator, &.{ "awww", "query" }) catch return;
+		defer result.deinit(self.allocator);
+		std.debug.print("DBG query ms={d}\n", .{fmt.nowMs(self.io) - started2});
+
+		if (result.code != 0) return;
+
+		if (self.generation.load(.monotonic) != generation) return;
 
 		self.mutex.lockUncancelable(self.io);
 
-		var it = self.inks.iterator();
-		while (it.next()) |entry| {
+		var old = self.inks.iterator();
+		while (old.next()) |entry| {
 			self.allocator.free(entry.key_ptr.*);
 			self.allocator.free(entry.value_ptr.*);
 		}
 		self.inks.clearRetainingCapacity();
 
-		for (names) |name| {
-			const key = self.allocator.dupe(u8, name) catch continue;
-			const value = self.allocator.dupe(u8, &colour) catch {
+		var lines = std.mem.splitScalar(u8, result.out, '\n');
+		while (lines.next()) |line| {
+			const ink = reading(line) orelse continue;
+
+			const colour = if (std.mem.eql(u8, ink.word, "black")) black_ink else white_ink;
+			const key = self.allocator.dupe(u8, ink.output) catch continue;
+			const value = self.allocator.dupe(u8, colour) catch {
 				self.allocator.free(key);
 				continue;
 			};
+
 			self.inks.put(self.allocator, key, value) catch {
 				self.allocator.free(key);
 				self.allocator.free(value);
 			};
 		}
 
-		self.sampled_band = band;
-		const copy = self.allocator.dupe(u8, preview) catch null;
-		if (copy) |path| {
-			self.allocator.free(self.sampled);
-			self.sampled = path;
-		}
-
 		self.mutex.unlock(self.io);
 
+		const started3 = fmt.nowMs(self.io);
 		self.persist();
+		const mid = fmt.nowMs(self.io);
 		self.hub.publish();
+		const done = fmt.nowMs(self.io);
+		std.debug.print("DBG t={d} persist ms={d} publish ms={d}\n", .{ done, mid - started3, done - mid });
 	}
 
 	fn persist(self: *Ink) void {
@@ -281,8 +233,6 @@ pub const Ink = struct {
 	}
 
 	fn writeInks(self: *Ink, writer: *Writer, allocator: Allocator) !void {
-		try writer.writeAll("\"inks\":{");
-
 		var keys: std.ArrayListUnmanaged([]const u8) = .empty;
 		defer keys.deinit(allocator);
 
@@ -290,6 +240,8 @@ pub const Ink = struct {
 		while (it.next()) |entry| keys.append(allocator, entry.key_ptr.*) catch {};
 
 		std.mem.sort([]const u8, keys.items, {}, lessThan);
+
+		try writer.writeAll("\"inks\":{");
 
 		for (keys.items, 0..) |key, index| {
 			const value = self.inks.get(key) orelse continue;
@@ -299,6 +251,18 @@ pub const Ink = struct {
 			try json.write(writer, key);
 			try writer.writeAll(":");
 			try json.write(writer, value);
+		}
+
+		try writer.writeAll("},\"verdicts\":{");
+
+		for (keys.items, 0..) |key, index| {
+			const value = self.inks.get(key) orelse continue;
+
+			if (index > 0) try writer.writeAll(",");
+
+			try json.write(writer, key);
+			try writer.writeAll(":");
+			try json.write(writer, if (std.mem.eql(u8, value, black_ink)) "black" else "white");
 		}
 
 		try writer.writeAll("}");
@@ -395,26 +359,22 @@ fn stateOf(root: json.Value) State {
 	};
 }
 
-fn inkColor(rgb: [3]u8) [7]u8 {
-	const r: f64 = @floatFromInt(rgb[0]);
-	const g: f64 = @floatFromInt(rgb[1]);
-	const b: f64 = @floatFromInt(rgb[2]);
+fn reading(line: []const u8) ?Reading {
+	const marker = std.mem.indexOf(u8, line, ", ink: ") orelse return null;
+	const rest = line[marker + ", ink: ".len ..];
 
-	const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0;
-	const target: f64 = if (luma < 0.5) 255 else 0;
+	var end: usize = 0;
+	while (end < rest.len and rest[end] != ' ' and rest[end] != '(') end += 1;
+	if (end == 0) return null;
 
-	var out: [7]u8 = .{ '#', '0', '0', '0', '0', '0', '0' };
-	const hex = "0123456789abcdef";
+	const word = rest[0..end];
+	if (!std.mem.eql(u8, word, "black") and !std.mem.eql(u8, word, "white")) return null;
 
-	for ([_]u8{ rgb[0], rgb[1], rgb[2] }, 0..) |value, index| {
-		const mixed = @round(@as(f64, @floatFromInt(value)) * 0.25 + target * 0.75);
-		const clamped: u8 = @intFromFloat(@min(255.0, @max(0.0, mixed)));
+	const name = std.mem.indexOf(u8, line, ": ") orelse return null;
+	const start = name + 2;
 
-		out[1 + index * 2] = hex[clamped >> 4];
-		out[2 + index * 2] = hex[clamped & 0xf];
-	}
-
-	return out;
+	const colon = std.mem.indexOfScalarPos(u8, line, start, ':') orelse return null;
+	return .{ .output = line[start..colon], .word = word };
 }
 
 fn lessThan(_: void, a: []const u8, b: []const u8) bool {
@@ -435,8 +395,17 @@ test "the stored state keeps the band and the bare flag" {
 	try std.testing.expect(!stateOf(empty.value).bare);
 }
 
-test "the ink keeps the band hue and flips with its luminance" {
-	try std.testing.expectEqualStrings("#bfbfbf", &inkColor(.{ 0, 0, 0 }));
-	try std.testing.expectEqualStrings("#404040", &inkColor(.{ 255, 255, 255 }));
-	try std.testing.expectEqualStrings("#f1c4c4", &inkColor(.{ 200, 20, 20 }));
+test "the daemon query line gives the output and the ink word" {
+	const line = ": DP-2: 1920x1080, scale: 1.3333334, currently displaying: image: /home/me/wall.png, ink: white (#d5cde8)";
+	const ink = reading(line).?;
+
+	try std.testing.expectEqualStrings("DP-2", ink.output);
+	try std.testing.expectEqualStrings("white", ink.word);
+
+	const named = reading("test: HDMI-A-1: 2560x1440, scale: 1.0, currently displaying: image: /w.jpg, ink: black (#101010)").?;
+	try std.testing.expectEqualStrings("HDMI-A-1", named.output);
+	try std.testing.expectEqualStrings("black", named.word);
+
+	try std.testing.expect(reading(": DP-2: 1920x1080, scale: 1.0, currently displaying: image: /w.jpg") == null);
+	try std.testing.expect(reading(": DP-2: 1920x1080, currently displaying: color: 000000, ink: purple (#101010)") == null);
 }
