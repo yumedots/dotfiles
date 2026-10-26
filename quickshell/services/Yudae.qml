@@ -259,6 +259,7 @@ QtObject {
 		root.send({ cmd: { screen: { detect: true } } });
 	}
 
+	readonly property var icons: root.snapshot.icons || ({})
 	readonly property var bar: root.snapshot.bar || ({})
 	readonly property var wallpaper: root.snapshot.wallpaper || ({})
 
@@ -311,6 +312,14 @@ QtObject {
 
 	function fetchCodex() {
 		root.send({ refresh: true });
+	}
+
+	function iconsWant(names) {
+		root.send({ cmd: { icons: { want: names } } });
+	}
+
+	function iconsWantPid(pid) {
+		root.send({ cmd: { icons: { pid: pid } } });
 	}
 
 	function send(message) {

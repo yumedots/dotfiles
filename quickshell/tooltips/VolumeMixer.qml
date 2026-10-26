@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell.Hyprland
 import qs.ui
 import qs
 import qs.services
@@ -25,7 +24,6 @@ Item {
 
 	property bool shown: false
 	property bool compact: false
-	property int iconEpoch: 0
 	readonly property bool showApps: root.hasApps && !root.compact
 
 	onOnScreenChanged: Yudae.audioWatch(root.onScreen)
@@ -33,33 +31,16 @@ Item {
 	onShownChanged: if (!root.shown) {
 		root.keyboard = false;
 		root.shift = false;
-	} else {
-		Hyprland.refreshToplevels();
-		refreshTimer.restart();
-	}
-
-	function bumpIcons() {
-		root.iconEpoch++;
 	}
 
 	Timer {
 		id: nodeRefreshTimer
 
 		interval: 1000
-		onTriggered: {
-			root.held = System.pruneHolds(root.held, Date.now());
-			root.bumpIcons();
-		}
+		onTriggered: root.held = System.pruneHolds(root.held, Date.now())
 	}
 
 	onNodesChanged: nodeRefreshTimer.restart()
-
-	Timer {
-		id: refreshTimer
-
-		interval: 1500
-		onTriggered: { Hyprland.refreshToplevels(); root.bumpIcons(); }
-	}
 
 	readonly property real contentWidth: Config.mixerWidth
 	readonly property var devices: root.picker === "" ? [] : root.sortedDevices(root.picker === "input")
@@ -212,23 +193,11 @@ Item {
 			return "";
 
 		const ids = System.streamIds(node.properties);
-		const pid = Number(node.properties ? node.properties["application.process.id"] || 0 : 0);
 
-		(Hyprland.toplevels.values || []).forEach(function (toplevel) {
-			const info = toplevel.lastIpcObject ? toplevel.lastIpcObject : {};
+		if (node.iconName)
+			ids.push(node.iconName);
 
-			if (pid && Number(info.pid) === pid)
-				ids.push(info.class);
-		});
-
-		for (let i = 0; i < ids.length; i++) {
-			const icon = AppIcons.iconOf(ids[i]);
-
-			if (icon !== "")
-				return icon;
-		}
-
-		return "";
+		return AppIcons.iconOf(ids[0], ids.slice(1));
 	}
 
 	function openPicker(direction) {
@@ -265,7 +234,7 @@ Item {
 		property bool appIcon: false
 		property bool muted: false
 		property real volume: 0
-		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node, root.iconEpoch) : ""
+		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 
 		readonly property bool selected: System.sameNode(channel.node, root.selectedNode)
 		readonly property int percent: Math.round(channel.volume * 100)
@@ -382,6 +351,7 @@ Item {
 		property bool recording: false
 		property real volume: 0
 		property var onActivate
+		readonly property string icon: line.node && line.node.iconName ? AppIcons.iconOf(line.node.iconName) : ""
 
 		readonly property bool selected: System.sameNode(line.node, root.selectedNode)
 		readonly property real level: Util.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
@@ -426,10 +396,19 @@ Item {
 			width: Config.mixerDeviceIconSize
 			height: Config.mixerDeviceIconSize
 
+			AppIcon {
+				anchors.centerIn: parent
+				implicitSize: Config.mixerIconSize
+				visible: line.icon !== ""
+				opacity: line.muted ? 0.45 : 1
+				source: line.icon
+			}
+
 			Text {
 				id: lineGlyph
 
 				anchors.centerIn: parent
+				visible: line.icon === ""
 				font.family: Config.fontFamily
 				font.pixelSize: Config.mixerDeviceIconSize
 				color: line.muted ? Config.muted : Config.foreground

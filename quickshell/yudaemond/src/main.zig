@@ -19,6 +19,8 @@ const audio = @import("providers/audio.zig");
 const wallpaper = @import("providers/wallpaper.zig");
 const bar = @import("providers/bar.zig");
 const launcher = @import("providers/launcher.zig");
+const icons = @import("providers/icons.zig");
+const iconsmod = @import("primitives/icons.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
@@ -47,6 +49,7 @@ pub const Context = struct {
 	wallpaper: *wallpaper.Wallpaper,
 	bar: *bar.Bar,
 	launcher: *launcher.Launcher,
+	icons: *icons.Icons,
 	socket_path: []const u8,
 };
 
@@ -114,6 +117,17 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 
 		if (json.flag(net_cmd, "speed")) context.network.speedTest();
 		if (json.flag(net_cmd, "speedCancel")) context.network.speedCancel();
+
+		return;
+	}
+
+	if (json.field(value, "icons")) |icon_cmd| {
+		if (json.field(icon_cmd, "want")) |list| {
+			for (json.list(list)) |item| context.icons.want(json.text(item));
+		}
+
+		const pid = json.integer(json.field(icon_cmd, "pid"));
+		if (pid > 0) context.icons.wantPid(pid);
 
 		return;
 	}
@@ -334,6 +348,10 @@ fn run(io: std.Io) !void {
 	const bar_provider = try bar.Bar.create(allocator, io, hub);
 	try hub.add(bar_provider.provider());
 
+	const icon_resolver = try iconsmod.Icons.create(allocator, io);
+	const icons_provider = try icons.Icons.create(allocator, io, hub, icon_resolver);
+	try hub.add(icons_provider.provider());
+
 	const launcher_provider = try launcher.Launcher.create(allocator, io, hub);
 	launcher_provider.attach(apps_provider, system_provider);
 	try hub.add(launcher_provider.provider());
@@ -361,6 +379,7 @@ fn run(io: std.Io) !void {
 		.wallpaper = wallpaper_provider,
 		.bar = bar_provider,
 		.launcher = launcher_provider,
+		.icons = icons_provider,
 		.socket_path = try socketPath(io, allocator),
 	};
 
@@ -390,6 +409,7 @@ fn run(io: std.Io) !void {
 	try wallpaper_provider.start();
 	try bar_provider.start();
 	try launcher_provider.start();
+	try icons_provider.start();
 
 	hub.publish();
 

@@ -23,6 +23,8 @@ test {
 	_ = @import("providers/wallpaper.zig");
 	_ = @import("providers/bar.zig");
 	_ = @import("providers/launcher.zig");
+	_ = @import("providers/icons.zig");
+	_ = @import("primitives/icons.zig");
 	_ = @import("primitives/hypr.zig");
 	_ = @import("primitives/config.zig");
 	_ = @import("cli.zig");

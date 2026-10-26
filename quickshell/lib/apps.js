@@ -16,55 +16,6 @@ function terminalAppId(cls, title, terminals) {
 	return commandWord(title);
 }
 
-function iconRank(path) {
-	if (path.indexOf("/scalable/") >= 0)
-		return Infinity;
-
-	const match = /(\d+)x\d+/.exec(path);
-
-	return match ? Number(match[1]) : 0;
-}
-
-function iconFiles(text) {
-	const files = {};
-	const ranks = {};
-
-	String(text === undefined || text === null ? "" : text).split("\n").forEach(function (path) {
-		if (path === "")
-			return;
-
-		const name = path.substring(path.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
-		const rank = iconRank(path);
-
-		if (ranks[name] === undefined || rank > ranks[name]) {
-			ranks[name] = rank;
-			files[name] = path;
-		}
-	});
-
-	const lower = {};
-
-	for (const key in files)
-		lower[key.toLowerCase()] = files[key];
-
-	return { names: files, lower: lower };
-}
-
-function iconLookup(files, name) {
-	if (!files)
-		return "";
-
-	if (files.names && files.names[name])
-		return files.names[name];
-
-	const lower = String(name).toLowerCase();
-
-	if (files.lower && files.lower[lower])
-		return files.lower[lower];
-
-	return "";
-}
-
 function cleanName(name) {
 	const value = String(name === undefined || name === null ? "" : name).trim();
 
