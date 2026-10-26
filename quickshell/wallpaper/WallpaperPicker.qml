@@ -67,7 +67,6 @@ PanelWindow {
 	property string heroPath: ""
 	property string heroThumb: ""
 	property string heroPreview: ""
-	property bool tilesOn: false
 
 	onCurrentIndexChanged: {
 		root.reveal();
@@ -81,15 +80,6 @@ PanelWindow {
 			return;
 
 		root.setHero();
-		root.tilesOn = false;
-		tileTimer.restart();
-	}
-
-	Timer {
-		id: tileTimer
-
-		interval: 140
-		onTriggered: root.tilesOn = true
 	}
 
 	Timer {
@@ -168,13 +158,6 @@ PanelWindow {
 		anchors.fill: parent
 		color: Config.surface
 		opacity: root.shown ? Config.wallpaperScrim : 0
-
-		Behavior on opacity {
-			NumberAnimation {
-				duration: Config.wallpaperScrimMs
-				easing.type: Easing.OutCubic
-			}
-		}
 	}
 
 	MouseArea {
@@ -200,13 +183,6 @@ PanelWindow {
 		opacity: root.shown ? 1 : 0
 		visible: root.configured && (root.shown || opacity > 0)
 		focus: true
-
-		Behavior on opacity {
-			NumberAnimation {
-				duration: Config.wallpaperScrimMs
-				easing.type: Easing.OutCubic
-			}
-		}
 
 		Keys.onPressed: function (event) {
 			Input.wallpaper(event, root);
@@ -325,7 +301,7 @@ PanelWindow {
 								asynchronous: true
 								retainWhileLoading: true
 								opacity: cell.current ? 1 : Config.wallpaperTileDim
-								source: root.tilesOn ? "file://" + (cell.modelData.thumb || cell.modelData.path) : ""
+								source: "file://" + (cell.modelData.thumb || cell.modelData.path)
 							}
 
 							Rectangle {
