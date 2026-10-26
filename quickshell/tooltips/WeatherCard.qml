@@ -16,6 +16,7 @@ Item {
 	property string query: ""
 	property bool selectQuery: false
 	property int queryStamp: 0
+	property int pickIndex: 0
 
 	readonly property var now: Weather.current || {}
 	readonly property var rows: Weather.days || []
@@ -44,6 +45,9 @@ Item {
 
 	implicitWidth: Config.weatherCardWidth + Config.weatherCardPadding * 2
 	implicitHeight: card.implicitHeight + Config.weatherCardPadding * 2
+
+	onQueryChanged: root.pickIndex = 0
+	onSuggestionRowsChanged: root.pickIndex = Util.clamp(root.pickIndex, 0, Math.max(0, root.suggestionRows.length - 1))
 
 	onPlaceNameChanged: {
 		root.held = true;
@@ -74,6 +78,26 @@ Item {
 			return "";
 
 		return name.toLowerCase().indexOf(typed.toLowerCase()) === 0 ? name.slice(typed.length) : "";
+	}
+
+	function pickRow(step) {
+		const rows = root.suggestionRows;
+
+		if (rows.length === 0)
+			return;
+
+		root.pickIndex = Util.clamp(root.pickIndex + step, 0, rows.length - 1);
+	}
+
+	function takeChosen() {
+		const rows = root.suggestionRows;
+
+		if (rows.length === 0) {
+			root.commitPlace();
+			return;
+		}
+
+		root.pick(rows[Util.clamp(root.pickIndex, 0, rows.length - 1)]);
 	}
 
 	function matchingRows() {
@@ -514,7 +538,19 @@ Item {
 						}
 
 						if (Input.accept(event)) {
-							root.commitPlace();
+							root.takeChosen();
+							event.accepted = true;
+							return;
+						}
+
+						if (event.key === Qt.Key_Down) {
+							root.pickRow(1);
+							event.accepted = true;
+							return;
+						}
+
+						if (event.key === Qt.Key_Up) {
+							root.pickRow(-1);
 							event.accepted = true;
 							return;
 						}
@@ -545,6 +581,7 @@ Item {
 		Item {
 			id: hero
 
+			visible: !root.editing
 			width: card.width
 			height: tempBox.height
 
@@ -690,6 +727,7 @@ Item {
 		Rectangle {
 			id: separator
 
+			visible: !root.editing
 			width: card.width
 			height: Config.weatherSeparator
 			color: Config.weatherSeparatorColor
@@ -698,6 +736,7 @@ Item {
 		Item {
 			id: daysSection
 
+			visible: !root.editing
 			width: card.width
 			height: root.dayHeight
 
@@ -765,81 +804,65 @@ Item {
 				}
 			}
 		}
-	}
+		Repeater {
+			model: root.editing ? root.suggestionRows : []
 
-	Item {
-		id: overlay
+			delegate: Item {
+				id: suggestRow
 
-		x: Config.weatherCardPadding
-		y: Config.weatherCardPadding + header.height + Config.weatherCardGap
-		width: Config.weatherCardWidth
-		height: card.height - header.height - Config.weatherCardGap
-		visible: root.editing
-		z: 10
+				required property var modelData
+				required property int index
 
-		Rectangle {
-			anchors.fill: parent
-			color: Config.surface
-		}
+				readonly property bool chosen: suggestRow.index === root.pickIndex
 
-		Column {
-			id: suggestList
+				width: card.width
+				height: suggestMetrics.height + Config.weatherCardGap
 
-			anchors.left: parent.left
-			anchors.right: parent.right
-			anchors.top: parent.top
-			spacing: 0
+				Highlight {
+					active: suggestRow.chosen || suggestHit.containsMouse
+				}
 
-			Repeater {
-				model: root.suggestionRows
+				Text {
+					id: suggestName
 
-				delegate: Item {
-					id: suggestRow
+					anchors.left: parent.left
+					anchors.leftMargin: Config.weatherCardGap
+					anchors.verticalCenter: parent.verticalCenter
+					width: Math.min(implicitWidth, suggestRow.width * 0.55)
+					elide: Text.ElideRight
+					font.family: Config.fontFamily
+					font.pixelSize: Config.weatherPlaceSize
+					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.foreground
+					text: String(suggestRow.modelData.name || "")
+				}
 
-					required property var modelData
+				Text {
+					anchors.left: suggestName.right
+					anchors.leftMargin: Config.weatherCardGap
+					anchors.right: parent.right
+					anchors.rightMargin: Config.weatherCardGap
+					anchors.verticalCenter: parent.verticalCenter
+					elide: Text.ElideRight
+					font.family: Config.fontFamily
+					font.pixelSize: Config.weatherPlaceSize
+					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.muted
+					text: root.regionOf(suggestRow.modelData)
+				}
 
-					width: suggestList.width
-					height: suggestMetrics.height
+				MouseArea {
+					id: suggestHit
 
-					Text {
-						id: suggestName
+					anchors.fill: parent
+					hoverEnabled: true
 
-						anchors.left: parent.left
-						anchors.verticalCenter: parent.verticalCenter
-						width: Math.min(implicitWidth, suggestRow.width * 0.55)
-						height: suggestMetrics.height
-						elide: Text.ElideRight
-						font.family: Config.fontFamily
-						font.pixelSize: Config.weatherPlaceSize
-						color: suggestHit.containsMouse ? Config.foreground : Config.foreground
-						text: String(suggestRow.modelData.name || "")
-					}
-
-					Text {
-						anchors.left: suggestName.right
-						anchors.leftMargin: 8
-						anchors.right: parent.right
-						anchors.rightMargin: 8
-						anchors.verticalCenter: parent.verticalCenter
-						height: suggestMetrics.height
-						elide: Text.ElideRight
-						font.family: Config.fontFamily
-						font.pixelSize: Config.weatherPlaceSize
-						color: Config.muted
-						text: root.regionOf(suggestRow.modelData)
-					}
-
-					MouseArea {
-						id: suggestHit
-
-						anchors.fill: parent
-						hoverEnabled: true
-						onClicked: root.pick(suggestRow.modelData)
-					}
+					onEntered: root.pickIndex = suggestRow.index
+					onClicked: root.pick(suggestRow.modelData)
 				}
 			}
 		}
+
 	}
+
 
 	Timer {
 		id: weatherSearch
