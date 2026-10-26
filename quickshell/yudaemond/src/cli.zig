@@ -3,6 +3,7 @@ const json = @import("primitives/json.zig");
 const proc = @import("primitives/proc.zig");
 const sock = @import("primitives/sock.zig");
 const benchmod = @import("bench.zig");
+const bench_widgets = @import("bench_widgets.zig");
 const paritymod = @import("parity.zig");
 const mcpmod = @import("mcp.zig");
 
@@ -32,6 +33,8 @@ pub fn fetch(io: Io) ![]u8 {
 		std.process.exit(2);
 	};
 	defer connection.close();
+
+	try connection.writeLine(sock.sync);
 
 	const message = try connection.readLine() orelse {
 		std.debug.print("yudaemond sent no state\n", .{});
@@ -94,6 +97,8 @@ pub fn doctor(io: Io, args: []const []const u8) !void {
 }
 
 pub fn bench(io: Io, args: []const []const u8) !void {
+	if (args.len > 2 and std.mem.eql(u8, args[2], "widgets")) return bench_widgets.run(io, args);
+
 	return benchmod.run(io, args);
 }
 

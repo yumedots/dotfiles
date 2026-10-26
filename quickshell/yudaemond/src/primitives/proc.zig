@@ -153,13 +153,7 @@ pub fn readProcess(io: Io, allocator: Allocator, pid: i32) ?ProcessInfo {
 
 	for (0..name_len) |i| name_out[i] = comm[i];
 
-	var fields = std.mem.tokenizeAny(u8, stat[close + 1 ..], " ");
-	var index: usize = 0;
-	var ticks: i64 = 0;
-
-	while (fields.next()) |field| : (index += 1) {
-		if (index == 11 or index == 12) ticks += std.fmt.parseInt(i64, field, 10) catch 0;
-	}
+	const ticks = parseTicks(stat);
 
 	const statm_path = std.fmt.allocPrint(allocator, "/proc/{d}/statm", .{pid}) catch return null;
 	defer allocator.free(statm_path);
@@ -198,6 +192,53 @@ pub fn listProcesses(io: Io, allocator: Allocator) ![]ProcessInfo {
 pub fn cpuTicks(io: Io, allocator: Allocator, pid: i32) i64 {
 	const info = readProcess(io, allocator, pid) orelse return 0;
 	return info.ticks;
+}
+
+pub fn threadTicks(io: Io, allocator: Allocator, pid: i32) i64 {
+	const path = std.fmt.allocPrint(allocator, "/proc/{d}/task", .{pid}) catch return 0;
+	defer allocator.free(path);
+
+	var dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch return 0;
+	defer dir.close(io);
+
+	var total: i64 = 0;
+	var it = dir.iterate();
+
+	while (it.next(io) catch null) |entry| {
+		_ = std.fmt.parseInt(i32, entry.name, 10) catch continue;
+
+		const stat_path = std.fmt.allocPrint(allocator, "/proc/{d}/task/{s}/stat", .{ pid, entry.name }) catch continue;
+		defer allocator.free(stat_path);
+
+		const stat = readFile(io, allocator, stat_path) catch continue;
+		defer allocator.free(stat);
+
+		total += parseTicks(stat);
+	}
+
+	return total;
+}
+
+pub fn parseTicks(stat: []const u8) i64 {
+	const close = std.mem.lastIndexOfScalar(u8, stat, ')') orelse return 0;
+
+	var fields = std.mem.tokenizeAny(u8, stat[close + 1 ..], " ");
+	var index: usize = 0;
+	var ticks: i64 = 0;
+
+	while (fields.next()) |field| : (index += 1) {
+		if (index == 11 or index == 12) ticks += std.fmt.parseInt(i64, field, 10) catch 0;
+	}
+
+	return ticks;
+}
+
+pub fn running(io: Io, allocator: Allocator, pid: i32) bool {
+	if (pid <= 0) return false;
+	const path = std.fmt.allocPrint(allocator, "/proc/{d}/stat", .{pid}) catch return false;
+	defer allocator.free(path);
+
+	return exists(io, path);
 }
 
 pub fn rssKb(io: Io, allocator: Allocator, pid: i32) i64 {

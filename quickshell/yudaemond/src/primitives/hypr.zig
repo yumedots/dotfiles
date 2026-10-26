@@ -7,6 +7,10 @@ const Io = std.Io;
 pub fn request(io: Io, allocator: Allocator, command: []const u8) ![]u8 {
 	const signature = proc.env(io, allocator, "HYPRLAND_INSTANCE_SIGNATURE") orelse return error.NoHyprland;
 
+	return requestSigned(io, allocator, signature, command);
+}
+
+pub fn requestSigned(io: Io, allocator: Allocator, signature: []const u8, command: []const u8) ![]u8 {
 	const runtime = proc.runtimeDir(io, allocator);
 	const path = try std.fmt.allocPrint(allocator, "{s}/hypr/{s}/.socket.sock", .{ runtime, signature });
 	defer allocator.free(path);

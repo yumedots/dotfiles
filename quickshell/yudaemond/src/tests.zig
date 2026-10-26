@@ -35,6 +35,8 @@ test {
 	_ = @import("primitives/config.zig");
 	_ = @import("cli.zig");
 	_ = @import("bench.zig");
+	_ = @import("bench_widgets.zig");
+	_ = @import("bench_report.zig");
 	_ = @import("parity.zig");
 	_ = @import("mcp.zig");
 	_ = @import("primitives/exec.zig");

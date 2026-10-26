@@ -13,11 +13,16 @@ pub const Result = struct {
 };
 
 pub fn run(io: Io, allocator: Allocator, argv: []const []const u8) !Result {
+	return runEnv(io, allocator, argv, null);
+}
+
+pub fn runEnv(io: Io, allocator: Allocator, argv: []const []const u8, environ_map: ?*const std.process.Environ.Map) !Result {
 	var child = try std.process.spawn(io, .{
 		.argv = argv,
 		.stdin = .ignore,
 		.stdout = .pipe,
 		.stderr = .ignore,
+		.environ_map = environ_map,
 	});
 
 	var buffer: [8192]u8 = undefined;
