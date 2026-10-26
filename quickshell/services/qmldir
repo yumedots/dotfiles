@@ -1,5 +1,4 @@
 module services
-CachedFile 1.0 CachedFile.qml
 Request 1.0 Request.qml
 singleton AppIcons 1.0 AppIcons.qml
 singleton BarInk 1.0 BarInk.qml
