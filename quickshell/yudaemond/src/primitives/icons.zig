@@ -202,7 +202,9 @@ pub const Icons = struct {
 
 		self.ensure();
 
-		if (std.mem.indexOfScalar(u8, name, '/') != null) return name;
+		if (std.mem.indexOfScalar(u8, name, '/') != null) {
+			return if (proc.exists(self.io, name)) name else "";
+		}
 
 		var lower_buf: [160]u8 = undefined;
 		const trimmed = if (std.mem.endsWith(u8, name, ".desktop")) name[0 .. name.len - ".desktop".len] else name;

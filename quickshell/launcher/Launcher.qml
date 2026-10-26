@@ -232,6 +232,16 @@ PanelWindow {
 		});
 	}
 
+	function iconOfEntry(entry) {
+		if (!entry)
+			return "";
+
+		if (entry.kind === "proc")
+			return AppIcons.iconOfPid(entry.pid);
+
+		return entry.appId ? AppIcons.iconOf(entry.appId) : "";
+	}
+
 	function rowGlyph(entry) {
 		return Entries.glyphOf(entry, Config);
 	}
@@ -940,7 +950,7 @@ PanelWindow {
 								height: Config.launcherIconSlot
 
 							readonly property string clipIcon: row.modelData.kind === "clip" && row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : ""
-							readonly property string icon: rowIcon.clipIcon !== "" ? rowIcon.clipIcon : (row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : "")
+							readonly property string icon: rowIcon.clipIcon !== "" ? rowIcon.clipIcon : root.iconOfEntry(row.modelData)
 
 							Text {
 								visible: rowIcon.icon === "" || rowIconImage.status === Image.Error
