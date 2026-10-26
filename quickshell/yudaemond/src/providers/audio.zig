@@ -9,7 +9,7 @@ const Io = std.Io;
 const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
-const pending_ms = 250;
+const pending_ms = 600;
 
 const Write = struct {
 	id: i64,
@@ -63,6 +63,7 @@ const Out = struct {
 	sink: i64,
 	source: i64,
 	hasInput: bool,
+	watch: bool,
 };
 
 pub const Audio = struct {
@@ -151,6 +152,8 @@ pub const Audio = struct {
 		if (exec.run(self.io, self.allocator, argv.items)) |result| {
 			result.deinit(self.allocator);
 		} else |_| {}
+
+		self.sampleSerial();
 	}
 
 	fn takeWrite(self: *Audio) ?Write {
@@ -246,54 +249,7 @@ pub const Audio = struct {
 	fn onEvent(self: *Audio, line: []const u8) void {
 		if (!streamObject(line)) return;
 
-		if (std.mem.indexOf(u8, line, "'change' on ") != null) {
-			if (eventId(line)) |id| {
-				if (self.patchVolume(id)) return;
-			}
-		}
-
 		self.sampleSerial();
-	}
-
-	fn patchVolume(self: *Audio, id: i64) bool {
-		const id_text = std.fmt.allocPrint(self.allocator, "{d}", .{id}) catch return false;
-		defer self.allocator.free(id_text);
-
-		const result = exec.run(self.io, self.allocator, &.{ "wpctl", "get-volume", id_text }) catch return false;
-		defer result.deinit(self.allocator);
-
-		if (result.code != 0) return false;
-
-		const marker = std.mem.indexOf(u8, result.out, "Volume:") orelse return false;
-		const text = std.mem.trim(u8, result.out[marker + "Volume:".len ..], " \n\r");
-		const stop = std.mem.indexOfAny(u8, text, " \n\r") orelse text.len;
-		const level = std.fmt.parseFloat(f64, text[0..stop]) catch return false;
-		const muted = std.mem.indexOf(u8, result.out, "[MUTED]") != null;
-
-		const rounded = @round(level * 1000) / 1000;
-		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
-
-		self.mutex.lockUncancelable(self.io);
-		var found = false;
-
-		for (self.nodes.items) |*node| {
-			if (node.id != id) continue;
-
-			found = true;
-
-			if (now < node.pending_until and node.pending >= 0 and @abs(node.pending - rounded) > 0.01) {
-				continue;
-			}
-
-			node.volume = rounded;
-			node.mute = muted;
-		}
-
-		self.mutex.unlock(self.io);
-
-		if (found) self.hub.publish();
-
-		return found;
 	}
 
 	fn loop(self: *Audio) void {
@@ -594,6 +550,7 @@ pub const Audio = struct {
 			.sink = self.sink,
 			.source = self.source,
 			.hasInput = self.has_input,
+			.watch = self.watch.load(.monotonic),
 		}, .{})});
 	}
 };
@@ -606,17 +563,6 @@ fn streamObject(line: []const u8) bool {
 	}
 
 	return false;
-}
-
-fn eventId(line: []const u8) ?i64 {
-	const at = std.mem.indexOfScalar(u8, line, '#') orelse return null;
-	const rest = line[at + 1 ..];
-
-	var stop: usize = 0;
-	while (stop < rest.len and rest[stop] >= '0' and rest[stop] <= '9') stop += 1;
-	if (stop == 0) return null;
-
-	return std.fmt.parseInt(i64, rest[0..stop], 10) catch null;
 }
 
 const dump_fixture =
@@ -680,10 +626,4 @@ test "only audio objects wake the mixer" {
 	try std.testing.expect(streamObject("Event 'new' on sink-input #118"));
 	try std.testing.expect(!streamObject("Event 'change' on client #90"));
 	try std.testing.expect(!streamObject("Event 'remove' on module #12"));
-}
-
-test "a pactl event carries the node id" {
-	try std.testing.expectEqual(@as(?i64, 52), eventId("Event 'change' on sink #52"));
-	try std.testing.expectEqual(@as(?i64, 118), eventId("Event 'change' on sink-input #118"));
-	try std.testing.expectEqual(@as(?i64, null), eventId("Event 'change' on server"));
 }

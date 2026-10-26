@@ -710,16 +710,13 @@ pub const Launcher = struct {
 	}
 
 	fn savedRows(self: *Launcher, arena: Allocator, rows: *std.ArrayListUnmanaged(Row)) !void {
-		self.mutex.lockUncancelable(self.io);
-		defer self.mutex.unlock(self.io);
-
 		for (self.saved.items) |entry| {
 			try rows.append(arena, .{
 				.id = try std.fmt.allocPrint(arena, "saved:{s}", .{entry.name}),
 				.kind = "saved",
-				.name = entry.name,
+				.name = try arena.dupe(u8, entry.name),
 				.glyph = glyph_command,
-				.command = entry.command,
+				.command = try arena.dupe(u8, entry.command),
 			});
 		}
 	}
@@ -736,16 +733,17 @@ pub const Launcher = struct {
 					if (isIgnored(entry.id)) continue;
 					if (isDropped(entry.id)) continue;
 
+					const id = state.arena.dupe(u8, entry.id) catch continue;
 					const keywords = state.arena.alloc([]const u8, 1) catch continue;
-					keywords[0] = entry.id;
+					keywords[0] = id;
 
 					state.rows.append(state.arena, .{
-						.id = std.fmt.allocPrint(state.arena, "app:{s}", .{entry.id}) catch continue,
+						.id = std.fmt.allocPrint(state.arena, "app:{s}", .{id}) catch continue,
 						.kind = "app",
-						.name = nameAlias(entry.id, entry.name),
+						.name = state.arena.dupe(u8, nameAlias(entry.id, entry.name)) catch continue,
 						.glyph = glyph_fallback,
-						.app_id = entry.id,
-						.command = entry.command,
+						.app_id = id,
+						.command = state.arena.dupe(u8, entry.command) catch continue,
 						.keywords = keywords,
 					}) catch continue;
 				}
@@ -768,12 +766,14 @@ pub const Launcher = struct {
 			if (std.mem.eql(u8, name, "ps")) continue;
 			if (!containsIgnoreCase(name, search)) continue;
 
+			const copy = try arena.dupe(u8, name);
+
 			try rows.append(arena, .{
 				.id = try std.fmt.allocPrint(arena, "proc:{d}", .{entry.pid}),
 				.kind = "proc",
-				.name = name,
+				.name = copy,
 				.glyph = glyph_process,
-				.app_id = name,
+				.app_id = copy,
 				.pid = entry.pid,
 				.value = entry.cpu,
 			});
@@ -781,21 +781,20 @@ pub const Launcher = struct {
 	}
 
 	fn buildClips(self: *Launcher, arena: Allocator, search: []const u8, rows: *std.ArrayListUnmanaged(Row)) !void {
-		self.mutex.lockUncancelable(self.io);
-		defer self.mutex.unlock(self.io);
-
 		for (self.clips.items) |entry| {
 			const name = if (std.mem.eql(u8, entry.kind, "image")) "Image" else entry.text;
 
 			if (!containsIgnoreCase(name, search)) continue;
 
+			const id = try arena.dupe(u8, entry.id);
+
 			try rows.append(arena, .{
-				.id = try std.fmt.allocPrint(arena, "clip:{s}", .{entry.id}),
+				.id = try std.fmt.allocPrint(arena, "clip:{s}", .{id}),
 				.kind = "clip",
-				.name = name,
+				.name = try arena.dupe(u8, name),
 				.glyph = glyph_clip,
-				.app_id = entry.app,
-				.clip_id = entry.id,
+				.app_id = try arena.dupe(u8, entry.app),
+				.clip_id = id,
 				.image = std.mem.eql(u8, entry.kind, "image"),
 			});
 		}
@@ -803,8 +802,6 @@ pub const Launcher = struct {
 
 	fn rank(self: *Launcher, arena: Allocator, rows: []Row, search: []const u8) []Row {
 		var kept: std.ArrayListUnmanaged(Row) = .empty;
-
-		self.mutex.lockUncancelable(self.io);
 
 		for (rows) |row| {
 			if (search.len == 0) {
@@ -832,8 +829,6 @@ pub const Launcher = struct {
 
 			row.power = if (std.mem.eql(u8, row.kind, "action")) 1 else 0;
 		}
-
-		self.mutex.unlock(self.io);
 
 		if (search.len > 0) {
 			std.mem.sort(Row, kept.items, {}, struct {
@@ -890,31 +885,16 @@ pub const Launcher = struct {
 	}
 
 	fn render(self: *Launcher, writer: *Writer) !void {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
 		_ = self.scratch.reset(.retain_capacity);
 		const arena = self.scratch.allocator();
 
-		self.mutex.lockUncancelable(self.io);
-		const query = self.allocator.dupe(u8, self.query) catch "";
-		const forced = self.allocator.dupe(u8, self.forced) catch "";
-		const group = self.allocator.dupe(u8, self.group) catch "";
-		const terminal = self.allocator.dupe(u8, self.terminal) catch "";
-		const clip_text = self.allocator.dupe(u8, self.clip_text) catch "";
-		const clip_path = self.allocator.dupe(u8, self.clip_path) catch "";
-		self.mutex.unlock(self.io);
-
-		defer self.allocator.free(query);
-		defer self.allocator.free(forced);
-		defer self.allocator.free(group);
-		defer self.allocator.free(terminal);
-		defer self.allocator.free(clip_text);
-		defer self.allocator.free(clip_path);
-
-		const state = self.effective(arena, forced, group, query);
+		const state = self.effective(arena, self.forced, self.group, self.query);
 		const rows = self.build(arena, state.mode, state.search) catch &.{};
 
 		var results: std.ArrayListUnmanaged(RowOut) = .empty;
-
-		self.mutex.lockUncancelable(self.io);
 
 		for (rows) |row| {
 			try results.append(arena, .{
@@ -934,8 +914,6 @@ pub const Launcher = struct {
 			});
 		}
 
-		defer self.mutex.unlock(self.io);
-
 		var pins: std.ArrayListUnmanaged([]const u8) = .empty;
 		for (self.pins.items) |pin| try pins.append(arena, pin);
 
@@ -943,10 +921,10 @@ pub const Launcher = struct {
 			.mode = displayMode(state.mode),
 			.prompt = state.prompt,
 			.query = state.search,
-			.terminal = terminal,
+			.terminal = self.terminal,
 			.pins = pins.items,
 			.results = results.items,
-			.clip = .{ .text = clip_text, .path = clip_path },
+			.clip = .{ .text = self.clip_text, .path = self.clip_path },
 		}, .{})});
 	}
 };

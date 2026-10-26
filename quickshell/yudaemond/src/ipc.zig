@@ -147,26 +147,21 @@ pub const Ipc = struct {
 
 	fn markDead(self: *Ipc, client: *Client) void {
 		self.mutex.lockUncancelable(self.io);
-		defer self.mutex.unlock(self.io);
 
 		client.alive = false;
-		_ = std.os.linux.close(client.fd);
-		self.prune();
-	}
 
-	fn prune(self: *Ipc) void {
 		var index: usize = 0;
-		while (index < self.clients.items.len) {
-			const client = self.clients.items[index];
+		while (index < self.clients.items.len) : (index += 1) {
+			if (self.clients.items[index] != client) continue;
 
-			if (client.alive) {
-				index += 1;
-				continue;
-			}
-
-			retire(self.allocator, client, &self.gaze_count);
 			_ = self.clients.swapRemove(index);
+			break;
 		}
+
+		self.mutex.unlock(self.io);
+
+		_ = std.os.linux.close(client.fd);
+		retire(self.allocator, client, &self.gaze_count);
 	}
 
 	pub fn gazeSubscribers(self: *Ipc) usize {
@@ -188,18 +183,11 @@ pub const Ipc = struct {
 		self.mutex.lockUncancelable(self.io);
 		defer self.mutex.unlock(self.io);
 
-		var index: usize = 0;
-		while (index < self.clients.items.len) {
-			const client = self.clients.items[index];
+		for (self.clients.items) |client| {
+			if (!client.alive) continue;
+			if (gaze_only and !client.gaze) continue;
 
-			if (!client.alive) {
-				retire(self.allocator, client, &self.gaze_count);
-				_ = self.clients.swapRemove(index);
-				continue;
-			}
-
-			if (!gaze_only or client.gaze) sendLine(self.io, client, line);
-			index += 1;
+			sendLine(self.io, client, line);
 		}
 	}
 };
@@ -209,13 +197,16 @@ fn sendLine(io: Io, client: *Client, line: []const u8) void {
 	defer client.write_mutex.unlock(io);
 
 	sock.writeAll(client.fd, line) catch {
-		client.alive = false;
+		drop(client);
 		return;
 	};
 
-	sock.writeAll(client.fd, "\n") catch {
-		client.alive = false;
-	};
+	sock.writeAll(client.fd, "\n") catch drop(client);
+}
+
+fn drop(client: *Client) void {
+	client.alive = false;
+	_ = std.os.linux.shutdown(client.fd, std.os.linux.SHUT.RDWR);
 }
 
 fn retire(allocator: Allocator, client: *Client, gaze: *std.atomic.Value(usize)) void {

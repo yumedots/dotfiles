@@ -188,6 +188,10 @@ PanelWindow {
 	readonly property real cardLeft: root.cardX
 	readonly property real cardTop: root.cardY
 
+	onAnchorItemChanged: root.refreshAnchor()
+	onAnchorWindowChanged: root.refreshAnchor()
+
+
 	MouseArea {
 		id: backdrop
 
