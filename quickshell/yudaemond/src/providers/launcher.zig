@@ -749,13 +749,11 @@ pub const Launcher = struct {
 	fn buildProcs(self: *Launcher, arena: Allocator, search: []const u8, rows: *std.ArrayListUnmanaged(Row)) !void {
 		const system = self.system orelse return;
 
-		var top: [sysmod.max_top]sysmod.TopOut = undefined;
-		const count = system.topRows(&top);
+		const all = try system.allRows(arena);
 
-		for (top[0..count]) |*entry| {
+		for (all) |*entry| {
 			const name = entry.getName();
 
-			if (std.mem.eql(u8, name, "ps")) continue;
 			if (!containsIgnoreCase(name, search)) continue;
 
 			const copy = try arena.dupe(u8, name);
@@ -770,6 +768,12 @@ pub const Launcher = struct {
 				.value = entry.cpu,
 			});
 		}
+
+		std.mem.sort(Row, rows.items, {}, struct {
+			fn less(_: void, a: Row, b: Row) bool {
+				return a.value > b.value;
+			}
+		}.less);
 	}
 
 	fn buildClips(self: *Launcher, arena: Allocator, search: []const u8, rows: *std.ArrayListUnmanaged(Row)) !void {
@@ -1103,4 +1107,30 @@ test "clipboard previews know images from text" {
 	try std.testing.expectEqualStrings("helium", sourceOf("1622 Alacritty\n1625 helium\n", "1625"));
 	try std.testing.expectEqualStrings("Alacritty", sourceOf("1622 Alacritty\n1625 helium\n", "1622"));
 	try std.testing.expectEqualStrings("", sourceOf("1622 Alacritty\n", "9"));
+}
+
+test "process rows keep every process, hottest first" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	const system = try sysmod.System.create(allocator, io, &hub);
+	const self = try Launcher.create(allocator, io, &hub);
+	self.system = system;
+
+	try system.all.append(allocator, .{ .pid = 7, .cpu = 0 });
+	try system.all.append(allocator, .{ .pid = 8, .cpu = 9 });
+	try system.all.append(allocator, .{ .pid = 9, .cpu = 3 });
+
+	var rows: std.ArrayListUnmanaged(Row) = .empty;
+
+	try self.buildProcs(allocator, "", &rows);
+
+	try std.testing.expectEqual(3, rows.items.len);
+	try std.testing.expectEqual(@as(i32, 8), rows.items[0].pid);
+	try std.testing.expectEqual(@as(i32, 9), rows.items[1].pid);
+	try std.testing.expectEqual(@as(i32, 7), rows.items[2].pid);
 }

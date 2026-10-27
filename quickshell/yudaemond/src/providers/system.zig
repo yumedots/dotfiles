@@ -119,6 +119,7 @@ pub const System = struct {
 	governor: []u8 = &.{},
 	top: [max_top]Process = @splat(.{}),
 	top_count: usize = 0,
+	all: std.ArrayListUnmanaged(Process) = .empty,
 	mem_top: [max_top]Process = @splat(.{}),
 	mem_count: usize = 0,
 	previous: std.AutoHashMapUnmanaged(i32, i64) = .empty,
@@ -156,6 +157,19 @@ pub const System = struct {
 		}
 
 		return self.top_count;
+	}
+
+	pub fn allRows(self: *System, arena: Allocator) ![]TopOut {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		const out = try arena.alloc(TopOut, self.all.items.len);
+
+		for (self.all.items, 0..) |*entry, index| {
+			out[index] = .{ .pid = entry.pid, .name = entry.comm, .name_len = entry.comm_len, .cpu = entry.cpu };
+		}
+
+		return out;
 	}
 
 	pub fn start(self: *System) !void {
@@ -337,6 +351,7 @@ pub const System = struct {
 
 	fn sampleProcesses(self: *System) void {
 		const list = proc.listProcesses(self.io, self.allocator) catch return;
+		defer self.allocator.free(list);
 		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
 		const seconds = if (self.last_proc_at > 0 and now > self.last_proc_at)
 			@as(f64, @floatFromInt(now - self.last_proc_at)) / 1000.0
@@ -349,6 +364,7 @@ pub const System = struct {
 		var top_count: usize = 0;
 		var mem_top: [max_top]Process = @splat(.{});
 		var mem_count: usize = 0;
+		var all: std.ArrayListUnmanaged(Process) = .empty;
 
 		for (list) |*entry| {
 			const before = self.previous.get(entry.pid) orelse entry.ticks;
@@ -356,15 +372,17 @@ pub const System = struct {
 
 			next.put(self.allocator, entry.pid, entry.ticks) catch continue;
 
-			if (delta <= 0) continue;
-
 			const candidate = Process{
 				.pid = entry.pid,
 				.comm = entry.comm,
 				.comm_len = entry.comm_len,
-				.cpu = cpuPercent(delta, seconds),
+				.cpu = if (delta > 0) cpuPercent(delta, seconds) else 0,
 				.rss_kb = entry.rss_kb,
 			};
+
+			all.append(self.allocator, candidate) catch {};
+
+			if (delta <= 0) continue;
 
 			insertTop(&top, &top_count, candidate);
 			insertTopByMem(&mem_top, &mem_count, candidate);
@@ -374,11 +392,15 @@ pub const System = struct {
 		self.previous = next;
 
 		self.mutex.lockUncancelable(self.io);
+		var previous_all = self.all;
+		self.all = all;
 		self.top = top;
 		self.top_count = top_count;
 		self.mem_top = mem_top;
 		self.mem_count = mem_count;
 		self.mutex.unlock(self.io);
+
+		previous_all.deinit(self.allocator);
 	}
 
 	fn insertTopByMem(list: *[max_top]Process, count: *usize, candidate: Process) void {
@@ -517,4 +539,29 @@ test "cpu percent uses the sample window" {
 	try std.testing.expectApproxEqAbs(@as(f64, 100), cpuPercent(555, 5.55), 0.001);
 	try std.testing.expectApproxEqAbs(@as(f64, 50), cpuPercent(100, 2.0), 0.001);
 	try std.testing.expectEqual(@as(f64, 0), cpuPercent(10, 0));
+}
+
+test "the full list reports every sampled process" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	const system = try System.create(allocator, io, &hub);
+
+	var idle = Process{ .pid = 42, .rss_kb = 8 };
+	@memcpy(idle.comm[0..7], "kthread");
+	idle.comm_len = 7;
+	try system.all.append(allocator, idle);
+
+	try system.all.append(allocator, .{ .pid = 43, .cpu = 12.5 });
+
+	const rows = try system.allRows(allocator);
+
+	try std.testing.expectEqual(2, rows.len);
+	try std.testing.expectEqual(@as(i32, 42), rows[0].pid);
+	try std.testing.expectEqualStrings("kthread", rows[0].getName());
+	try std.testing.expectEqual(@as(f64, 12.5), rows[1].cpu);
 }
