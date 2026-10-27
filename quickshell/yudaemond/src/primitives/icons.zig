@@ -24,15 +24,11 @@ pub const Icons = struct {
 	}
 
 	pub fn ensure(self: *Icons) void {
-		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
-
 		self.mutex.lockUncancelable(self.io);
-		const stale = self.scanned_at == 0 or now - self.scanned_at > 300_000;
+		const empty = self.scanned_at == 0;
 		self.mutex.unlock(self.io);
 
-		if (!stale) return;
-
-		self.scan();
+		if (empty) self.scan();
 	}
 
 	pub fn scan(self: *Icons) void {

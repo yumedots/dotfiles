@@ -408,6 +408,7 @@ fn run(io: std.Io) !void {
 
 	const icon_resolver = try iconsmod.Icons.create(allocator, io);
 	const icons_provider = try icons.Icons.create(allocator, io, hub, icon_resolver);
+	icons_provider.attach(apps_provider);
 	try hub.add(icons_provider.provider());
 
 	const launcher_provider = try launcher.Launcher.create(allocator, io, hub);
