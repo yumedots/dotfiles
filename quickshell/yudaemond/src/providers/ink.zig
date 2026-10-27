@@ -6,6 +6,7 @@ const fmt = @import("../primitives/fmt.zig");
 const proc = @import("../primitives/proc.zig");
 const sleep = @import("../primitives/sleep.zig");
 const watch = @import("../primitives/watch.zig");
+const hypr = @import("../primitives/hypr.zig");
 const wallpaper = @import("wallpaper.zig");
 
 const Allocator = std.mem.Allocator;
@@ -35,6 +36,11 @@ const Stamp = struct {
 	size: i64,
 };
 
+const Size = struct {
+	width: i64,
+	height: i64,
+};
+
 const Target = struct {
 	name: []const u8,
 	width: i64,
@@ -62,6 +68,7 @@ pub const Ink = struct {
 	inks: std.StringHashMapUnmanaged([]u8) = .empty,
 	verdicts: std.StringHashMapUnmanaged(Verdict) = .empty,
 	attempted: std.StringHashMapUnmanaged(Stamp) = .empty,
+	out_size: ?Size = null,
 	wallpaper: ?*wallpaper.Wallpaper = null,
 	generation: std.atomic.Value(u64) = .init(0),
 	scans: std.atomic.Value(u64) = .init(0),
@@ -236,7 +243,7 @@ pub const Ink = struct {
 
 		self.mutex.lockUncancelable(self.io);
 		if (self.verdicts.get(path)) |verdict| {
-			if (fresh(verdict, stamp, self.band, null)) colour = paintOf(verdict.ink);
+			if (fresh(verdict, stamp, self.band, self.out_size)) colour = paintOf(verdict.ink);
 		}
 		self.mutex.unlock(self.io);
 
@@ -302,7 +309,15 @@ pub const Ink = struct {
 
 		if (result.code != 0) return null;
 
-		return targetOf(allocator, result.out);
+		const target = targetOf(allocator, result.out, focused(self.io, allocator)) orelse return null;
+
+		// awww frames the wallpaper on the canvas the query reports for that output, so the
+		// cached verdict only holds while the output still has that size
+		self.mutex.lockUncancelable(self.io);
+		self.out_size = .{ .width = target.width, .height = target.height };
+		self.mutex.unlock(self.io);
+
+		return target;
 	}
 
 	fn measure(self: *Ink, path: []const u8, target: Target, band: i64) void {
@@ -360,7 +375,9 @@ pub const Ink = struct {
 
 		const verdict = self.verdicts.get(path) orelse return false;
 
-		return fresh(verdict, stamp, band, target);
+		const size: ?Size = if (target) |want| .{ .width = want.width, .height = want.height } else null;
+
+		return fresh(verdict, stamp, band, size);
 	}
 
 	fn tried(self: *Ink, path: []const u8, stamp: Stamp) bool {
@@ -898,12 +915,12 @@ fn colourOf(raw: []const u8) ?[]const u8 {
 /// A verdict only holds for the same file and the same measurement: the band is global, so a
 /// band change invalidates every entry, and a mode change invalidates the ones measured at the
 /// old output size. Passing no target skips the size when the caller cannot know it yet.
-fn fresh(verdict: Verdict, stamp: Stamp, band: i64, target: ?Target) bool {
+fn fresh(verdict: Verdict, stamp: Stamp, band: i64, size: ?Size) bool {
 	if (verdict.mtime != stamp.mtime) return false;
 	if (verdict.size != stamp.size) return false;
 	if (verdict.band != band) return false;
 
-	if (target) |want| {
+	if (size) |want| {
 		if (verdict.width != want.width or verdict.height != want.height) return false;
 	}
 
@@ -939,8 +956,11 @@ fn measuredOf(raw: []const u8) ?[]const u8 {
 }
 
 /// `awww query` prints one line per output: `: DP-2: 1920x1080, scale: 1.3333334, ...`. The
-/// size is the canvas awww draws on, which is what `awww ink` has to be told to match it.
-fn targetOf(allocator: Allocator, raw: []const u8) ?Target {
+/// size is the canvas awww draws on, which is what `awww ink` has to be told to match it, and
+/// the line that counts is the output the wallpaper is shown on, not whichever line comes first.
+fn targetOf(allocator: Allocator, raw: []const u8, wanted: []const u8) ?Target {
+	var fallback: ?Target = null;
+
 	var lines = std.mem.splitScalar(u8, raw, '\n');
 
 	while (lines.next()) |line| {
@@ -959,14 +979,30 @@ fn targetOf(allocator: Allocator, raw: []const u8) ?Target {
 
 		if (name.len == 0 or width <= 0 or height <= 0) continue;
 
-		return .{
+		const target: Target = .{
 			.name = allocator.dupe(u8, name) catch return null,
 			.width = width,
 			.height = height,
 		};
+
+		if (wanted.len > 0 and std.mem.eql(u8, name, wanted)) return target;
+		if (fallback == null) fallback = target;
 	}
 
-	return null;
+	return fallback;
+}
+
+fn focused(io: Io, allocator: Allocator) []const u8 {
+	const raw = hypr.request(io, allocator, "j/monitors") catch return "";
+	const parsed = json.parse(allocator, raw) catch return "";
+
+	for (json.list(parsed.value)) |monitor| {
+		if (!json.flag(monitor, "focused")) continue;
+
+		return json.textAt(monitor, "name");
+	}
+
+	return "";
 }
 
 fn verdictOf(allocator: Allocator, value: json.Value) ?Verdict {
@@ -1069,7 +1105,7 @@ test "a cached verdict only holds for the file, band and size it was measured wi
 	};
 
 	const stamp: Stamp = .{ .mtime = 100, .size = 4096 };
-	const target: Target = .{ .name = "DP-2", .width = 1920, .height = 1080 };
+	const target: Size = .{ .width = 1920, .height = 1080 };
 
 	try std.testing.expect(fresh(verdict, stamp, 33, target));
 	try std.testing.expect(fresh(verdict, stamp, 33, null));
@@ -1077,7 +1113,7 @@ test "a cached verdict only holds for the file, band and size it was measured wi
 	try std.testing.expect(!fresh(verdict, .{ .mtime = 101, .size = 4096 }, 33, target));
 	try std.testing.expect(!fresh(verdict, .{ .mtime = 100, .size = 8192 }, 33, target));
 	try std.testing.expect(!fresh(verdict, stamp, 34, target));
-	try std.testing.expect(!fresh(verdict, stamp, 33, .{ .name = "DP-2", .width = 2560, .height = 1440 }));
+	try std.testing.expect(!fresh(verdict, stamp, 33, .{ .width = 1280, .height = 720 }));
 }
 
 test "a verdict survives the round trip through the cache file" {
@@ -1120,11 +1156,18 @@ test "the measurement reads back from awww ink and awww query" {
 	defer arena.deinit();
 
 	const line = ": DP-2: 1920x1080, scale: 1.3333334, currently displaying: image: /home/me/wall.png, ink: black (#484953)";
-	const target = targetOf(arena.allocator(), line).?;
+	const target = targetOf(arena.allocator(), line, "").?;
 
 	try std.testing.expectEqualStrings("DP-2", target.name);
 	try std.testing.expectEqual(@as(i64, 1920), target.width);
 	try std.testing.expectEqual(@as(i64, 1080), target.height);
 
-	try std.testing.expect(targetOf(arena.allocator(), "nothing here") == null);
+	try std.testing.expect(targetOf(arena.allocator(), "nothing here", "") == null);
+
+	const both = ": eDP-1: 1280x720, scale: 1.0, currently displaying: image: /home/me/wall.png, ink: white (#e2e2e2)\n" ++ line;
+	const shown = targetOf(arena.allocator(), both, "DP-2").?;
+
+	try std.testing.expectEqualStrings("DP-2", shown.name);
+	try std.testing.expectEqual(@as(i64, 1920), shown.width);
+	try std.testing.expectEqual(@as(i64, 1280), targetOf(arena.allocator(), both, "").?.width);
 }
