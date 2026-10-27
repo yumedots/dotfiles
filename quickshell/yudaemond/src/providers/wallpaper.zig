@@ -47,6 +47,11 @@ const Out = struct {
 	list: []EntryOut,
 };
 
+pub const Hook = struct {
+	ctx: *anyopaque,
+	run: *const fn (ctx: *anyopaque) void,
+};
+
 pub const Wallpaper = struct {
 	allocator: Allocator,
 	io: Io,
@@ -58,6 +63,7 @@ pub const Wallpaper = struct {
 	cache: []u8 = &.{},
 	entries: std.ArrayListUnmanaged(Entry) = .empty,
 	seen_at: std.Io.Timestamp = .zero,
+	hook: ?Hook = null,
 	working: std.atomic.Value(bool) = .init(false),
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Wallpaper {
@@ -154,6 +160,27 @@ pub const Wallpaper = struct {
 		self.hub.publish();
 		self.prune(cache);
 		self.ensureWorker();
+
+		if (self.hook) |hook| hook.run(hook.ctx);
+	}
+
+	pub fn onRescan(self: *Wallpaper, hook: Hook) void {
+		self.hook = hook;
+	}
+
+	pub fn paths(self: *Wallpaper, allocator: Allocator) ![][]const u8 {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		const out = try allocator.alloc([]const u8, self.entries.items.len);
+		var count: usize = 0;
+
+		for (self.entries.items) |entry| {
+			out[count] = allocator.dupe(u8, entry.path) catch continue;
+			count += 1;
+		}
+
+		return out[0..count];
 	}
 
 	fn derive(self: *Wallpaper, entry: *Entry, cache: []const u8) void {

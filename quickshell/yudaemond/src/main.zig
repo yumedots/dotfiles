@@ -388,6 +388,7 @@ fn run(io: std.Io) !void {
 
 	const ink_provider = try ink.Ink.create(allocator, io, hub);
 	ink_provider.attach(wallpaper_provider);
+	wallpaper_provider.onRescan(.{ .ctx = ink_provider, .run = ink.Ink.rescanned });
 	try hub.add(ink_provider.provider());
 
 	const bar_provider = try bar.Bar.create(allocator, io, hub);

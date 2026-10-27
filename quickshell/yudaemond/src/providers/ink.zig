@@ -14,14 +14,40 @@ const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
 const state_file = ".config/quickshell/cache/bar-ink.json";
+const verdict_file = ".config/quickshell/yudaemond/cache/wallpaper-ink.json";
 const daemon_bin = "/usr/bin/awww-daemon";
 const ink_prefix = "awww-ink-";
 const black_ink = "#000000";
 const white_ink = "#ffffff";
+const ink_black = "black";
+const ink_white = "white";
+const measure_gap_ms = 2000;
+const settle_ms = 550;
+const max_band = 255;
 
 const State = struct {
 	bare: bool,
 	band: i64,
+};
+
+const Stamp = struct {
+	mtime: i64,
+	size: i64,
+};
+
+const Target = struct {
+	name: []const u8,
+	width: i64,
+	height: i64,
+};
+
+const Verdict = struct {
+	mtime: i64,
+	size: i64,
+	band: i64,
+	width: i64,
+	height: i64,
+	ink: []u8,
 };
 
 pub const Ink = struct {
@@ -29,12 +55,17 @@ pub const Ink = struct {
 	io: Io,
 	hub: *Hub,
 	mutex: std.Io.Mutex = .init,
+	save_mutex: std.Io.Mutex = .init,
 	show_mutex: std.Io.Mutex = .init,
 	bare: bool = false,
 	band: i64 = 0,
 	inks: std.StringHashMapUnmanaged([]u8) = .empty,
+	verdicts: std.StringHashMapUnmanaged(Verdict) = .empty,
+	attempted: std.StringHashMapUnmanaged(Stamp) = .empty,
 	wallpaper: ?*wallpaper.Wallpaper = null,
 	generation: std.atomic.Value(u64) = .init(0),
+	scans: std.atomic.Value(u64) = .init(0),
+	working: std.atomic.Value(bool) = .init(false),
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Ink {
 		const self = try allocator.create(Ink);
@@ -61,6 +92,7 @@ pub const Ink = struct {
 	}
 
 	pub fn start(self: *Ink) !void {
+		self.openCache();
 		self.load();
 		_ = self.refresh(null);
 
@@ -71,6 +103,8 @@ pub const Ink = struct {
 		watcher.detach();
 
 		if (self.bare) self.reapply();
+
+		self.schedule();
 	}
 
 	pub fn set(self: *Ink, band: i64, bare: ?bool) void {
@@ -83,7 +117,10 @@ pub const Ink = struct {
 		self.persist();
 		self.hub.publish();
 
-		if (changed) self.reapply();
+		if (changed) {
+			self.reapply();
+			self.schedule();
+		}
 	}
 
 	pub fn apply(self: *Ink, path: []const u8, band: i64) void {
@@ -96,6 +133,7 @@ pub const Ink = struct {
 
 		if (changed) self.persist();
 
+		self.preload(path);
 		self.sync(path);
 	}
 
@@ -151,6 +189,7 @@ pub const Ink = struct {
 
 		argv.append(allocator, path) catch return;
 
+		const stamp = self.stampOf(path);
 		const started = fmt.nowMs(self.io);
 		const result = exec.run(self.io, self.allocator, argv.items) catch return;
 		defer result.deinit(self.allocator);
@@ -161,6 +200,376 @@ pub const Ink = struct {
 		// awww measured the band of the frame it just drew and published the verdict; read it
 		// back rather than leaning on the fade timer
 		_ = self.refresh(generation);
+
+		self.settle(path, stamp, generation);
+	}
+
+	/// The fade writes one ink file per drawn frame, so the cache is only confirmed once the
+	/// transition has settled, off the apply thread.
+	fn settle(self: *Ink, path: []const u8, stamp: ?Stamp, generation: u64) void {
+		const copy = self.allocator.dupe(u8, path) catch return;
+
+		const thread = std.Thread.spawn(.{}, settleThunk, .{ self, copy, stamp, generation }) catch {
+			self.allocator.free(copy);
+			return;
+		};
+
+		thread.detach();
+	}
+
+	fn settleThunk(self: *Ink, path: []u8, stamp: ?Stamp, generation: u64) void {
+		defer self.allocator.free(path);
+
+		sleep.ms(settle_ms);
+
+		if (self.generation.load(.monotonic) != generation) return;
+
+		_ = self.refresh(generation);
+
+		self.confirm(path, stamp);
+	}
+
+	fn preload(self: *Ink, path: []const u8) void {
+		const stamp = self.stampOf(path) orelse return;
+
+		var colour: []const u8 = "";
+
+		self.mutex.lockUncancelable(self.io);
+		if (self.verdicts.get(path)) |verdict| {
+			if (fresh(verdict, stamp, self.band, null)) colour = paintOf(verdict.ink);
+		}
+		self.mutex.unlock(self.io);
+
+		if (colour.len == 0) return;
+
+		self.paint(colour);
+	}
+
+	fn paint(self: *Ink, colour: []const u8) void {
+		var changed = false;
+
+		self.mutex.lockUncancelable(self.io);
+		var it = self.inks.iterator();
+		while (it.next()) |entry| {
+			if (std.mem.eql(u8, entry.value_ptr.*, colour)) continue;
+
+			const copy = self.allocator.dupe(u8, colour) catch continue;
+			self.allocator.free(entry.value_ptr.*);
+			entry.value_ptr.* = copy;
+			changed = true;
+		}
+		self.mutex.unlock(self.io);
+
+		if (changed) self.hub.publish();
+	}
+
+	fn confirm(self: *Ink, path: []const u8, stamp: ?Stamp) void {
+		const wanted = stamp orelse return;
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const target = self.outputSize(arena.allocator()) orelse return;
+
+		var ink: []const u8 = "";
+
+		self.mutex.lockUncancelable(self.io);
+		if (self.inks.get(target.name)) |colour| ink = inkOf(colour) orelse "";
+		const band = self.band;
+		self.mutex.unlock(self.io);
+
+		if (ink.len == 0 or band <= 0) return;
+		if (!self.store(path, wanted, band, target, ink)) return;
+
+		self.saveVerdicts();
+	}
+
+	fn outputSize(self: *Ink, allocator: Allocator) ?Target {
+		var attempt: usize = 0;
+
+		while (attempt < 2) : (attempt += 1) {
+			if (self.querySize(allocator)) |target| return target;
+
+			sleep.ms(400);
+		}
+
+		return null;
+	}
+
+	fn querySize(self: *Ink, allocator: Allocator) ?Target {
+		const result = exec.run(self.io, self.allocator, &.{ "awww", "query" }) catch return null;
+		defer result.deinit(self.allocator);
+
+		if (result.code != 0) return null;
+
+		return targetOf(allocator, result.out);
+	}
+
+	fn measure(self: *Ink, path: []const u8, target: Target, band: i64) void {
+		const stamp = self.stampOf(path) orelse return;
+
+		self.remember(path, stamp);
+
+		const ink = self.measureInk(path, target, band) orelse return;
+
+		if (self.store(path, stamp, band, target, ink)) self.saveVerdicts();
+
+		sleep.ms(measure_gap_ms);
+	}
+
+	fn measureInk(self: *Ink, path: []const u8, target: Target, band: i64) ?[]const u8 {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+
+		const rows = std.fmt.allocPrint(allocator, "{d}", .{@min(band, max_band)}) catch return null;
+		const width = std.fmt.allocPrint(allocator, "{d}", .{target.width}) catch return null;
+		const height = std.fmt.allocPrint(allocator, "{d}", .{target.height}) catch return null;
+
+		const result = exec.run(self.io, self.allocator, &.{ "awww", "ink", "--width", width, "--height", height, "--band", rows, path }) catch return null;
+		defer result.deinit(self.allocator);
+
+		if (result.code != 0) return null;
+
+		return measuredOf(result.out);
+	}
+
+	fn plan(self: *Ink, allocator: Allocator, band: i64, target: ?Target) [][]const u8 {
+		var out: std.ArrayListUnmanaged([]const u8) = .empty;
+
+		const source = self.wallpaper orelse return out.items;
+		const paths = source.paths(allocator) catch return out.items;
+
+		for (paths) |path| {
+			const stamp = self.stampOf(path) orelse continue;
+			if (self.settled(path, stamp, band, target)) continue;
+			if (self.tried(path, stamp)) continue;
+
+			out.append(allocator, path) catch continue;
+		}
+
+		self.dropGone(allocator);
+
+		return out.items;
+	}
+
+	fn settled(self: *Ink, path: []const u8, stamp: Stamp, band: i64, target: ?Target) bool {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		const verdict = self.verdicts.get(path) orelse return false;
+
+		return fresh(verdict, stamp, band, target);
+	}
+
+	fn tried(self: *Ink, path: []const u8, stamp: Stamp) bool {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		const seen = self.attempted.get(path) orelse return false;
+
+		return seen.mtime == stamp.mtime and seen.size == stamp.size;
+	}
+
+	fn remember(self: *Ink, path: []const u8, stamp: Stamp) void {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		const key = self.allocator.dupe(u8, path) catch return;
+
+		const entry = self.attempted.getOrPut(self.allocator, key) catch {
+			self.allocator.free(key);
+			return;
+		};
+
+		if (entry.found_existing) self.allocator.free(key);
+
+		entry.value_ptr.* = stamp;
+	}
+
+	fn store(self: *Ink, path: []const u8, stamp: Stamp, band: i64, target: Target, ink: []const u8) bool {
+		const next: Verdict = .{
+			.mtime = stamp.mtime,
+			.size = stamp.size,
+			.band = band,
+			.width = target.width,
+			.height = target.height,
+			.ink = self.allocator.dupe(u8, ink) catch return false,
+		};
+
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		if (self.verdicts.getPtr(path)) |slot| {
+			if (sameVerdict(slot.*, next)) {
+				self.allocator.free(next.ink);
+				return false;
+			}
+
+			self.allocator.free(slot.ink);
+			slot.* = next;
+			return true;
+		}
+
+		const key = self.allocator.dupe(u8, path) catch {
+			self.allocator.free(next.ink);
+			return false;
+		};
+
+		self.verdicts.put(self.allocator, key, next) catch {
+			self.allocator.free(key);
+			self.allocator.free(next.ink);
+			return false;
+		};
+
+		return true;
+	}
+
+	fn drop(self: *Ink, path: []const u8) void {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		if (self.verdicts.fetchRemove(path)) |entry| {
+			self.allocator.free(entry.key);
+			self.allocator.free(entry.value.ink);
+		}
+
+		if (self.attempted.fetchRemove(path)) |entry| self.allocator.free(entry.key);
+	}
+
+	/// Drops the cache entries of wallpapers that are gone, so a deleted file does not keep a
+	/// verdict the next wallpaper of the same name would inherit.
+	fn dropGone(self: *Ink, allocator: Allocator) void {
+		var gone: std.ArrayListUnmanaged([]const u8) = .empty;
+
+		self.mutex.lockUncancelable(self.io);
+		var it = self.verdicts.keyIterator();
+		while (it.next()) |key| {
+			if (proc.exists(self.io, key.*)) continue;
+			gone.append(allocator, allocator.dupe(u8, key.*) catch continue) catch continue;
+		}
+		self.mutex.unlock(self.io);
+
+		if (gone.items.len == 0) return;
+
+		std.debug.print("DBG ink drop gone={d}\n", .{gone.items.len});
+
+		for (gone.items) |path| self.drop(path);
+
+		self.saveVerdicts();
+	}
+
+	fn stampOf(self: *Ink, path: []const u8) ?Stamp {
+		const stat = std.Io.Dir.cwd().statFile(self.io, path, .{}) catch return null;
+
+		return .{ .mtime = @intCast(stat.mtime.nanoseconds), .size = @intCast(stat.size) };
+	}
+
+	pub fn rescanned(ctx: *anyopaque) void {
+		const self: *Ink = @ptrCast(@alignCast(ctx));
+
+		self.schedule();
+	}
+
+	/// A pass that is already running picks the scan up on its next round; one that is just
+	/// finishing restarts, so a scan landing between the last round and the exit is not lost.
+	fn schedule(self: *Ink) void {
+		_ = self.scans.fetchAdd(1, .monotonic);
+
+		self.ensureWorker();
+	}
+
+	fn ensureWorker(self: *Ink) void {
+		if (self.working.swap(true, .acquire)) return;
+
+		const thread = std.Thread.spawn(.{}, workLoop, .{self}) catch {
+			self.working.store(false, .release);
+			return;
+		};
+
+		thread.detach();
+	}
+
+	fn workLoop(self: *Ink) void {
+		var seen = self.scans.load(.monotonic);
+
+		while (true) {
+			if (!self.round()) continue;
+			if (self.scans.load(.monotonic) == seen) break;
+
+			seen = self.scans.load(.monotonic);
+		}
+
+		self.working.store(false, .release);
+
+		if (self.scans.load(.monotonic) != seen) self.ensureWorker();
+	}
+
+	/// Measures one wallpaper per pass, at a gentle rate, so the daemon stays cheap while the
+	/// cache fills. Returns true when there is nothing left to measure.
+	fn round(self: *Ink) bool {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+		const target = self.outputSize(allocator);
+
+		const band = self.bandNow();
+		const jobs = self.plan(allocator, band, target);
+
+		if (jobs.len == 0) return true;
+		if (target == null or band <= 0) return true;
+
+		for (jobs) |path| self.measure(path, target.?, band);
+
+		return false;
+	}
+
+	fn bandNow(self: *Ink) i64 {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		return self.band;
+	}
+
+	fn saveVerdicts(self: *Ink) void {
+		self.save_mutex.lockUncancelable(self.io);
+		defer self.save_mutex.unlock(self.io);
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+		const path = std.fmt.allocPrint(allocator, "{s}/{s}", .{ proc.home(self.io, self.allocator), verdict_file }) catch return;
+
+		const body = self.verdictBody(allocator) orelse return;
+		proc.writeFileAtomic(self.io, self.allocator, path, body) catch return;
+	}
+
+	fn verdictBody(self: *Ink, allocator: Allocator) ?[]const u8 {
+		var buffer: Writer.Allocating = .init(allocator);
+
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		buffer.writer.writeAll("{\"files\":{") catch return null;
+
+		var first = true;
+		var it = self.verdicts.iterator();
+
+		while (it.next()) |entry| {
+			if (!first) buffer.writer.writeAll(",") catch return null;
+			first = false;
+
+			json.write(&buffer.writer, entry.key_ptr.*) catch return null;
+			buffer.writer.writeAll(":") catch return null;
+			writeVerdict(&buffer.writer, entry.value_ptr.*) catch return null;
+		}
+
+		buffer.writer.writeAll("}}") catch return null;
+
+		return buffer.toOwnedSlice() catch null;
 	}
 
 	fn refresh(self: *Ink, generation: ?u64) bool {
@@ -366,6 +775,57 @@ pub const Ink = struct {
 		}
 
 		self.mutex.unlock(self.io);
+
+		self.loadVerdicts();
+	}
+
+	fn openCache(self: *Ink) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const dir = std.fmt.allocPrint(arena.allocator(), "{s}/.config/quickshell/yudaemond/cache", .{proc.home(self.io, self.allocator)}) catch return;
+
+		std.Io.Dir.cwd().createDirPath(self.io, dir) catch {};
+	}
+
+	fn loadVerdicts(self: *Ink) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+		const path = std.fmt.allocPrint(allocator, "{s}/{s}", .{ proc.home(self.io, self.allocator), verdict_file }) catch return;
+
+		const raw = proc.readFile(self.io, allocator, path) catch return;
+		const parsed = json.parse(allocator, raw) catch return;
+
+		const files = json.field(parsed.value, "files") orelse return;
+		if (files != .object) return;
+
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		var it = files.object.iterator();
+		while (it.next()) |entry| {
+			const verdict = verdictOf(allocator, entry.value_ptr.*) orelse continue;
+
+			const key = self.allocator.dupe(u8, entry.key_ptr.*) catch continue;
+			const ink = self.allocator.dupe(u8, verdict.ink) catch {
+				self.allocator.free(key);
+				continue;
+			};
+
+			self.verdicts.put(self.allocator, key, .{
+				.mtime = verdict.mtime,
+				.size = verdict.size,
+				.band = verdict.band,
+				.width = verdict.width,
+				.height = verdict.height,
+				.ink = ink,
+			}) catch {
+				self.allocator.free(key);
+				self.allocator.free(ink);
+			};
+		}
 	}
 
 	fn keepDaemon(self: *Ink) void {
@@ -435,6 +895,108 @@ fn colourOf(raw: []const u8) ?[]const u8 {
 	return null;
 }
 
+/// A verdict only holds for the same file and the same measurement: the band is global, so a
+/// band change invalidates every entry, and a mode change invalidates the ones measured at the
+/// old output size. Passing no target skips the size when the caller cannot know it yet.
+fn fresh(verdict: Verdict, stamp: Stamp, band: i64, target: ?Target) bool {
+	if (verdict.mtime != stamp.mtime) return false;
+	if (verdict.size != stamp.size) return false;
+	if (verdict.band != band) return false;
+
+	if (target) |want| {
+		if (verdict.width != want.width or verdict.height != want.height) return false;
+	}
+
+	return true;
+}
+
+fn sameVerdict(a: Verdict, b: Verdict) bool {
+	return a.mtime == b.mtime and a.size == b.size and a.band == b.band and
+		a.width == b.width and a.height == b.height and std.mem.eql(u8, a.ink, b.ink);
+}
+
+fn paintOf(ink: []const u8) []const u8 {
+	return if (std.mem.eql(u8, ink, ink_black)) black_ink else white_ink;
+}
+
+fn inkOf(colour: []const u8) ?[]const u8 {
+	if (std.mem.eql(u8, colour, black_ink)) return ink_black;
+	if (std.mem.eql(u8, colour, white_ink)) return ink_white;
+
+	return null;
+}
+
+/// `awww ink` prints the verdict and the band's mean luminance; only the verdict is kept.
+fn measuredOf(raw: []const u8) ?[]const u8 {
+	var words = std.mem.tokenizeAny(u8, raw, " \t\r\n");
+
+	const first = words.next() orelse return null;
+
+	if (std.mem.eql(u8, first, ink_black)) return ink_black;
+	if (std.mem.eql(u8, first, ink_white)) return ink_white;
+
+	return null;
+}
+
+/// `awww query` prints one line per output: `: DP-2: 1920x1080, scale: 1.3333334, ...`. The
+/// size is the canvas awww draws on, which is what `awww ink` has to be told to match it.
+fn targetOf(allocator: Allocator, raw: []const u8) ?Target {
+	var lines = std.mem.splitScalar(u8, raw, '\n');
+
+	while (lines.next()) |line| {
+		const opened = std.mem.indexOf(u8, line, ": ") orelse continue;
+		const rest = line[opened + 2 ..];
+		const stop = std.mem.indexOfScalar(u8, rest, ',') orelse rest.len;
+		const head = rest[0..stop];
+
+		const split = std.mem.lastIndexOf(u8, head, ": ") orelse continue;
+		const name = std.mem.trim(u8, head[0..split], " \t");
+		const dim = head[split + 2 ..];
+
+		const x = std.mem.indexOfScalar(u8, dim, 'x') orelse continue;
+		const width = std.fmt.parseInt(i64, dim[0..x], 10) catch continue;
+		const height = std.fmt.parseInt(i64, dim[x + 1 ..], 10) catch continue;
+
+		if (name.len == 0 or width <= 0 or height <= 0) continue;
+
+		return .{
+			.name = allocator.dupe(u8, name) catch return null,
+			.width = width,
+			.height = height,
+		};
+	}
+
+	return null;
+}
+
+fn verdictOf(allocator: Allocator, value: json.Value) ?Verdict {
+	const ink = json.textAt(value, "ink");
+
+	if (!std.mem.eql(u8, ink, ink_black) and !std.mem.eql(u8, ink, ink_white)) return null;
+
+	return .{
+		.mtime = json.integer(json.field(value, "mtime")),
+		.size = json.integer(json.field(value, "size")),
+		.band = json.integer(json.field(value, "band")),
+		.width = json.integer(json.field(value, "width")),
+		.height = json.integer(json.field(value, "height")),
+		.ink = allocator.dupe(u8, ink) catch return null,
+	};
+}
+
+fn writeVerdict(writer: *Writer, verdict: Verdict) !void {
+	try writer.print("{{\"mtime\":{d},\"size\":{d},\"band\":{d},\"width\":{d},\"height\":{d},\"ink\":", .{
+		verdict.mtime,
+		verdict.size,
+		verdict.band,
+		verdict.width,
+		verdict.height,
+	});
+
+	try json.write(writer, verdict.ink);
+	try writer.writeAll("}");
+}
+
 fn sameInks(a: *const std.StringHashMapUnmanaged([]u8), b: *const std.StringHashMapUnmanaged([]u8)) bool {
 	if (a.count() != b.count()) return false;
 
@@ -494,4 +1056,75 @@ test "the ink map keeps every output" {
 	try b.put(std.testing.allocator, key2, value2);
 
 	try std.testing.expect(sameInks(&a, &b));
+}
+
+test "a cached verdict only holds for the file, band and size it was measured with" {
+	const verdict: Verdict = .{
+		.mtime = 100,
+		.size = 4096,
+		.band = 33,
+		.width = 1920,
+		.height = 1080,
+		.ink = @constCast(ink_black),
+	};
+
+	const stamp: Stamp = .{ .mtime = 100, .size = 4096 };
+	const target: Target = .{ .name = "DP-2", .width = 1920, .height = 1080 };
+
+	try std.testing.expect(fresh(verdict, stamp, 33, target));
+	try std.testing.expect(fresh(verdict, stamp, 33, null));
+
+	try std.testing.expect(!fresh(verdict, .{ .mtime = 101, .size = 4096 }, 33, target));
+	try std.testing.expect(!fresh(verdict, .{ .mtime = 100, .size = 8192 }, 33, target));
+	try std.testing.expect(!fresh(verdict, stamp, 34, target));
+	try std.testing.expect(!fresh(verdict, stamp, 33, .{ .name = "DP-2", .width = 2560, .height = 1440 }));
+}
+
+test "a verdict survives the round trip through the cache file" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+
+	var buffer: Writer.Allocating = .init(allocator);
+	try writeVerdict(&buffer.writer, .{
+		.mtime = 17,
+		.size = 8192,
+		.band = 33,
+		.width = 1920,
+		.height = 1080,
+		.ink = @constCast(ink_white),
+	});
+
+	const body = try buffer.toOwnedSlice();
+	const parsed = try json.parse(allocator, body);
+	const verdict = verdictOf(allocator, parsed.value).?;
+
+	try std.testing.expectEqual(@as(i64, 17), verdict.mtime);
+	try std.testing.expectEqual(@as(i64, 8192), verdict.size);
+	try std.testing.expectEqual(@as(i64, 33), verdict.band);
+	try std.testing.expectEqual(@as(i64, 1920), verdict.width);
+	try std.testing.expectEqualStrings(ink_white, verdict.ink);
+
+	const broken = try json.parse(allocator, "{\"mtime\":1,\"ink\":\"purple\"}");
+	try std.testing.expect(verdictOf(allocator, broken.value) == null);
+}
+
+test "the measurement reads back from awww ink and awww query" {
+	try std.testing.expectEqualStrings(ink_black, measuredOf("black 0.0521\n").?);
+	try std.testing.expectEqualStrings(ink_white, measuredOf(" white 0.9102 ").?);
+	try std.testing.expect(measuredOf("") == null);
+	try std.testing.expect(measuredOf("error: no such file") == null);
+
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const line = ": DP-2: 1920x1080, scale: 1.3333334, currently displaying: image: /home/me/wall.png, ink: black (#484953)";
+	const target = targetOf(arena.allocator(), line).?;
+
+	try std.testing.expectEqualStrings("DP-2", target.name);
+	try std.testing.expectEqual(@as(i64, 1920), target.width);
+	try std.testing.expectEqual(@as(i64, 1080), target.height);
+
+	try std.testing.expect(targetOf(arena.allocator(), "nothing here") == null);
 }
