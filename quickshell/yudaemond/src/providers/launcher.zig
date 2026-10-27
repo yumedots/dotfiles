@@ -23,7 +23,6 @@ const glyph_file = "\u{f0213}";
 const glyph_apps = "\u{f0c9}";
 const glyph_wallpaper = "\u{f0e09}";
 const glyph_process = "\u{f0874}";
-const glyph_fallback = "\u{f2d0}";
 const glyph_power = "\u{f011}";
 const glyph_prompt = "\u{ea6d}";
 
@@ -733,7 +732,7 @@ pub const Launcher = struct {
 						.id = std.fmt.allocPrint(state.arena, "app:{s}", .{id}) catch continue,
 						.kind = "app",
 						.name = state.arena.dupe(u8, nameAlias(entry.id, entry.name)) catch continue,
-						.glyph = glyph_fallback,
+						.glyph = "",
 						.app_id = id,
 						.command = state.arena.dupe(u8, entry.command) catch continue,
 						.keywords = keywords,

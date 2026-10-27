@@ -683,13 +683,22 @@ PanelWindow {
 							readonly property string icon: rowIcon.clipIcon !== "" ? rowIcon.clipIcon : root.iconOfEntry(row.modelData)
 
 							Text {
-								visible: rowIcon.icon === "" || rowIconImage.status === Image.Error
+								visible: row.modelData.kind !== "app" && (rowIcon.icon === "" || rowIconImage.status === Image.Error)
 								anchors.centerIn: parent
 								font.family: Config.fontFamily
 								font.pixelSize: 18
 								color: row.active ? Config.launcherHighlightText : Config.foreground
 								text: root.rowGlyph(row.modelData)
 								z: 1
+							}
+
+							Rectangle {
+								anchors.centerIn: parent
+								width: Config.launcherIconSize
+								height: Config.launcherIconSize
+								radius: 3
+								color: Config.surface
+								visible: row.modelData.kind === "app" && (rowIcon.icon === "" || rowIconImage.status === Image.Error)
 							}
 
 							AppIcon {
