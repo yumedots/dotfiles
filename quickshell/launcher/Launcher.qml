@@ -34,7 +34,6 @@ PanelWindow {
 	property string clipPreviewId: ""
 	readonly property string clipPreviewText: root.state.clip ? String(root.state.clip.text || "") : ""
 	readonly property string clipPreviewPath: root.state.clip && root.state.clip.path ? "file://" + root.state.clip.path : ""
-	readonly property bool clipPreviewLoading: root.clipPreviewId !== "" && root.clipPreviewText === "" && root.clipPreviewPath === ""
 	readonly property bool isClipboard: root.mode === "clipboard"
 
 	readonly property var prefix: Apps.detectPrefix(root.query, Entries.modeMarks(Config.launcherModes))
@@ -122,13 +121,13 @@ PanelWindow {
 	function close() {
 		root.shown = false;
 		Yudae.launcherQuery("", "", "");
-		Yudae.launcherQuery("", "", "");
 	}
 
 	function settle() {
 		root.query = "";
 		root.group = "";
 		root.forced = "";
+		root.clipPreviewId = "";
 		field.clear();
 		field.typing = false;
 
@@ -375,11 +374,22 @@ PanelWindow {
 	}
 
 	function decodeClip(clipId) {
-		if (root.clipPreviewId === clipId && clipId !== "")
+		const id = clipId || "";
+
+		if (root.clipPreviewId === id)
 			return;
 
-		root.clipPreviewId = clipId || "";
-		Yudae.launcherClip(clipId || "");
+		root.clipPreviewId = id;
+		Yudae.launcherClip(id);
+	}
+
+	function decodeCurrentClip() {
+		if (!root.isClipboard)
+			return;
+
+		const entry = root.results[list.currentIndex >= 0 ? list.currentIndex : 0];
+
+		root.decodeClip(entry && entry.clipId ? entry.clipId : "");
 	}
 
 	function scrollPreview(delta) {
@@ -455,6 +465,8 @@ PanelWindow {
 	}
 
 	onSearchChanged: Yudae.launcherQuery(root.query, root.forced, root.group)
+
+	onResultsChanged: root.decodeCurrentClip()
 
 	onModeChanged: {
 		list.currentIndex = 0;
