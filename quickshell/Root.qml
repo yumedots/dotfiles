@@ -28,7 +28,12 @@ ShellRoot {
 	}
 
 	function toMain(fn) {
-		Quickshell.execDetached(["quickshell", "ipc", "call", "shell", fn]);
+		const pid = Quickshell.env("QS_MAIN_PID");
+
+		if (pid)
+			Quickshell.execDetached(["quickshell", "ipc", "--pid", pid, "call", "shell", fn]);
+		else
+			Quickshell.execDetached(["quickshell", "ipc", "call", "shell", fn]);
 	}
 
 	function launcher() {
