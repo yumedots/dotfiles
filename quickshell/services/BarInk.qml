@@ -18,7 +18,7 @@ Item {
 	readonly property bool bare: state.bare === true
 	readonly property bool wantsBare: root.bare
 	readonly property int savedBand: state.band || 0
-	readonly property int fadeMs: Config.wallpaperTransitionMs
+	readonly property int fadeMs: Math.round(Config.wallpaperTransitionMs / 2)
 
 	function key(bar) {
 		return bar && bar.screen ? bar.screen.name : "";
