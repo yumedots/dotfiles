@@ -24,6 +24,9 @@ const ink_black = "black";
 const ink_white = "white";
 const measure_gap_ms = 2000;
 const fade_ms = 400;
+/// the frame that starts a fade is committed on the next pass and shown on the refresh after
+/// that, so the fade is on screen a little after the first ink write
+const first_frame_ms = 50;
 const confirm_ms = fade_ms + 150;
 const mid_lead_ms = fade_ms / 2 - 40;
 const mid_wait_ms = 80;
@@ -34,7 +37,9 @@ const max_band = 255;
 
 /// The wallpaper is half switched halfway through its fade: the old image is as present as the
 /// new one and the bar band has stopped being the old colour. That is the moment the ink flips,
-/// not when the cache knows the answer.
+/// not when the cache knows the answer. A daemon that writes on every frame marks the fade's
+/// first frame; the frame is on screen a moment later, so the halfway point is half a fade after
+/// that.
 const Moment = struct {
 	at: i64,
 	written: bool = false,
@@ -53,13 +58,13 @@ const Moment = struct {
 /// When the bar should take the new ink. A write that lands after `awww img` returned is the
 /// verdict of the frame that made the wallpaper half present, so it is already the moment. A
 /// write before that is a per-frame daemon's first frame, which is the start of the fade, so
-/// the moment is half a fade later. With no write at all the fade is assumed to have started
-/// when the command did.
+/// the moment is half a fade after that frame reaches the screen. With no write at all the fade
+/// is assumed to have started when the command did.
 fn moment(written: ?Stamp, started: i64) Moment {
 	const at = if (written) |stamp| @divTrunc(stamp.mtime, 1_000_000) else 0;
 
 	if (written != null and at > started) return .{ .at = at, .written = true };
-	if (written != null) return .{ .at = at + fade_ms / 2, .written = false };
+	if (written != null) return .{ .at = at + first_frame_ms + fade_ms / 2, .written = false };
 
 	return .{ .at = started + fade_ms / 2, .written = false };
 }
@@ -1351,7 +1356,7 @@ test "the switch flips on the verdict write when it lands after the fade started
 
 	const early = moment(.{ .mtime = 960 * 1_000_000, .size = 5 }, 1000);
 	try std.testing.expect(!early.written);
-	try std.testing.expectEqual(@as(i64, 1160), early.at);
+	try std.testing.expectEqual(@as(i64, 960 + first_frame_ms + fade_ms / 2), early.at);
 
 	const none = moment(null, 1000);
 	try std.testing.expect(!none.written);
