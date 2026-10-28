@@ -6,6 +6,7 @@ const windowsmod = @import("windows.zig");
 const calc = @import("../primitives/calc.zig");
 const json = @import("../primitives/json.zig");
 const exec = @import("../primitives/exec.zig");
+const environ = @import("../primitives/environ.zig");
 const proc = @import("../primitives/proc.zig");
 
 const Allocator = std.mem.Allocator;
@@ -142,6 +143,7 @@ pub const Launcher = struct {
 	io: Io,
 	hub: *Hub,
 	mutex: std.Io.Mutex = .init,
+	wake_mutex: std.Io.Mutex = .init,
 	scratch: std.heap.ArenaAllocator,
 	apps: ?*appsmod.Apps = null,
 	system: ?*sysmod.System = null,
@@ -715,6 +717,56 @@ pub const Launcher = struct {
 		_ = child.wait(self.io) catch {};
 	}
 
+	pub fn wake(self: *Launcher, sock: []const u8, pid: i64, path: []const u8) void {
+		if (sock.len == 0 or path.len == 0) return;
+
+		const sock_copy = self.allocator.dupe(u8, sock) catch return;
+		const path_copy = self.allocator.dupe(u8, path) catch {
+			self.allocator.free(sock_copy);
+			return;
+		};
+
+		const args = Wake{ .sock = sock_copy, .pid = pid, .path = path_copy };
+
+		const thread = std.Thread.spawn(.{}, wakeThread, .{ self, args }) catch {
+			self.allocator.free(sock_copy);
+			self.allocator.free(path_copy);
+			return;
+		};
+		thread.detach();
+	}
+
+	fn wakeThread(self: *Launcher, args: Wake) void {
+		defer self.allocator.free(args.sock);
+		defer self.allocator.free(args.path);
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+
+		self.wake_mutex.lockUncancelable(self.io);
+		defer self.wake_mutex.unlock(self.io);
+
+		if (launcherUp(self.io, allocator, args.path)) return;
+
+		const pid = std.fmt.allocPrint(allocator, "{d}", .{args.pid}) catch return;
+
+		const source = environ.ofPid(self.io, allocator, @intCast(args.pid)) catch
+			environ.ofPid(self.io, allocator, null) catch return;
+
+		var map = std.process.Environ.Map.init(allocator);
+		map.putPosixBlock(source.block.view()) catch return;
+		map.put("QS_MAIN_SOCK", args.sock) catch return;
+		map.put("QS_MAIN_PID", pid) catch return;
+
+		const argv = wakeArgv(allocator, args.path) catch return;
+
+		if (exec.runEnv(self.io, allocator, argv, &map)) |result| {
+			result.deinit(allocator);
+		} else |_| {}
+	}
+
 	pub fn copyText(self: *Launcher, text: []const u8) void {
 		const copy = self.allocator.dupe(u8, text) catch return;
 
@@ -1071,6 +1123,37 @@ pub const Launcher = struct {
 	}
 };
 
+const Wake = struct {
+	sock: []u8,
+	pid: i64,
+	path: []u8,
+};
+
+const wake_script = "pgrep -f \"^quickshell -p $1\" >/dev/null || { ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid quickshell -p \"$1\" >/dev/null 2>&1 & echo $! > \"$XDG_RUNTIME_DIR/qs-launcher.pid\"; }";
+
+fn launcherUp(io: Io, allocator: Allocator, path: []const u8) bool {
+	const file = std.fmt.allocPrint(allocator, "{s}/qs-launcher.pid", .{proc.runtimeDir(io, allocator)}) catch return false;
+	const body = proc.readFile(io, allocator, file) catch return false;
+	const pid = std.fmt.parseInt(i32, std.mem.trim(u8, body, " \t\r\n"), 10) catch return false;
+
+	const cmdline = std.fmt.allocPrint(allocator, "/proc/{d}/cmdline", .{pid}) catch return false;
+	const raw = proc.readFile(io, allocator, cmdline) catch return false;
+
+	return std.mem.indexOf(u8, raw, path) != null;
+}
+
+fn wakeArgv(allocator: Allocator, path: []const u8) ![]const []const u8 {
+	const argv = try allocator.alloc([]const u8, 5);
+
+	argv[0] = "sh";
+	argv[1] = "-c";
+	argv[2] = wake_script;
+	argv[3] = "sh";
+	argv[4] = path;
+
+	return argv;
+}
+
 fn promptOf(mode: ?Mode) []const u8 {
 	const entry = mode orelse return glyph_prompt;
 	return entry.glyph;
@@ -1419,4 +1502,16 @@ test "only launcher entries are remembered or pinned" {
 	try std.testing.expect(!rememberable("win:0xaa"));
 	try std.testing.expect(!rememberable("calc"));
 	try std.testing.expect(!rememberable(""));
+}
+
+test "the launcher spawn passes the path as a shell parameter" {
+	try std.testing.expect(std.mem.indexOf(u8, wake_script, "\"$1\"") != null);
+	try std.testing.expect(std.mem.indexOf(u8, wake_script, "launcherShell") == null);
+
+	const argv = try wakeArgv(std.testing.allocator, "/home/a b/launcherShell.qml");
+	defer std.testing.allocator.free(argv);
+
+	try std.testing.expectEqual(@as(usize, 5), argv.len);
+	try std.testing.expectEqualStrings("sh", argv[0]);
+	try std.testing.expectEqualStrings("/home/a b/launcherShell.qml", argv[4]);
 }

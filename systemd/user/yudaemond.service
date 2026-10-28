@@ -9,8 +9,9 @@ ExecStart=%h/.config/quickshell/yudaemond/zig-out/bin/yudaemond run
 Restart=always
 RestartSec=1
 MemoryMax=512M
-LimitNOFILE=16384
+LimitNOFILE=65536
 Nice=5
+KillMode=process
 
 [Install]
 WantedBy=default.target

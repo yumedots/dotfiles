@@ -102,6 +102,14 @@ pub fn stateHome(io: Io, allocator: Allocator) []const u8 {
 	return std.fmt.allocPrint(allocator, "{s}/.local/state", .{home(io, allocator)}) catch "/tmp";
 }
 
+pub fn writeFile(io: Io, path: []const u8, body: []const u8) !void {
+	try std.Io.Dir.cwd().createDirPath(io, std.fs.path.dirname(path) orelse ".");
+
+	var file = try std.Io.Dir.cwd().createFile(io, path, .{ .truncate = true });
+	file.writeStreamingAll(io, body) catch {};
+	file.close(io);
+}
+
 pub fn writeFileAtomic(io: Io, allocator: Allocator, path: []const u8, body: []const u8) !void {
 	const temp = try std.fmt.allocPrint(allocator, "{s}.tmp", .{path});
 
@@ -113,6 +121,23 @@ pub fn writeFileAtomic(io: Io, allocator: Allocator, path: []const u8, body: []c
 	file.close(io);
 
 	try std.Io.Dir.cwd().rename(temp, std.Io.Dir.cwd(), path, io);
+}
+
+test "a file write makes the folders it needs" {
+	const io = std.testing.io;
+
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+
+	const path = try std.fmt.allocPrint(std.testing.allocator, ".zig-cache/tmp/{s}/a/b/name.txt", .{tmp.sub_path});
+	defer std.testing.allocator.free(path);
+
+	try writeFile(io, path, "hello\n");
+
+	const body = try readFile(io, std.testing.allocator, path);
+	defer std.testing.allocator.free(body);
+
+	try std.testing.expectEqualStrings("hello\n", body);
 }
 
 test "env reads a known variable" {

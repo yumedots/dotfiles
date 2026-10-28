@@ -5,7 +5,18 @@ const Allocator = std.mem.Allocator;
 const Io = std.Io;
 
 pub fn current(io: Io, allocator: Allocator) !std.process.Environ {
-	const body = try proc.readFile(io, allocator, "/proc/self/environ");
+	return ofPid(io, allocator, null);
+}
+
+pub fn ofPid(io: Io, allocator: Allocator, pid: ?i32) !std.process.Environ {
+	const path = if (pid) |value|
+		try std.fmt.allocPrint(allocator, "/proc/{d}/environ", .{value})
+	else
+		"/proc/self/environ";
+
+	defer if (pid != null) allocator.free(path);
+
+	const body = try proc.readFile(io, allocator, path);
 
 	var entries: std.ArrayList(?[*:0]const u8) = .empty;
 	errdefer entries.deinit(allocator);

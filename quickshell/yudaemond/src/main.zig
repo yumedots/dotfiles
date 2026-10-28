@@ -183,6 +183,24 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 
 		if (json.flag(l_cmd, "clips")) context.launcher.refreshClips();
 
+		if (json.field(l_cmd, "wake")) |target| {
+			context.launcher.wake(
+				json.textAt(target, "sock"),
+				json.integer(json.field(target, "pid")),
+				json.textAt(target, "path"),
+			);
+		}
+
+		return;
+	}
+
+	if (json.field(value, "file")) |file_cmd| {
+		if (json.field(file_cmd, "write")) |target| {
+			const path = json.textAt(target, "path");
+
+			if (path.len > 0) proc.writeFile(context.io, path, json.textAt(target, "text")) catch {};
+		}
+
 		return;
 	}
 
