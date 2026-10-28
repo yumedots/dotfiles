@@ -19,12 +19,14 @@ ShellRoot {
 	readonly property string launcherPath: Quickshell.shellDir + "/launcherShell.qml"
 
 	function toLauncher(fn, arg) {
-		const cmd = ["quickshell", "ipc", "-p", shellRoot.launcherPath, "call", "shell", fn];
+		const rest = arg !== undefined && arg !== null ? " " + shellQuote(arg) : "";
+		const line = "pid=$(pgrep -f launcherShell.qml | head -1); if [ -n \"$pid\" ]; then exec quickshell ipc --pid \"$pid\" call shell " + fn + rest + "; fi; exec quickshell ipc call shell " + fn + rest;
 
-		if (arg !== undefined && arg !== null)
-			cmd.push(arg);
+		Quickshell.execDetached(["sh", "-c", line]);
+	}
 
-		Quickshell.execDetached(cmd);
+	function shellQuote(text) {
+		return "'" + String(text).split("'").join("'\\''") + "'";
 	}
 
 	function toMain(fn) {
