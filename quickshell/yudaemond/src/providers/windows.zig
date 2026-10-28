@@ -25,6 +25,8 @@ pub const Window = struct {
 
 const Out = struct {
 	id: []const u8,
+	kind: []const u8,
+	name: []const u8,
 	title: []const u8,
 	appId: []const u8,
 	address: []const u8,
@@ -46,6 +48,7 @@ pub const Windows = struct {
 	mutex: std.Io.Mutex = .init,
 	scratch: std.heap.ArenaAllocator,
 	list: []Window = &.{},
+	query: []u8 = &.{},
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Windows {
 		const self = try allocator.create(Windows);
@@ -133,6 +136,24 @@ pub const Windows = struct {
 		defer self.allocator.free(path);
 
 		return proc.exists(self.io, path);
+	}
+
+	pub fn setQuery(self: *Windows, query: []const u8) void {
+		const next = self.allocator.dupe(u8, query) catch return;
+
+		self.mutex.lockUncancelable(self.io);
+
+		if (std.mem.eql(u8, self.query, next)) {
+			self.mutex.unlock(self.io);
+			self.allocator.free(next);
+			return;
+		}
+
+		self.allocator.free(self.query);
+		self.query = next;
+		self.mutex.unlock(self.io);
+
+		self.hub.publish();
 	}
 
 	pub fn focus(self: *Windows, address: []const u8) void {
@@ -337,8 +358,14 @@ pub const Windows = struct {
 		var rows: std.ArrayListUnmanaged(Out) = .empty;
 
 		for (self.list) |window| {
+			if (!matches(window.title, self.query) and !matches(window.app_id, self.query)) continue;
+
+			const name = if (window.title.len > 0) window.title else window.app_id;
+
 			try rows.append(arena, .{
 				.id = try std.fmt.allocPrint(arena, "win:{s}", .{window.address}),
+				.kind = "window",
+				.name = name,
 				.title = window.title,
 				.appId = window.app_id,
 				.address = window.address,
@@ -349,9 +376,22 @@ pub const Windows = struct {
 			});
 		}
 
-		try writer.print("{f}", .{std.json.fmt(.{ .list = rows.items }, .{})});
+		try writer.print("{f}", .{std.json.fmt(.{ .list = rows.items, .empty = "No windows open" }, .{})});
 	}
 };
+
+fn matches(text: []const u8, needle: []const u8) bool {
+	if (needle.len == 0) return true;
+	if (needle.len > text.len) return false;
+
+	var index: usize = 0;
+
+	while (index + needle.len <= text.len) : (index += 1) {
+		if (std.ascii.eqlIgnoreCase(text[index .. index + needle.len], needle)) return true;
+	}
+
+	return false;
+}
 
 fn findFile(io: Io, allocator: Allocator, dir_path: []const u8, file: []const u8, depth: usize) ?[]const u8 {
 	var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return null;
@@ -659,4 +699,29 @@ test "the change check notices a retitled window" {
 
 	after[0].title = "b";
 	try std.testing.expect(!sameAs(&before, &after));
+}
+
+test "the window query keeps only the matching rows" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	const self = try Windows.create(allocator, io, &hub);
+	try hub.add(self.provider());
+
+	self.list = try allocator.dupe(Window, &.{
+		.{ .address = "0xaa", .title = "Mozilla Firefox", .app_id = "firefox", .workspace = "1", .slot = 1, .version = 1, .focus = 0 },
+		.{ .address = "0xbb", .title = "foot", .app_id = "btop", .workspace = "1", .slot = 1, .version = 1, .focus = 1 },
+	});
+	self.query = try allocator.dupe(u8, "fire");
+
+	const body = try hub.syncSnapshot(allocator);
+
+	try std.testing.expect(std.mem.indexOf(u8, body, "0xaa") != null);
+	try std.testing.expect(std.mem.indexOf(u8, body, "0xbb") == null);
+	try std.testing.expect(std.mem.indexOf(u8, body, "\"kind\":\"window\"") != null);
+	try std.testing.expect(std.mem.indexOf(u8, body, "No windows open") != null);
 }

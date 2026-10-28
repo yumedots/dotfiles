@@ -2,6 +2,7 @@ const std = @import("std");
 const hubmod = @import("../hub.zig");
 const appsmod = @import("apps.zig");
 const sysmod = @import("system.zig");
+const windowsmod = @import("windows.zig");
 const calc = @import("../primitives/calc.zig");
 const json = @import("../primitives/json.zig");
 const exec = @import("../primitives/exec.zig");
@@ -109,7 +110,7 @@ const RowOut = struct {
 	clipId: []const u8,
 	image: bool,
 	pid: i32,
-	value: f64,
+	detail: []const u8,
 	pinned: bool,
 };
 
@@ -122,10 +123,18 @@ const Out = struct {
 	mode: []const u8,
 	prompt: []const u8,
 	query: []const u8,
+	empty: []const u8,
 	terminal: []const u8,
 	pins: [][]const u8,
 	results: []RowOut,
 	clip: PreviewOut,
+};
+
+const View = struct {
+	mode: []const u8,
+	prompt: []const u8,
+	search: []const u8,
+	empty: []const u8,
 };
 
 pub const Launcher = struct {
@@ -136,12 +145,14 @@ pub const Launcher = struct {
 	scratch: std.heap.ArenaAllocator,
 	apps: ?*appsmod.Apps = null,
 	system: ?*sysmod.System = null,
+	windows: ?*windowsmod.Windows = null,
 	query: []u8 = &.{},
 	forced: []u8 = &.{},
 	group: []u8 = &.{},
 	terminal: []u8 = &.{},
 	clip_text: []u8 = &.{},
 	clip_path: []u8 = &.{},
+	clip_id: []u8 = &.{},
 	pins: std.ArrayListUnmanaged([]u8) = .empty,
 	saved: std.ArrayListUnmanaged(Saved) = .empty,
 	clips: std.ArrayListUnmanaged(Clip) = .empty,
@@ -159,9 +170,10 @@ pub const Launcher = struct {
 		return self;
 	}
 
-	pub fn attach(self: *Launcher, apps: *appsmod.Apps, system: *sysmod.System) void {
+	pub fn attach(self: *Launcher, apps: *appsmod.Apps, system: *sysmod.System, windows: *windowsmod.Windows) void {
 		self.apps = apps;
 		self.system = system;
+		self.windows = windows;
 	}
 
 	pub fn provider(self: *Launcher) hubmod.Provider {
@@ -386,7 +398,7 @@ pub const Launcher = struct {
 	}
 
 	pub fn togglePin(self: *Launcher, id: []const u8) void {
-		if (id.len == 0) return;
+		if (!rememberable(id)) return;
 
 		self.mutex.lockUncancelable(self.io);
 
@@ -426,11 +438,7 @@ pub const Launcher = struct {
 	}
 
 	pub fn remember(self: *Launcher, id: []const u8) void {
-		if (id.len == 0) return;
-		if (!std.mem.startsWith(u8, id, "app:") and
-			!std.mem.startsWith(u8, id, "saved:") and
-			!std.mem.startsWith(u8, id, "cmd:") and
-			!std.mem.startsWith(u8, id, "wall:")) return;
+		if (!rememberable(id)) return;
 
 		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
 
@@ -560,6 +568,16 @@ pub const Launcher = struct {
 	}
 
 	pub fn previewClip(self: *Launcher, id: []const u8) void {
+		self.mutex.lockUncancelable(self.io);
+
+		if (std.mem.eql(u8, self.clip_id, id)) {
+			self.mutex.unlock(self.io);
+			return;
+		}
+
+		self.setStr(&self.clip_id, id);
+		self.mutex.unlock(self.io);
+
 		if (id.len == 0) {
 			self.mutex.lockUncancelable(self.io);
 			self.setStr(&self.clip_text, "");
@@ -622,20 +640,146 @@ pub const Launcher = struct {
 		_ = std.posix.kill(pid, std.posix.SIG.KILL) catch {};
 	}
 
-	fn effective(self: *Launcher, arena: Allocator, forced: []const u8, group: []const u8, query: []const u8) struct { mode: []const u8, prompt: []const u8, search: []const u8 } {
-		_ = self;
+	pub fn activate(self: *Launcher, id: []const u8) void {
+		if (id.len == 0) return;
 
-		if (group.len > 0) {
-			const mode = std.fmt.allocPrint(arena, "group:{s}", .{group}) catch "group:";
-
-			return .{ .mode = mode, .prompt = glyph_prompt, .search = query };
+		if (std.mem.startsWith(u8, id, "app:")) {
+			if (self.windows) |windows| windows.launch(id);
+			return;
 		}
 
-		if (forced.len > 0) return .{ .mode = forced, .prompt = promptOf(modeOf(forced)), .search = query };
+		if (std.mem.startsWith(u8, id, "win:")) {
+			if (self.windows) |windows| windows.focus(id["win:".len..]);
+			return;
+		}
+
+		if (std.mem.startsWith(u8, id, "clip:")) {
+			self.copyClip(id["clip:".len..]);
+			return;
+		}
+
+		if (std.mem.startsWith(u8, id, "saved:")) {
+			self.runSaved(id["saved:".len..]);
+			return;
+		}
+
+		if (std.mem.eql(u8, id, "calc")) self.copyCalc();
+	}
+
+	fn copyCalc(self: *Launcher) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+
+		self.mutex.lockUncancelable(self.io);
+		const view = self.effective(allocator, self.forced, self.group, self.query);
+		self.mutex.unlock(self.io);
+
+		const entry = calc.evaluate(allocator, view.search) orelse return;
+
+		self.copyText(entry.value);
+	}
+
+	fn runSaved(self: *Launcher, name: []const u8) void {
+		if (name.len == 0) return;
+
+		var command: ?[]u8 = null;
+
+		self.mutex.lockUncancelable(self.io);
+		for (self.saved.items) |entry| {
+			if (!std.mem.eql(u8, entry.name, name)) continue;
+			command = self.allocator.dupe(u8, entry.command) catch null;
+		}
+		self.mutex.unlock(self.io);
+
+		const line = command orelse return;
+
+		const thread = std.Thread.spawn(.{}, runThread, .{ self, line }) catch {
+			self.allocator.free(line);
+			return;
+		};
+		thread.detach();
+	}
+
+	fn runThread(self: *Launcher, command: []u8) void {
+		defer self.allocator.free(command);
+
+		var child = std.process.spawn(self.io, .{
+			.argv = &.{ "sh", "-c", command },
+			.stdin = .ignore,
+			.stdout = .ignore,
+			.stderr = .ignore,
+		}) catch return;
+
+		_ = child.wait(self.io) catch {};
+	}
+
+	pub fn copyText(self: *Launcher, text: []const u8) void {
+		const copy = self.allocator.dupe(u8, text) catch return;
+
+		const thread = std.Thread.spawn(.{}, copyThread, .{ self, copy }) catch {
+			self.allocator.free(copy);
+			return;
+		};
+		thread.detach();
+	}
+
+	fn copyThread(self: *Launcher, text: []u8) void {
+		defer self.allocator.free(text);
+
+		const marker = std.fmt.allocPrint(self.allocator, "{s}/qs-clip-self", .{proc.runtimeDir(self.io, self.allocator)}) catch return;
+		defer self.allocator.free(marker);
+
+		if (std.Io.Dir.cwd().createFile(self.io, marker, .{ .truncate = true })) |file| {
+			file.close(self.io);
+		} else |_| {}
+
+		var child = std.process.spawn(self.io, .{
+			.argv = &.{ "wl-copy" },
+			.stdin = .pipe,
+			.stdout = .ignore,
+			.stderr = .ignore,
+		}) catch return;
+
+		if (child.stdin) |stdin| {
+			stdin.writeStreamingAll(self.io, text) catch {};
+			stdin.close(self.io);
+		}
+
+		_ = child.wait(self.io) catch {};
+	}
+
+	fn effective(self: *Launcher, arena: Allocator, forced: []const u8, group: []const u8, query: []const u8) View {
+		_ = self;
+
+		if (modeOf(forced)) |entry| {
+			return .{
+				.mode = entry.mode,
+				.prompt = entry.glyph,
+				.search = query,
+				.empty = emptyOf(entry.mode),
+			};
+		}
+
+		if (groupOf(group) != null) {
+			const mode = std.fmt.allocPrint(arena, "group:{s}", .{group}) catch "group:";
+
+			return .{ .mode = mode, .prompt = glyph_prompt, .search = query, .empty = "Nothing here" };
+		}
 
 		const prefix = detectPrefix(query);
 
-		return .{ .mode = prefix.mode, .prompt = promptOf(modeOf(prefix.mode)), .search = prefix.text };
+		if (prefix.mode.len > 0) {
+			return .{
+				.mode = prefix.mode,
+				.prompt = promptOf(modeOf(prefix.mode)),
+				.search = prefix.text,
+				.empty = emptyOf(prefix.mode),
+			};
+		}
+
+		return .{ .mode = "", .prompt = glyph_prompt, .search = query, .empty = "Nothing matches" };
 	}
 
 	fn build(self: *Launcher, arena: Allocator, mode: []const u8, search: []const u8) ![]Row {
@@ -662,6 +806,8 @@ pub const Launcher = struct {
 
 			return self.rank(arena, rows.items, search, false);
 		}
+
+		if (mode.len > 0) return rows.items;
 
 		self.modeRows(arena, mode, search, &rows) catch {};
 		self.savedRows(arena, &rows) catch {};
@@ -830,10 +976,10 @@ pub const Launcher = struct {
 				fn less(_: void, a: Row, b: Row) bool {
 					if (a.power != b.power) return a.power < b.power;
 
-					const pinned_a = a.pin < 0;
-					const pinned_b = b.pin < 0;
+					const unpinned_a = a.pin < 0;
+					const unpinned_b = b.pin < 0;
 
-					if (pinned_a != pinned_b) return pinned_a;
+					if (unpinned_a != unpinned_b) return unpinned_b;
 					if (a.pin != b.pin) return a.pin < b.pin;
 					if (a.score != b.score) return a.score > b.score;
 					if (a.count != b.count) return a.count > b.count;
@@ -904,7 +1050,7 @@ pub const Launcher = struct {
 				.clipId = row.clip_id,
 				.image = row.image,
 				.pid = row.pid,
-				.value = row.value,
+				.detail = detailOf(arena, row) catch "",
 				.pinned = self.pinIndex(row.id) >= 0,
 			});
 		}
@@ -916,6 +1062,7 @@ pub const Launcher = struct {
 			.mode = displayMode(state.mode),
 			.prompt = state.prompt,
 			.query = state.search,
+			.empty = state.empty,
 			.terminal = self.terminal,
 			.pins = pins.items,
 			.results = results.items,
@@ -935,6 +1082,35 @@ fn modeOf(mode: []const u8) ?Mode {
 	}
 
 	return null;
+}
+
+fn groupOf(id: []const u8) ?Group {
+	if (id.len == 0) return null;
+
+	for (groups) |entry| {
+		if (std.mem.eql(u8, entry.id, id)) return entry;
+	}
+
+	return null;
+}
+
+fn emptyOf(mode: []const u8) []const u8 {
+	if (std.mem.eql(u8, mode, "clipboard")) return "Nothing copied yet";
+
+	return "Nothing matches";
+}
+
+fn rememberable(id: []const u8) bool {
+	return std.mem.startsWith(u8, id, "app:") or
+		std.mem.startsWith(u8, id, "saved:") or
+		std.mem.startsWith(u8, id, "cmd:") or
+		std.mem.startsWith(u8, id, "wall:");
+}
+
+fn detailOf(arena: Allocator, row: Row) ![]const u8 {
+	if (!std.mem.eql(u8, row.kind, "proc")) return "";
+
+	return std.fmt.allocPrint(arena, "{d:.1}%", .{row.value});
 }
 
 fn displayMode(mode: []const u8) []const u8 {
@@ -1132,4 +1308,115 @@ test "process rows keep every process, hottest first" {
 	try std.testing.expectEqual(@as(i32, 8), rows.items[0].pid);
 	try std.testing.expectEqual(@as(i32, 9), rows.items[1].pid);
 	try std.testing.expectEqual(@as(i32, 7), rows.items[2].pid);
+}
+
+test "every mode id renders rows of its own kind" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	const system = try sysmod.System.create(allocator, io, &hub);
+	const self = try Launcher.create(allocator, io, &hub);
+	self.system = system;
+
+	try system.all.append(allocator, .{ .pid = 7, .cpu = 4 });
+	try self.clips.append(allocator, .{
+		.id = try allocator.dupe(u8, "9"),
+		.text = try allocator.dupe(u8, "hello"),
+		.kind = try allocator.dupe(u8, "text"),
+		.format = try allocator.dupe(u8, ""),
+		.app = try allocator.dupe(u8, ""),
+	});
+
+	for (modes) |mode| {
+		const view = self.effective(allocator, mode.mode, "", "");
+		try std.testing.expectEqualStrings(mode.mode, view.mode);
+
+		const rows = try self.build(allocator, view.mode, view.search);
+
+		for (rows) |row| {
+			const own = if (std.mem.eql(u8, mode.mode, "clipboard"))
+				std.mem.eql(u8, row.kind, "clip")
+			else if (std.mem.eql(u8, mode.mode, "procs"))
+				std.mem.eql(u8, row.kind, "proc")
+			else
+				false;
+
+			try std.testing.expect(own);
+		}
+
+		if (std.mem.eql(u8, mode.mode, "clipboard")) try std.testing.expectEqual(@as(usize, 1), rows.len);
+		if (std.mem.eql(u8, mode.mode, "procs")) try std.testing.expectEqual(@as(usize, 1), rows.len);
+		if (std.mem.eql(u8, mode.mode, "wallpaper")) try std.testing.expectEqual(@as(usize, 0), rows.len);
+	}
+}
+
+test "the forced mode wins and an unknown token is home" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	const self = try Launcher.create(allocator, io, &hub);
+
+	const clip = self.effective(allocator, "clipboard", "apps", "");
+	try std.testing.expectEqualStrings("clipboard", clip.mode);
+	try std.testing.expectEqualStrings("Nothing copied yet", clip.empty);
+
+	const junk = self.effective(allocator, "apps", "", "dol");
+	try std.testing.expectEqualStrings("", junk.mode);
+	try std.testing.expectEqualStrings("apps", displayMode(junk.mode));
+	try std.testing.expectEqualStrings("dol", junk.search);
+
+	const group = self.effective(allocator, "", "apps", "");
+	try std.testing.expectEqualStrings("group:apps", group.mode);
+
+	const unknown_group = self.effective(allocator, "", "nope", "");
+	try std.testing.expectEqualStrings("", unknown_group.mode);
+
+	const prefix = self.effective(allocator, "", "", "%x");
+	try std.testing.expectEqualStrings("procs", prefix.mode);
+	try std.testing.expectEqualStrings("x", prefix.search);
+}
+
+test "a pinned row sorts ahead of a better match and usage breaks the tie" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	const self = try Launcher.create(allocator, io, &hub);
+
+	try self.pins.append(allocator, try allocator.dupe(u8, "app:pin"));
+	try self.usage.put(allocator, try allocator.dupe(u8, "app:used"), .{ .count = 9, .last = 99 });
+
+	var rows = [_]Row{
+		.{ .id = "app:pin", .kind = "app", .name = "Pine", .glyph = "", .keywords = &.{"pine"} },
+		.{ .id = "app:plain", .kind = "app", .name = "Plum", .glyph = "", .keywords = &.{"plum"} },
+		.{ .id = "app:used", .kind = "app", .name = "Puma", .glyph = "", .keywords = &.{"puma"} },
+	};
+
+	const ranked = self.rank(allocator, &rows, "p", true);
+
+	try std.testing.expectEqualStrings("app:pin", ranked[0].id);
+	try std.testing.expectEqualStrings("app:used", ranked[1].id);
+}
+
+test "only launcher entries are remembered or pinned" {
+	try std.testing.expect(rememberable("app:firefox"));
+	try std.testing.expect(rememberable("saved:term"));
+	try std.testing.expect(!rememberable("proc:12"));
+	try std.testing.expect(!rememberable("clip:9"));
+	try std.testing.expect(!rememberable("mode:clipboard"));
+	try std.testing.expect(!rememberable("group:apps"));
+	try std.testing.expect(!rememberable("win:0xaa"));
+	try std.testing.expect(!rememberable("calc"));
+	try std.testing.expect(!rememberable(""));
 }

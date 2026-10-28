@@ -172,6 +172,12 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		const copy = json.textAt(l_cmd, "copyClip");
 		if (copy.len > 0) context.launcher.copyClip(copy);
 
+		const activate = json.textAt(l_cmd, "activate");
+		if (activate.len > 0) context.launcher.activate(activate);
+
+		const copy_text = json.textAt(l_cmd, "copyText");
+		if (json.field(l_cmd, "copyText") != null) context.launcher.copyText(copy_text);
+
 		const kill = json.integer(json.field(l_cmd, "kill"));
 		if (kill > 0) context.launcher.killProcess(@intCast(kill));
 
@@ -189,6 +195,8 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	}
 
 	if (json.field(value, "windows")) |wi_cmd| {
+		if (json.field(wi_cmd, "query") != null) context.windows.setQuery(json.textAt(wi_cmd, "query"));
+
 		const focus = json.textAt(wi_cmd, "focus");
 		if (focus.len > 0) context.windows.focus(focus);
 
@@ -412,7 +420,7 @@ fn run(io: std.Io) !void {
 	try hub.add(icons_provider.provider());
 
 	const launcher_provider = try launcher.Launcher.create(allocator, io, hub);
-	launcher_provider.attach(apps_provider, system_provider);
+	launcher_provider.attach(apps_provider, system_provider, windows_provider);
 	try hub.add(launcher_provider.provider());
 
 	screen_provider.attachSettings(settings_provider);
