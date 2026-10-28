@@ -16,6 +16,12 @@ PanelWindow {
 	property string forced: ""
 	property var pointer: null
 	property var pending: null
+	property string clipAsked: ""
+	property bool grabbed: false
+	property string anchorId: ""
+	property string anchorKey: ""
+	property bool following: false
+	property bool freshAnchor: false
 
 	property bool windows: false
 	property int winIndex: 0
@@ -28,6 +34,10 @@ PanelWindow {
 	readonly property var results: root.windows ? (Yudae.windows || []) : (root.state.results || [])
 	readonly property string clipPreviewText: root.state.clip ? String(root.state.clip.text || "") : ""
 	readonly property string clipPreviewPath: root.state.clip && root.state.clip.path ? "file://" + root.state.clip.path : ""
+
+	readonly property int selectedIndex: root.results.length === 0 ? -1 : Util.clamp(list.currentIndex < 0 ? 0 : list.currentIndex, 0, root.results.length - 1)
+	readonly property var selectedRow: root.selectedIndex >= 0 ? root.results[root.selectedIndex] : null
+	readonly property string wantedClip: root.shown && root.isClipboard && root.selectedRow && root.selectedRow.clipId ? root.selectedRow.clipId : ""
 
 	readonly property int windowColumns: windowsGrid.columns
 	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
@@ -46,7 +56,7 @@ PanelWindow {
 
 	WlrLayershell.layer: WlrLayer.Overlay
 	WlrLayershell.namespace: "launcher"
-	WlrLayershell.keyboardFocus: root.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+	WlrLayershell.keyboardFocus: root.shown && root.grabbed ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 	WlrLayershell.focusable: true
 
 	exclusiveZone: 0
@@ -67,7 +77,82 @@ PanelWindow {
 
 	visible: alwaysMapped || root.shown || card.opacity > 0
 
-	Component.onCompleted: root.push()
+	Component.onCompleted: {
+		if (root.alwaysMapped)
+			root.push();
+	}
+
+	Timer {
+		id: grabTimer
+
+		interval: 16
+
+		onTriggered: {
+			if (!root.shown)
+				return;
+
+			root.grabbed = true;
+
+			if (field.typing)
+				field.focusInput();
+			else
+				card.forceActiveFocus();
+		}
+	}
+
+	function grab() {
+		if (!root.shown)
+			return;
+
+		root.grabbed = false;
+		grabTimer.restart();
+	}
+
+	function anchor() {
+		if (root.following)
+			return;
+
+		root.anchorId = root.selectedRow ? root.selectedRow.id : "";
+		root.anchorKey = root.mode + "\u0000" + (root.state.query || "");
+	}
+
+	function followResults() {
+		const key = root.mode + "\u0000" + (root.state.query || "");
+
+		if (root.freshAnchor || root.mode !== "procs" || root.anchorKey !== key) {
+			root.freshAnchor = false;
+			root.anchor();
+			return;
+		}
+
+		root.restoreAnchor();
+	}
+
+	function restoreAnchor() {
+		if (root.anchorId === "" || root.results.length === 0)
+			return;
+
+		for (let i = 0; i < root.results.length; i++) {
+			if (root.results[i].id !== root.anchorId)
+				continue;
+
+			if (list.currentIndex === i)
+				return;
+
+			root.following = true;
+			list.currentIndex = i;
+			root.following = false;
+			return;
+		}
+	}
+
+	function requestClip() {
+		if (root.clipAsked === root.wantedClip)
+			return;
+
+		root.clipAsked = root.wantedClip;
+		Yudae.launcherClip(root.clipAsked);
+	}
 
 	function push() {
 		if (root.windows) {
@@ -86,14 +171,15 @@ PanelWindow {
 		root.group = "";
 		root.forced = mode || "";
 		root.pointer = null;
+		root.anchorId = "";
+		root.anchorKey = "";
+		root.freshAnchor = true;
 		list.currentIndex = 0;
 		root.shown = true;
 		root.winIndex = root.windows ? 1 : 0;
 		root.push();
-		Qt.callLater(function () {
-			list.currentIndex = 0;
-			card.forceActiveFocus();
-		});
+		root.grab();
+		root.anchor();
 	}
 
 	function openWindows() {
@@ -107,6 +193,8 @@ PanelWindow {
 
 	function close() {
 		root.shown = false;
+		root.anchorId = "";
+		root.anchorKey = "";
 		Yudae.launcherQuery("", "", "");
 		Yudae.windowQuery("");
 	}
@@ -166,7 +254,7 @@ PanelWindow {
 		}
 
 		if (root.mode === "procs" && event.text === Config.procKillKey) {
-			root.killProc(root.results[list.currentIndex]);
+			root.killProc(root.selectedRow);
 			event.accepted = true;
 			return;
 		}
@@ -200,6 +288,7 @@ PanelWindow {
 		if (root.isClipboard && event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
 			if (previewText.selectedText !== "") {
 				Yudae.launcherCopyText(previewText.selectedText);
+				root.grab();
 				event.accepted = true;
 				return;
 			}
@@ -222,7 +311,7 @@ PanelWindow {
 		}
 
 		if (!field.typing && Input.accept(event)) {
-			root.activate(root.results[list.currentIndex]);
+			root.activate(root.selectedRow);
 			event.accepted = true;
 			return;
 		}
@@ -276,7 +365,7 @@ PanelWindow {
 		if (!Input.pin(event))
 			return;
 
-		root.pin(root.results[list.currentIndex]);
+		root.pin(root.selectedRow);
 		event.accepted = true;
 	}
 
@@ -321,15 +410,7 @@ PanelWindow {
 
 	function copyClip(id) {
 		Yudae.launcherCopyClip(id);
-	}
-
-	function decodeCurrentClip() {
-		if (!root.isClipboard)
-			return;
-
-		const entry = root.results[list.currentIndex >= 0 ? list.currentIndex : 0];
-
-		Yudae.launcherClip(entry && entry.clipId ? entry.clipId : "");
+		root.grab();
 	}
 
 	function scrollPreview(delta) {
@@ -388,7 +469,9 @@ PanelWindow {
 
 	onQueryChanged: root.push()
 
-	onResultsChanged: root.decodeCurrentClip()
+	onWantedClipChanged: root.requestClip()
+
+	onResultsChanged: root.followResults()
 
 	onModeChanged: {
 		list.currentIndex = 0;
@@ -400,6 +483,22 @@ PanelWindow {
 			root.openWallpaper();
 		else if (root.mode === "clipboard")
 			Yudae.launcherClips();
+
+		root.grab();
+	}
+
+	Connections {
+		target: Yudae
+
+		function onConnectedChanged() {
+			if (!Yudae.connected || !root.shown)
+				return;
+
+			root.push();
+			root.clipAsked = "";
+			root.requestClip();
+			root.grab();
+		}
 	}
 
 
@@ -478,7 +577,7 @@ PanelWindow {
 					root.query = field.text;
 					list.currentIndex = 0;
 				}
-				onAccepted: root.activate(root.results[list.currentIndex])
+				onAccepted: root.activate(root.selectedRow)
 				onKeyPressed: function (event) { root.handleTypingKeys(event); }
 				onTypingChanged: {
 					if (!field.typing)
@@ -702,12 +801,11 @@ PanelWindow {
 						}
 					}
 
-					// decode on selection change without shadowing Selector's handlers
 					Connections {
 						target: list
 
 						function onCurrentIndexChanged() {
-							root.decodeCurrentClip();
+							root.anchor();
 						}
 					}
 
