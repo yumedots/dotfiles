@@ -638,6 +638,8 @@ pub const Ink = struct {
 			};
 		}
 
+		if (outputs(self.io, allocator)) |live| _ = prune(self.allocator, &next, live);
+
 		self.mutex.lockUncancelable(self.io);
 
 		const same = sameInks(&self.inks, &next);
@@ -793,7 +795,25 @@ pub const Ink = struct {
 
 		self.mutex.unlock(self.io);
 
+		self.pruneOutputs();
 		self.loadVerdicts();
+	}
+
+	/// An output that is gone from Hyprland is gone for good, but its ink file outlives the
+	/// session that wrote it, so the cache only keeps the outputs Hyprland reports right now.
+	fn pruneOutputs(self: *Ink) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const live = outputs(self.io, arena.allocator()) orelse return;
+
+		self.mutex.lockUncancelable(self.io);
+		const dropped = prune(self.allocator, &self.inks, live);
+		self.mutex.unlock(self.io);
+
+		if (dropped == 0) return;
+
+		self.persist();
 	}
 
 	fn openCache(self: *Ink) void {
@@ -1005,6 +1025,60 @@ fn focused(io: Io, allocator: Allocator) []const u8 {
 	return "";
 }
 
+/// The outputs Hyprland is driving now. Null when the answer is unknown, because a failed query
+/// must not be read as "every output is gone" and wipe the cache.
+fn outputs(io: Io, allocator: Allocator) ?[][]const u8 {
+	const raw = hypr.request(io, allocator, "j/monitors") catch return null;
+
+	return monitorNames(allocator, raw);
+}
+
+fn monitorNames(allocator: Allocator, raw: []const u8) ?[][]const u8 {
+	const parsed = json.parse(allocator, raw) catch return null;
+
+	var names: std.ArrayListUnmanaged([]const u8) = .empty;
+
+	for (json.list(parsed.value)) |monitor| {
+		const name = json.textAt(monitor, "name");
+		if (name.len == 0) continue;
+
+		names.append(allocator, name) catch return null;
+	}
+
+	if (names.items.len == 0) return null;
+
+	return names.items;
+}
+
+fn prune(allocator: Allocator, inks: *std.StringHashMapUnmanaged([]u8), live: []const []const u8) usize {
+	var gone: std.ArrayListUnmanaged([]const u8) = .empty;
+
+	var it = inks.keyIterator();
+	while (it.next()) |key| {
+		var known = false;
+
+		for (live) |name| {
+			if (!std.mem.eql(u8, name, key.*)) continue;
+
+			known = true;
+			break;
+		}
+
+		if (known) continue;
+
+		gone.append(allocator, key.*) catch return 0;
+	}
+
+	for (gone.items) |key| {
+		if (inks.fetchRemove(key)) |entry| {
+			allocator.free(entry.key);
+			allocator.free(entry.value);
+		}
+	}
+
+	return gone.items.len;
+}
+
 fn verdictOf(allocator: Allocator, value: json.Value) ?Verdict {
 	const ink = json.textAt(value, "ink");
 
@@ -1170,4 +1244,37 @@ test "the measurement reads back from awww ink and awww query" {
 	try std.testing.expectEqualStrings("DP-2", shown.name);
 	try std.testing.expectEqual(@as(i64, 1920), shown.width);
 	try std.testing.expectEqual(@as(i64, 1280), targetOf(arena.allocator(), both, "").?.width);
+}
+
+test "the live outputs come from the hypr monitor list" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const raw = "[{\"name\":\"DP-2\",\"focused\":true},{\"name\":\"eDP-1\",\"focused\":false}]";
+	const names = monitorNames(arena.allocator(), raw).?;
+
+	try std.testing.expectEqual(@as(usize, 2), names.len);
+	try std.testing.expectEqualStrings("DP-2", names[0]);
+
+	try std.testing.expect(monitorNames(arena.allocator(), "[]") == null);
+	try std.testing.expect(monitorNames(arena.allocator(), "not json") == null);
+}
+
+test "a stale output is pruned and a live one kept" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+
+	var inks: std.StringHashMapUnmanaged([]u8) = .empty;
+	defer inks.deinit(allocator);
+
+	try inks.put(allocator, try allocator.dupe(u8, "WAYLAND-9"), try allocator.dupe(u8, black_ink));
+	try inks.put(allocator, try allocator.dupe(u8, "DP-2"), try allocator.dupe(u8, white_ink));
+
+	const live = [_][]const u8{ "DP-2", "eDP-1" };
+
+	try std.testing.expectEqual(@as(usize, 1), prune(allocator, &inks, &live));
+	try std.testing.expect(inks.get("WAYLAND-9") == null);
+	try std.testing.expectEqualStrings(white_ink, inks.get("DP-2").?);
 }
