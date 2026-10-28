@@ -171,8 +171,10 @@ PanelWindow {
 			return;
 		}
 
-		if (Input.hint(event)) {
+		if (!field.typing && root.types(event)) {
 			field.startTyping();
+			field.text = event.text;
+			root.query = field.text;
 			event.accepted = true;
 			return;
 		}
@@ -249,6 +251,16 @@ PanelWindow {
 		}
 
 		root.pinKey(event);
+	}
+
+	function types(event) {
+		if (event.text.length !== 1)
+			return false;
+
+		if (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))
+			return false;
+
+		return event.text >= " ";
 	}
 
 	function navigate(dir) {
@@ -461,7 +473,6 @@ PanelWindow {
 				glyphSize: Config.launcherIconSize
 				size: Config.launcherFontSize
 				glyph: root.prompt
-				hintKey: Config.procSearchHint
 
 				onEdited: {
 					root.query = field.text;
