@@ -1,5 +1,6 @@
 import QtQuick
 import qs
+import qs.services
 
 Item {
 	id: root
@@ -27,7 +28,7 @@ Item {
 	}
 
 	function scroll(step) {
-		list.contentY = Util.clamp(list.contentY + step, 0, Math.max(0, list.contentHeight - list.height));
+		list.contentY = Calc.clamp(list.contentY + step, 0, Math.max(0, list.contentHeight - list.height));
 	}
 
 	function reset() {
@@ -64,7 +65,7 @@ Item {
 		const step = root.rowHeight + root.rowSpacing;
 		const top = index * step;
 
-		list.contentY = Util.scrollIntoView(list.contentY, list.height, list.contentHeight, top, top + root.rowHeight);
+		list.contentY = Math.min(Math.max(top < list.contentY ? top : (top + root.rowHeight > list.contentY + list.height ? top + root.rowHeight - list.height : list.contentY), 0), Math.max(0, list.contentHeight - list.height));
 	}
 
 	onCountChanged: {

@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs
+import qs.services
 
 PanelWindow {
 	id: root
@@ -22,7 +23,7 @@ PanelWindow {
 	property bool alwaysCentered: false
 	property bool centerScreen: false
 	readonly property bool fullscreen: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
-	readonly property string side: Util.popupSide(root.alignRight, root.centered, root.alwaysCentered, root.fullscreen)
+	readonly property string side: root.alignRight ? "right" : !root.centered ? "anchor" : root.alwaysCentered ? "center" : root.fullscreen ? "float" : "anchor"
 	readonly property bool centeredSide: root.centered && root.side !== "right"
 	readonly property bool pinnedSide: root.alwaysCentered && root.side !== "right"
 	property bool closable: true
@@ -47,8 +48,8 @@ PanelWindow {
 	screen: root.anchorWindow ? root.anchorWindow.screen : null
 
 	readonly property real scale: border.scale
-	readonly property real cardWidth: Util.snap(border.contentWidth + 2 * border.inset, root.scale)
-	readonly property real cardHeight: Util.snap(border.contentHeight + 2 * border.inset, root.scale)
+	readonly property real cardWidth: Math.round((border.contentWidth + 2 * border.inset) * root.scale) / root.scale
+	readonly property real cardHeight: Math.round((border.contentHeight + 2 * border.inset) * root.scale) / root.scale
 	readonly property real restX: root.screenWidth - root.cardWidth
 	readonly property real restY: root.screenHeight - root.cardHeight
 	readonly property bool posLeft: Config.popupPos.indexOf("left") >= 0
@@ -56,19 +57,19 @@ PanelWindow {
 	readonly property bool posBottom: Config.popupPos.indexOf("bottom") >= 0
 	readonly property bool slideBelow: Config.popupY >= 0 ? Config.popupY > root.restY / 2 : root.posBottom
 	readonly property real floatX: Config.popupX >= 0
-		? Util.clamp(Config.popupX, 0, root.restX)
+		? Calc.clamp(Config.popupX, 0, root.restX)
 		: root.posRight ? root.restX - Config.gapsOut
 			: root.posLeft ? Config.gapsOut
 				: root.restX / 2
 	readonly property real floatY: Config.popupY >= 0
-		? Util.clamp(Config.popupY, 0, root.restY)
+		? Calc.clamp(Config.popupY, 0, root.restY)
 		: root.posBottom ? root.restY - Config.gapsOut
 			: Config.gapsOut
 	readonly property real cardX: root.side === "right"
-		? Util.snap(root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight, root.scale)
-		: Util.snap(root.centerScreen || root.side === "center" ? (root.screenWidth - root.cardWidth) / 2
+		? Math.round((root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight) * root.scale) / root.scale
+		: Math.round((root.centerScreen || root.side === "center" ? (root.screenWidth - root.cardWidth) / 2
 			: root.side === "float" ? root.floatX
-				: root.outerMargin + Config.tooltipGap + Util.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX), root.scale)
+				: root.outerMargin + Config.tooltipGap + Calc.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX)) * root.scale) / root.scale
 	readonly property real cardY: root.centerScreen
 		? Math.round((root.screenHeight - root.cardHeight) / 2)
 		: root.fullscreen

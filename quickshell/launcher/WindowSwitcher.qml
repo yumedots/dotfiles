@@ -76,7 +76,7 @@ Item {
 		id: windowName
 
 		width: Math.min(implicitWidth, grid.width)
-		x: Util.clamp(switcher.index * switcher.cell + (switcher.cell - width) / 2, 0, grid.width - width)
+		x: Calc.clamp(switcher.index * switcher.cell + (switcher.cell - width) / 2, 0, grid.width - width)
 		anchors.top: grid.bottom
 		anchors.topMargin: Config.windowsLabelGap
 		height: Math.ceil(font.pixelSize * 1.35)

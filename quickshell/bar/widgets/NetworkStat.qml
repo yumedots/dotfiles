@@ -11,13 +11,13 @@ BarStat {
 
 	readonly property var net: Yudae.network
 	readonly property bool isWifi: root.net.kind === "wifi"
-	readonly property int wifiStep: Util.clamp(root.net.bars || 0, 1, 4) - 1
+	readonly property int wifiStep: Calc.clamp(root.net.bars || 0, 1, 4) - 1
 	readonly property string wifiIcon: Config.networkWifiIcons[root.wifiStep]
 
 	property bool testPending: false
 
 	mode: "icon"
-	barColor: Util.pick(Config.mono, Config.networkBase, Config.networkBaseMono)
+	barColor: Config.mono ? Config.networkBase : Config.networkBaseMono
 	textColor: root.barColor
 	icon: root.isWifi ? root.wifiIcon : Config.networkLanIcon
 

@@ -14,7 +14,7 @@ BarStat {
 
 	mode: "icon"
 	icon: Config.iconDisplay
-	barColor: Util.pick(Config.mono, Config.displayBase, Config.displayBaseMono)
+	barColor: Config.mono ? Config.displayBase : Config.displayBaseMono
 	textColor: root.barColor
 
 	popupContent: Component {

@@ -22,7 +22,7 @@ Item {
 	readonly property real wantedWidth: root.borderWidth >= 0
 		? root.borderWidth
 		: (root.hyprBorder.width !== null ? root.hyprBorder.width : Config.borderFallbackWidth)
-	readonly property real themeWidth: Util.snap(root.wantedWidth, root.scale)
+	readonly property real themeWidth: Math.round((root.wantedWidth) * root.scale) / root.scale
 	readonly property real themeAngle: root.hyprBorder.angle
 	readonly property var edges: Ink.gradientEdges(root.themeColors, root.themeAngle, frame.width, frame.height, root.themeWidth)
 	readonly property real inset: root.themeWidth + root.padding

@@ -69,7 +69,7 @@ Item {
 	property bool shift: false
 
 	readonly property var selectedNode: root.targetNodes.length > 0
-		? root.targetNodes[Util.clamp(root.targetIndex, 0, root.targetNodes.length - 1)]
+		? root.targetNodes[Calc.clamp(root.targetIndex, 0, root.targetNodes.length - 1)]
 		: null
 
 	function same(a, b) {
@@ -104,7 +104,7 @@ Item {
 		if (last < 0)
 			return;
 
-		root.targetIndex = Util.clamp(root.targetIndex + step, 0, last);
+		root.targetIndex = Calc.clamp(root.targetIndex + step, 0, last);
 	}
 
 	function focusNode(node) {
@@ -138,7 +138,7 @@ Item {
 		root.keyboard = false;
 		root.focusNode(node);
 
-		const level = Util.clamp(fraction, 0, Config.mixerMaxVolume);
+		const level = Calc.clamp(fraction, 0, Config.mixerMaxVolume);
 
 		if (!isFinite(level))
 			return;
@@ -169,11 +169,11 @@ Item {
 
 		root.drag = { id: root.drag.id, from: root.drag.from, width: root.drag.width, last: at };
 
-		const fraction = Util.clamp(at / root.drag.width, 0, 1);
+		const fraction = Calc.clamp(at / root.drag.width, 0, 1);
 		const shift = (modifiers & Qt.ShiftModifier) !== 0;
 
 		root.shift = shift;
-		root.setFader(node, shift ? fraction : Util.roundStep(fraction, Config.mixerStepCount));
+		root.setFader(node, shift ? fraction : Math.round(Math.min(Math.max(fraction, 0), 1) * Config.mixerStepCount) / Config.mixerStepCount);
 	}
 
 	function nudgeVolume(step) {
@@ -182,7 +182,7 @@ Item {
 		if (!node)
 			return;
 
-		root.setFader(node, Util.clamp((node.volume || 0) + step, 0, Config.mixerMaxVolume));
+		root.setFader(node, Calc.clamp((node.volume || 0) + step, 0, Config.mixerMaxVolume));
 	}
 
 	Keys.onPressed: function (event) {
@@ -280,7 +280,7 @@ Item {
 		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 
 		readonly property bool selected: root.same(channel.node, root.selectedNode)
-		readonly property real level: Util.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
+		readonly property real level: Calc.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(channel.level * Config.mixerStepCount) - 1
 
 		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
@@ -396,7 +396,7 @@ Item {
 		readonly property real volume: line.node ? line.node.volume : 0
 		readonly property string percentText: line.node ? line.node.volumeText : "0%"
 		readonly property bool selected: root.same(line.node, root.selectedNode)
-		readonly property real level: Util.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
+		readonly property real level: Calc.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(line.level * Config.mixerStepCount) - 1
 
 		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)

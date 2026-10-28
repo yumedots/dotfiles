@@ -113,7 +113,7 @@ PanelWindow {
 		if (root.wallpapers.length === 0)
 			return;
 
-		root.currentIndex = Util.clamp(root.currentIndex + step, 0, root.wallpapers.length - 1);
+		root.currentIndex = Calc.clamp(root.currentIndex + step, 0, root.wallpapers.length - 1);
 		root.reveal();
 	}
 
@@ -372,12 +372,20 @@ PanelWindow {
 									if (!hovered)
 										return;
 
-									const next = Util.pointerMoved(root.pointer, point.scenePosition, root.tileHeight);
+									const at = point.scenePosition;
+									const prev = root.pointer;
 
-									root.pointer = next;
+									if (!prev) {
+										root.pointer = { x: at.x, y: at.y, engaged: false };
+										return;
+									}
 
-									if (next.moved)
-										root.currentIndex = cell.index;
+									if (prev.engaged || (at.x - prev.x) ** 2 + (at.y - prev.y) ** 2 >= root.tileHeight ** 2) {
+										root.pointer = { x: at.x, y: at.y, engaged: true };
+
+										if (at.x !== prev.x || at.y !== prev.y)
+											root.currentIndex = cell.index;
+									}
 								}
 							}
 
@@ -398,7 +406,7 @@ PanelWindow {
 					acceptedButtons: Qt.NoButton
 
 					onWheel: function (wheel) {
-						grid.contentY = Util.clamp(grid.contentY - wheel.angleDelta.y, 0, Math.max(0, grid.contentHeight - grid.height));
+						grid.contentY = Calc.clamp(grid.contentY - wheel.angleDelta.y, 0, Math.max(0, grid.contentHeight - grid.height));
 						wheel.accepted = true;
 					}
 				}

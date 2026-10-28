@@ -47,7 +47,7 @@ Item {
 	implicitHeight: card.implicitHeight + Config.weatherCardPadding * 2
 
 	onQueryChanged: root.pickIndex = 0
-	onSuggestionRowsChanged: root.pickIndex = Util.clamp(root.pickIndex, 0, Math.max(0, root.suggestionRows.length - 1))
+	onSuggestionRowsChanged: root.pickIndex = Calc.clamp(root.pickIndex, 0, Math.max(0, root.suggestionRows.length - 1))
 
 	onPlaceNameChanged: {
 		root.held = true;
@@ -86,7 +86,7 @@ Item {
 		if (rows.length === 0)
 			return;
 
-		root.pickIndex = Util.clamp(root.pickIndex + step, 0, rows.length - 1);
+		root.pickIndex = Calc.clamp(root.pickIndex + step, 0, rows.length - 1);
 	}
 
 	function takeChosen() {
@@ -97,7 +97,7 @@ Item {
 			return;
 		}
 
-		root.pick(rows[Util.clamp(root.pickIndex, 0, rows.length - 1)]);
+		root.pick(rows[Calc.clamp(root.pickIndex, 0, rows.length - 1)]);
 	}
 
 	function matchingRows() {

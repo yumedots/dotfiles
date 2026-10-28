@@ -57,7 +57,7 @@ Item {
 		if (root.opened) {
 			const max = Math.max(0, list.contentHeight - list.height);
 
-			list.contentY = Util.clamp(list.contentY + step * Config.notifyRowHeight, 0, max);
+			list.contentY = Calc.clamp(list.contentY + step * Config.notifyRowHeight, 0, max);
 			return;
 		}
 
@@ -66,7 +66,7 @@ Item {
 
 		const from = root.selected < 0 ? (step > 0 ? 0 : root.count - 1) : root.selected + step;
 
-		root.selected = Util.clamp(from, 0, root.count - 1);
+		root.selected = Calc.clamp(from, 0, root.count - 1);
 	}
 
 	function reveal() {
@@ -80,7 +80,7 @@ Item {
 			return;
 		}
 
-		list.contentY = Util.scrollIntoView(list.contentY, list.height, list.contentHeight, block.y, block.y + block.height);
+		list.contentY = Math.min(Math.max(block.y < list.contentY ? block.y : (block.y + block.height > list.contentY + list.height ? block.y + block.height - list.height : list.contentY), 0), Math.max(0, list.contentHeight - list.height));
 	}
 
 	function open() {
@@ -139,7 +139,7 @@ Item {
 		acceptedButtons: Qt.NoButton
 
 		onWheel: function (wheel) {
-			list.contentY = Util.clamp(list.contentY + (wheel.angleDelta.y > 0 ? -Config.notifyRowHeight : Config.notifyRowHeight), 0, Math.max(0, list.contentHeight - list.height));
+			list.contentY = Calc.clamp(list.contentY + (wheel.angleDelta.y > 0 ? -Config.notifyRowHeight : Config.notifyRowHeight), 0, Math.max(0, list.contentHeight - list.height));
 			wheel.accepted = true;
 		}
 	}

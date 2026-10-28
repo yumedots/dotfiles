@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs
+import qs.services
 import qs.ui
 
 PanelWindow {
@@ -137,7 +138,7 @@ PanelWindow {
 			anchors.fill: parent
 			hoverEnabled: true
 
-			onPositionChanged: function (mouse) { root.index = Util.clamp(Math.floor(mouse.x / Config.powerCellSize), 0, Math.max(0, root.count - 1)); }
+			onPositionChanged: function (mouse) { root.index = Calc.clamp(Math.floor(mouse.x / Config.powerCellSize), 0, Math.max(0, root.count - 1)); }
 			onClicked: root.execute(root.actions[root.index])
 		}
 	}

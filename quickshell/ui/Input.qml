@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import qs
+import qs.services
 
 QtObject {
 	id: root
@@ -161,7 +162,7 @@ QtObject {
 		return root.act(event, {
 			escape: () => target.closePicker(),
 			up: () => target.pickerIndex = Math.max(0, target.pickerIndex - 1),
-			down: () => target.pickerIndex = Util.clamp(target.pickerIndex + 1, 0, target.devices.length - 1),
+			down: () => target.pickerIndex = Calc.clamp(target.pickerIndex + 1, 0, target.devices.length - 1),
 			accept: () => target.makeDefault(target.picker, target.devices[target.pickerIndex])
 		});
 	}

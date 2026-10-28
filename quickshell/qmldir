@@ -1,5 +1,4 @@
 Config 1.0 config.js
-Util 1.0 lib/util.js
 Ink 1.0 lib/ink.js
 Format 1.0 lib/format.js
 singleton Settings 1.0 Settings.qml

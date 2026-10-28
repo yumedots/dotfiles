@@ -35,12 +35,12 @@ PanelWindow {
 	readonly property string clipPreviewText: root.state.clip ? String(root.state.clip.text || "") : ""
 	readonly property string clipPreviewPath: root.state.clip && root.state.clip.path ? "file://" + root.state.clip.path : ""
 
-	readonly property int selectedIndex: root.results.length === 0 ? -1 : Util.clamp(list.currentIndex < 0 ? 0 : list.currentIndex, 0, root.results.length - 1)
+	readonly property int selectedIndex: root.results.length === 0 ? -1 : Calc.clamp(list.currentIndex < 0 ? 0 : list.currentIndex, 0, root.results.length - 1)
 	readonly property var selectedRow: root.selectedIndex >= 0 ? root.results[root.selectedIndex] : null
 	readonly property string wantedClip: root.shown && root.isClipboard && root.selectedRow && root.selectedRow.clipId ? root.selectedRow.clipId : ""
 
 	readonly property int windowColumns: windowsGrid.columns
-	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
+	readonly property int winCurrent: Calc.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
 	readonly property string winName: root.windows && root.results.length > 0 ? root.results[root.winCurrent].name : ""
 
 	readonly property int listHeight: Config.launcherMaxRows * Config.launcherRowHeight
@@ -234,7 +234,7 @@ PanelWindow {
 		if (!Input.switchRepeat())
 			return;
 
-		root.winIndex = Util.wrap(root.winIndex, step, root.results.length);
+		root.winIndex = root.results.length > 0 ? ((root.winIndex + step) % root.results.length + root.results.length) % root.results.length : 0;
 	}
 
 	function handleRelease(event) {
@@ -415,7 +415,7 @@ PanelWindow {
 
 	function scrollPreview(delta) {
 		if (typeof previewFlick !== "undefined" && previewFlick) {
-			previewFlick.contentY = Util.clamp(
+			previewFlick.contentY = Calc.clamp(
 				previewFlick.contentY + delta,
 				0,
 				Math.max(0, previewFlick.contentHeight - previewFlick.height)
@@ -776,12 +776,20 @@ PanelWindow {
 									if (!hovered)
 										return;
 
-									const next = Util.pointerMoved(root.pointer, point.scenePosition, Config.launcherRowHeight);
+									const at = point.scenePosition;
+									const prev = root.pointer;
 
-									root.pointer = next;
+									if (!prev) {
+										root.pointer = { x: at.x, y: at.y, engaged: false };
+										return;
+									}
 
-									if (next.moved)
-										list.currentIndex = row.index;
+									if (prev.engaged || (at.x - prev.x) ** 2 + (at.y - prev.y) ** 2 >= Config.launcherRowHeight ** 2) {
+										root.pointer = { x: at.x, y: at.y, engaged: true };
+
+										if (at.x !== prev.x || at.y !== prev.y)
+											list.currentIndex = row.index;
+									}
 								}
 							}
 

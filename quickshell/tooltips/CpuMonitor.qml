@@ -8,8 +8,8 @@ ProcessPanel {
 
 	readonly property var sys: Yudae.system.cpu || ({})
 
-	readonly property color accentInk: Util.pick(Config.mono, Config.cpuBase, Config.cpuBaseMono)
-	readonly property color peakInk: Util.pick(Config.mono, Config.cpuPeak, Config.cpuPeakMono)
+	readonly property color accentInk: Config.mono ? Config.cpuBase : Config.cpuBaseMono
+	readonly property color peakInk: Config.mono ? Config.cpuPeak : Config.cpuPeakMono
 	readonly property var cores: root.source && root.source.cores ? root.source.cores : []
 	readonly property real blockSize: (Config.cpuTooltipWidth - (Config.cpuBlockColumns - 1) * Config.cpuBlockGap) / Config.cpuBlockColumns
 	readonly property int blockRows: Math.max(1, Math.ceil(root.cores.length / Config.cpuBlockColumns))

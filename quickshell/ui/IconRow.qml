@@ -16,7 +16,7 @@ Item {
 	property string emptyMessage: ""
 
 	readonly property int count: row.model ? row.model.length : 0
-	readonly property int active: row.count === 0 ? -1 : Util.clamp(row.index, 0, row.count - 1)
+	readonly property int active: row.count === 0 ? -1 : Calc.clamp(row.index, 0, row.count - 1)
 	readonly property real emptyWidth: row.count === 0 ? emptyLabel.implicitWidth : 0
 
 	implicitWidth: Math.max(row.columns * row.cell, row.emptyWidth)
@@ -88,7 +88,7 @@ Item {
 		id: labelText
 
 		width: Math.min(implicitWidth, grid.width)
-		x: row.active < 0 ? 0 : Util.clamp(row.active * row.cell + (row.cell - width) / 2, 0, grid.width - width)
+		x: row.active < 0 ? 0 : Calc.clamp(row.active * row.cell + (row.cell - width) / 2, 0, grid.width - width)
 		anchors.top: grid.bottom
 		anchors.topMargin: Config.windowsLabelGap
 		horizontalAlignment: Text.AlignHCenter

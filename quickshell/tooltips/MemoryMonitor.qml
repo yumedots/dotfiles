@@ -1,17 +1,18 @@
 import QtQuick
 import qs.ui
 import qs
+import qs.services
 
 ProcessPanel {
 	id: root
 
 	property var mem: root.source ? root.source.memory : null
 
-	readonly property color accentInk: Util.pick(Config.mono, Config.memoryBase, Config.memoryBaseMono)
-	readonly property color cachedInk: Util.pick(Config.mono, Config.memoryCached, Config.memoryCachedMono)
-	readonly property color buffersInk: Util.pick(Config.mono, Config.memoryBuffers, Config.memoryBuffersMono)
-	readonly property color warnInk: Util.pick(Config.mono, Config.memoryWarn, Config.memoryWarnMono)
-	readonly property color dangerInk: Util.pick(Config.mono, Config.memoryDanger, Config.memoryDangerMono)
+	readonly property color accentInk: Config.mono ? Config.memoryBase : Config.memoryBaseMono
+	readonly property color cachedInk: Config.mono ? Config.memoryCached : Config.memoryCachedMono
+	readonly property color buffersInk: Config.mono ? Config.memoryBuffers : Config.memoryBuffersMono
+	readonly property color warnInk: Config.mono ? Config.memoryWarn : Config.memoryWarnMono
+	readonly property color dangerInk: Config.mono ? Config.memoryDanger : Config.memoryDangerMono
 
 	title: "Memory"
 	detail: root.mem ? root.mem.committedText + " of " + root.mem.poolText : ""
@@ -88,7 +89,7 @@ ProcessPanel {
 		if (!root.mem || root.mem.pool <= 0)
 			return 0;
 
-		return Util.clamp(100 * kb / root.mem.pool, 0, 100);
+		return Calc.clamp(100 * kb / root.mem.pool, 0, 100);
 	}
 
 	viz: [

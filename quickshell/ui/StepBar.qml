@@ -1,5 +1,6 @@
 import QtQuick
 import qs
+import qs.services
 
 Item {
 	id: root
@@ -19,7 +20,7 @@ Item {
 	readonly property real cellSize: root.count > 0 ? ((root.vertical ? root.height : root.width) - (root.count - 1) * root.gap) / root.count : 0
 	readonly property string hoverLabel: root.entryLabel(root.hovered)
 	readonly property bool solid: root.level >= 0
-	readonly property real filled: Util.clamp(root.level, 0, 1)
+	readonly property real filled: Calc.clamp(root.level, 0, 1)
 
 	implicitHeight: Config.stepBarHeight
 

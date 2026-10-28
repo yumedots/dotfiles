@@ -22,8 +22,8 @@ ProcessPanel {
 	readonly property string dns: root.net.dns || ""
 	readonly property bool linked: root.net.connected === true
 	readonly property bool isWifi: root.net.kind === "wifi"
-	readonly property color downInk: Util.pick(Config.mono, Config.networkDown, Config.networkDownMono)
-	readonly property color upInk: Util.pick(Config.mono, Config.networkUp, Config.networkUpMono)
+	readonly property color downInk: Config.mono ? Config.networkDown : Config.networkDownMono
+	readonly property color upInk: Config.mono ? Config.networkUp : Config.networkUpMono
 	readonly property string link: root.linked ? (root.net.ip !== "" ? root.net.ip : root.net.iface) : Config.networkWiredNothing
 	readonly property bool testing: (root.speed.stage || "") !== ""
 	readonly property bool done: !root.testing && (root.speed.down || 0) > 0
@@ -378,7 +378,7 @@ ProcessPanel {
 							font.family: Config.fontFamily
 							font.pixelSize: Settings.fontSize
 							color: wifiRow.current ? root.downInk : (wifiRow.hot ? Config.launcherHighlightText : Config.muted)
-							text: wifiRow.locked ? Config.networkLockIcon : Config.networkWifiIcons[Util.clamp(wifiRow.modelData.bars, 1, 4) - 1]
+							text: wifiRow.locked ? Config.networkLockIcon : Config.networkWifiIcons[Calc.clamp(wifiRow.modelData.bars, 1, 4) - 1]
 						}
 
 						Text {
