@@ -23,7 +23,10 @@ const white_ink = "#ffffff";
 const ink_black = "black";
 const ink_white = "white";
 const measure_gap_ms = 2000;
-const settle_ms = 550;
+const fade_ms = 400;
+const settle_ms = fade_ms + 50;
+const ink_wait_ms = 700;
+const ink_poll_ms = 20;
 const max_band = 255;
 
 const State = struct {
@@ -197,6 +200,7 @@ pub const Ink = struct {
 		argv.append(allocator, path) catch return;
 
 		const stamp = self.stampOf(path);
+		const ink = self.inkStamp(allocator);
 		const started = fmt.nowMs(self.io);
 		const result = exec.run(self.io, self.allocator, argv.items) catch return;
 		defer result.deinit(self.allocator);
@@ -204,19 +208,16 @@ pub const Ink = struct {
 
 		if (result.code != 0) return;
 
-		// awww measured the band of the frame it just drew and published the verdict; read it
-		// back rather than leaning on the fade timer
-		_ = self.refresh(generation);
-
-		self.settle(path, stamp, generation);
+		self.settle(path, stamp, ink, generation);
 	}
 
-	/// The fade writes one ink file per drawn frame, so the cache is only confirmed once the
-	/// transition has settled, off the apply thread.
-	fn settle(self: *Ink, path: []const u8, stamp: ?Stamp, generation: u64) void {
+	/// The ink file is only worth reading once the transition has drawn its last frame: the
+	/// frames before it are blends of the old and the new wallpaper, and the verdict they carry
+	/// is the one the bar already shows.
+	fn settle(self: *Ink, path: []const u8, stamp: ?Stamp, ink: ?Stamp, generation: u64) void {
 		const copy = self.allocator.dupe(u8, path) catch return;
 
-		const thread = std.Thread.spawn(.{}, settleThunk, .{ self, copy, stamp, generation }) catch {
+		const thread = std.Thread.spawn(.{}, settleThunk, .{ self, copy, stamp, ink, generation }) catch {
 			self.allocator.free(copy);
 			return;
 		};
@@ -224,16 +225,55 @@ pub const Ink = struct {
 		thread.detach();
 	}
 
-	fn settleThunk(self: *Ink, path: []u8, stamp: ?Stamp, generation: u64) void {
+	fn settleThunk(self: *Ink, path: []u8, stamp: ?Stamp, ink: ?Stamp, generation: u64) void {
 		defer self.allocator.free(path);
 
 		sleep.ms(settle_ms);
 
 		if (self.generation.load(.monotonic) != generation) return;
 
+		self.awaitInk(ink, generation);
+
+		if (self.generation.load(.monotonic) != generation) return;
+
 		_ = self.refresh(generation);
 
 		self.confirm(path, stamp);
+	}
+
+	/// Waits for the transition to write its verdict. A wallpaper daemon that writes per frame
+	/// has already done so by the time the fade is over, so only the missing write waits.
+	fn awaitInk(self: *Ink, before: ?Stamp, generation: u64) void {
+		const wanted = before orelse return;
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const path = self.inkPath(arena.allocator()) orelse return;
+
+		var waited: usize = 0;
+
+		while (waited < ink_wait_ms) : (waited += ink_poll_ms) {
+			const now = self.stampOf(path) orelse return;
+
+			if (now.mtime != wanted.mtime or now.size != wanted.size) return;
+			if (self.generation.load(.monotonic) != generation) return;
+
+			sleep.ms(ink_poll_ms);
+		}
+	}
+
+	fn inkPath(self: *Ink, allocator: Allocator) ?[]u8 {
+		const name = focused(self.io, allocator);
+		if (name.len == 0) return null;
+
+		return std.fmt.allocPrint(allocator, "{s}/{s}{s}", .{ proc.runtimeDir(self.io, allocator), ink_prefix, name }) catch null;
+	}
+
+	fn inkStamp(self: *Ink, allocator: Allocator) ?Stamp {
+		const path = self.inkPath(allocator) orelse return null;
+
+		return self.stampOf(path);
 	}
 
 	fn preload(self: *Ink, path: []const u8) void {
@@ -247,9 +287,30 @@ pub const Ink = struct {
 		}
 		self.mutex.unlock(self.io);
 
-		if (colour.len == 0) return;
+		if (colour.len == 0) {
+			self.preloadMeasured(path, stamp);
+			return;
+		}
 
 		self.paint(colour);
+	}
+
+	/// A wallpaper the cache has never seen is measured before it is shown, so the bar turns
+	/// with the switch instead of waiting for the fade to end. The fade confirms it later.
+	fn preloadMeasured(self: *Ink, path: []const u8, stamp: Stamp) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+		const band = self.bandNow();
+		if (band <= 0) return;
+
+		const target = self.outputSize(allocator) orelse return;
+		const ink = self.measureInk(path, target, band) orelse return;
+
+		if (self.store(path, stamp, band, target, ink)) self.saveVerdicts();
+
+		self.paint(paintOf(ink));
 	}
 
 	fn paint(self: *Ink, colour: []const u8) void {
@@ -267,7 +328,10 @@ pub const Ink = struct {
 		}
 		self.mutex.unlock(self.io);
 
-		if (changed) self.hub.publish();
+		if (!changed) return;
+
+		self.persist();
+		self.hub.publish();
 	}
 
 	fn confirm(self: *Ink, path: []const u8, stamp: ?Stamp) void {
@@ -279,13 +343,25 @@ pub const Ink = struct {
 		const target = self.outputSize(arena.allocator()) orelse return;
 
 		var ink: []const u8 = "";
+		var cached: []const u8 = "";
 
 		self.mutex.lockUncancelable(self.io);
 		if (self.inks.get(target.name)) |colour| ink = inkOf(colour) orelse "";
+		if (self.verdicts.get(path)) |verdict| {
+			const size: Size = .{ .width = target.width, .height = target.height };
+			if (fresh(verdict, wanted, self.band, size)) cached = verdict.ink;
+		}
 		const band = self.band;
 		self.mutex.unlock(self.io);
 
 		if (ink.len == 0 or band <= 0) return;
+
+		// a verdict measured on the same file, band and canvas that the fade contradicts is a
+		// cache bug, not something to paper over: the bar has to take the measured one
+		if (cached.len > 0 and !std.mem.eql(u8, cached, ink)) {
+			std.debug.print("yudaemond: ink cache was wrong path={s} cached={s} measured={s} band={d} canvas={d}x{d}\n", .{ path, cached, ink, band, target.width, target.height });
+		}
+
 		if (!self.store(path, wanted, band, target, ink)) return;
 
 		self.saveVerdicts();
@@ -682,6 +758,8 @@ pub const Ink = struct {
 
 		watcher.add(dir) catch return;
 
+		var debounce: watch.Debounce = .{};
+
 		while (true) {
 			const name = watcher.next() catch {
 				sleep.ms(1000);
@@ -690,10 +768,26 @@ pub const Ink = struct {
 
 			if (!std.mem.startsWith(u8, name, ink_prefix)) continue;
 
-			// awww writes once per drawn frame through the fade; let the burst settle, then read
-			// whatever the file holds now
-			sleep.ms(80);
+			// awww writes once per drawn frame through the fade; only the write that is left
+			// after the burst is the verdict, so wait until the writes stop
+			debounce.note(fmt.nowMs(self.io));
+			self.awaitQuiet(&watcher, &debounce);
 			_ = self.refresh(null);
+		}
+	}
+
+	fn awaitQuiet(self: *Ink, watcher: *watch.Watcher, debounce: *watch.Debounce) void {
+		while (true) {
+			const now = fmt.nowMs(self.io);
+
+			if (debounce.due(now)) return;
+
+			sleep.ms(40);
+
+			if (!watcher.pending()) continue;
+
+			_ = watcher.next() catch return;
+			debounce.note(fmt.nowMs(self.io));
 		}
 	}
 
