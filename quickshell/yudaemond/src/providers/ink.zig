@@ -24,10 +24,56 @@ const ink_black = "black";
 const ink_white = "white";
 const measure_gap_ms = 2000;
 const fade_ms = 400;
-const settle_ms = fade_ms + 50;
+const confirm_ms = fade_ms + 150;
+const mid_lead_ms = fade_ms / 2 - 40;
+const mid_wait_ms = 80;
+const mid_poll_ms = 10;
 const ink_wait_ms = 700;
 const ink_poll_ms = 20;
 const max_band = 255;
+
+/// The wallpaper is half switched halfway through its fade: the old image is as present as the
+/// new one and the bar band has stopped being the old colour. That is the moment the ink flips,
+/// not when the cache knows the answer.
+const Moment = struct {
+	at: i64,
+	written: bool = false,
+
+	fn after(started: i64) Moment {
+		return .{ .at = started + fade_ms / 2 };
+	}
+
+	fn wait(self: Moment, now: i64) u64 {
+		if (now >= self.at) return 0;
+
+		return @intCast(self.at - now);
+	}
+};
+
+/// When the bar should take the new ink. A write that lands after `awww img` returned is the
+/// verdict of the frame that made the wallpaper half present, so it is already the moment. A
+/// write before that is a per-frame daemon's first frame, which is the start of the fade, so
+/// the moment is half a fade later. With no write at all the fade is assumed to have started
+/// when the command did.
+fn moment(written: ?Stamp, started: i64) Moment {
+	const at = if (written) |stamp| @divTrunc(stamp.mtime, 1_000_000) else 0;
+
+	if (written != null and at > started) return .{ .at = at, .written = true };
+	if (written != null) return .{ .at = at + fade_ms / 2, .written = false };
+
+	return .{ .at = started + fade_ms / 2, .written = false };
+}
+
+
+/// A verdict written at the midpoint wins only when it agrees with the colour the switch
+/// expects: a wallpaper daemon that still writes per frame leaves a blend there, not a verdict.
+fn pickMidpoint(expected: []const u8, written: []const u8) []const u8 {
+	if (written.len == 0) return expected;
+	if (expected.len == 0) return written;
+	if (std.mem.eql(u8, written, expected)) return written;
+
+	return expected;
+}
 
 const State = struct {
 	bare: bool,
@@ -143,7 +189,6 @@ pub const Ink = struct {
 
 		if (changed) self.persist();
 
-		self.preload(path);
 		self.sync(path);
 	}
 
@@ -158,10 +203,11 @@ pub const Ink = struct {
 	}
 
 	fn sync(self: *Ink, path: []const u8) void {
+		const expected = self.switchColour(path);
 		const copy = self.allocator.dupe(u8, path) catch return;
 		const generation = self.generation.fetchAdd(1, .monotonic) + 1;
 
-		const thread = std.Thread.spawn(.{}, show, .{ self, copy, generation }) catch {
+		const thread = std.Thread.spawn(.{}, show, .{ self, copy, expected, generation }) catch {
 			self.allocator.free(copy);
 			return;
 		};
@@ -169,7 +215,7 @@ pub const Ink = struct {
 		thread.detach();
 	}
 
-	fn show(self: *Ink, path: []u8, generation: u64) void {
+	fn show(self: *Ink, path: []u8, expected: []const u8, generation: u64) void {
 		defer self.allocator.free(path);
 
 		// one wallpaper transition at a time: overlapping `awww img` runs finish out of order
@@ -206,18 +252,21 @@ pub const Ink = struct {
 		defer result.deinit(self.allocator);
 		std.debug.print("DBG t={d} img code={d} ms={d}\n", .{ fmt.nowMs(self.io), result.code, fmt.nowMs(self.io) - started });
 
-		if (result.code != 0) return;
+		if (result.code != 0) {
+			if (expected.len > 0) self.paint(expected);
 
-		self.settle(path, stamp, ink, generation);
+			return;
+		}
+
+		self.settle(path, stamp, ink, expected, generation, fmt.nowMs(self.io));
 	}
 
-	/// The ink file is only worth reading once the transition has drawn its last frame: the
-	/// frames before it are blends of the old and the new wallpaper, and the verdict they carry
-	/// is the one the bar already shows.
-	fn settle(self: *Ink, path: []const u8, stamp: ?Stamp, ink: ?Stamp, generation: u64) void {
+	/// Off the apply thread: flip the ink when the wallpaper is half switched, then confirm the
+	/// cache once the fade is over.
+	fn settle(self: *Ink, path: []const u8, stamp: ?Stamp, ink: ?Stamp, expected: []const u8, generation: u64, started: i64) void {
 		const copy = self.allocator.dupe(u8, path) catch return;
 
-		const thread = std.Thread.spawn(.{}, settleThunk, .{ self, copy, stamp, ink, generation }) catch {
+		const thread = std.Thread.spawn(.{}, settleThunk, .{ self, copy, stamp, ink, expected, generation, started }) catch {
 			self.allocator.free(copy);
 			return;
 		};
@@ -225,10 +274,40 @@ pub const Ink = struct {
 		thread.detach();
 	}
 
-	fn settleThunk(self: *Ink, path: []u8, stamp: ?Stamp, ink: ?Stamp, generation: u64) void {
+	fn settleThunk(self: *Ink, path: []u8, stamp: ?Stamp, ink: ?Stamp, expected: []const u8, generation: u64, started: i64) void {
 		defer self.allocator.free(path);
 
-		sleep.ms(settle_ms);
+		const written = self.firstInk(ink, generation, started);
+
+		if (self.generation.load(.monotonic) != generation) return;
+
+		const flip = moment(written, started);
+		var colour: []const u8 = "";
+
+		if (flip.written) {
+			const painted = self.writtenColour(generation) orelse "";
+
+			colour = pickMidpoint(expected, painted);
+
+			if (painted.len > 0 and !std.mem.eql(u8, painted, colour)) {
+				std.debug.print("yudaemond: ink midpoint wrote {s} but the switch expects {s}; keeping the measured colour\n", .{ painted, colour });
+			}
+		} else if (flip.at > fmt.nowMs(self.io)) {
+			sleep.ms(@intCast(flip.at - fmt.nowMs(self.io)));
+			colour = expected;
+		}
+
+		if (self.generation.load(.monotonic) != generation) return;
+
+		if (colour.len > 0) self.paint(colour);
+
+		std.debug.print("yudaemond: ink switch colour={s} from={s} at=+{d}ms\n", .{
+			colour,
+			if (flip.written) "awww" else "schedule",
+			flip.at - started,
+		});
+
+		sleep.ms(@intCast(@max(0, flip.at + fade_ms / 2 + confirm_ms - fade_ms - fmt.nowMs(self.io))));
 
 		if (self.generation.load(.monotonic) != generation) return;
 
@@ -239,6 +318,47 @@ pub const Ink = struct {
 		_ = self.refresh(generation);
 
 		self.confirm(path, stamp);
+	}
+
+	/// The first write the wallpaper daemon makes after the apply. A daemon that draws its ink on
+	/// every frame writes it on the transition's first frame, before `awww img` even returns.
+	fn firstInk(self: *Ink, ink: ?Stamp, generation: u64, started: i64) ?Stamp {
+		const before = ink orelse return null;
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const path = self.inkPath(arena.allocator()) orelse return null;
+		const deadline = started + fade_ms + confirm_ms;
+
+		while (true) {
+			if (self.stampOf(path)) |stamp| {
+				if (stamp.mtime != before.mtime or stamp.size != before.size) return stamp;
+			}
+
+			if (self.generation.load(.monotonic) != generation) return null;
+			if (fmt.nowMs(self.io) >= deadline) return null;
+
+			sleep.ms(5);
+		}
+	}
+
+	fn writtenColour(self: *Ink, generation: u64) ?[]const u8 {
+		_ = generation;
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+		const path = self.inkPath(allocator) orelse return null;
+
+		return self.inkColour(path, allocator);
+	}
+
+	fn inkColour(self: *Ink, path: []const u8, allocator: Allocator) ?[]const u8 {
+		const raw = proc.readFile(self.io, allocator, path) catch return null;
+
+		return colourOf(raw);
 	}
 
 	/// Waits for the transition to write its verdict. A wallpaper daemon that writes per frame
@@ -276,8 +396,11 @@ pub const Ink = struct {
 		return self.stampOf(path);
 	}
 
-	fn preload(self: *Ink, path: []const u8) void {
-		const stamp = self.stampOf(path) orelse return;
+	/// The colour the switch will land on, known before the fade starts: the cached verdict when
+	/// it still holds, otherwise one measurement of the file. It is kept off screen until the
+	/// midpoint, so the bar turns with the wall and not before it.
+	fn switchColour(self: *Ink, path: []const u8) []const u8 {
+		const stamp = self.stampOf(path) orelse return "";
 
 		var colour: []const u8 = "";
 
@@ -287,30 +410,25 @@ pub const Ink = struct {
 		}
 		self.mutex.unlock(self.io);
 
-		if (colour.len == 0) {
-			self.preloadMeasured(path, stamp);
-			return;
-		}
+		if (colour.len > 0) return colour;
 
-		self.paint(colour);
+		return self.measureColour(path, stamp);
 	}
 
-	/// A wallpaper the cache has never seen is measured before it is shown, so the bar turns
-	/// with the switch instead of waiting for the fade to end. The fade confirms it later.
-	fn preloadMeasured(self: *Ink, path: []const u8, stamp: Stamp) void {
+	fn measureColour(self: *Ink, path: []const u8, stamp: Stamp) []const u8 {
 		var arena = std.heap.ArenaAllocator.init(self.allocator);
 		defer arena.deinit();
 
 		const allocator = arena.allocator();
 		const band = self.bandNow();
-		if (band <= 0) return;
+		if (band <= 0) return "";
 
-		const target = self.outputSize(allocator) orelse return;
-		const ink = self.measureInk(path, target, band) orelse return;
+		const target = self.outputSize(allocator) orelse return "";
+		const ink = self.measureInk(path, target, band) orelse return "";
 
 		if (self.store(path, stamp, band, target, ink)) self.saveVerdicts();
 
-		self.paint(paintOf(ink));
+		return paintOf(ink);
 	}
 
 	fn paint(self: *Ink, colour: []const u8) void {
@@ -1215,6 +1333,37 @@ fn sameInks(a: *const std.StringHashMapUnmanaged([]u8), b: *const std.StringHash
 
 fn lessThan(_: void, a: []const u8, b: []const u8) bool {
 	return std.mem.lessThan(u8, a, b);
+}
+
+test "the ink flips when the wallpaper is half switched" {
+	const half = Moment.after(1000);
+
+	try std.testing.expectEqual(@as(i64, 1200), half.at);
+	try std.testing.expectEqual(@as(u64, 200), half.wait(1000));
+	try std.testing.expectEqual(@as(u64, 50), half.wait(1150));
+	try std.testing.expectEqual(@as(u64, 0), half.wait(1300));
+}
+
+test "the switch flips on the verdict write when it lands after the fade started" {
+	const late = moment(.{ .mtime = 1200 * 1_000_000, .size = 5 }, 1000);
+	try std.testing.expect(late.written);
+	try std.testing.expectEqual(@as(i64, 1200), late.at);
+
+	const early = moment(.{ .mtime = 960 * 1_000_000, .size = 5 }, 1000);
+	try std.testing.expect(!early.written);
+	try std.testing.expectEqual(@as(i64, 1160), early.at);
+
+	const none = moment(null, 1000);
+	try std.testing.expect(!none.written);
+	try std.testing.expectEqual(@as(i64, 1200), none.at);
+}
+
+test "a midpoint write wins only when it agrees with the colour the switch expects" {
+	try std.testing.expectEqualStrings(black_ink, pickMidpoint(black_ink, black_ink));
+	try std.testing.expectEqualStrings(black_ink, pickMidpoint(black_ink, white_ink));
+	try std.testing.expectEqualStrings(black_ink, pickMidpoint(black_ink, ""));
+	try std.testing.expectEqualStrings(white_ink, pickMidpoint("", white_ink));
+	try std.testing.expectEqualStrings("", pickMidpoint("", ""));
 }
 
 test "the stored state keeps the band and the bare flag" {
