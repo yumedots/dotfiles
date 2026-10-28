@@ -13,7 +13,7 @@ Item {
 	property var asked: ({})
 
 	function iconOf(appId, extra) {
-		const names = Apps.iconNames([appId].concat(extra || []));
+		const names = [appId].concat(extra || []);
 
 		for (let i = 0; i < names.length; i++) {
 			const path = root.resolved[names[i]];

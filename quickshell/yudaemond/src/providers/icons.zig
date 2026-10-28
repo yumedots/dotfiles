@@ -76,27 +76,51 @@ pub const Icons = struct {
 	}
 
 	fn collect(self: *Icons, entries: []const appsmod.Entry, pending: *std.ArrayListUnmanaged(Pending)) void {
-		for (entries) |entry| {
+		const urls = self.allocator.alloc(?[]u8, entries.len) catch return;
+
+		defer {
+			for (urls) |url| {
+				if (url) |value| self.allocator.free(value);
+			}
+
+			self.allocator.free(urls);
+		}
+
+		for (entries, 0..) |entry, index| {
+			urls[index] = null;
 			if (entry.id.len == 0) continue;
-			if (self.known(entry.id)) continue;
 
 			const path = self.resolver.resolve(entry.id);
-			const value = if (path.len > 0)
+			urls[index] = if (path.len > 0)
 				std.fmt.allocPrint(self.allocator, "file://{s}", .{path}) catch continue
 			else
 				self.allocator.dupe(u8, "") catch continue;
-
-			const key = self.allocator.dupe(u8, entry.id) catch {
-				self.allocator.free(value);
-				continue;
-			};
-
-			pending.append(self.allocator, .{ .key = key, .value = value }) catch {
-				self.allocator.free(key);
-				self.allocator.free(value);
-				continue;
-			};
 		}
+
+		for (entries, 0..) |entry, index| {
+			if (urls[index]) |url| self.add(pending, entry.id, url);
+		}
+
+		for (entries, 0..) |entry, index| {
+			if (urls[index]) |url| self.add(pending, entry.name, url);
+		}
+	}
+
+	fn add(self: *Icons, pending: *std.ArrayListUnmanaged(Pending), name: []const u8, value: []const u8) void {
+		const cleaned = cleanName(name);
+		if (cleaned.len == 0) return;
+		if (self.known(cleaned)) return;
+
+		const key = self.allocator.dupe(u8, cleaned) catch return;
+		const copy = self.allocator.dupe(u8, value) catch {
+			self.allocator.free(key);
+			return;
+		};
+
+		pending.append(self.allocator, .{ .key = key, .value = copy }) catch {
+			self.allocator.free(key);
+			self.allocator.free(copy);
+		};
 	}
 
 	fn merge(self: *Icons, pending: *std.ArrayListUnmanaged(Pending)) bool {
@@ -158,7 +182,7 @@ pub const Icons = struct {
 	}
 
 	pub fn want(self: *Icons, name: []const u8) void {
-		const trimmed = std.mem.trim(u8, name, " \t");
+		const trimmed = cleanName(name);
 		if (trimmed.len == 0) return;
 
 		self.mutex.lockUncancelable(self.io);
@@ -168,7 +192,7 @@ pub const Icons = struct {
 
 		if (found or full) return;
 
-		self.resolveName(trimmed);
+		self.resolveName(name, trimmed);
 	}
 
 	pub fn wantPid(self: *Icons, pid: i64) void {
@@ -186,12 +210,15 @@ pub const Icons = struct {
 		self.store(key, url);
 	}
 
-	fn resolveName(self: *Icons, name: []const u8) void {
+	fn resolveName(self: *Icons, raw: []const u8, name: []const u8) void {
 		const path = self.resolver.resolve(name);
 		const url = if (path.len > 0) std.fmt.allocPrint(self.allocator, "file://{s}", .{path}) catch "" else "";
 		defer if (url.len > 0) self.allocator.free(url);
 
 		self.store(name, url);
+
+		const alias = std.mem.trim(u8, raw, " \t\r\n");
+		if (!std.mem.eql(u8, alias, name)) self.store(alias, url);
 	}
 
 	fn store(self: *Icons, key: []const u8, value: []const u8) void {
@@ -259,6 +286,22 @@ pub const Icons = struct {
 	}
 };
 
+pub fn cleanName(name: []const u8) []const u8 {
+	const trimmed = std.mem.trim(u8, name, " \t\r\n");
+
+	if (std.mem.endsWith(u8, trimmed, ".desktop")) return trimmed[0 .. trimmed.len - ".desktop".len];
+
+	return trimmed;
+}
+
+test "names are trimmed and lose their desktop suffix" {
+	try std.testing.expectEqualStrings("Dolphin", cleanName("  Dolphin.desktop \t"));
+	try std.testing.expectEqualStrings("Dolphin", cleanName("Dolphin"));
+	try std.testing.expectEqualStrings("org.kde.dolphin", cleanName("org.kde.dolphin"));
+	try std.testing.expectEqualStrings("Cyberpunk 2077", cleanName(" Cyberpunk 2077 "));
+	try std.testing.expectEqualStrings("", cleanName(" \n\t "));
+}
+
 test "every app entry is resolved before the map is ever asked" {
 	const io = std.Io.Threaded.global_single_threaded.io();
 	const allocator = std.testing.allocator;
@@ -305,11 +348,13 @@ test "every app entry is resolved before the map is ever asked" {
 	}
 
 	self.collect(&entries, &pending);
-	try std.testing.expectEqual(@as(usize, 2), pending.items.len);
+	try std.testing.expectEqual(@as(usize, 4), pending.items.len);
 	try std.testing.expect(self.merge(&pending));
 
 	try std.testing.expectEqualStrings("file:///icons/top.svg", self.asked.get("top").?);
+	try std.testing.expectEqualStrings("file:///icons/top.svg", self.asked.get("Top").?);
 	try std.testing.expectEqualStrings("", self.asked.get("missing").?);
+	try std.testing.expectEqualStrings("", self.asked.get("Missing").?);
 
 	var again: std.ArrayListUnmanaged(Pending) = .empty;
 	defer again.deinit(allocator);
