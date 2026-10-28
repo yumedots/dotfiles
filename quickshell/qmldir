@@ -1,9 +1,6 @@
 Config 1.0 config.js
 Util 1.0 lib/util.js
 Ink 1.0 lib/ink.js
-Shell 1.0 lib/shell.js
-System 1.0 lib/system.js
-Network 1.0 lib/network.js
 Format 1.0 lib/format.js
 singleton Settings 1.0 Settings.qml
 Root 1.0 Root.qml

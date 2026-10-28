@@ -28,11 +28,11 @@ ProcessPanel {
 	readonly property bool testing: (root.speed.stage || "") !== ""
 	readonly property bool done: !root.testing && (root.speed.down || 0) > 0
 	readonly property real hero: root.testing ? (root.speed.live || 0) : (root.speed.down || 0)
-	readonly property real ceiling: Network.speedCeiling(root.testing ? (root.speed.best || 0) : (root.speed.down || 0))
+	readonly property real ceiling: root.speed.ceiling || 1
 	readonly property color testInk: root.speed.stage === "up" ? root.upInk : root.downInk
 	readonly property string buttonText: root.testing
 		? (root.speed.stage === "down" ? Config.networkSpeedTestingDown : Config.networkSpeedTestingUp)
-		: root.done ? "\u{2193} " + Network.speedText(root.speed.down) + " \u{2191} " + Network.speedText(root.speed.up) + " " + Config.networkSpeedAgain
+		: root.done ? "\u{2193} " + root.speed.downText + " \u{2191} " + root.speed.upText + " " + Config.networkSpeedAgain
 			: Config.networkSpeedNone
 
 	title: Config.networkTitle
@@ -99,14 +99,45 @@ ProcessPanel {
 		}
 	}
 
+	function brailleMasks(values, peak, cells, dir) {
+		const cols = cells * 2;
+		const top = peak > 0 ? peak : 1;
+		const quiet = 16 * 1024;
+		const count = values.length;
+		const masks = [];
+
+		let i = count - cols;
+
+		for (let c = 0; c < cells; c++) {
+			let mask = 0;
+
+			for (let k = 0; k < 2; k++) {
+				const sample = i >= 0 && i < count ? values[i] : 0;
+
+				i++;
+				const value = Math.max(0, Number(sample) || 0);
+				const lit = value < quiet ? 0 : Math.min(4, Math.floor(value / top * 4 + 0.5));
+
+				if (lit > 0) {
+					const dots = (1 << lit) - 1;
+					mask |= dir === "up" ? dots << (k * 4) : dots << (4 - lit) << (k * 4);
+				}
+			}
+
+			masks.push(mask);
+		}
+
+		return masks;
+	}
+
 	function graphDots(cells) {
 		const out = [];
 		const pitch = Config.networkGraphHeight / 8;
 		const size = pitch * 0.76;
 		const peak = root.scaleOf();
 
-		pushDots(out, Network.brailleMasks(graphValues("up"), peak, cells, "up"), 0, root.upInk, cells, pitch, size);
-		pushDots(out, Network.brailleMasks(graphValues("down"), peak, cells, "down"), 4, root.downInk, cells, pitch, size);
+		pushDots(out, root.brailleMasks(graphValues("up"), peak, cells, "up"), 0, root.upInk, cells, pitch, size);
+		pushDots(out, root.brailleMasks(graphValues("down"), peak, cells, "down"), 4, root.downInk, cells, pitch, size);
 
 		return out;
 	}
@@ -119,7 +150,7 @@ ProcessPanel {
 
 
 		if (root.isWifi)
-			out.push({ label: "signal", text: root.net.signal >= 0 ? root.net.signal + "%" : "—", color: root.upInk });
+			out.push({ label: "signal", text: root.net.signalText, color: root.upInk });
 
 		out.push({ label: "ipv4", text: root.link, color: Config.foreground });
 
@@ -228,7 +259,7 @@ ProcessPanel {
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
 				color: root.downInk
-				text: "\u{2193} " + Network.rateText(root.net.down || 0)
+				text: "\u{2193} " + root.net.downText
 			}
 
 			Text {
@@ -240,7 +271,7 @@ ProcessPanel {
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
 				color: root.upInk
-				text: "\u{2191} " + Network.rateText(root.net.up || 0)
+				text: "\u{2191} " + root.net.upText
 			}
 		},
 		Item {
@@ -347,7 +378,7 @@ ProcessPanel {
 							font.family: Config.fontFamily
 							font.pixelSize: Settings.fontSize
 							color: wifiRow.current ? root.downInk : (wifiRow.hot ? Config.launcherHighlightText : Config.muted)
-							text: wifiRow.locked ? Config.networkLockIcon : Config.networkWifiIcons[Util.clamp(Network.signalBars(wifiRow.modelData.signal), 1, 4) - 1]
+							text: wifiRow.locked ? Config.networkLockIcon : Config.networkWifiIcons[Util.clamp(wifiRow.modelData.bars, 1, 4) - 1]
 						}
 
 						Text {
@@ -373,7 +404,7 @@ ProcessPanel {
 							font.family: Config.fontFamily
 							font.pixelSize: Settings.fontSize
 							color: wifiRow.current ? root.downInk : Config.muted
-							text: wifiRow.modelData.signal + "%"
+							text: wifiRow.modelData.signalText
 						}
 
 						MouseArea {
@@ -519,7 +550,7 @@ ProcessPanel {
 				value: root.hero
 				ceiling: root.ceiling
 				ink: root.testInk
-				valueText: Network.speedText(root.hero)
+				valueText: root.speed.text || "0"
 				arrow: root.speed.stage === "down" ? "\u{2193}" : root.speed.stage === "up" ? "\u{2191}" : ""
 				arrowSide: root.speed.stage === "up" ? "left" : "right"
 			}

@@ -41,6 +41,8 @@ const WifiOut = struct {
 	ssid: []const u8,
 	security: []const u8,
 	signal: i64,
+	signalText: []const u8,
+	bars: i64,
 	channel: i64,
 	frequency: i64,
 	inUse: bool,
@@ -54,6 +56,10 @@ const SpeedOut = struct {
 	best: f64,
 	down: f64,
 	up: f64,
+	text: []const u8,
+	downText: []const u8,
+	upText: []const u8,
+	ceiling: f64,
 };
 
 const Out = struct {
@@ -62,6 +68,8 @@ const Out = struct {
 	connected: bool,
 	ssid: []const u8,
 	signal: i64,
+	signalText: []const u8,
+	bars: i64,
 	down: f64,
 	up: f64,
 	downText: []const u8,
@@ -592,16 +600,27 @@ pub const Network = struct {
 		_ = self.scratch.reset(.retain_capacity);
 		const arena = self.scratch.allocator();
 
+		const down = @round(self.down);
+		const up = @round(self.up);
+		const speed_down = @round(self.speed_down);
+		const speed_up = @round(self.speed_up);
+		const speed_live = @round(self.speed_live);
+		const speed_best = @round(self.speed_best);
+		const testing = self.speed_stage != .none;
+		const hero = if (testing) speed_live else speed_down;
+
 		const out = Out{
 			.iface = self.iface,
 			.kind = self.kind,
 			.connected = self.connected,
 			.ssid = self.ssid,
 			.signal = self.signal,
-			.down = @round(self.down),
-			.up = @round(self.up),
-			.downText = try rateText(arena, self.down),
-			.upText = try rateText(arena, self.up),
+			.signalText = try signalText(arena, self.signal),
+			.bars = signalBars(self.signal),
+			.down = down,
+			.up = up,
+			.downText = try rateText(arena, down),
+			.upText = try rateText(arena, up),
 			.linkSpeed = self.link_speed,
 			.peak = @round(self.peak),
 			.history = try historyOut(arena, self),
@@ -611,10 +630,14 @@ pub const Network = struct {
 			.wifi = try wifiOut(arena, self),
 			.speed = .{
 				.stage = if (self.speed_stage == .none) "" else @tagName(self.speed_stage),
-				.live = @round(self.speed_live),
-				.best = @round(self.speed_best),
-				.down = @round(self.speed_down),
-				.up = @round(self.speed_up),
+				.live = speed_live,
+				.best = speed_best,
+				.down = speed_down,
+				.up = speed_up,
+				.text = try speedText(arena, hero),
+				.downText = try speedText(arena, speed_down),
+				.upText = try speedText(arena, speed_up),
+				.ceiling = speedCeiling(if (testing) speed_best else speed_down),
 			},
 		};
 
@@ -685,6 +708,8 @@ fn wifiOut(arena: Allocator, self: *Network) ![]WifiOut {
 			.ssid = entry.ssid,
 			.security = entry.security,
 			.signal = entry.signal,
+			.signalText = try signalText(arena, entry.signal),
+			.bars = signalBars(entry.signal),
 			.channel = entry.channel,
 			.frequency = entry.frequency,
 			.inUse = entry.in_use,
@@ -694,12 +719,48 @@ fn wifiOut(arena: Allocator, self: *Network) ![]WifiOut {
 	return out.items;
 }
 
-fn rateText(allocator: Allocator, rate: f64) ![]u8 {
-	if (rate < 1024) return std.fmt.allocPrint(allocator, "{d} B/s", .{@as(i64, @intFromFloat(rate))});
-	if (rate < 1024 * 1024) return std.fmt.allocPrint(allocator, "{d:.1} KiB/s", .{rate / 1024});
-	if (rate < 1024 * 1024 * 1024) return std.fmt.allocPrint(allocator, "{d:.1} MiB/s", .{rate / (1024 * 1024)});
+fn rateText(allocator: Allocator, rate: f64) ![]const u8 {
+	const value = @max(0, rate);
 
-	return std.fmt.allocPrint(allocator, "{d:.1} GiB/s", .{rate / (1024 * 1024 * 1024)});
+	if (value >= 1024 * 1024) return std.fmt.allocPrint(allocator, "{d:.1} MB/s", .{value / (1024 * 1024)});
+	if (value >= 1024) return std.fmt.allocPrint(allocator, "{d:.0} KB/s", .{value / 1024});
+
+	return std.fmt.allocPrint(allocator, "{d:.0} B/s", .{value});
+}
+
+fn megaBits(rate: f64) f64 {
+	return @max(0, rate) * 8 / 1000000;
+}
+
+fn speedText(allocator: Allocator, rate: f64) ![]const u8 {
+	return std.fmt.allocPrint(allocator, "{d:.0}", .{megaBits(rate)});
+}
+
+fn speedCeiling(rate: f64) f64 {
+	const ladder = [_]f64{ 5, 10, 25, 50, 100, 250, 500, 1000 };
+	const mbps = megaBits(rate) * 1.5;
+
+	for (ladder) |step| {
+		if (mbps < step) return step * 125000;
+	}
+
+	return ladder[ladder.len - 1] * 125000;
+}
+
+fn signalBars(pct: i64) i64 {
+	const value = std.math.clamp(pct, 0, 100);
+
+	if (value > 80) return 4;
+	if (value > 55) return 3;
+	if (value > 30) return 2;
+
+	return if (value > 5) 1 else 0;
+}
+
+fn signalText(allocator: Allocator, pct: i64) ![]const u8 {
+	if (pct < 0) return "-";
+
+	return std.fmt.allocPrint(allocator, "{d}%", .{pct});
 }
 
 test "nmcli terse lines keep escaped colons inside the ssid" {
@@ -722,11 +783,66 @@ test "nmcli terse lines keep escaped colons inside the ssid" {
 test "rates format" {
 	const allocator = std.testing.allocator;
 
+	const idle = try rateText(allocator, 0);
+	defer allocator.free(idle);
+	try std.testing.expectEqualStrings("0 B/s", idle);
+
 	const bytes = try rateText(allocator, 512);
 	defer allocator.free(bytes);
 	try std.testing.expectEqualStrings("512 B/s", bytes);
 
-	const mib = try rateText(allocator, 14_000_000);
-	defer allocator.free(mib);
-	try std.testing.expectEqualStrings("13.4 MiB/s", mib);
+	const kb = try rateText(allocator, 1600);
+	defer allocator.free(kb);
+	try std.testing.expectEqualStrings("2 KB/s", kb);
+
+	const mb = try rateText(allocator, 1.2 * 1024 * 1024);
+	defer allocator.free(mb);
+	try std.testing.expectEqualStrings("1.2 MB/s", mb);
+}
+
+test "speed text is whole megabits" {
+	const allocator = std.testing.allocator;
+
+	const zero = try speedText(allocator, 0);
+	defer allocator.free(zero);
+	try std.testing.expectEqualStrings("0", zero);
+
+	const one = try speedText(allocator, 125000);
+	defer allocator.free(one);
+	try std.testing.expectEqualStrings("1", one);
+
+	const twenty = try speedText(allocator, 2_500_000);
+	defer allocator.free(twenty);
+	try std.testing.expectEqualStrings("20", twenty);
+}
+
+test "speed ceiling climbs the ladder" {
+	try std.testing.expectEqual(@as(f64, 625000), speedCeiling(0));
+	try std.testing.expectEqual(@as(f64, 3125000), speedCeiling(1_000_000));
+	try std.testing.expectEqual(@as(f64, 125000000), speedCeiling(100_000_000));
+}
+
+test "signal percent maps to bars" {
+	try std.testing.expectEqual(@as(i64, 4), signalBars(100));
+	try std.testing.expectEqual(@as(i64, 4), signalBars(81));
+	try std.testing.expectEqual(@as(i64, 3), signalBars(80));
+	try std.testing.expectEqual(@as(i64, 3), signalBars(56));
+	try std.testing.expectEqual(@as(i64, 2), signalBars(55));
+	try std.testing.expectEqual(@as(i64, 2), signalBars(31));
+	try std.testing.expectEqual(@as(i64, 1), signalBars(30));
+	try std.testing.expectEqual(@as(i64, 1), signalBars(6));
+	try std.testing.expectEqual(@as(i64, 0), signalBars(5));
+	try std.testing.expectEqual(@as(i64, 0), signalBars(-20));
+	try std.testing.expectEqual(@as(i64, 4), signalBars(200));
+}
+
+test "signal text is a percent or a dash" {
+	const allocator = std.testing.allocator;
+
+	const some = try signalText(allocator, 83);
+	defer allocator.free(some);
+	try std.testing.expectEqualStrings("83%", some);
+
+	const none = try signalText(allocator, -1);
+	try std.testing.expectEqualStrings("-", none);
 }
