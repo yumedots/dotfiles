@@ -28,6 +28,13 @@ pub const Watcher = struct {
 		if (@as(isize, @bitCast(result)) < 0) return error.WatchAdd;
 	}
 
+	/// True when an event is already queued, so a debounce can tell a burst that is still
+	/// arriving from one that has stopped.
+	pub fn pending(self: *Watcher) bool {
+		var fds = [_]linux.pollfd{.{ .fd = self.fd, .events = linux.POLL.IN, .revents = 0 }};
+		return linux.poll(&fds, 1, 0) > 0;
+	}
+
 	pub fn next(self: *Watcher) ![]const u8 {
 		const count = linux.read(self.fd, &self.buffer, self.buffer.len);
 		if (@as(isize, @bitCast(count)) < 0) return error.WatchRead;
@@ -39,6 +46,25 @@ pub const Watcher = struct {
 		const name = std.mem.sliceTo(self.buffer[start..end], 0);
 
 		return name;
+	}
+};
+
+/// A wallpaper daemon writes the ink of every frame it draws while a wallpaper fades. Waiting
+/// for the writes to stop reads the frame the fade ended on, never one halfway through it, and
+/// the wait is longer than the fade that produces the burst.
+pub const quiet_ms = 550;
+
+pub const Debounce = struct {
+	last: i64 = 0,
+	armed: bool = false,
+
+	pub fn note(self: *Debounce, now: i64) void {
+		self.last = now;
+		self.armed = true;
+	}
+
+	pub fn due(self: *const Debounce, now: i64) bool {
+		return self.armed and now - self.last >= quiet_ms;
 	}
 };
 
@@ -72,6 +98,22 @@ pub fn watchFile(io: Io, allocator: Allocator, path: []const u8, ctx: *anyopaque
 		try io.sleep(std.Io.Duration.fromMilliseconds(120), .awake);
 		callback(ctx);
 	}
+}
+
+test "a burst of ink writes only reads once the fade that made it is over" {
+	var debounce: Debounce = .{};
+
+	try std.testing.expect(!debounce.due(1000));
+
+	debounce.note(1000);
+	try std.testing.expect(!debounce.due(1016));
+	try std.testing.expect(!debounce.due(1400));
+	try std.testing.expect(!debounce.due(1549));
+	try std.testing.expect(debounce.due(1550));
+
+	debounce.note(1560);
+	try std.testing.expect(!debounce.due(1570));
+	try std.testing.expect(debounce.due(2110));
 }
 
 test "watch helpers split a path" {
