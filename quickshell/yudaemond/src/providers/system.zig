@@ -173,6 +173,8 @@ pub const System = struct {
 	}
 
 	pub fn start(self: *System) !void {
+		self.sampleProcesses();
+
 		const thread = try std.Thread.spawn(.{}, loop, .{self});
 		thread.detach();
 	}
@@ -349,7 +351,7 @@ pub const System = struct {
 		self.mutex.unlock(self.io);
 	}
 
-	fn sampleProcesses(self: *System) void {
+	pub fn sampleProcesses(self: *System) void {
 		const list = proc.listProcesses(self.io, self.allocator) catch return;
 		defer self.allocator.free(list);
 		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
@@ -564,4 +566,24 @@ test "the full list reports every sampled process" {
 	try std.testing.expectEqual(@as(i32, 42), rows[0].pid);
 	try std.testing.expectEqualStrings("kthread", rows[0].getName());
 	try std.testing.expectEqual(@as(f64, 12.5), rows[1].cpu);
+}
+
+test "one synchronous sample fills the list before the first snapshot" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	const system = try System.create(allocator, io, &hub);
+
+	try std.testing.expectEqual(@as(usize, 0), system.all.items.len);
+
+	system.sampleProcesses();
+
+	try std.testing.expect(system.all.items.len > 100);
+
+	const rows = try system.allRows(allocator);
+	try std.testing.expectEqual(system.all.items.len, rows.len);
 }

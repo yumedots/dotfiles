@@ -477,12 +477,12 @@ fn run(io: std.Io) !void {
 
 	try hub.ipc.?.start();
 	daemon_provider.markListening();
+	try system_provider.start();
 	try opencode_provider.start();
 	try codex_provider.start();
 	try cursor_provider.start();
 	try github_provider.start();
 	try weather_provider.start();
-	try system_provider.start();
 	try apps_provider.start();
 	try screen_provider.start();
 	try settings_provider.start();
