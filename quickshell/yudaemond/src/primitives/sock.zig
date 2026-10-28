@@ -5,9 +5,43 @@ pub const Allocator = std.mem.Allocator;
 
 pub const sync = "{\"sync\":true}";
 
+const lock_exclusive = 2;
+const lock_nonblocking = 4;
+const lock_release = 8;
+
 pub fn failed(result: usize) bool {
 	return @as(isize, @bitCast(result)) < 0;
 }
+
+/// One daemon per runtime dir. The kernel drops the lock when the process dies, so a crash
+/// leaves no file to clean up and a restart is never blocked by its own corpse.
+pub const Lock = struct {
+	fd: i32,
+
+	/// Null means another process already holds it.
+	pub fn take(path: []const u8) !?Lock {
+		const terminated = try std.heap.smp_allocator.allocSentinel(u8, path.len, 0);
+		@memcpy(terminated, path);
+		defer std.heap.smp_allocator.free(terminated);
+
+		const result = linux.open(terminated, .{ .ACCMODE = .RDWR, .CREAT = true, .CLOEXEC = true }, 0o600);
+		if (failed(result)) return error.OpenFailed;
+
+		const fd: i32 = @intCast(result);
+
+		if (failed(linux.flock(fd, lock_exclusive | lock_nonblocking))) {
+			_ = linux.close(fd);
+			return null;
+		}
+
+		return .{ .fd = fd };
+	}
+
+	pub fn release(self: Lock) void {
+		_ = linux.flock(self.fd, lock_release);
+		_ = linux.close(self.fd);
+	}
+};
 
 pub const Server = struct {
 	fd: i32,
@@ -141,4 +175,21 @@ test "line framing keeps the remainder" {
 	try std.testing.expectEqualStrings("a", (try connection.readLine()).?);
 	try std.testing.expectEqualStrings("bb", (try connection.readLine()).?);
 	try std.testing.expectEqualStrings("c", connection.buffer[connection.start..connection.length]);
+}
+
+test "the guard lets the first daemon in and turns the second one away" {
+	const path = try std.fmt.allocPrint(std.testing.allocator, "/tmp/yudae-lock-{d}", .{std.os.linux.getpid()});
+	defer std.testing.allocator.free(path);
+	defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+	const first = (try Lock.take(path)).?;
+
+	const second = try Lock.take(path);
+	try std.testing.expect(second == null);
+	if (second) |lock| lock.release();
+
+	first.release();
+
+	const third = (try Lock.take(path)).?;
+	third.release();
 }

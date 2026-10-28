@@ -349,6 +349,15 @@ fn beat(hub: *hubmod.Hub) void {
 }
 
 fn run(io: std.Io) !void {
+	const socket_path = try socketPath(io, allocator);
+	const lock_path = try std.fmt.allocPrint(allocator, "{s}.lock", .{socket_path});
+
+	var guard = (try sock.Lock.take(lock_path)) orelse {
+		std.debug.print("yudaemond already serves {s}\n", .{socket_path});
+		return;
+	};
+	defer guard.release();
+
 	const hub = try allocator.create(hubmod.Hub);
 	hub.* = .{ .allocator = allocator, .io = io };
 
@@ -452,7 +461,7 @@ fn run(io: std.Io) !void {
 		.supervisor = supervisor_provider,
 		.versions = versions_provider,
 		.windows = windows_provider,
-		.socket_path = try socketPath(io, allocator),
+		.socket_path = socket_path,
 	};
 
 	std.debug.print("yudaemond listening on {s}\n", .{context.socket_path});
