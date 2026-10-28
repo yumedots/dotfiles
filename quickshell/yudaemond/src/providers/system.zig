@@ -50,11 +50,18 @@ const ProcessOut = struct {
 	name: []const u8,
 	cmd: []const u8,
 	value: f64,
+	valueText: []const u8,
 };
 
 const CpuOut = struct {
 	pct: f64,
 	cores: []f64,
+	model: []const u8,
+	spec: []const u8,
+	threads: i64,
+	coreCount: i64,
+	mhz: f64,
+	cache: f64,
 };
 
 const MemoryOut = struct {
@@ -71,6 +78,18 @@ const MemoryOut = struct {
 	swapFree: i64,
 	free: i64,
 	pct: f64,
+	totalText: []const u8,
+	usedText: []const u8,
+	availableText: []const u8,
+	cachedText: []const u8,
+	buffersText: []const u8,
+	swapTotalText: []const u8,
+	swapUsedText: []const u8,
+	poolText: []const u8,
+	committedText: []const u8,
+	ramFreeText: []const u8,
+	swapFreeText: []const u8,
+	freeText: []const u8,
 };
 
 const BatteryOut = struct {
@@ -126,6 +145,12 @@ pub const System = struct {
 	last_cpu: [max_cores + 1][4]i64 = undefined,
 	last_cpu_count: usize = 0,
 	last_proc_at: i64 = 0,
+	cpu_model: []u8 = &.{},
+	cpu_spec: []u8 = &.{},
+	cpu_cores: i64 = 0,
+	cpu_threads: i64 = 0,
+	cpu_mhz: f64 = 0,
+	cpu_cache: f64 = 0,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*System {
 		const self = try allocator.create(System);
@@ -173,10 +198,88 @@ pub const System = struct {
 	}
 
 	pub fn start(self: *System) !void {
+		self.loadCpuInfo();
 		self.sampleProcesses();
 
 		const thread = try std.Thread.spawn(.{}, loop, .{self});
 		thread.detach();
+	}
+
+	const CpuInfo = struct { model: []const u8 = "", cores: i64 = 0, threads: i64 = 0, mhz: f64 = 0, cache: f64 = 0 };
+
+	fn parseCpuInfo(text: []const u8) CpuInfo {
+		var info: CpuInfo = .{};
+
+		var lines = std.mem.splitScalar(u8, text, '\n');
+		while (lines.next()) |line| {
+			const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
+
+			const key = std.mem.trim(u8, line[0..colon], " \t");
+			const value = std.mem.trim(u8, line[colon + 1 ..], " \t\r");
+
+			if (std.mem.eql(u8, key, "processor")) {
+				info.threads += 1;
+			} else if (std.mem.eql(u8, key, "model name") and info.model.len == 0) {
+				info.model = value;
+			} else if (std.mem.eql(u8, key, "cpu cores") and info.cores == 0) {
+				info.cores = std.fmt.parseInt(i64, value, 10) catch 0;
+			} else if (std.mem.eql(u8, key, "cpu MHz")) {
+				info.mhz = @max(info.mhz, std.fmt.parseFloat(f64, value) catch 0);
+			} else if (std.mem.eql(u8, key, "cache size") and info.cache == 0) {
+				info.cache = leadingFloat(value);
+			}
+		}
+
+		if (info.cores == 0) info.cores = info.threads;
+
+		return info;
+	}
+
+	fn leadingFloat(text: []const u8) f64 {
+		var end: usize = 0;
+
+		while (end < text.len and (std.ascii.isDigit(text[end]) or text[end] == '.')) end += 1;
+
+		return std.fmt.parseFloat(f64, text[0..end]) catch 0;
+	}
+
+	fn specLine(allocator: Allocator, info: CpuInfo) ![]u8 {
+		var out: std.ArrayList(u8) = .empty;
+		errdefer out.deinit(allocator);
+
+		var buf: [64]u8 = undefined;
+
+		if (info.threads > 0) try out.appendSlice(allocator, try std.fmt.bufPrint(&buf, "{d} threads", .{info.threads}));
+		if (info.cores > 0 and info.cores != info.threads) try out.appendSlice(allocator, try std.fmt.bufPrint(&buf, "{s}{d} cores", .{if (out.items.len > 0) " · " else "", info.cores}));
+		if (info.mhz > 0) try out.appendSlice(allocator, try std.fmt.bufPrint(&buf, "{s}{d:.1} GHz", .{if (out.items.len > 0) " · " else "", info.mhz / 1000}));
+		if (info.cache > 0) {
+			const part = if (info.cache >= 1024)
+				try std.fmt.bufPrint(&buf, "{s}{d} MB", .{if (out.items.len > 0) " · " else "", @as(i64, @intFromFloat(@round(info.cache / 1024)))})
+			else
+				try std.fmt.bufPrint(&buf, "{s}{d} KB", .{if (out.items.len > 0) " · " else "", @as(i64, @intFromFloat(info.cache))});
+
+			try out.appendSlice(allocator, part);
+		}
+
+		return out.toOwnedSlice(allocator);
+	}
+
+	fn loadCpuInfo(self: *System) void {
+		const body = proc.readFile(self.io, self.allocator, "/proc/cpuinfo") catch return;
+		defer self.allocator.free(body);
+
+		const info = parseCpuInfo(body);
+		const spec = specLine(self.allocator, info) catch return;
+		defer self.allocator.free(spec);
+
+		self.mutex.lockUncancelable(self.io);
+		setStr(self.allocator, &self.cpu_model, info.model) catch {};
+		setStr(self.allocator, &self.cpu_spec, spec) catch {};
+		self.cpu_cores = info.cores;
+		self.cpu_threads = info.threads;
+		self.cpu_mhz = info.mhz;
+		self.cpu_cache = info.cache;
+		self.mutex.unlock(self.io);
 	}
 
 	fn loop(self: *System) void {
@@ -485,6 +588,7 @@ pub const System = struct {
 				.name = entry.name(),
 				.cmd = entry.name(),
 				.value = @round(entry.cpu * 10) / 10,
+				.valueText = try std.fmt.allocPrint(arena, "{d:.1}%", .{entry.cpu}),
 			});
 		}
 
@@ -495,13 +599,27 @@ pub const System = struct {
 				.name = entry.name(),
 				.cmd = entry.name(),
 				.value = @floatFromInt(entry.rss_kb),
+				.valueText = try kbText(arena, entry.rss_kb),
 			});
 		}
+
+		const ram_free = @max(0, self.mem_total - self.mem_used - self.mem_cached - self.mem_buffers);
+		const swap_free = @max(0, self.swap_total - self.swap_used);
+		const pool_free = @max(0, self.mem_pool - self.mem_committed - self.mem_cached - self.mem_buffers);
 
 		const out = Out{
 			.governor = self.governor,
 			.governors = governor_list.items,
-			.cpu = .{ .pct = @round(self.cpu_pct * 10) / 10, .cores = cores.items },
+			.cpu = .{
+				.pct = @round(self.cpu_pct * 10) / 10,
+				.cores = cores.items,
+				.model = self.cpu_model,
+				.spec = self.cpu_spec,
+				.threads = self.cpu_threads,
+				.coreCount = self.cpu_cores,
+				.mhz = self.cpu_mhz,
+				.cache = self.cpu_cache,
+			},
 			.memory = .{
 				.total = self.mem_total,
 				.used = self.mem_used,
@@ -512,10 +630,22 @@ pub const System = struct {
 				.swapUsed = self.swap_used,
 				.pool = self.mem_pool,
 				.committed = self.mem_committed,
-				.ramFree = @max(0, self.mem_total - self.mem_used - self.mem_cached - self.mem_buffers),
-				.swapFree = @max(0, self.swap_total - self.swap_used),
-				.free = @max(0, self.mem_pool - self.mem_committed - self.mem_cached - self.mem_buffers),
+				.ramFree = ram_free,
+				.swapFree = swap_free,
+				.free = pool_free,
 				.pct = @round(self.mem_pct * 10) / 10,
+				.totalText = try kbText(arena, self.mem_total),
+				.usedText = try kbText(arena, self.mem_used),
+				.availableText = try kbText(arena, self.mem_available),
+				.cachedText = try kbText(arena, self.mem_cached),
+				.buffersText = try kbText(arena, self.mem_buffers),
+				.swapTotalText = try kbText(arena, self.swap_total),
+				.swapUsedText = try kbText(arena, self.swap_used),
+				.poolText = try kbText(arena, self.mem_pool),
+				.committedText = try kbText(arena, self.mem_committed),
+				.ramFreeText = try kbText(arena, ram_free),
+				.swapFreeText = try kbText(arena, swap_free),
+				.freeText = try kbText(arena, pool_free),
 			},
 			.battery = .{
 				.present = self.battery_present,
@@ -531,6 +661,15 @@ pub const System = struct {
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
+
+fn kbText(arena: Allocator, kb: i64) ![]const u8 {
+	const value: f64 = @floatFromInt(kb);
+
+	if (kb >= 1024 * 1024) return std.fmt.allocPrint(arena, "{d:.1} GB", .{value / 1024 / 1024});
+	if (kb >= 1024) return std.fmt.allocPrint(arena, "{d:.1} MB", .{value / 1024});
+
+	return std.fmt.allocPrint(arena, "{d} KB", .{kb});
+}
 
 fn cpuPercent(delta: i64, seconds: f64) f64 {
 	if (seconds <= 0 or delta <= 0) return 0;
@@ -586,4 +725,52 @@ test "one synchronous sample fills the list before the first snapshot" {
 
 	const rows = try system.allRows(allocator);
 	try std.testing.expectEqual(system.all.items.len, rows.len);
+}
+
+test "memory sizes read the way the panel prints them" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+
+	try std.testing.expectEqualStrings("0 KB", try kbText(allocator, 0));
+	try std.testing.expectEqualStrings("512 KB", try kbText(allocator, 512));
+	try std.testing.expectEqualStrings("1.0 MB", try kbText(allocator, 1024));
+	try std.testing.expectEqualStrings("1.5 MB", try kbText(allocator, 1536));
+	try std.testing.expectEqualStrings("32.0 GB", try kbText(allocator, 32 * 1024 * 1024));
+}
+
+test "cpuinfo names the model and the spec line" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+
+	const fixture =
+		\\processor : 0
+		\\model name : AMD Ryzen 7 5800X 8-Core Processor
+		\\cpu MHz : 3800.000
+		\\cache size : 32768 KB
+		\\cpu cores : 8
+		\\
+		\\processor : 1
+		\\model name : AMD Ryzen 7 5800X 8-Core Processor
+		\\cpu MHz : 4200.000
+		\\cache size : 32768 KB
+		\\cpu cores : 8
+	;
+
+	const info = System.parseCpuInfo(fixture);
+
+	try std.testing.expectEqualStrings("AMD Ryzen 7 5800X 8-Core Processor", info.model);
+	try std.testing.expectEqual(@as(i64, 2), info.threads);
+	try std.testing.expectEqual(@as(i64, 8), info.cores);
+	try std.testing.expectEqual(@as(f64, 4200), info.mhz);
+	try std.testing.expectEqual(@as(f64, 32768), info.cache);
+
+	const spec = try System.specLine(allocator, info);
+	try std.testing.expectEqualStrings("2 threads · 8 cores · 4.2 GHz · 32 MB", spec);
+
+	const tiny = try System.specLine(allocator, .{ .threads = 4, .cores = 4 });
+	try std.testing.expectEqualStrings("4 threads", tiny);
 }

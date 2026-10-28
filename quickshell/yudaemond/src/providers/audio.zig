@@ -47,12 +47,19 @@ const NodeOut = struct {
 	id: i64,
 	name: []const u8,
 	app: []const u8,
+	appId: []const u8,
+	appIds: []const []const u8,
 	class: []const u8,
 	description: []const u8,
 	volume: f64,
+	volumeText: []const u8,
 	mute: bool,
+	muted: bool,
 	isStream: bool,
 	isSink: bool,
+	isDefault: bool,
+	shown: bool,
+	playing: bool,
 	ready: bool,
 	running: bool,
 	props: PropsOut,
@@ -63,6 +70,7 @@ const Out = struct {
 	sink: i64,
 	source: i64,
 	hasInput: bool,
+	recording: bool,
 	watch: bool,
 };
 
@@ -537,21 +545,33 @@ pub const Audio = struct {
 		const arena = self.scratch.allocator();
 
 		var nodes: std.ArrayListUnmanaged(NodeOut) = .empty;
+		var recording = false;
 
 		for (self.nodes.items) |node| {
 			const running = std.mem.eql(u8, node.state, "running");
+			const ready = node.state.len > 0;
+			const input = std.mem.indexOf(u8, node.class, "Input") != null;
+
+			if (node.is_stream and running and input) recording = true;
 
 			try nodes.append(arena, .{
 				.id = node.id,
 				.name = node.name,
 				.app = node.app,
+				.appId = if (node.name.len > 0) node.name else node.app,
+				.appIds = try appIds(arena, node),
 				.class = node.class,
 				.description = node.description,
 				.volume = node.volume,
+				.volumeText = try percentText(arena, node.volume),
 				.mute = node.mute,
+				.muted = node.mute,
 				.isStream = node.is_stream,
 				.isSink = node.is_sink,
-				.ready = node.state.len > 0,
+				.isDefault = node.id == self.sink or node.id == self.source,
+				.shown = ready and node.is_stream and !input,
+				.playing = running,
+				.ready = ready,
 				.running = running,
 				.props = .{
 					.@"node.name" = node.name,
@@ -568,10 +588,50 @@ pub const Audio = struct {
 			.sink = self.sink,
 			.source = self.source,
 			.hasInput = self.has_input,
+			.recording = recording,
 			.watch = self.watch.load(.monotonic),
 		}, .{})});
 	}
 };
+
+fn percentText(arena: Allocator, volume: f64) ![]const u8 {
+	return std.fmt.allocPrint(arena, "{d}%", .{@as(i64, @intFromFloat(@round(volume * 100)))});
+}
+
+fn appIds(arena: Allocator, node: Node) ![]const []const u8 {
+	var list: std.ArrayListUnmanaged([]const u8) = .empty;
+
+	if (node.name.len > 0) try list.append(arena, node.name);
+	if (node.app.len > 0) try list.append(arena, node.app);
+
+	if (digitRun(node.name) orelse digitRun(node.app)) |digits| {
+		try list.append(arena, try std.fmt.allocPrint(arena, "steam_app_{s}", .{digits}));
+	}
+
+	const binary = if (std.mem.lastIndexOfScalar(u8, node.binary, '/')) |at| node.binary[at + 1 ..] else node.binary;
+	if (binary.len > 0) try list.append(arena, binary);
+
+	return list.items;
+}
+
+fn digitRun(text: []const u8) ?[]const u8 {
+	var index: usize = 0;
+
+	while (index < text.len) : (index += 1) {
+		if (!std.ascii.isDigit(text[index])) continue;
+
+		const start = index;
+		while (index < text.len and std.ascii.isDigit(text[index])) index += 1;
+
+		const end = index;
+		if (end - start < 3) continue;
+		if (end < text.len and (std.ascii.isAlphanumeric(text[end]) or text[end] == '_')) continue;
+
+		return text[start..end];
+	}
+
+	return null;
+}
 
 fn sameNodes(a: []const Node, b: []const Node, sink_a: i64, sink_b: i64) bool {
 	if (a.len != b.len or sink_a != sink_b) return false;
@@ -660,4 +720,123 @@ test "only audio objects wake the mixer" {
 	try std.testing.expect(streamObject("Event 'new' on sink-input #118"));
 	try std.testing.expect(!streamObject("Event 'change' on client #90"));
 	try std.testing.expect(!streamObject("Event 'remove' on module #12"));
+}
+
+test "volume text is the percent the mixer draws" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+
+	try std.testing.expectEqualStrings("72%", try percentText(allocator, 0.72));
+	try std.testing.expectEqualStrings("100%", try percentText(allocator, 1));
+	try std.testing.expectEqualStrings("0%", try percentText(allocator, 0.004));
+	try std.testing.expectEqualStrings("150%", try percentText(allocator, 1.5));
+}
+
+test "the steam id is the first digit run of three" {
+	try std.testing.expectEqualStrings("12345", digitRun("Civilization (12345)").?);
+	try std.testing.expectEqualStrings("732", digitRun("game-732").?);
+	try std.testing.expect(digitRun("mp3") == null);
+	try std.testing.expect(digitRun("x99") == null);
+	try std.testing.expect(digitRun("123abc") == null);
+	try std.testing.expectEqualStrings("123", digitRun("123 abc").?);
+	try std.testing.expectEqualStrings("777", digitRun("a 1 b 777").?);
+}
+
+test "render emits the node fields the mixer binds" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+
+	var audio: Audio = .{
+		.allocator = allocator,
+		.io = std.Io.Threaded.global_single_threaded.io(),
+		.hub = undefined,
+		.scratch = std.heap.ArenaAllocator.init(allocator),
+	};
+
+	audio.sink = 52;
+	audio.source = 54;
+
+	try audio.nodes.append(allocator, .{
+		.id = 52,
+		.name = try allocator.dupe(u8, "speakers"),
+		.app = try allocator.dupe(u8, "Speakers"),
+		.class = try allocator.dupe(u8, "Audio/Sink"),
+		.description = try allocator.dupe(u8, "Speakers"),
+		.binary = try allocator.dupe(u8, ""),
+		.pid = try allocator.dupe(u8, ""),
+		.volume = 0.72,
+		.mute = false,
+		.is_stream = false,
+		.is_sink = true,
+		.state = try allocator.dupe(u8, "running"),
+	});
+
+	try audio.nodes.append(allocator, .{
+		.id = 60,
+		.name = try allocator.dupe(u8, "browser"),
+		.app = try allocator.dupe(u8, "Browser 12345"),
+		.class = try allocator.dupe(u8, "Stream/Output/Audio"),
+		.description = try allocator.dupe(u8, "Browser"),
+		.binary = try allocator.dupe(u8, "/usr/lib/browser"),
+		.pid = try allocator.dupe(u8, "1234"),
+		.volume = 0.064,
+		.mute = true,
+		.is_stream = true,
+		.is_sink = false,
+		.state = try allocator.dupe(u8, "running"),
+	});
+
+	try audio.nodes.append(allocator, .{
+		.id = 62,
+		.name = try allocator.dupe(u8, "recorder"),
+		.app = try allocator.dupe(u8, "Recorder"),
+		.class = try allocator.dupe(u8, "Stream/Input/Audio"),
+		.description = try allocator.dupe(u8, "Recorder"),
+		.binary = try allocator.dupe(u8, ""),
+		.pid = try allocator.dupe(u8, ""),
+		.volume = 1,
+		.mute = false,
+		.is_stream = true,
+		.is_sink = false,
+		.state = try allocator.dupe(u8, "running"),
+	});
+
+	var out: std.Io.Writer.Allocating = .init(allocator);
+	defer out.deinit();
+
+	try audio.render(&out.writer);
+
+	const parsed = try json.parse(allocator, out.written());
+	const nodes = json.listAt(parsed.value, "nodes");
+
+	try std.testing.expectEqual(@as(usize, 3), nodes.len);
+	try std.testing.expect(json.flag(parsed.value, "recording"));
+
+	const sink = nodes[0];
+	try std.testing.expectEqualStrings("72%", json.textAt(sink, "volumeText"));
+	try std.testing.expect(json.flag(sink, "isDefault"));
+	try std.testing.expect(!json.flag(sink, "isStream"));
+	try std.testing.expect(!json.flag(sink, "shown"));
+
+	const stream = nodes[1];
+	try std.testing.expectEqualStrings("6%", json.textAt(stream, "volumeText"));
+	try std.testing.expect(json.flag(stream, "shown"));
+	try std.testing.expect(json.flag(stream, "playing"));
+	try std.testing.expect(json.flag(stream, "muted"));
+	try std.testing.expect(!json.flag(stream, "isDefault"));
+	try std.testing.expectEqualStrings("browser", json.textAt(stream, "appId"));
+
+	const ids = json.listAt(stream, "appIds");
+	try std.testing.expectEqualStrings("browser", json.text(ids[0]));
+	try std.testing.expectEqualStrings("Browser 12345", json.text(ids[1]));
+	try std.testing.expectEqualStrings("steam_app_12345", json.text(ids[2]));
+	try std.testing.expectEqualStrings("browser", json.text(ids[3]));
+
+	const input = nodes[2];
+	try std.testing.expect(!json.flag(input, "shown"));
+	try std.testing.expect(json.flag(input, "playing"));
 }
