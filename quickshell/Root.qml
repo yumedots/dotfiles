@@ -70,7 +70,7 @@ ShellRoot {
 			return;
 		}
 
-		if (launcherWindow.windowEntries().length === 0)
+		if (Yudae.windows.length === 0)
 			return;
 
 		const wasOpen = launcherWindow.shown;

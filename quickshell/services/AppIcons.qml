@@ -9,7 +9,6 @@ Item {
 
 	visible: false
 
-	readonly property var entries: Yudae.appsEntries
 	readonly property var resolved: Yudae.icons.map || ({})
 	property var asked: ({})
 

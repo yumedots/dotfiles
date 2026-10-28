@@ -175,35 +175,11 @@ const launcherTextGap = 10;
 const launcherSearchBox = "#1f1f1f";
 const launcherHighlight = "#2f2f2f";
 const launcherHighlightText = foreground;
-const launcherUsageMax = 10;
-const launcherTerminalConfig = "~/.config/hypr/programs.lua";
 const launcherPrompt = "\uea6d";
 const launcherMaxRows = 12;
-const launcherMaxResults = 60;
-const launcherIgnoreApps = ["avahi-discover", "bssh", "bvnc"];
 
-const launcherIconCommand = "\u{f018c}";
-const launcherIconCalc = "\u{f00ec}";
-const launcherIconClipboard = "\uf07f";
-const launcherIconWindow = "\u{f05b1}";
-const launcherIconFile = "\u{f0213}";
 const launcherIconPin = "\ueba0";
 const launcherIconActive = "\u{f00c}";
-const launcherIconApps = "\u{f0c9}";
-const launcherIconWallpaper = "\u{f0e09}";
-const launcherIconProcess = "\u{f0874}";
-const launcherIconFallback = "\u{f2d0}";
-const launcherIconPower = "\u{f011}";
-const launcherModes = [
-	{ mode: "clipboard", name: "Clipboard", mark: "", glyph: launcherIconClipboard, keywords: ["copy", "paste"] },
-	{ mode: "wallpaper", name: "Wallpaper", mark: "~", glyph: launcherIconWallpaper, keywords: ["wallpaper", "background", "desktop"] },
-	{ mode: "procs", name: "Processes", mark: "%", glyph: launcherIconProcess, keywords: ["top", "atop", "cpu", "processes", "monitor", "kill"] }
-];
-const launcherGroups = [
-	{ id: "apps", name: "Apps", glyph: launcherIconApps, keywords: ["programs", "applications"] },
-	{ id: "power", name: "Power", glyph: launcherIconPower, keywords: ["power", "session", "shutdown", "logout", "reboot", "suspend", "sleep"] }
-];
-const launcherAppAliases = { foot: ["foot", "footclient", "foot-server"] };
 
 const wallpaperTransitionMs = 400;
 const wallpaperEmpty = "No wallpapers found";

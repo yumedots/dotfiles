@@ -274,6 +274,7 @@ QtObject {
 	readonly property var launcher: root.snapshot.launcher || ({})
 	readonly property var ink: root.snapshot.ink || ({})
 	readonly property var windows: root.snapshot.windows ? (root.snapshot.windows.list || []) : []
+	readonly property string windowsEmpty: root.snapshot.windows ? (root.snapshot.windows.empty || "") : ""
 
 	function windowLaunch(id) {
 		root.send({ cmd: { windows: { launch: id } } });
@@ -281,6 +282,10 @@ QtObject {
 
 	function windowFocus(address) {
 		root.send({ cmd: { windows: { focus: address } } });
+	}
+
+	function windowQuery(query) {
+		root.send({ cmd: { windows: { query: query || "" } } });
 	}
 
 	function launcherQuery(query, forced, group) {
@@ -313,6 +318,14 @@ QtObject {
 
 	function launcherRemember(id) {
 		root.send({ cmd: { launcher: { remember: id } } });
+	}
+
+	function launcherActivate(id) {
+		root.send({ cmd: { launcher: { activate: id } } });
+	}
+
+	function launcherCopyText(text) {
+		root.send({ cmd: { launcher: { copyText: text || "" } } });
 	}
 	readonly property var bar: root.snapshot.bar || ({})
 	readonly property var wallpaper: root.snapshot.wallpaper || ({})

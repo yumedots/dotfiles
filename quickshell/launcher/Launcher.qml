@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import Quickshell.Wayland
 import qs.ui
 import qs
@@ -13,51 +12,29 @@ PanelWindow {
 
 	property bool shown: false
 	property string query: ""
-	readonly property var pins: root.state.pins || []
-
-
-
-
 	property string group: ""
 	property string forced: ""
 	property var pointer: null
 	property var pending: null
 
+	property bool windows: false
+	property int winIndex: 0
+
+	readonly property var state: Yudae.launcher
+	readonly property string mode: root.windows ? "windows" : (root.state.mode || "apps")
+	readonly property string prompt: root.windows ? "" : (root.state.prompt || "")
+	readonly property bool isClipboard: root.mode === "clipboard"
+	readonly property string empty: root.windows ? Yudae.windowsEmpty : (root.state.empty || "")
+	readonly property var results: root.windows ? (Yudae.windows || []) : (root.state.results || [])
+	readonly property string clipPreviewText: root.state.clip ? String(root.state.clip.text || "") : ""
+	readonly property string clipPreviewPath: root.state.clip && root.state.clip.path ? "file://" + root.state.clip.path : ""
+
 	readonly property int windowColumns: windowsGrid.columns
 	readonly property int winCurrent: Util.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
 	readonly property string winName: root.windows && root.results.length > 0 ? root.results[root.winCurrent].name : ""
 
-
-
-	property bool windows: false
-	property int winIndex: 0
-	property string clipPreviewId: ""
-	readonly property string clipPreviewText: root.state.clip ? String(root.state.clip.text || "") : ""
-	readonly property string clipPreviewPath: root.state.clip && root.state.clip.path ? "file://" + root.state.clip.path : ""
-	readonly property bool isClipboard: root.mode === "clipboard"
-
-	readonly property var prefix: Apps.detectPrefix(root.query, Entries.modeMarks(Config.launcherModes))
-	readonly property string search: root.windows || root.group !== "" || root.forced !== "" ? root.query : root.prefix.text
-	readonly property string mode: root.windows ? "windows" : (root.group !== "" ? "group:" + root.group : (root.forced !== "" ? root.forced : root.prefix.mode))
-	readonly property string home: Quickshell.env("HOME")
-	readonly property string terminalConfig: Config.launcherTerminalConfig.replace("~", root.home)
-	readonly property string stateDir: Quickshell.shellDir + "/cache/launcher"
-	readonly property var appEntries: Entries.appEntries(AppIcons.entries, Config.launcherIgnoreApps, Config.launcherAppAliases)
-	readonly property var state: Yudae.launcher
-	readonly property var results: root.windows ? root.windowResults() : (root.state.results || [])
-
-	function windowResults() {
-		const typed = root.search.toLowerCase();
-
-		return root.windowEntries().filter(function (entry) {
-			return typed === "" || String(entry.name).toLowerCase().indexOf(typed) >= 0;
-		});
-	}
 	readonly property int listHeight: Config.launcherMaxRows * Config.launcherRowHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
-
-	readonly property var modeInfo: Entries.modeInfo(root.mode, Config)
-	readonly property string prompt: root.modeInfo && root.modeInfo.glyph ? root.modeInfo.glyph : Config.launcherPrompt
 
 	anchors.top: true
 	anchors.left: true
@@ -90,7 +67,16 @@ PanelWindow {
 
 	visible: alwaysMapped || root.shown || card.opacity > 0
 
-	Component.onCompleted: Yudae.launcherQuery(root.query, root.forced, root.group)
+	Component.onCompleted: root.push()
+
+	function push() {
+		if (root.windows) {
+			Yudae.windowQuery(root.query);
+			return;
+		}
+
+		Yudae.launcherQuery(root.query, root.forced, root.group);
+	}
 
 	function open(mode) {
 		if (mode !== undefined)
@@ -103,6 +89,7 @@ PanelWindow {
 		list.currentIndex = 0;
 		root.shown = true;
 		root.winIndex = root.windows ? 1 : 0;
+		root.push();
 		Qt.callLater(function () {
 			list.currentIndex = 0;
 			card.forceActiveFocus();
@@ -121,20 +108,22 @@ PanelWindow {
 	function close() {
 		root.shown = false;
 		Yudae.launcherQuery("", "", "");
+		Yudae.windowQuery("");
 	}
 
 	function settle() {
 		root.query = "";
 		root.group = "";
 		root.forced = "";
-		root.clipPreviewId = "";
 		field.clear();
 		field.typing = false;
 
 		if (root.pending !== null) {
-			root.remember(root.pending);
+			Yudae.launcherRemember(root.pending.id);
 			root.pending = null;
 		}
+
+		root.push();
 	}
 
 	function toggle() {
@@ -151,48 +140,6 @@ PanelWindow {
 			root.close();
 		else
 			root.openWindows();
-	}
-
-	function windowEntries() {
-		return (Yudae.windows || []).map(function (info) {
-			return {
-				id: info.id,
-				kind: "window",
-				name: info.title || info.appId,
-				appId: info.appId,
-				keywords: [info.appId],
-				address: info.address,
-				workspace: info.workspace,
-				focus: info.focus
-			};
-		});
-	}
-
-	function iconOfEntry(entry) {
-		if (!entry)
-			return "";
-
-		if (entry.kind === "proc")
-			return AppIcons.iconOfPid(entry.pid);
-
-		return entry.appId ? AppIcons.iconOf(entry.appId) : "";
-	}
-
-	function rowGlyph(entry) {
-		return Entries.glyphOf(entry, Config);
-	}
-
-	function emptyText() {
-		if (root.mode === "clipboard")
-			return "Nothing copied yet";
-		if (root.mode === "windows")
-			return "No windows open";
-		if (root.mode === "calc")
-			return "Type an expression";
-		if (root.group !== "")
-			return "Nothing here";
-
-		return "Nothing matches";
 	}
 
 	function stepWindows(step) {
@@ -250,8 +197,7 @@ PanelWindow {
 
 		if (root.isClipboard && event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
 			if (previewText.selectedText !== "") {
-				Quickshell.execDetached(["sh", "-c", "touch " + Shell.shellQuote(Quickshell.env("XDG_RUNTIME_DIR") + "/qs-clip-self")]);
-				root.copy(previewText.selectedText);
+				Yudae.launcherCopyText(previewText.selectedText);
 				event.accepted = true;
 				return;
 			}
@@ -328,6 +274,7 @@ PanelWindow {
 		root.query = "";
 		field.clear();
 		list.currentIndex = 0;
+		root.push();
 	}
 
 	function saveQuery() {
@@ -335,10 +282,6 @@ PanelWindow {
 			return;
 
 		Yudae.launcherSave(root.query);
-	}
-
-	function writeFile(path, text) {
-		Quickshell.execDetached(Shell.writeCommand(path, text));
 	}
 
 	function openWallpaper() {
@@ -357,36 +300,15 @@ PanelWindow {
 		root.powerRequested();
 	}
 
-	function remember(entry) {
-		if (!entry || entry.kind === "calc" || entry.kind === "window" || entry.kind === "proc" || entry.kind === "clip")
-			return;
-
-		Yudae.launcherRemember(entry.id);
-	}
-
 	function pin(entry) {
-		if (!Entries.rememberable(entry))
+		if (!entry)
 			return;
 
 		Yudae.launcherPin(entry.id);
 	}
 
-	function copy(text) {
-		Quickshell.execDetached(["sh", "-c", "printf '%s' " + Shell.shellQuote(text) + " | wl-copy"]);
-	}
-
 	function copyClip(id) {
 		Yudae.launcherCopyClip(id);
-	}
-
-	function decodeClip(clipId) {
-		const id = clipId || "";
-
-		if (root.clipPreviewId === id)
-			return;
-
-		root.clipPreviewId = id;
-		Yudae.launcherClip(id);
 	}
 
 	function decodeCurrentClip() {
@@ -395,7 +317,7 @@ PanelWindow {
 
 		const entry = root.results[list.currentIndex >= 0 ? list.currentIndex : 0];
 
-		root.decodeClip(entry && entry.clipId ? entry.clipId : "");
+		Yudae.launcherClip(entry && entry.clipId ? entry.clipId : "");
 	}
 
 	function scrollPreview(delta) {
@@ -406,10 +328,6 @@ PanelWindow {
 				Math.max(0, previewFlick.contentHeight - previewFlick.height)
 			);
 		}
-	}
-
-	function focusWindow(address) {
-		Yudae.windowFocus(address);
 	}
 
 	function killProc(entry) {
@@ -424,16 +342,12 @@ PanelWindow {
 			return;
 
 		if (entry.kind === "mode") {
-			if (entry.mode === "wallpaper") {
-				root.openWallpaper();
-				return;
-			}
-
 			root.group = "";
 			root.forced = entry.mode;
 			root.query = "";
 			field.clear();
 			list.currentIndex = 0;
+			root.push();
 			return;
 		}
 
@@ -443,46 +357,37 @@ PanelWindow {
 				return;
 			}
 
+			root.forced = "";
 			root.group = entry.group;
 			root.query = "";
 			field.clear();
 			list.currentIndex = 0;
+			root.push();
 			return;
 		}
 
 		if (!root.shown)
 			return;
 
-		if (entry.kind === "app")
-			Yudae.windowLaunch(entry.appId);
-		else if (entry.kind === "window")
-			root.focusWindow(entry.address);
-		else if (entry.kind === "command" || entry.kind === "action" || entry.kind === "saved")
-			Quickshell.execDetached(["sh", "-c", entry.command]);
-		else if (entry.kind === "calc")
-			root.copy(entry.value);
-		else if (entry.kind === "clip")
-			root.copyClip(entry.clipId);
-		else if (entry.kind === "file")
-			Quickshell.execDetached(["xdg-open", entry.path]);
-
+		Yudae.launcherActivate(entry.id);
 		root.pending = entry;
 		root.close();
 	}
 
-	onSearchChanged: Yudae.launcherQuery(root.query, root.forced, root.group)
+	onQueryChanged: root.push()
 
 	onResultsChanged: root.decodeCurrentClip()
 
 	onModeChanged: {
 		list.currentIndex = 0;
-		Yudae.launcherQuery(root.query, root.forced, root.group);
+
+		if (!root.shown)
+			return;
 
 		if (root.mode === "wallpaper")
 			root.openWallpaper();
-		else if (root.mode === "clipboard") {
+		else if (root.mode === "clipboard")
 			Yudae.launcherClips();
-		}
 	}
 
 
@@ -675,7 +580,7 @@ PanelWindow {
 							height: Config.launcherRowHeight
 
 							readonly property bool active: row.index === list.currentIndex
-							readonly property bool pinned: root.pins.indexOf(row.modelData.id) >= 0 || row.modelData.kind === "saved"
+							readonly property bool pinned: row.modelData.pinned === true
 
 							Item {
 								id: rowIcon
@@ -685,8 +590,7 @@ PanelWindow {
 								width: Config.launcherIconSlot
 								height: Config.launcherIconSlot
 
-							readonly property string clipIcon: row.modelData.kind === "clip" && row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : ""
-							readonly property string icon: rowIcon.clipIcon !== "" ? rowIcon.clipIcon : root.iconOfEntry(row.modelData)
+							readonly property string icon: row.modelData.kind === "proc" ? AppIcons.iconOfPid(row.modelData.pid) : (row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : "")
 
 							Text {
 								visible: row.modelData.kind !== "app" && (rowIcon.icon === "" || rowIconImage.status === Image.Error)
@@ -694,7 +598,7 @@ PanelWindow {
 								font.family: Config.fontFamily
 								font.pixelSize: 18
 								color: row.active ? Config.launcherHighlightText : Config.foreground
-								text: root.rowGlyph(row.modelData)
+								text: row.modelData.glyph
 								z: 1
 							}
 
@@ -742,7 +646,7 @@ PanelWindow {
 								font.family: Config.fontFamily
 								font.pixelSize: Config.launcherFontSize
 								color: row.active ? Config.launcherHighlightText : Config.muted
-								text: row.modelData.kind === "proc" ? row.modelData.value.toFixed(1) + "%" : ""
+								text: row.modelData.detail
 							}
 
 							Text {
@@ -812,7 +716,7 @@ PanelWindow {
 							font.family: Config.fontFamily
 							font.pixelSize: Config.launcherFontSize
 							color: Config.muted
-							text: root.emptyText()
+							text: root.empty
 						}
 					}
 				}
@@ -826,7 +730,7 @@ PanelWindow {
 			results: root.windows ? root.results : []
 			index: root.winCurrent
 			title: root.winName
-			emptyMessage: root.emptyText()
+			emptyMessage: root.empty
 			available: root.screen ? root.screen.width : root.width
 		}
 	}
