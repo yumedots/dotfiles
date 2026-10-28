@@ -327,6 +327,15 @@ QtObject {
 	function launcherCopyText(text) {
 		root.send({ cmd: { launcher: { copyText: text || "" } } });
 	}
+
+	function launcherWake(sock, pid, path) {
+		root.send({ cmd: { launcher: { wake: { sock: sock, pid: pid, path: path } } } });
+	}
+
+	function fileWrite(path, text) {
+		root.send({ cmd: { file: { write: { path: path, text: text || "" } } } });
+	}
+
 	readonly property var bar: root.snapshot.bar || ({})
 	readonly property var wallpaper: root.snapshot.wallpaper || ({})
 

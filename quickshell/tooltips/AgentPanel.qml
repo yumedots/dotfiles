@@ -30,7 +30,7 @@ Item {
 		nameField.text = root.agentName;
 
 		if (nameFile.text().trim() !== root.agentName)
-			Quickshell.execDetached(Shell.writeCommand(root.agentNamePath, root.agentName + "\n"));
+			Yudae.fileWrite(root.agentNamePath, root.agentName + "\n");
 	}
 
 	FileView {

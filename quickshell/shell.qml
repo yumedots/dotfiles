@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs
+import qs.services
 import Quickshell
 import Quickshell.Io
 
@@ -12,10 +13,19 @@ Root {
 	readonly property string linkPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/qs-main-" + Quickshell.instanceId + ".sock"
 
 	function spawnLauncher() {
-		Quickshell.execDetached(["sh", "-c", "pgrep -f '^quickshell -p " + mainShell.launcherPath + "' >/dev/null || { ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid env QS_MAIN_SOCK=" + Shell.shellQuote(mainShell.linkPath) + " QS_MAIN_PID=" + Quickshell.processId + " quickshell -p " + Shell.shellQuote(mainShell.launcherPath) + " >/dev/null 2>&1 & echo $! > \"$XDG_RUNTIME_DIR/qs-launcher.pid\"; }"]);
+		Yudae.launcherWake(mainShell.linkPath, Quickshell.processId, mainShell.launcherPath);
 	}
 
 	Component.onCompleted: mainShell.spawnLauncher()
+
+	Connections {
+		target: Yudae
+
+		function onConnectedChanged() {
+			if (Yudae.connected)
+				mainShell.spawnLauncher();
+		}
+	}
 
 	SocketServer {
 		active: true
