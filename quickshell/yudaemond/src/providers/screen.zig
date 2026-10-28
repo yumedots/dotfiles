@@ -259,6 +259,12 @@ pub const Screen = struct {
 		};
 		defer self.allocator.free(body);
 
+		self.mutex.lockUncancelable(self.io);
+		const unchanged = self.raw.len > 0 and std.mem.eql(u8, self.raw, body);
+		self.mutex.unlock(self.io);
+
+		if (unchanged) return;
+
 		var arena = std.heap.ArenaAllocator.init(self.allocator);
 		defer arena.deinit();
 
