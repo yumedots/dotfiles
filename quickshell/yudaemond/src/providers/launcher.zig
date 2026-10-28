@@ -678,7 +678,7 @@ pub const Launcher = struct {
 
 		const entry = calc.evaluate(allocator, view.search) orelse return;
 
-		self.copyText(entry.value);
+		self.copyText(entry.text);
 	}
 
 	fn runSaved(self: *Launcher, name: []const u8) void {
