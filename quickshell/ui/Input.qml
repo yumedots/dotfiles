@@ -117,9 +117,9 @@ QtObject {
 			up: () => target.nudgeVolume(step),
 			down: () => target.nudgeVolume(-step),
 			m: () => target.toggleMute(target.selectedNode),
-			accept: () => System.sameNode(target.selectedNode, target.sink)
-				? target.openPicker("output")
-				: System.sameNode(target.selectedNode, target.source) ? target.openPicker("input") : null
+			accept: () => target.selectedNode && target.selectedNode.isDefault === true
+				? target.openPicker(target.selectedNode.isSink ? "output" : "input")
+				: null
 		}, root.mixerArrows[event.key]);
 	}
 

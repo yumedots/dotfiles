@@ -1,12 +1,12 @@
 import QtQuick
-import Quickshell.Io
 import qs.ui
 import qs
+import qs.services
 
 ProcessPanel {
 	id: root
 
-	property var info: ({ model: "", cores: 0, threads: 0, mhz: 0, cache: 0 })
+	readonly property var sys: Yudae.system.cpu || ({})
 
 	readonly property color accentInk: Util.pick(Config.mono, Config.cpuBase, Config.cpuBaseMono)
 	readonly property color peakInk: Util.pick(Config.mono, Config.cpuPeak, Config.cpuPeakMono)
@@ -15,8 +15,8 @@ ProcessPanel {
 	readonly property int blockRows: Math.max(1, Math.ceil(root.cores.length / Config.cpuBlockColumns))
 	readonly property real vizHeight: root.blockRows * (root.blockSize + Config.cpuBlockGap) - Config.cpuBlockGap
 
-	title: root.info.model !== "" ? root.info.model : "CPU"
-	detail: System.cpuSpecLine(root.info)
+	title: root.sys.model || "CPU"
+	detail: root.sys.spec || ""
 	detailColor: root.accentInk
 	listInk: root.accentInk
 	totalInk: root.colorFor(root.pct)
@@ -24,7 +24,6 @@ ProcessPanel {
 	panelPadding: Config.cpuTooltipPadding
 	topCount: Config.cpuTopCount
 	psField: "pcpu"
-	rowText: (value) => value.toFixed(1) + "%"
 	rowColor: (value) => root.colorFor(value)
 
 	function colorFor(load) {
@@ -33,15 +32,6 @@ ProcessPanel {
 
 	function blockColor(load) {
 		return Ink.mixColors(Config.cpuIdle, root.accentInk, load / 100);
-	}
-
-	FileView {
-		id: cpuInfoFile
-
-		path: "/proc/cpuinfo"
-		blockLoading: true
-
-		onLoaded: root.info = System.parseCpuInfo(cpuInfoFile.text())
 	}
 
 	viz: Item {

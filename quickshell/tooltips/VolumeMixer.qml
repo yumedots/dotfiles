@@ -8,11 +8,11 @@ Item {
 
 	readonly property var mix: Yudae.audio
 	readonly property var nodes: root.mix.nodes || []
-	readonly property var sink: root.nodeOf(root.mix.sink) || System.firstDevice(root.nodes, false)
-	readonly property var source: root.nodeOf(root.mix.source) || System.firstDevice(root.nodes, true)
+	readonly property var sink: root.nodeOf(root.mix.sink)
+	readonly property var source: root.nodeOf(root.mix.source)
 	readonly property bool onScreen: root.Window.window ? root.Window.window.visible : false
 	readonly property bool hasInput: root.mix.hasInput === true
-	readonly property bool recording: System.recordingStream(root.nodes)
+	readonly property bool recording: root.mix.recording === true
 
 	property string picker: ""
 	property int targetIndex: 0
@@ -37,14 +37,14 @@ Item {
 		id: nodeRefreshTimer
 
 		interval: 1000
-		onTriggered: root.held = System.pruneHolds(root.held, Date.now())
+		onTriggered: root.pruneHolds()
 	}
 
 	onNodesChanged: nodeRefreshTimer.restart()
 
 	readonly property real contentWidth: Config.mixerWidth
 	readonly property var devices: root.picker === "" ? [] : root.sortedDevices(root.picker === "input")
-	readonly property bool hasApps: System.anyStreamVisible(root.nodes, Config.mixerOnlyPlaying, root.held)
+	readonly property bool hasApps: root.nodes.some(function (node) { return root.streamVisible(node); })
 	readonly property var steps: Array(Config.mixerStepCount).fill(1)
 
 	implicitWidth: root.contentWidth + Config.mixerPadding * 2
@@ -62,7 +62,7 @@ Item {
 		if (root.hasInput && root.source)
 			list.push(root.source);
 
-		return list.concat(System.streamNodes(root.nodes, Config.mixerOnlyPlaying));
+		return list.concat(root.streams(Config.mixerOnlyPlaying));
 	}
 
 	property bool keyboard: false
@@ -71,6 +71,32 @@ Item {
 	readonly property var selectedNode: root.targetNodes.length > 0
 		? root.targetNodes[Util.clamp(root.targetIndex, 0, root.targetNodes.length - 1)]
 		: null
+
+	function same(a, b) {
+		return !!a && !!b && a.id === b.id;
+	}
+
+	function shownStream(node) {
+		return !!node && node.shown === true;
+	}
+
+	function playing(node) {
+		return !!node && node.playing === true;
+	}
+
+	function streamHeld(node) {
+		return !!node && root.held[node.id] !== undefined;
+	}
+
+	function streams(onlyPlaying) {
+		return root.nodes.filter(function (node) {
+			return root.shownStream(node) && (!onlyPlaying || root.playing(node));
+		});
+	}
+
+	function streamVisible(node) {
+		return root.shownStream(node) && (root.streamHeld(node) || !Config.mixerOnlyPlaying || root.playing(node));
+	}
 
 	function moveTarget(step) {
 		const last = root.targetNodes.length - 1;
@@ -85,7 +111,7 @@ Item {
 		const nodes = root.targetNodes;
 
 		for (let i = 0; i < nodes.length; i++) {
-			if (System.sameNode(nodes[i], node))
+			if (root.same(nodes[i], node))
 				root.targetIndex = i;
 		}
 	}
@@ -117,7 +143,7 @@ Item {
 		if (!isFinite(level))
 			return;
 
-		if (Math.abs(System.nodeVolume(node) - level) < 0.004)
+		if (node.volume !== undefined && Math.abs(node.volume - level) < 0.004)
 			return;
 
 		Yudae.audioVolume(node.id, level);
@@ -156,7 +182,7 @@ Item {
 		if (!node)
 			return;
 
-		root.setFader(node, Util.clamp(System.nodeVolume(node) + step, 0, Config.mixerMaxVolume));
+		root.setFader(node, Util.clamp((node.volume || 0) + step, 0, Config.mixerMaxVolume));
 	}
 
 	Keys.onPressed: function (event) {
@@ -181,20 +207,27 @@ Item {
 		if (!node)
 			return;
 
-		Yudae.audioMute(node.id, !System.nodeMuted(node));
+		Yudae.audioMute(node.id, node.muted !== true);
 	}
 
 	function sortedDevices(input) {
-		return System.sortedDevices(root.nodes, input, input ? root.source : root.sink);
+		const active = input ? root.source : root.sink;
+		const found = root.nodes.filter(function (node) {
+			return !!node && !node.isStream && node.isSink !== !!input;
+		});
+		const at = found.findIndex(function (node) { return root.same(node, active); });
+
+		if (at > 0)
+			found.unshift(found.splice(at, 1)[0]);
+
+		return found;
 	}
 
 	function iconFor(node) {
 		if (!node)
 			return "";
 
-		const ids = System.streamIds(node.props);
-
-		return AppIcons.iconOf(ids[0], ids.slice(1));
+		return AppIcons.iconOf(node.appId, node.appIds);
 	}
 
 	function openPicker(direction) {
@@ -220,7 +253,19 @@ Item {
 
 	function hold(node, until) {
 		if (node)
-			root.held = System.holdStream(root.held, node.id, until);
+			root.held = Object.assign({}, root.held, { [node.id]: until });
+	}
+
+	function pruneHolds() {
+		const now = Date.now();
+		const next = {};
+
+		Object.keys(root.held).forEach(function (id) {
+			if (root.held[id] > now)
+				next[id] = root.held[id];
+		});
+
+		root.held = next;
 	}
 
 	component MixChannel: Item {
@@ -229,12 +274,12 @@ Item {
 		property var node
 		property string glyph: ""
 		property bool appIcon: false
-		property bool muted: false
-		property real volume: 0
+		readonly property bool muted: !!channel.node && channel.node.muted === true
+		readonly property real volume: channel.node ? channel.node.volume : 0
+		readonly property string percentText: channel.node ? channel.node.volumeText : "0%"
 		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 
-		readonly property bool selected: System.sameNode(channel.node, root.selectedNode)
-		readonly property int percent: Math.round(channel.volume * 100)
+		readonly property bool selected: root.same(channel.node, root.selectedNode)
 		readonly property real level: Util.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(channel.level * Config.mixerStepCount) - 1
 
@@ -300,7 +345,7 @@ Item {
 			font.family: Config.fontFamily
 			font.pixelSize: Settings.fontSize
 			color: channel.muted && !hl.active ? Config.muted : hl.ink
-			text: channel.percent + "%"
+			text: channel.percentText
 		}
 
 		Item {
@@ -344,14 +389,14 @@ Item {
 
 		property var node
 		property string glyph: ""
-		property bool muted: false
 		property bool recording: false
-		property real volume: 0
 		property var onActivate
 
-		readonly property bool selected: System.sameNode(line.node, root.selectedNode)
+		readonly property bool muted: !!line.node && line.node.muted === true
+		readonly property real volume: line.node ? line.node.volume : 0
+		readonly property string percentText: line.node ? line.node.volumeText : "0%"
+		readonly property bool selected: root.same(line.node, root.selectedNode)
 		readonly property real level: Util.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
-		readonly property int percent: Math.round(line.volume * 100)
 		readonly property int step: Math.round(line.level * Config.mixerStepCount) - 1
 
 		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
@@ -423,7 +468,7 @@ Item {
 			font.family: Config.fontFamily
 			font.pixelSize: Settings.fontSize
 			color: line.muted && !hl.active ? Config.muted : hl.ink
-			text: line.percent + "%"
+			text: line.percentText
 		}
 
 		Item {
@@ -482,8 +527,6 @@ Item {
 				root.openPicker("output");
 			}
 			glyph: Config.iconOutput
-			muted: System.nodeMuted(root.sink)
-			volume: System.nodeVolume(root.sink)
 		}
 
 		DeviceLine {
@@ -499,8 +542,6 @@ Item {
 			}
 			glyph: Config.iconInput
 			recording: root.recording
-			muted: System.nodeMuted(root.source)
-			volume: System.nodeVolume(root.source)
 		}
 
 		Repeater {
@@ -512,9 +553,9 @@ Item {
 				required property int index
 
 				readonly property var node: root.nodeAt(holder.index)
-				readonly property bool shown: System.shownStream(holder.node)
-				readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || System.streamPlaying(holder.node))
-				visible: root.showApps && System.streamVisible(holder.node, Config.mixerOnlyPlaying, root.held)
+				readonly property bool shown: root.shownStream(holder.node)
+				readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || root.playing(holder.node))
+				visible: root.showApps && root.streamVisible(holder.node)
 				width: parent.width
 				height: channel.implicitHeight
 				clip: true
@@ -531,8 +572,6 @@ Item {
 					node: holder.shown ? holder.node : null
 					glyph: Config.iconApp
 					appIcon: holder.shown
-					muted: holder.shown && System.nodeMuted(holder.node)
-					volume: holder.shown ? System.nodeVolume(holder.node) : 0
 				}
 			}
 		}
@@ -569,7 +608,7 @@ Item {
 					required property int index
 
 					readonly property var node: option.modelData
-					readonly property bool active: System.sameNode(option.node, root.picker === "input" ? root.source : root.sink)
+					readonly property bool active: !!option.node && option.node.isDefault === true
 					readonly property bool highlighted: option.index === root.pickerIndex
 
 					width: options.width

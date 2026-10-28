@@ -14,7 +14,7 @@ ProcessPanel {
 	readonly property color dangerInk: Util.pick(Config.mono, Config.memoryDanger, Config.memoryDangerMono)
 
 	title: "Memory"
-	detail: root.mem ? System.sizeText(root.mem.committed) + " of " + System.sizeText(root.mem.pool) : ""
+	detail: root.mem ? root.mem.committedText + " of " + root.mem.poolText : ""
 	detailColor: root.accentInk
 	listInk: root.accentInk
 	totalInk: root.dangerColorFor(root.pct)
@@ -22,7 +22,6 @@ ProcessPanel {
 	panelPadding: Config.memoryTooltipPadding
 	topCount: Config.memoryTopCount
 	psField: "rss"
-	rowText: (value) => System.sizeText(value)
 	rowColor: (value) => root.dangerColorFor(root.shareOf(value))
 
 	function dangerColorFor(load) {
@@ -36,15 +35,15 @@ ProcessPanel {
 			return [];
 
 		const rows = [
-			{ label: "used", text: System.sizeText(m.used), color: root.dangerColorFor(root.pct) },
-			{ label: "cached", text: System.sizeText(m.cached), color: root.cachedInk },
-			{ label: "buffers", text: System.sizeText(m.buffers), color: root.buffersInk }
+			{ label: "used", text: m.usedText, color: root.dangerColorFor(root.pct) },
+			{ label: "cached", text: m.cachedText, color: root.cachedInk },
+			{ label: "buffers", text: m.buffersText, color: root.buffersInk }
 		];
 
 		if (m.swapTotal > 0)
-			rows.push({ label: "swap", text: System.sizeText(m.swapUsed) + " of " + System.sizeText(m.swapTotal), color: Config.memorySwap });
+			rows.push({ label: "swap", text: m.swapUsedText + " of " + m.swapTotalText, color: Config.memorySwap });
 
-		rows.push({ label: "free", text: System.sizeText(m.free), color: Config.foreground });
+		rows.push({ label: "free", text: m.freeText, color: Config.foreground });
 
 		return rows;
 	}
