@@ -19,15 +19,18 @@ Item {
 	readonly property color aside: root.expanded ? Config.foreground : (root.selected ? Config.launcherHighlightText : Config.muted)
 	readonly property string picture: root.pictureOf()
 	readonly property bool urgent: !!root.entry && root.entry.urgent === true
-	readonly property string detail: root.entry ? Parse.plainText(root.entry.body) : ""
+	readonly property string detail: root.entry ? (root.entry.body || "") : ""
 	readonly property string headline: root.entry ? (root.entry.summary !== "" ? root.entry.summary : root.entry.appName) : ""
 	readonly property string message: root.entry ? (root.detail !== "" ? root.detail : root.entry.appName) : ""
+	readonly property bool marked: /<\/?[a-z][^>]*>|&(#\d+|#x[0-9a-f]+|[a-z]+);/i.test(root.message)
+	readonly property int format: root.marked ? Text.RichText : Text.PlainText
 
-	readonly property int bodyLines: root.expanded
-		? 1000
-		: Math.max(1, Math.floor((Config.notifyRowHeight - root.pad * 2 - titleMetrics.implicitHeight - lines.spacing) / bodyMetrics.implicitHeight))
+	readonly property real limit: root.expanded ? root.cardHeight : Config.notifyRowHeight
+	readonly property int bodyLines: Math.max(1, Math.floor((root.limit - root.pad * 2 - titleMetrics.implicitHeight - lines.spacing) / bodyMetrics.implicitHeight))
 	readonly property bool more: root.expandable && !root.expanded && measure.lineCount > root.bodyLines
-	implicitHeight: root.expanded ? Math.max(root.cardHeight, lines.implicitHeight + root.pad * 2) : Config.notifyRowHeight
+	implicitHeight: root.expanded
+		? Math.min(root.cardHeight, Math.max(Config.notifyRowHeight, lines.implicitHeight + root.pad * 2))
+		: Config.notifyRowHeight
 	clip: true
 	opacity: root.entry && root.entry.gone === true ? Config.notifyGoneOpacity : 1
 
@@ -137,6 +140,7 @@ Item {
 			width: lines.width
 			elide: Text.ElideRight
 			wrapMode: Text.WordWrap
+			textFormat: root.format
 			maximumLineCount: root.bodyLines
 			font.family: Config.fontFamily
 			font.pixelSize: Config.notifyAppFontSize
@@ -182,6 +186,7 @@ Item {
 		width: body.width
 		visible: false
 		wrapMode: Text.WordWrap
+		textFormat: root.format
 		font.family: Config.fontFamily
 		font.pixelSize: Config.notifyAppFontSize
 		text: root.message
