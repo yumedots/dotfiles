@@ -254,6 +254,7 @@ PanelWindow {
 		anchors.fill: parent
 		padding: Config.barInset
 		borderWidth: Config.barBorderWidth
+		shadowEnabled: false
 		backgroundColor: BarInk.bare ? "transparent" : Config.surfaceTranslucent
 
 		Behavior on backgroundColor {
