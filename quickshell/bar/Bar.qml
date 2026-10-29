@@ -17,6 +17,7 @@ PanelWindow {
 	readonly property bool atBottom: bar.layout.position === "bottom"
 	readonly property real outerMargin: Config.barFloating ? Config.gapsOut : 0
 	readonly property var centerItem: bar.widgets[bar.layout.centerAnchor]
+	readonly property var centerSlot: bar.centerItem && bar.centerItem.parent && bar.centerItem.parent.parent === centerRow ? bar.centerItem.parent : null
 
 	anchors {
 		top: !bar.atBottom
@@ -290,7 +291,7 @@ PanelWindow {
 		anchors.bottom: parent.bottom
 		anchors.bottomMargin: border.inset
 		spacing: Config.spacing
-		x: Math.round(bar.width / 2 - (bar.centerItem ? bar.centerItem.mapToItem(centerRow, bar.centerItem.width / 2, 0).x : centerRow.width / 2))
+		x: Math.round(bar.width / 2 - (bar.centerSlot ? bar.centerSlot.x + bar.centerSlot.width / 2 : centerRow.width / 2))
 
 		Repeater {
 			model: bar.layout.center
