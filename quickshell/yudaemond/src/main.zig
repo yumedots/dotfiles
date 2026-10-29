@@ -383,7 +383,7 @@ pub fn main() !void {
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudaemond [run|state|doctor|bench [widgets]|parity|mcp]\n", .{});
+		std.debug.print("usage: yudaemond [run|state|doctor [config]|bench [widgets]|parity|mcp]\n", .{});
 		return;
 	}
 
@@ -445,6 +445,7 @@ fn run(io: std.Io) !void {
 
 	const config_settings = try config_provider.Config.create(allocator, io, hub);
 	try hub.add(config_settings.provider());
+	try hub.add(config_settings.usage());
 
 	const network_provider = try network.Network.create(allocator, io, hub);
 	try hub.add(network_provider.provider());

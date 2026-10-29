@@ -15,6 +15,7 @@ pub const Config = struct {
 	hub: *Hub,
 	mutex: std.Io.Mutex = .init,
 	state: configmod.Config,
+	shell_keys: []const []const u8 = &.{},
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Config {
 		const self = try allocator.create(Config);
@@ -32,12 +33,23 @@ pub const Config = struct {
 		return .{ .key = "settings", .ctx = self, .render = renderThunk };
 	}
 
+	pub fn usage(self: *Config) hubmod.Provider {
+		return .{ .key = "config", .ctx = self, .render = usageThunk };
+	}
+
+	fn usageThunk(ctx: *anyopaque, writer: *Writer) anyerror!void {
+		_ = ctx;
+		try configmod.renderUsage(writer);
+	}
+
 	fn renderThunk(ctx: *anyopaque, writer: *Writer) anyerror!void {
 		const self: *Config = @ptrCast(@alignCast(ctx));
 		try self.render(writer);
 	}
 
 	pub fn start(self: *Config) !void {
+		self.shell_keys = shellKeys(self.io, self.allocator) catch &.{};
+
 		const thread = try std.Thread.spawn(.{}, watchLoop, .{self});
 		thread.detach();
 	}
@@ -77,6 +89,7 @@ pub const Config = struct {
 		previous.deinit();
 
 		self.hub.publish();
+		self.audit();
 	}
 
 	fn render(self: *Config, writer: *Writer) !void {
@@ -85,7 +98,86 @@ pub const Config = struct {
 
 		try self.state.render(writer);
 	}
+
+	fn audit(self: *Config) void {
+		const used = configmod.usedKeys(self.allocator) catch return;
+		defer {
+			for (used) |name| self.allocator.free(name);
+			self.allocator.free(used);
+		}
+
+		var consumed: std.ArrayListUnmanaged([]const u8) = .empty;
+		defer consumed.deinit(self.allocator);
+
+		consumed.appendSlice(self.allocator, used) catch return;
+		consumed.appendSlice(self.allocator, self.shell_keys) catch return;
+
+		const unknown = self.unknownList(consumed.items) catch return;
+		defer {
+			for (unknown) |name| self.allocator.free(name);
+			self.allocator.free(unknown);
+		}
+
+		if (unknown.len == 0) return;
+
+		var line: Writer.Allocating = .init(self.allocator);
+		defer line.deinit();
+
+		line.writer.print("config: {d} unknown keys: ", .{unknown.len}) catch return;
+		for (unknown, 0..) |name, index| {
+			if (index > 0) line.writer.writeAll(", ") catch return;
+			line.writer.writeAll(name) catch return;
+		}
+
+		std.debug.print("{s}\n", .{line.written()});
+	}
+
+	fn unknownList(self: *Config, consumed: []const []const u8) ![][]u8 {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		return self.state.unknown(self.allocator, consumed);
+	}
 };
+
+pub fn shellKeys(io: Io, allocator: Allocator) ![]const []const u8 {
+	const file = std.fmt.allocPrint(allocator, "{s}/.config/quickshell/services/Config.qml", .{proc.home(io, allocator)}) catch return &.{};
+	defer allocator.free(file);
+
+	const body = proc.readFile(io, allocator, file) catch return &.{};
+	defer allocator.free(body);
+
+	var out: std.ArrayListUnmanaged([]const u8) = .empty;
+	errdefer {
+		for (out.items) |name| allocator.free(name);
+		out.deinit(allocator);
+	}
+
+	var rest = body;
+	while (std.mem.indexOf(u8, rest, "settings.")) |at| {
+		const tail = rest[at + "settings.".len ..];
+
+		var end: usize = 0;
+		while (end < tail.len and (std.ascii.isAlphanumeric(tail[end]) or tail[end] == '_')) end += 1;
+
+		if (end > 0) {
+			const key = tail[0..end];
+
+			var known = false;
+			for (out.items) |item| {
+				if (!std.mem.eql(u8, item, key)) continue;
+				known = true;
+				break;
+			}
+
+			if (!known) try out.append(allocator, try allocator.dupe(u8, key));
+		}
+
+		rest = tail[end..];
+	}
+
+	return out.toOwnedSlice(allocator);
+}
 
 test "a broken edit keeps the config it already had" {
 	var hub: hubmod.Hub = .{ .allocator = std.testing.allocator, .io = std.Io.Threaded.global_single_threaded.io() };
