@@ -3,6 +3,7 @@ const hubmod = @import("../hub.zig");
 const limits = @import("../primitives/limits.zig");
 const opencodemod = @import("opencode.zig");
 const codexmod = @import("codex.zig");
+const claudemod = @import("claude.zig");
 const sleep = @import("../primitives/sleep.zig");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -37,9 +38,10 @@ pub const Subscriptions = struct {
 	scratch: std.heap.ArenaAllocator,
 	opencode: *opencodemod.Opencode,
 	codex: *codexmod.Codex,
+	claude: *claudemod.Claude,
 	last: []u8 = &.{},
 
-	pub fn create(allocator: Allocator, io: Io, hub: *Hub, opencode: *opencodemod.Opencode, codex: *codexmod.Codex) !*Subscriptions {
+	pub fn create(allocator: Allocator, io: Io, hub: *Hub, opencode: *opencodemod.Opencode, codex: *codexmod.Codex, claude: *claudemod.Claude) !*Subscriptions {
 		const self = try allocator.create(Subscriptions);
 		self.* = .{
 			.allocator = allocator,
@@ -48,6 +50,7 @@ pub const Subscriptions = struct {
 			.scratch = std.heap.ArenaAllocator.init(allocator),
 			.opencode = opencode,
 			.codex = codex,
+			.claude = claude,
 		};
 
 		return self;
@@ -81,6 +84,7 @@ pub const Subscriptions = struct {
 	pub fn refresh(self: *Subscriptions) void {
 		self.opencode.refreshPlan();
 		self.codex.refreshPlan();
+		self.claude.refreshPlan();
 		self.publishIfChanged();
 	}
 
@@ -116,6 +120,7 @@ pub const Subscriptions = struct {
 		const items = [_]Item{
 			.{ .id = "opencode", .title = "OpenCode", .plan = self.opencode.planOut(arena) },
 			.{ .id = "codex", .title = "ChatGPT", .plan = self.codex.planOut(arena) },
+			.{ .id = "claude", .title = "Claude", .plan = self.claude.planOut(arena) },
 		};
 
 		var list: std.ArrayListUnmanaged(ItemOut) = .empty;
