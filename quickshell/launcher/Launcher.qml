@@ -548,6 +548,8 @@ PanelWindow {
 		Behavior on opacity {
 			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.OutCubic }
 		}
+
+		layer.enabled: opacity > 0 && opacity < 1
 		focus: true
 
 		onOpacityChanged: {
