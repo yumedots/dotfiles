@@ -66,7 +66,7 @@ Item {
 		}
 
 		if (missing.length > 0)
-			Yudae.iconsWant(missing);
+			Yudae.cmd("icons", { want: missing });
 	}
 
 	function askPid(pid) {
@@ -78,6 +78,6 @@ Item {
 			return;
 
 		root.asked[key] = now;
-		Yudae.iconsWantPid(pid);
+		Yudae.cmd("icons", { pid: pid });
 	}
 }

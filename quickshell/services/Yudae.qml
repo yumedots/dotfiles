@@ -227,6 +227,7 @@ QtObject {
 
 	readonly property var screenState: root.snapshot.screen || ({})
 	readonly property var screenBorder: root.screenState.border || ({})
+	readonly property var screenShadow: root.screenState.shadow || ({ enabled: true, range: 8, color: "rgba(000000cc)", offsetX: 0, offsetY: 2 })
 	readonly property var screenMonitors: root.screenState.monitors || []
 	readonly property int screenPrimary: root.screenState.primary || 0
 	readonly property var screenActive: root.screenMonitors[root.screenPrimary] || null
@@ -242,164 +243,40 @@ QtObject {
 	readonly property var screenGroups: root.screenPanel.groups || []
 	readonly property string screenRaw: root.screenState.raw || ""
 
-	function networkScan() {
-		root.send({ cmd: { network: { scan: true } } });
-	}
-
-	function networkConnect(ssid, password) {
-		root.send({ cmd: { network: { connect: { ssid: ssid, password: password || "" } } } });
-	}
-
-	function networkDns(connection, servers) {
-		root.send({ cmd: { network: { dns: { connection: connection, servers: servers } } } });
-	}
-
-	function networkSpeedTest() {
-		root.send({ cmd: { network: { speed: true } } });
-	}
-
-	function networkSpeedCancel() {
-		root.send({ cmd: { network: { speedCancel: true } } });
-	}
-
-	function screenKey(code) {
-		root.send({ cmd: { screen: { keyCode: code } } });
-	}
-
-	function screenPick(kind, value) {
-		root.send({ cmd: { screen: { pick: { kind: kind, value: value } } } });
-	}
-
-	function screenDetect() {
-		root.send({ cmd: { screen: { detect: true } } });
-	}
-
 	readonly property var icons: root.snapshot.icons || ({})
 	readonly property var launcher: root.snapshot.launcher || ({})
 	readonly property var ink: root.snapshot.ink || ({})
 	readonly property var windows: root.snapshot.windows ? (root.snapshot.windows.list || []) : []
 	readonly property string windowsEmpty: root.snapshot.windows ? (root.snapshot.windows.empty || "") : ""
 
-	function windowLaunch(id) {
-		root.send({ cmd: { windows: { launch: id } } });
-	}
-
-	function windowFocus(address) {
-		root.send({ cmd: { windows: { focus: address } } });
-	}
-
-	function windowQuery(query) {
-		root.send({ cmd: { windows: { query: query || "" } } });
-	}
-
-	function launcherQuery(query, forced, group) {
-		root.send({ cmd: { launcher: { query: query || "", forced: forced || "", group: group || "" } } });
-	}
-
-	function launcherPin(id) {
-		root.send({ cmd: { launcher: { pin: id } } });
-	}
-
-	function launcherSave(query) {
-		root.send({ cmd: { launcher: { save: query } } });
-	}
-
-	function launcherClips() {
-		root.send({ cmd: { launcher: { clips: true } } });
-	}
-
-	function launcherClip(id) {
-		root.send({ cmd: { launcher: { clip: id || "" } } });
-	}
-
-	function launcherCopyClip(id) {
-		root.send({ cmd: { launcher: { copyClip: id } } });
-	}
-
-	function launcherKill(pid) {
-		root.send({ cmd: { launcher: { kill: pid } } });
-	}
-
-	function launcherRemember(id) {
-		root.send({ cmd: { launcher: { remember: id } } });
-	}
-
-	function launcherActivate(id) {
-		root.send({ cmd: { launcher: { activate: id } } });
-	}
-
-	function launcherCopyText(text) {
-		root.send({ cmd: { launcher: { copyText: text || "" } } });
-	}
-
-	function launcherWake(sock, pid, path) {
-		root.send({ cmd: { launcher: { wake: { sock: sock, pid: pid, path: path } } } });
-	}
-
-	function fileWrite(path, text) {
-		root.send({ cmd: { file: { write: { path: path, text: text || "" } } } });
-	}
-
 	readonly property var bar: root.snapshot.bar || ({})
 	readonly property var wallpaper: root.snapshot.wallpaper || ({})
 
-	function wallpaperApply(path, band) {
-		root.send({ cmd: { wallpaper: { apply: { path: path, band: band || 0 } } } });
-	}
-
-	function wallpaperScan() {
-		root.send({ cmd: { wallpaper: { scan: true } } });
-	}
-
 	readonly property var audio: root.snapshot.audio || ({})
 	readonly property var audioNodes: root.audio.nodes || []
-
-	function audioVolume(id, level) {
-		root.send({ cmd: { audio: { volume: { id: id, level: level } } } });
-	}
-
-	function audioMute(id, muted) {
-		root.send({ cmd: { audio: { mute: { id: id, muted: muted } } } });
-	}
-
-	function audioDefault(id) {
-		root.send({ cmd: { audio: { default: { id: id } } } });
-	}
-
-	function audioWatch(on) {
-		root.send({ cmd: { audio: { watch: { on: on === true } } } });
-	}
 
 	readonly property var appsEntries: (root.snapshot.apps && root.snapshot.apps.entries) || ({})
 	readonly property var systemState: root.snapshot.system || ({})
 	readonly property var system: root.systemState
 
+	function cmd(name, body) {
+		root.send({ cmd: { [name]: body } });
+	}
+
 	function systemCommand(message) {
-		root.send({ cmd: { system: message } });
+		root.cmd("system", message);
 	}
 
 	function weather(message) {
-		root.send({ cmd: { weather: message } });
+		root.cmd("weather", message);
 	}
 
 	function dismiss(id) {
 		root.send({ dismiss: id });
 	}
 
-	function fetchUsage() {
+	function refresh() {
 		root.send({ refresh: true });
-	}
-
-	function fetchCodex() {
-		root.send({ refresh: true });
-	}
-
-	function iconsWant(names) {
-		root.send({ cmd: { icons: { want: names } } });
-	}
-
-	function iconsWantPid(pid) {
-		root.send({ cmd: { icons: { pid: pid } } });
 	}
 
 	function send(message) {

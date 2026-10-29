@@ -34,7 +34,7 @@ Item {
 	onShownChanged: if (root.shown) resList.reset()
 	onCursorStepChanged: if (root.resolutionCursor >= 0) resList.ensureVisible(root.resolutionCursor)
 
-	Keys.onPressed: Yudae.screenKey(event.key)
+	Keys.onPressed: Yudae.cmd("screen", { keyCode: event.key })
 
 	component Header: Item {
 		id: header
@@ -93,7 +93,7 @@ Item {
 			cursor: group.cursor
 			ink: root.ink
 
-			onPick: function (value) { Yudae.screenPick(group.kind, value) }
+			onPick: function (value) { Yudae.cmd("screen", { pick: { kind: group.kind, value: value } }) }
 		}
 	}
 
@@ -186,7 +186,7 @@ Item {
 
 				Glyph {
 					text: Config.displayIconRefresh
-					onActivate: function () { Yudae.screenDetect() }
+					onActivate: function () { Yudae.cmd("screen", { detect: true }) }
 				}
 			}
 
@@ -267,7 +267,7 @@ Item {
 					label: modelData.label
 					hint: modelData.maxRefresh > 0 ? modelData.maxRefresh + " Hz" : ""
 					lit: root.resolutionCursor === index
-					onPick: function () { Yudae.screenPick("resolution", modelData.label) }
+					onPick: function () { Yudae.cmd("screen", { pick: { kind: "resolution", value: modelData.label } }) }
 				}
 			}
 		}

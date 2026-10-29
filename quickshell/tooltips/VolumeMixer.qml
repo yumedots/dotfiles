@@ -26,7 +26,7 @@ Item {
 	property bool compact: false
 	readonly property bool showApps: root.hasApps && !root.compact
 
-	onOnScreenChanged: Yudae.audioWatch(root.onScreen)
+	onOnScreenChanged: Yudae.cmd("audio", { watch: { on: root.onScreen === true } })
 
 	onShownChanged: if (!root.shown) {
 		root.keyboard = false;
@@ -96,7 +96,7 @@ Item {
 		if (node.volume !== undefined && Math.abs(node.volume - level) < 0.004)
 			return;
 
-		Yudae.audioVolume(node.id, level);
+		Yudae.cmd("audio", { volume: { id: node.id, level: level } });
 	}
 
 	function beginDrag(node, fader, position) {
@@ -157,7 +157,7 @@ Item {
 		if (!node)
 			return;
 
-		Yudae.audioMute(node.id, node.muted !== true);
+		Yudae.cmd("audio", { mute: { id: node.id, muted: node.muted !== true } });
 	}
 
 	function iconFor(node) {
@@ -180,7 +180,7 @@ Item {
 		if (!node)
 			return;
 
-		Yudae.audioDefault(node.id);
+		Yudae.cmd("audio", { default: { id: node.id } });
 
 		root.picker = "";
 	}

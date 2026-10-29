@@ -140,14 +140,14 @@ PanelWindow {
 
 	function reload() {
 		if (root.active)
-			Yudae.wallpaperScan();
+			Yudae.cmd("wallpaper", { scan: true });
 	}
 
 	function applyCurrent() {
 		if (root.held === null)
 			return;
 
-		Yudae.wallpaperApply(root.held.path, BarInk.bandPx());
+		Yudae.cmd("wallpaper", { apply: { path: root.held.path, band: BarInk.bandPx() } });
 		root.close();
 	}
 

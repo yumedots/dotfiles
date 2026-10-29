@@ -13,7 +13,7 @@ Root {
 	readonly property string linkPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/qs-main-" + Quickshell.instanceId + ".sock"
 
 	function spawnLauncher() {
-		Yudae.launcherWake(mainShell.linkPath, Quickshell.processId, mainShell.launcherPath);
+		Yudae.cmd("launcher", { wake: { sock: mainShell.linkPath, pid: Quickshell.processId, path: mainShell.launcherPath } });
 	}
 
 	Component.onCompleted: mainShell.spawnLauncher()

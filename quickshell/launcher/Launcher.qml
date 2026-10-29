@@ -151,16 +151,16 @@ PanelWindow {
 			return;
 
 		root.clipAsked = root.wantedClip;
-		Yudae.launcherClip(root.clipAsked);
+		Yudae.cmd("launcher", { clip: root.clipAsked });
 	}
 
 	function push() {
 		if (root.windows) {
-			Yudae.windowQuery(root.query);
+			Yudae.cmd("windows", { query: root.query });
 			return;
 		}
 
-		Yudae.launcherQuery(root.query, root.forced, root.group);
+		Yudae.cmd("launcher", { query: root.query, forced: root.forced, group: root.group });
 	}
 
 	function open(mode) {
@@ -195,8 +195,8 @@ PanelWindow {
 		root.shown = false;
 		root.anchorId = "";
 		root.anchorKey = "";
-		Yudae.launcherQuery("", "", "");
-		Yudae.windowQuery("");
+		Yudae.cmd("launcher", { query: "", forced: "", group: "" });
+		Yudae.cmd("windows", { query: "" });
 	}
 
 	function settle() {
@@ -207,7 +207,7 @@ PanelWindow {
 		field.typing = false;
 
 		if (root.pending !== null) {
-			Yudae.launcherRemember(root.pending.id);
+			Yudae.cmd("launcher", { remember: root.pending.id });
 			root.pending = null;
 		}
 
@@ -287,7 +287,7 @@ PanelWindow {
 
 		if (root.isClipboard && event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
 			if (previewText.selectedText !== "") {
-				Yudae.launcherCopyText(previewText.selectedText);
+				Yudae.cmd("launcher", { copyText: previewText.selectedText });
 				root.grab();
 				event.accepted = true;
 				return;
@@ -382,7 +382,7 @@ PanelWindow {
 		if (root.query === "" || root.windows)
 			return;
 
-		Yudae.launcherSave(root.query);
+		Yudae.cmd("launcher", { save: root.query });
 	}
 
 	function openWallpaper() {
@@ -405,11 +405,11 @@ PanelWindow {
 		if (!entry)
 			return;
 
-		Yudae.launcherPin(entry.id);
+		Yudae.cmd("launcher", { pin: entry.id });
 	}
 
 	function copyClip(id) {
-		Yudae.launcherCopyClip(id);
+		Yudae.cmd("launcher", { copyClip: id });
 		root.grab();
 	}
 
@@ -427,7 +427,7 @@ PanelWindow {
 		if (!entry || entry.kind !== "proc")
 			return;
 
-		Yudae.launcherKill(entry.pid);
+		Yudae.cmd("launcher", { kill: entry.pid });
 	}
 
 	function activate(entry) {
@@ -462,7 +462,7 @@ PanelWindow {
 		if (!root.shown)
 			return;
 
-		Yudae.launcherActivate(entry.id);
+		Yudae.cmd("launcher", { activate: entry.id });
 		root.pending = entry;
 		root.close();
 	}
@@ -482,7 +482,7 @@ PanelWindow {
 		if (root.mode === "wallpaper")
 			root.openWallpaper();
 		else if (root.mode === "clipboard")
-			Yudae.launcherClips();
+			Yudae.cmd("launcher", { clips: true });
 
 		root.grab();
 	}

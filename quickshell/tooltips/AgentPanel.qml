@@ -30,7 +30,7 @@ Item {
 		nameField.text = root.agentName;
 
 		if (nameFile.text().trim() !== root.agentName)
-			Yudae.fileWrite(root.agentNamePath, root.agentName + "\n");
+			Yudae.cmd("file", { write: { path: root.agentNamePath, text: root.agentName + "\n" } });
 	}
 
 	FileView {
@@ -60,8 +60,7 @@ Item {
 		Yudae.watchGaze(root.open);
 
 		if (root.open) {
-			Yudae.fetchUsage();
-			Yudae.fetchCodex();
+			Yudae.refresh();
 		}
 	}
 
