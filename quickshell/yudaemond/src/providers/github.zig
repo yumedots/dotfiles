@@ -8,6 +8,7 @@ const json = @import("../primitives/json.zig");
 const proc = @import("../primitives/proc.zig");
 const sleep = @import("../primitives/sleep.zig");
 const fmt = @import("../primitives/fmt.zig");
+const localtime = @import("../primitives/localtime.zig");
 const setStr = @import("opencode.zig").setStr;
 
 const Allocator = std.mem.Allocator;
@@ -34,6 +35,9 @@ const Out = struct {
 	fetched: i64,
 	status: []const u8,
 	days: []DayOut,
+	grid: []const ?DayOut,
+	todayCount: i64,
+	todayLevel: i64,
 };
 
 pub const Github = struct {
@@ -51,6 +55,9 @@ pub const Github = struct {
 	base_ink: color.Rgb = .{ 0x7b, 0xd8, 0x8f },
 
 	fetched: i64 = 0,
+	weeks: usize = 19,
+	offset_ms: i64 = 0,
+	offset_at: i64 = 0,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub, client: *http.Client) !*Github {
 		const self = try allocator.create(Github);
@@ -86,6 +93,8 @@ pub const Github = struct {
 		defer cfg.deinit();
 
 		const mono = cfg.boolean("mono", true);
+
+		self.weeks = @intCast(@max(1, cfg.integer("contribWeeks", 19)));
 
 		self.empty_ink = color.parse(cfg.color("contribEmpty") orelse "") orelse self.empty_ink;
 		self.base_ink = color.parse(cfg.color(if (mono) "contribBase" else "contribBaseMono") orelse "") orelse self.base_ink;
@@ -302,6 +311,15 @@ pub const Github = struct {
 			try level_ink.append(arena, try arena.dupe(u8, color.hex(&buffer, color.mix(self.empty_ink, self.base_ink, @as(f64, @floatFromInt(level)) / 4))));
 		}
 
+		if (fmt.nowMs(self.io) - self.offset_at > localtime.refresh_ms) {
+			self.offset_at = fmt.nowMs(self.io);
+			self.offset_ms = localtime.offsetMs(self.io, self.allocator) orelse self.offset_ms;
+		}
+
+		const today = localtime.epochDay(self.io, self.offset_ms);
+		const grid = try contribGrid(arena, days.items, self.weeks, today);
+		const here = dayOn(days.items, today);
+
 		const out = Out{
 			.levelInk = level_ink.items,
 			.login = self.login,
@@ -309,11 +327,79 @@ pub const Github = struct {
 			.fetched = self.fetched,
 			.status = self.status,
 			.days = days.items,
+			.grid = grid,
+			.todayCount = if (here) |day| day.count else 0,
+			.todayLevel = if (here) |day| day.level else 0,
 		};
 
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
+
+fn dayNumber(date: []const u8) ?i64 {
+	if (date.len != 10 or date[4] != '-' or date[7] != '-') return null;
+
+	const year = std.fmt.parseInt(i64, date[0..4], 10) catch return null;
+	const month = std.fmt.parseInt(i64, date[5..7], 10) catch return null;
+	const day = std.fmt.parseInt(i64, date[8..10], 10) catch return null;
+
+	return fmt.daysFromCivil(year, month, day);
+}
+
+fn weekIndex(day: i64) i64 {
+	return @divFloor(day - 3, 7);
+}
+
+fn dayOn(days: []const DayOut, today: i64) ?DayOut {
+	for (days) |day| {
+		if ((dayNumber(day.date) orelse continue) == today) return day;
+	}
+
+	return null;
+}
+
+fn contribGrid(arena: Allocator, days: []const DayOut, weeks: usize, today: i64) ![]const ?DayOut {
+	const cells = try arena.alloc(?DayOut, weeks * 7);
+	@memset(cells, null);
+
+	const last_week = weekIndex(today);
+
+	for (days) |day| {
+		const number = dayNumber(day.date) orelse continue;
+		if (number > today) continue;
+
+		const back = last_week - weekIndex(number);
+		if (back >= weeks) continue;
+
+		const col = weeks - 1 - @as(usize, @intCast(back));
+		const row: usize = @intCast(@mod(number + 4, 7));
+
+		cells[row * weeks + col] = day;
+	}
+
+	return cells;
+}
+
+test "the grid puts today in the last column on its weekday row" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const days = [_]DayOut{
+		.{ .date = "2026-10-28", .level = 2, .count = 5 },
+		.{ .date = "2026-10-29", .level = 4, .count = 9 },
+		.{ .date = "2026-10-30", .level = 1, .count = 1 },
+		.{ .date = "2026-10-20", .level = 3, .count = 3 },
+	};
+	const today = fmt.daysFromCivil(2026, 10, 29);
+	const grid = try contribGrid(arena.allocator(), &days, 3, today);
+
+	try std.testing.expectEqual(@as(usize, 21), grid.len);
+	try std.testing.expectEqual(@as(i64, 9), grid[4 * 3 + 2].?.count);
+	try std.testing.expectEqual(@as(i64, 5), grid[3 * 3 + 2].?.count);
+	try std.testing.expectEqual(@as(i64, 3), grid[2 * 3 + 1].?.count);
+	try std.testing.expect(grid[5 * 3 + 2] == null);
+	try std.testing.expectEqual(@as(i64, 9), dayOn(&days, today).?.count);
+}
 
 const Contributions = struct {
 	days: std.ArrayListUnmanaged(Day),
