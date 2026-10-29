@@ -95,8 +95,7 @@ pub const Calendar = struct {
 		const keys = [_][]const u8{ "calendarIconDay", "calendarIconMonth", "calendarIconYear", "calendarIconLife" };
 
 		for (keys, 0..) |key, index| {
-			const raw = cfg.string(key, self.allocator) orelse continue;
-			self.icons[index] = config.unescape(self.allocator, raw) catch "";
+			self.icons[index] = cfg.string(key, self.allocator) orelse continue;
 		}
 	}
 

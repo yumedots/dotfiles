@@ -14,6 +14,7 @@ const system = @import("providers/system.zig");
 const apps = @import("providers/apps.zig");
 const screen = @import("providers/screen.zig");
 const settings = @import("providers/settings.zig");
+const config_provider = @import("providers/config.zig");
 const network = @import("providers/network.zig");
 const audio = @import("providers/audio.zig");
 const wallpaper = @import("providers/wallpaper.zig");
@@ -442,6 +443,9 @@ fn run(io: std.Io) !void {
 	const settings_provider = try settings.Settings.create(allocator, io, hub);
 	try hub.add(settings_provider.provider());
 
+	const config_settings = try config_provider.Config.create(allocator, io, hub);
+	try hub.add(config_settings.provider());
+
 	const network_provider = try network.Network.create(allocator, io, hub);
 	try hub.add(network_provider.provider());
 
@@ -542,6 +546,7 @@ fn run(io: std.Io) !void {
 	try apps_provider.start();
 	try screen_provider.start();
 	try settings_provider.start();
+	try config_settings.start();
 	try network_provider.start();
 	try audio_provider.start();
 	try wallpaper_provider.start();

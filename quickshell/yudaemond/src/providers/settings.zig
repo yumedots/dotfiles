@@ -56,7 +56,7 @@ pub const Settings = struct {
 	}
 
 	pub fn provider(self: *Settings) hubmod.Provider {
-		return .{ .key = "settings", .ctx = self, .render = renderThunk };
+		return .{ .key = "display", .ctx = self, .render = renderThunk };
 	}
 
 	fn renderThunk(ctx: *anyopaque, writer: *Writer) anyerror!void {
