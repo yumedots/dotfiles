@@ -57,7 +57,7 @@ QtObject {
 
 			out.push({
 				title: entry.id === "opencode" ? Config.agentPlanName : entry.title + (entry.plan ? " " + entry.plan : ""),
-				icon: entry.id === "opencode" ? Config.agentPlanIcon : "openai",
+				icon: entry.id === "opencode" ? Config.agentPlanIcon : (entry.id === "claude" ? "claude" : "openai"),
 				limits: entry.limits,
 				failure: entry.failure || "",
 			});
