@@ -107,8 +107,17 @@ const BorderOut = struct {
 	width: ?i64,
 };
 
+const ShadowOut = struct {
+	enabled: bool,
+	range: i64,
+	color: []const u8,
+	offsetX: f64,
+	offsetY: f64,
+};
+
 const Out = struct {
 	border: BorderOut,
+	shadow: ShadowOut,
 	primary: i64,
 	monitors: []MonitorOut,
 	panel: PanelOut,
@@ -140,6 +149,11 @@ pub const Screen = struct {
 	settings: ?*settings.Settings = null,
 	border_text: []u8 = &.{},
 	border_width: ?i64 = null,
+	shadow_enabled: bool = true,
+	shadow_range: i64 = 8,
+	shadow_color: []u8 = &.{},
+	shadow_offset_x: f64 = 0,
+	shadow_offset_y: f64 = 2,
 	border_tick: usize = 0,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Screen {
@@ -266,8 +280,10 @@ pub const Screen = struct {
 	fn poll(self: *Screen) void {
 		self.border_tick += 1;
 
-		if (self.border_tick % 4 == 0)
+		if (self.border_tick % 4 == 0) {
 			self.pollBorder();
+			self.pollShadow();
+		}
 
 		const body = hypr.request(self.io, self.allocator, "j/monitors") catch {
 			return;
@@ -354,6 +370,50 @@ pub const Screen = struct {
 			self.allocator.free(self.border_text);
 			self.border_text = self.allocator.dupe(u8, gradient) catch &.{};
 			self.border_width = width;
+		}
+		self.mutex.unlock(self.io);
+
+		if (!same) self.hub.publish();
+	}
+
+	fn pollShadow(self: *Screen) void {
+		const enabled = hypr.request(self.io, self.allocator, "j/getoption decoration:shadow:enabled") catch return;
+		defer self.allocator.free(enabled);
+
+		const range = hypr.request(self.io, self.allocator, "j/getoption decoration:shadow:range") catch return;
+		defer self.allocator.free(range);
+
+		const color = hypr.request(self.io, self.allocator, "j/getoption decoration:shadow:color") catch return;
+		defer self.allocator.free(color);
+
+		const offset = hypr.request(self.io, self.allocator, "j/getoption decoration:shadow:offset") catch return;
+		defer self.allocator.free(offset);
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const enabled_value = json.parse(arena.allocator(), enabled) catch return;
+		const range_value = json.parse(arena.allocator(), range) catch return;
+		const color_value = json.parse(arena.allocator(), color) catch return;
+		const offset_value = json.parse(arena.allocator(), offset) catch return;
+		const enabled_setting = json.flag(enabled_value.value, "bool");
+		const range_setting = json.integer(json.field(range_value.value, "int"));
+		const custom_color = json.textAt(color_value.value, "custom");
+		const color_setting = if (custom_color.len > 0) custom_color else json.textAt(color_value.value, "str");
+		const offset_parts = json.listAt(offset_value.value, "vec2");
+		const offset_x: f64 = if (offset_parts.len > 0) json.number(offset_parts[0]) else 0;
+		const offset_y: f64 = if (offset_parts.len > 1) json.number(offset_parts[1]) else 0;
+
+		self.mutex.lockUncancelable(self.io);
+		const same = self.shadow_enabled == enabled_setting and self.shadow_range == range_setting and self.shadow_offset_x == offset_x and self.shadow_offset_y == offset_y and std.mem.eql(u8, self.shadow_color, color_setting);
+
+		if (!same) {
+			self.allocator.free(self.shadow_color);
+			self.shadow_color = self.allocator.dupe(u8, color_setting) catch &.{};
+			self.shadow_enabled = enabled_setting;
+			self.shadow_range = range_setting;
+			self.shadow_offset_x = offset_x;
+			self.shadow_offset_y = offset_y;
 		}
 		self.mutex.unlock(self.io);
 
@@ -995,8 +1055,9 @@ pub const Screen = struct {
 
 		const stops = parseStops(arena, self.border_text);
 		const border = BorderOut{ .colors = stops.colors, .angle = stops.angle, .width = self.border_width };
+		const shadow = ShadowOut{ .enabled = self.shadow_enabled, .range = self.shadow_range, .color = if (self.shadow_color.len > 0) self.shadow_color else "rgba(00000070)", .offsetX = self.shadow_offset_x, .offsetY = self.shadow_offset_y };
 
-		const out = Out{ .border = border, .primary = primary, .monitors = monitors.items, .panel = panel, .raw = self.raw };
+		const out = Out{ .border = border, .shadow = shadow, .primary = primary, .monitors = monitors.items, .panel = panel, .raw = self.raw };
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
