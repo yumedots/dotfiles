@@ -107,6 +107,9 @@ pub const Subscriptions = struct {
 	}
 
 	fn render(self: *Subscriptions, writer: *Writer) !void {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
 		_ = self.scratch.reset(.retain_capacity);
 		const arena = self.scratch.allocator();
 

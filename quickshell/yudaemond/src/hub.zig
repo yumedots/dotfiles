@@ -48,6 +48,9 @@ pub const Hub = struct {
 	}
 
 	pub fn syncSnapshot(self: *Hub, allocator: Allocator) ![]u8 {
+		self.publish_mutex.lockUncancelable(self.io);
+		defer self.publish_mutex.unlock(self.io);
+
 		_ = self.revision.fetchAdd(1, .monotonic);
 		return self.snapshot(allocator);
 	}
