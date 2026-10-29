@@ -21,6 +21,7 @@ const preview_bytes = 20000;
 const glyph_command = "\u{f018c}";
 const glyph_calc = "\u{f00ec}";
 const glyph_clip = "\u{f07f}";
+const glyph_image = "\u{f03e}";
 const glyph_file = "\u{f0213}";
 const glyph_apps = "\u{f0c9}";
 const glyph_wallpaper = "\u{f0e09}";
@@ -120,12 +121,19 @@ const PreviewOut = struct {
 	path: []const u8,
 };
 
+const IntentOut = struct {
+	query: []const u8,
+	forced: []const u8,
+	group: []const u8,
+};
+
 const Out = struct {
 	mode: []const u8,
 	prompt: []const u8,
 	query: []const u8,
 	empty: []const u8,
 	terminal: []const u8,
+	intent: IntentOut,
 	pins: [][]const u8,
 	results: []RowOut,
 	clip: PreviewOut,
@@ -980,12 +988,13 @@ pub const Launcher = struct {
 			if (!containsIgnoreCase(name, search)) continue;
 
 			const id = try arena.dupe(u8, entry.id);
+			const image = std.mem.eql(u8, entry.kind, "image");
 
 			try rows.append(arena, .{
 				.id = try std.fmt.allocPrint(arena, "clip:{s}", .{id}),
 				.kind = "clip",
 				.name = try arena.dupe(u8, name),
-				.glyph = glyph_clip,
+				.glyph = if (image) glyph_image else glyph_clip,
 				.app_id = try arena.dupe(u8, entry.app),
 				.clip_id = id,
 				.image = std.mem.eql(u8, entry.kind, "image"),
@@ -1116,6 +1125,7 @@ pub const Launcher = struct {
 			.query = state.search,
 			.empty = state.empty,
 			.terminal = self.terminal,
+			.intent = .{ .query = self.query, .forced = self.forced, .group = self.group },
 			.pins = pins.items,
 			.results = results.items,
 			.clip = .{ .text = self.clip_text, .path = self.clip_path },
@@ -1465,6 +1475,41 @@ test "the forced mode wins and an unknown token is home" {
 	const prefix = self.effective(allocator, "", "", "%x");
 	try std.testing.expectEqualStrings("procs", prefix.mode);
 	try std.testing.expectEqualStrings("x", prefix.search);
+}
+
+test "the snapshot echoes the intent the client asked for" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	const self = try Launcher.create(allocator, io, &hub);
+
+	self.setQuery("dol", "", "");
+
+	var out: Writer.Allocating = .init(allocator);
+	defer out.deinit();
+
+	try self.render(&out.writer);
+
+	const body = try out.toOwnedSlice();
+	defer allocator.free(body);
+
+	try std.testing.expect(std.mem.indexOf(u8, body, "\"intent\":{\"query\":\"dol\",\"forced\":\"\",\"group\":\"\"}") != null);
+
+	self.setQuery("", "clipboard", "");
+
+	var next: Writer.Allocating = .init(allocator);
+	defer next.deinit();
+
+	try self.render(&next.writer);
+
+	const shifted = try next.toOwnedSlice();
+	defer allocator.free(shifted);
+
+	try std.testing.expect(std.mem.indexOf(u8, shifted, "\"intent\":{\"query\":\"\",\"forced\":\"clipboard\",\"group\":\"\"}") != null);
 }
 
 test "a pinned row sorts ahead of a better match and usage breaks the tie" {

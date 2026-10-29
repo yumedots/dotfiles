@@ -73,7 +73,7 @@ Rectangle {
 		font.family: Config.fontFamily
 		font.pixelSize: root.size
 		color: Config.muted
-		text: root.hintKey
+		text: root.hintKey + " to type"
 	}
 
 	TextInput {

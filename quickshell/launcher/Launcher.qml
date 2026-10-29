@@ -101,7 +101,7 @@ PanelWindow {
 	}
 
 	function grab() {
-		if (!root.shown)
+		if (!root.shown || root.grabbed)
 			return;
 
 		root.grabbed = false;
@@ -177,6 +177,7 @@ PanelWindow {
 		list.currentIndex = 0;
 		root.shown = true;
 		root.winIndex = root.windows ? 1 : 0;
+		root.grabbed = false;
 		root.push();
 		root.grab();
 		root.anchor();
@@ -469,6 +470,18 @@ PanelWindow {
 
 	onQueryChanged: root.push()
 
+	onStateChanged: {
+		const intent = root.state.intent;
+
+		if (root.windows || !root.shown || !intent)
+			return;
+
+		if (intent.query === root.query && intent.forced === root.forced && intent.group === root.group)
+			return;
+
+		root.push();
+	}
+
 	onWantedClipChanged: root.requestClip()
 
 	onResultsChanged: root.followResults()
@@ -566,6 +579,7 @@ PanelWindow {
 
 				width: parent.width
 				boxHeight: Config.launcherInputHeight
+				hintKey: Config.procHintKey
 				padding: 0
 				gap: Config.launcherTextGap
 				glyphSlot: Config.launcherIconSlot
