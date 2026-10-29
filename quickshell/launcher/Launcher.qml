@@ -544,6 +544,10 @@ PanelWindow {
 		backgroundColor: Config.surfaceTranslucent
 		opacity: root.shown ? 1 : 0
 		visible: root.configured && (root.shown || opacity > 0)
+
+		Behavior on opacity {
+			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.OutCubic }
+		}
 		focus: true
 
 		onOpacityChanged: {
