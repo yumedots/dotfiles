@@ -21,6 +21,7 @@ SpeedGauge 1.0 SpeedGauge.qml
 StepBar 1.0 StepBar.qml
 Highlight 1.0 Highlight.qml
 IconRow 1.0 IconRow.qml
+RevealIcon 1.0 RevealIcon.qml
 Figures 1.0 Figures.qml
 AgentFace 1.0 AgentFace.qml
 BarIcon 1.0 BarIcon.qml

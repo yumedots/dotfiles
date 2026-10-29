@@ -335,7 +335,7 @@ Item {
 				}
 			}
 
-			Text {
+			RevealIcon {
 				id: leftArrow
 
 				visible: !root.editing
@@ -343,30 +343,13 @@ Item {
 				anchors.leftMargin: Config.weatherCardHeaderGap
 				anchors.verticalCenter: parent.verticalCenter
 				height: placeMetrics.height
-				opacity: root.headerShown ? 1 : 0
-				font.family: Config.fontFamily
+				shown: root.headerShown
 				font.pixelSize: Config.weatherPlaceSize
-				color: leftHit.containsMouse ? Config.foreground : Config.muted
 				text: Config.weatherIconLeft
-
-				Behavior on opacity {
-					NumberAnimation {
-						duration: Config.popupFadeMs
-					}
-				}
-
-				MouseArea {
-					id: leftHit
-
-					anchors.fill: parent
-					anchors.margins: -4
-					hoverEnabled: true
-					enabled: root.headerShown
-					onClicked: Weather.shift(-1)
-				}
+				onClicked: Weather.shift(-1)
 			}
 
-			Text {
+			RevealIcon {
 				id: rightArrow
 
 				visible: !root.editing
@@ -374,57 +357,23 @@ Item {
 				anchors.leftMargin: Config.weatherCardHeaderGap
 				anchors.verticalCenter: parent.verticalCenter
 				height: placeMetrics.height
-				opacity: root.headerShown ? 1 : 0
-				font.family: Config.fontFamily
+				shown: root.headerShown
 				font.pixelSize: Config.weatherPlaceSize
-				color: rightHit.containsMouse ? Config.foreground : Config.muted
 				text: Config.weatherIconRight
-
-				Behavior on opacity {
-					NumberAnimation {
-						duration: Config.popupFadeMs
-					}
-				}
-
-				MouseArea {
-					id: rightHit
-
-					anchors.fill: parent
-					anchors.margins: -4
-					hoverEnabled: true
-					enabled: root.headerShown
-					onClicked: Weather.shift(1)
-				}
+				onClicked: Weather.shift(1)
 			}
 
-			Text {
+			RevealIcon {
 				id: addIcon
 
 				visible: !root.editing
 				anchors.right: parent.right
 				anchors.verticalCenter: parent.verticalCenter
 				height: placeMetrics.height
-				opacity: root.headerShown ? 1 : 0
-				font.family: Config.fontFamily
+				shown: root.headerShown
 				font.pixelSize: Config.weatherPlaceSize
-				color: addHit.containsMouse ? Config.foreground : Config.muted
 				text: Config.weatherIconAdd
-
-				Behavior on opacity {
-					NumberAnimation {
-						duration: Config.popupFadeMs
-					}
-				}
-
-				MouseArea {
-					id: addHit
-
-					anchors.fill: parent
-					anchors.margins: -4
-					hoverEnabled: true
-					enabled: root.headerShown
-					onClicked: root.startEdit("", true)
-				}
+				onClicked: root.startEdit("", true)
 			}
 
 			Item {
