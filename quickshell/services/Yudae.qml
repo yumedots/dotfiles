@@ -222,9 +222,11 @@ QtObject {
 
 	readonly property var notifications: root.snapshot.notifications || ({})
 	readonly property var workspaces: root.snapshot.workspaces || ({})
+	readonly property var tray: root.snapshot.tray || []
 	readonly property var github: root.snapshot.github || ({})
 	readonly property string agentName: root.snapshot.agentName || ""
 	readonly property var weatherState: root.snapshot.weather || ({})
+	readonly property var radarState: root.snapshot.radar || ({})
 
 	readonly property var calendarState: root.snapshot.calendar || ({})
 	readonly property var mediaState: root.snapshot.media || ({})

@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Effects
 import Quickshell
-import Quickshell.DBusMenu
-import Quickshell.Services.SystemTray
 import qs.ui
 import qs
 import qs.services
@@ -13,8 +11,17 @@ Row {
 	property var bar: null
 	property bool expanded: false
 	property Item menuAnchor: null
+	property string menuKey: ""
 
-	readonly property var items: SystemTray.items.values ? SystemTray.items.values : []
+	readonly property var items: Yudae.tray || []
+	readonly property var menuEntries: {
+		for (let i = 0; i < root.items.length; i++) {
+			if (root.items[i].key === root.menuKey)
+				return root.items[i].menu || [];
+		}
+
+		return [];
+	}
 	readonly property real baselineLift: Math.ceil(Config.barThickness)
 
 	// The bar gives every widget a slot whether it has anything to show or
@@ -30,7 +37,8 @@ Row {
 
 	function openMenu(item, anchor) {
 		root.menuAnchor = anchor;
-		menu.menu = item.menu;
+		root.menuKey = item.key;
+		Yudae.cmd("tray", { key: item.key, open: true });
 		menuPopup.open();
 	}
 
@@ -60,10 +68,6 @@ Row {
 		font.family: Config.fontFamily
 		font.pixelSize: Settings.fontSize
 		text: Config.valueSample
-	}
-
-	QsMenuOpener {
-		id: menu
 	}
 
 	Item {
@@ -143,14 +147,16 @@ Row {
 				acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
 
 				onClicked: function (mouse) {
-					if (mouse.button === Qt.LeftButton)
-						slot.modelData.activate();
+					if (mouse.button === Qt.LeftButton && slot.modelData.itemIsMenu && slot.modelData.hasMenu)
+						root.openMenu(slot.modelData, slot);
+					else if (mouse.button === Qt.LeftButton)
+						Yudae.cmd("tray", { key: slot.modelData.key, activate: 0 });
 					else if (mouse.button === Qt.MiddleButton)
-						slot.modelData.secondaryActivate();
+						Yudae.cmd("tray", { key: slot.modelData.key, activate: 1 });
 					else if (slot.modelData.hasMenu)
 						root.openMenu(slot.modelData, slot);
 					else
-						slot.modelData.activate();
+						Yudae.cmd("tray", { key: slot.modelData.key, activate: 0 });
 				}
 			}
 		}
@@ -166,7 +172,8 @@ Row {
 		closable: false
 
 		MenuLevel {
-			entries: menu.children
+			entries: root.menuEntries
+			trayKey: root.menuKey
 			dismiss: function () { menuPopup.close(); }
 		}
 	}

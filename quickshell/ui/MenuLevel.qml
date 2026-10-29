@@ -1,13 +1,13 @@
 import QtQuick
-import Quickshell
-import Quickshell.DBusMenu
 import qs
+import qs.services
 
 Column {
 	id: root
 
 	property var entries: null
 	property var dismiss: null
+	property string trayKey: ""
 	property int openIndex: -1
 	property real indent: 0
 	property var levelComponent: null
@@ -34,12 +34,7 @@ Column {
 			readonly property bool checked: !row.separator && modelData.checkState === 2
 
 			spacing: 0
-
-			QsMenuOpener {
-				id: rowMenu
-
-				menu: row.submenu && !row.separator ? row.entry : null
-			}
+			visible: row.entry.visible !== false
 
 			Item {
 				id: rowItem
@@ -125,7 +120,7 @@ Column {
 							return;
 						}
 
-						row.entry.triggered();
+						Yudae.cmd("tray", { key: root.trayKey, menu: row.entry.id });
 
 						if (root.dismiss)
 							root.dismiss();
@@ -140,7 +135,8 @@ Column {
 				sourceComponent: root.levelComponent
 
 				onLoaded: {
-					item.entries = rowMenu.children;
+					item.entries = row.entry.children;
+					item.trayKey = root.trayKey;
 					item.dismiss = root.dismiss;
 					item.indent = root.indent + 14;
 					item.levelComponent = root.levelComponent;
