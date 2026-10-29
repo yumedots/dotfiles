@@ -44,6 +44,24 @@ pub fn fetch(io: Io) ![]u8 {
 	return std.heap.smp_allocator.dupe(u8, message);
 }
 
+pub fn wake(io: Io, args: []const []const u8) !void {
+	if (args.len < 3) return;
+
+	const path = try proc.socketPath(io, std.heap.smp_allocator);
+	defer std.heap.smp_allocator.free(path);
+
+	var read_buffer: [1048576]u8 = undefined;
+	var connection = sock.Connection.connect(path, &read_buffer) catch std.process.exit(2);
+	defer connection.close();
+
+	const line = try std.fmt.allocPrint(std.heap.smp_allocator, "{{\"cmd\":{{\"launcher\":{{\"requestWake\":\"{s}\"}}}}}}", .{args[2]});
+	defer std.heap.smp_allocator.free(line);
+
+	try connection.writeLine(line);
+	try connection.writeLine(sock.sync);
+	_ = try connection.readLine();
+}
+
 pub fn doctor(io: Io) !void {
 	const body = try fetch(io);
 	defer std.heap.smp_allocator.free(body);

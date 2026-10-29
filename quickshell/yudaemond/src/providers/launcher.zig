@@ -9,6 +9,7 @@ const exec = @import("../primitives/exec.zig");
 const config = @import("../primitives/config.zig");
 const environ = @import("../primitives/environ.zig");
 const proc = @import("../primitives/proc.zig");
+const hypr = @import("../primitives/hypr.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -154,6 +155,8 @@ pub const Launcher = struct {
 	hub: *Hub,
 	mutex: std.Io.Mutex = .init,
 	wake_mutex: std.Io.Mutex = .init,
+	remembered: ?Wake = null,
+	pending: ?[]const u8 = null,
 	scratch: std.heap.ArenaAllocator,
 	apps: ?*appsmod.Apps = null,
 	system: ?*sysmod.System = null,
@@ -768,6 +771,8 @@ pub const Launcher = struct {
 
 		const args = Wake{ .sock = sock_copy, .pid = pid, .path = path_copy };
 
+		self.keepWake(sock, pid, path);
+
 		const thread = std.Thread.spawn(.{}, wakeThread, .{ self, args }) catch {
 			self.allocator.free(sock_copy);
 			self.allocator.free(path_copy);
@@ -807,22 +812,92 @@ pub const Launcher = struct {
 		} else |_| {}
 	}
 
-	pub fn takeWake(self: *Launcher) ?[]const u8 {
-		const path = std.fmt.allocPrint(self.allocator, "{s}/qs-launcher-wake", .{proc.runtimeDir(self.io, self.allocator)}) catch return null;
-		defer self.allocator.free(path);
+	fn keepWake(self: *Launcher, sock: []const u8, pid: i64, path: []const u8) void {
+		const sock_copy = self.allocator.dupe(u8, sock) catch return;
+		const path_copy = self.allocator.dupe(u8, path) catch {
+			self.allocator.free(sock_copy);
+			return;
+		};
 
-		const body = proc.readFile(self.io, self.allocator, path) catch return null;
-		defer self.allocator.free(body);
+		self.wake_mutex.lockUncancelable(self.io);
+		defer self.wake_mutex.unlock(self.io);
 
-		std.Io.Dir.cwd().deleteFile(self.io, path) catch {};
-
-		const action = std.mem.trim(u8, body, " \t\r\n");
-
-		for (wake_actions) |known| {
-			if (std.mem.eql(u8, known, action)) return known;
+		if (self.remembered) |old| {
+			self.allocator.free(old.sock);
+			self.allocator.free(old.path);
 		}
 
-		return null;
+		self.remembered = .{ .sock = sock_copy, .pid = pid, .path = path_copy };
+	}
+
+	pub fn requestWake(self: *Launcher, action: []const u8) void {
+		const known = knownWake(action) orelse return;
+
+		const thread = std.Thread.spawn(.{}, requestThread, .{ self, known }) catch return;
+		thread.detach();
+	}
+
+	fn requestThread(self: *Launcher, action: []const u8) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+
+		self.wake_mutex.lockUncancelable(self.io);
+
+		const saved = self.remembered orelse {
+			self.wake_mutex.unlock(self.io);
+			return;
+		};
+
+		const sock_copy = allocator.dupe(u8, saved.sock) catch {
+			self.wake_mutex.unlock(self.io);
+			return;
+		};
+		const path_copy = allocator.dupe(u8, saved.path) catch {
+			self.wake_mutex.unlock(self.io);
+			return;
+		};
+		const pid = saved.pid;
+
+		self.pending = action;
+		self.wake_mutex.unlock(self.io);
+
+		if (!launcherUp(self.io, allocator, path_copy)) {
+			self.wake(sock_copy, pid, path_copy);
+			return;
+		}
+
+		self.wake_mutex.lockUncancelable(self.io);
+		self.pending = null;
+		self.wake_mutex.unlock(self.io);
+
+		self.dispatchGlobal(allocator, action);
+	}
+
+	fn dispatchGlobal(self: *Launcher, allocator: Allocator, action: []const u8) void {
+		var buffer: [96]u8 = undefined;
+
+		if (hypr.usingLua(self.io, allocator)) {
+			const script = std.fmt.bufPrint(&buffer, "hl.dispatch(hl.dsp.global(\"quickshell:{s}\"))", .{action}) catch return;
+			const result = exec.run(self.io, allocator, &.{ "hyprctl", "eval", script }) catch return;
+			result.deinit(allocator);
+			return;
+		}
+
+		const command = std.fmt.bufPrint(&buffer, "dispatch global quickshell:{s}", .{action}) catch return;
+		const answer = hypr.request(self.io, allocator, command) catch return;
+		allocator.free(answer);
+	}
+
+	pub fn takeWake(self: *Launcher) ?[]const u8 {
+		self.wake_mutex.lockUncancelable(self.io);
+		defer self.wake_mutex.unlock(self.io);
+
+		const action = self.pending;
+		self.pending = null;
+
+		return action;
 	}
 
 	pub fn copyText(self: *Launcher, text: []const u8) void {
@@ -1194,6 +1269,14 @@ pub const Launcher = struct {
 		}, .{})});
 	}
 };
+
+fn knownWake(action: []const u8) ?[]const u8 {
+	for (wake_actions) |known| {
+		if (std.mem.eql(u8, known, action)) return known;
+	}
+
+	return null;
+}
 
 const Wake = struct {
 	sock: []u8,

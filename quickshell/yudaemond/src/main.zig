@@ -207,6 +207,8 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		const power = json.integer(json.field(l_cmd, "power"));
 		if (json.field(l_cmd, "power") != null and power >= 0) context.launcher.power(@intCast(power));
 
+		if (json.field(l_cmd, "requestWake") != null) context.launcher.requestWake(json.textAt(l_cmd, "requestWake"));
+
 		if (json.field(l_cmd, "wake")) |target| {
 			context.launcher.wake(
 				json.textAt(target, "sock"),
@@ -435,13 +437,14 @@ pub fn main() !void {
 		return cli.state(io, args);
 	}
 
+	if (std.mem.eql(u8, command, "wake")) return cli.wake(io, args);
 	if (std.mem.eql(u8, command, "doctor")) return cli.doctor(io);
 	if (std.mem.eql(u8, command, "bench")) return cli.bench(io, args);
 	if (std.mem.eql(u8, command, "parity")) return cli.parity(io, args);
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudaemond [run|state|doctor|bench [widgets]|parity|mcp]\n", .{});
+		std.debug.print("usage: yudaemond [run|state|wake <action>|doctor|bench [widgets]|parity|mcp]\n", .{});
 		return;
 	}
 
