@@ -13,7 +13,7 @@ BarStat {
 	showBar: false
 	iconSize: Settings.iconSize + 4
 	iconLift: -1
-	barColor: Config.mono ? Config.weatherBase : Config.weatherBaseMono
+	barColor: Config.mono ? Config.weatherBaseMono : Config.weatherBase
 	icon: Weather.current.code >= 0 ? Weather.current.icon : Config.weatherLoadingIcon
 
 	popupContent: Component {

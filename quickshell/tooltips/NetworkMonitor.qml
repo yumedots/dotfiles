@@ -22,8 +22,8 @@ ProcessPanel {
 	readonly property string dns: root.net.dns || ""
 	readonly property bool linked: root.net.connected === true
 	readonly property bool isWifi: root.net.kind === "wifi"
-	readonly property color downInk: Config.mono ? Config.networkDown : Config.networkDownMono
-	readonly property color upInk: Config.mono ? Config.networkUp : Config.networkUpMono
+	readonly property color downInk: Config.mono ? Config.networkDownMono : Config.networkDown
+	readonly property color upInk: Config.mono ? Config.networkUpMono : Config.networkUp
 	readonly property string link: root.linked ? (root.net.ip !== "" ? root.net.ip : root.net.iface) : Config.networkWiredNothing
 	readonly property bool testing: (root.speed.stage || "") !== ""
 	readonly property bool done: !root.testing && (root.speed.down || 0) > 0

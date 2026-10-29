@@ -19,7 +19,7 @@ Item {
 	readonly property var groups: root.panel.groups || []
 	readonly property var monitor: Yudae.screenActive
 	readonly property bool ready: root.monitor !== null
-	readonly property color ink: Config.mono ? Config.displayBase : Config.displayBaseMono
+	readonly property color ink: Config.mono ? Config.displayBaseMono : Config.displayBase
 	readonly property var resolutions: root.ready ? root.monitor.resolutions : []
 	readonly property int resolutionRows: Math.min(root.resolutions.length, Config.displayResolutionLimit)
 	readonly property string currentRow: root.panel.cursor || ""

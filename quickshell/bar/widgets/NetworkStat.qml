@@ -17,7 +17,7 @@ BarStat {
 	property bool testPending: false
 
 	mode: "icon"
-	barColor: Config.mono ? Config.networkBase : Config.networkBaseMono
+	barColor: Config.mono ? Config.networkBaseMono : Config.networkBase
 	textColor: root.barColor
 	icon: root.isWifi ? root.wifiIcon : Config.networkLanIcon
 

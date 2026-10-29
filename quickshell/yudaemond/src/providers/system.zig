@@ -179,23 +179,23 @@ const Palette = struct {
 	}
 
 	fn cpuAccent(self: Palette) color.Rgb {
-		return if (self.mono) self.cpu_base else self.cpu_base_mono;
+		return if (self.mono) self.cpu_base_mono else self.cpu_base;
 	}
 
 	fn cpuPeakColor(self: Palette) color.Rgb {
-		return if (self.mono) self.cpu_peak else self.cpu_peak_mono;
+		return if (self.mono) self.cpu_peak_mono else self.cpu_peak;
 	}
 
 	fn memoryAccent(self: Palette) color.Rgb {
-		return if (self.mono) self.memory_base else self.memory_base_mono;
+		return if (self.mono) self.memory_base_mono else self.memory_base;
 	}
 
 	fn memoryWarnColor(self: Palette) color.Rgb {
-		return if (self.mono) self.memory_warn else self.memory_warn_mono;
+		return if (self.mono) self.memory_warn_mono else self.memory_warn;
 	}
 
 	fn memoryDangerColor(self: Palette) color.Rgb {
-		return if (self.mono) self.memory_danger else self.memory_danger_mono;
+		return if (self.mono) self.memory_danger_mono else self.memory_danger;
 	}
 
 	fn cpuInk(self: Palette, pct: f64) color.Rgb {

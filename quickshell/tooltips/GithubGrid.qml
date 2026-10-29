@@ -13,7 +13,7 @@ Item {
 
 	readonly property var cells: Github.grid
 	readonly property int weeks: Config.contribWeeks
-	readonly property color accentInk: Config.mono ? Config.contribBase : Config.contribBaseMono
+	readonly property color accentInk: Config.mono ? Config.contribBaseMono : Config.contribBase
 
 	implicitWidth: Config.contribTooltipWidth + Config.contribTooltipPadding * 2
 	implicitHeight: column.implicitHeight + Config.contribTooltipPadding * 2

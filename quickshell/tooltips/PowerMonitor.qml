@@ -8,7 +8,7 @@ ProcessPanel {
 	property var governors: root.source ? root.source.governors : []
 	property string governor: root.source ? root.source.governor : ""
 
-	readonly property color accentInk: Config.mono ? Config.powerBase : Config.powerBaseMono
+	readonly property color accentInk: Config.mono ? Config.powerBaseMono : Config.powerBase
 	readonly property int governorIndex: Math.max(0, root.governors.indexOf(root.governor))
 
 	title: Config.powerGovernorTitle
