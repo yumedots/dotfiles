@@ -1287,14 +1287,11 @@ const Wake = struct {
 const wake_script = "pgrep -f \"^quickshell -p $1\" >/dev/null || { ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid quickshell -p \"$1\" >/dev/null 2>&1 & echo $! > \"$XDG_RUNTIME_DIR/qs-launcher.pid\"; }";
 
 fn launcherUp(io: Io, allocator: Allocator, path: []const u8) bool {
-	const file = std.fmt.allocPrint(allocator, "{s}/qs-launcher.pid", .{proc.runtimeDir(io, allocator)}) catch return false;
-	const body = proc.readFile(io, allocator, file) catch return false;
-	const pid = std.fmt.parseInt(i32, std.mem.trim(u8, body, " \t\r\n"), 10) catch return false;
+	const pattern = std.fmt.allocPrint(allocator, "^quickshell -p {s}$", .{path}) catch return false;
+	const result = exec.run(io, allocator, &.{ "pgrep", "-f", pattern }) catch return false;
+	defer result.deinit(allocator);
 
-	const cmdline = std.fmt.allocPrint(allocator, "/proc/{d}/cmdline", .{pid}) catch return false;
-	const raw = proc.readFile(io, allocator, cmdline) catch return false;
-
-	return std.mem.indexOf(u8, raw, path) != null;
+	return result.code == 0;
 }
 
 fn wakeArgv(allocator: Allocator, path: []const u8) ![]const []const u8 {
