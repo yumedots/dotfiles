@@ -673,7 +673,7 @@ pub const Opencode = struct {
 		defer parsed_usage.deinit();
 
 		const windows = [_]struct { key: []const u8, title: []const u8 }{
-			.{ .key = "rolling", .title = "Session" },
+			.{ .key = "rolling", .title = "Rolling" },
 			.{ .key = "weekly", .title = "Weekly" },
 			.{ .key = "monthly", .title = "Monthly" },
 		};

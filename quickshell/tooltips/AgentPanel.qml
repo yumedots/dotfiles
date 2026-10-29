@@ -147,8 +147,6 @@ Item {
 		onTriggered: root.now = Date.now()
 	}
 
-	// How long until a window of the allowance resets. One measure at a time:
-	// the days when there are days, the hours when there are not.
 	function countdown(text) {
 		const at = Date.parse(String(text || ""));
 
@@ -563,7 +561,7 @@ Item {
 
 										anchors.left: parent.left
 										anchors.verticalCenter: parent.verticalCenter
-										width: 60
+										width: 68
 
 										font.family: Config.fontFamily
 										font.pixelSize: Settings.fontSize
