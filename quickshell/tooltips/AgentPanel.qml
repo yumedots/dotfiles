@@ -248,7 +248,7 @@ Item {
 					font.pixelSize: Settings.fontSize
 					color: Config.foreground
 					selectionColor: Config.muted
-					selectedTextColor: Config.background
+					selectedTextColor: Config.surface
 					selectByMouse: true
 					text: root.agentName
 
