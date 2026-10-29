@@ -843,6 +843,13 @@ pub const Launcher = struct {
 
 		const allocator = arena.allocator();
 
+		const path = std.fmt.allocPrint(allocator, "{s}/.config/quickshell/launcherShell.qml", .{proc.home(self.io, allocator)}) catch return;
+
+		if (launcherUp(self.io, allocator, path)) {
+			self.dispatchGlobal(allocator, action);
+			return;
+		}
+
 		self.wake_mutex.lockUncancelable(self.io);
 
 		const saved = self.remembered orelse {
@@ -854,25 +861,12 @@ pub const Launcher = struct {
 			self.wake_mutex.unlock(self.io);
 			return;
 		};
-		const path_copy = allocator.dupe(u8, saved.path) catch {
-			self.wake_mutex.unlock(self.io);
-			return;
-		};
 		const pid = saved.pid;
 
 		self.pending = action;
 		self.wake_mutex.unlock(self.io);
 
-		if (!launcherUp(self.io, allocator, path_copy)) {
-			self.wake(sock_copy, pid, path_copy);
-			return;
-		}
-
-		self.wake_mutex.lockUncancelable(self.io);
-		self.pending = null;
-		self.wake_mutex.unlock(self.io);
-
-		self.dispatchGlobal(allocator, action);
+		self.wake(sock_copy, pid, path);
 	}
 
 	fn dispatchGlobal(self: *Launcher, allocator: Allocator, action: []const u8) void {
