@@ -52,14 +52,14 @@ PanelWindow {
 	anchors.right: true
 
 	implicitWidth: root.screen ? root.screen.width : 1
-	implicitHeight: 1
+	implicitHeight: root.screen ? root.screen.height : 1
 
 	WlrLayershell.layer: WlrLayer.Overlay
 	WlrLayershell.namespace: "launcher"
 	WlrLayershell.keyboardFocus: root.shown && root.grabbed ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 	WlrLayershell.focusable: true
 
-	exclusiveZone: 0
+	exclusiveZone: -1
 	color: "transparent"
 
 	margins.left: 0
