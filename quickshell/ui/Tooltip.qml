@@ -38,8 +38,8 @@ PanelWindow {
 	readonly property bool wide: root.wantsKeyboard && !root.shut
 	readonly property bool atBottom: root.anchorWindow !== null && root.anchorWindow.atBottom === true
 	readonly property real outerMargin: root.anchorWindow !== null ? root.anchorWindow.outerMargin : Config.gapsOut
-	readonly property real wantedX: root.anchorX + (root.anchorItem ? root.anchorItem.width : 0) / 2 - root.cardWidth / 2
-	readonly property real limitX: (root.anchorWindow ? root.anchorWindow.width : 0) - root.cardWidth - Config.tooltipGap - Config.tooltipGapRight
+	readonly property real wantedX: root.outerMargin + root.anchorX + (root.anchorItem ? root.anchorItem.width : 0) / 2 - root.cardWidth / 2
+	readonly property real limitX: (root.anchorWindow ? root.anchorWindow.width : 0) + root.outerMargin - root.cardWidth - Config.tooltipGapRight
 	readonly property real hang: Config.tooltipHang
 	readonly property real screenWidth: root.screen ? root.screen.width : root.cardWidth
 	readonly property real screenHeight: root.screen ? root.screen.height : root.cardHeight
@@ -69,7 +69,7 @@ PanelWindow {
 		? Math.round((root.screenWidth - root.cardWidth - root.outerMargin - Config.tooltipGapRight) * root.scale) / root.scale
 		: Math.round((root.centerScreen || root.side === "center" ? (root.screenWidth - root.cardWidth) / 2
 			: root.side === "float" ? root.floatX
-				: root.outerMargin + Config.tooltipGap + Calc.clamp(root.wantedX + Config.tooltipOffsetX, 0, root.limitX)) * root.scale) / root.scale
+				: Calc.clamp(root.wantedX + Config.tooltipOffsetX, root.outerMargin + Config.tooltipGap, root.limitX)) * root.scale) / root.scale
 	readonly property real cardY: root.centerScreen
 		? Math.round((root.screenHeight - root.cardHeight) / 2)
 		: root.fullscreen
