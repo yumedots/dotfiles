@@ -208,7 +208,7 @@ Item {
 							anchors.centerIn: parent
 							font.family: Config.fontFamily
 							font.pixelSize: Config.calendarDaySize
-							color: cell.day.inMonth || cell.day.today || cell.day.cursor ? Config.foreground : Config.calendarOutside
+							color: !cell.day.outside || cell.day.today || cell.day.cursor ? Config.foreground : Config.calendarOutside
 							text: cell.day.day
 						}
 					}
