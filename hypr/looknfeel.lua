@@ -26,12 +26,12 @@ hl.config({
 
         shadow = {
             enabled      = true,
-            range        = 40,
+            range        = 48,
             render_power = 3,
             sharp        = false,
-            scale        = 1.0,
+            scale        = 0.96,
             color        = "rgba(00000070)",
-            offset       = { 0, 6 },
+            offset       = { 0, 14 },
         },
 
         blur = {
