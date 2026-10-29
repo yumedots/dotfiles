@@ -534,6 +534,7 @@ PanelWindow {
 		      : Config.launcherWidth
 		height: root.windows ? windowsGrid.implicitHeight + card.inset * 2 : column.implicitHeight + card.inset * 2
 		padding: Config.launcherPadding
+		borderWidth: 2
 		backgroundColor: Config.surfaceTranslucent
 		opacity: root.shown ? 1 : 0
 		visible: root.configured && (root.shown || opacity > 0)
