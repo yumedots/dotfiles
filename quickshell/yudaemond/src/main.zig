@@ -11,6 +11,7 @@ const activity = @import("providers/activity.zig");
 const cursor = @import("providers/cursor.zig");
 const daemon = @import("providers/daemon.zig");
 const github = @import("providers/github.zig");
+const agentname = @import("providers/agentname.zig");
 const weather = @import("providers/weather.zig");
 const system = @import("providers/system.zig");
 const apps = @import("providers/apps.zig");
@@ -50,6 +51,7 @@ pub const Context = struct {
 	cursor: *cursor.Cursor,
 	daemon: *daemon.Daemon,
 	github: *github.Github,
+	agent_name: *agentname.AgentName,
 	weather: *weather.Weather,
 	system: *system.System,
 	apps: *apps.Apps,
@@ -205,13 +207,8 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		return;
 	}
 
-	if (json.field(value, "file")) |file_cmd| {
-		if (json.field(file_cmd, "write")) |target| {
-			const path = json.textAt(target, "path");
-
-			if (path.len > 0) proc.writeFile(context.io, path, json.textAt(target, "text")) catch {};
-		}
-
+	if (json.field(value, "agentName")) |name| {
+		context.agent_name.set(json.textAt(name, "set"));
 		return;
 	}
 
@@ -435,6 +432,9 @@ fn run(io: std.Io) !void {
 	const daemon_provider = try daemon.Daemon.create(allocator, io, hub);
 	try hub.add(daemon_provider.provider());
 
+	const agent_name_provider = try agentname.AgentName.create(allocator, io, hub);
+	try hub.add(agent_name_provider.provider());
+
 	const github_provider = try github.Github.create(allocator, io, hub, client);
 	try hub.add(github_provider.provider());
 
@@ -514,6 +514,7 @@ fn run(io: std.Io) !void {
 		.cursor = cursor_provider,
 		.daemon = daemon_provider,
 		.github = github_provider,
+		.agent_name = agent_name_provider,
 		.weather = weather_provider,
 		.system = system_provider,
 		.apps = apps_provider,

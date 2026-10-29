@@ -17,35 +17,19 @@ Item {
 
 	// The name the panel shows for the agent. It is typed in the panel and
 	// kept in a file, so it survives a restart.
-	property string agentName: Config.agentPanelTitle
+	readonly property string agentName: Yudae.agentName === "" ? Config.agentPanelTitle : Yudae.agentName
 
-	readonly property string agentNamePath: Quickshell.shellDir + "/" + Config.agentNameFile
+	onAgentNameChanged: nameField.text = root.agentName
 
 	// A blank name falls back to the one the shell ships with, so the panel
 	// never loses its title.
 	function saveAgentName(value) {
 		const name = String(value === undefined || value === null ? "" : value).trim();
 
-		root.agentName = name === "" ? Config.agentPanelTitle : name;
-		nameField.text = root.agentName;
+		nameField.text = name === "" ? Config.agentPanelTitle : name;
 
-		if (nameFile.text().trim() !== root.agentName)
-			Yudae.cmd("file", { write: { path: root.agentNamePath, text: root.agentName + "\n" } });
-	}
-
-	FileView {
-		id: nameFile
-
-		path: root.agentNamePath
-		blockLoading: true
-		watchChanges: true
-
-		onLoaded: {
-			const name = nameFile.text().trim();
-
-			root.agentName = name === "" ? Config.agentPanelTitle : name;
-			nameField.text = root.agentName;
-		}
+		if (name !== Yudae.agentName)
+			Yudae.cmd("agentName", { set: name });
 	}
 
 	// Why the plans are missing, when nothing could be read.

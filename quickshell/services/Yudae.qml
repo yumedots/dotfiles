@@ -220,6 +220,8 @@ QtObject {
 		root.send({ gaze: root.gazeWanted });
 	}
 
+	readonly property var github: root.snapshot.github || ({})
+	readonly property string agentName: root.snapshot.agentName || ""
 	readonly property var weatherState: root.snapshot.weather || ({})
 
 	readonly property var calendarState: root.snapshot.calendar || ({})
