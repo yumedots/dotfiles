@@ -25,6 +25,8 @@ const subscriptions = @import("providers/subscriptions.zig");
 const supervisor = @import("providers/supervisor.zig");
 const versions = @import("providers/versions.zig");
 const windows = @import("providers/windows.zig");
+const media = @import("providers/media.zig");
+const calendar = @import("providers/calendar.zig");
 const iconsmod = @import("primitives/icons.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
@@ -61,6 +63,8 @@ pub const Context = struct {
 	supervisor: *supervisor.Supervisor,
 	versions: *versions.Versions,
 	windows: *windows.Windows,
+	media: *media.Media,
+	calendar: *calendar.Calendar,
 	socket_path: []const u8,
 };
 
@@ -291,6 +295,21 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		return;
 	}
 
+	if (json.field(value, "calendar")) |calendar_cmd| {
+		if (json.field(calendar_cmd, "days")) |days| context.calendar.shiftDays(json.integer(days));
+		if (json.field(calendar_cmd, "months")) |months| context.calendar.shiftMonths(json.integer(months));
+		if (json.field(calendar_cmd, "years")) |years| context.calendar.shiftYears(json.integer(years));
+		if (json.field(calendar_cmd, "weekStart")) |start| context.calendar.setWeekStart(json.integer(start));
+		if (json.flag(calendar_cmd, "reset")) context.calendar.reset();
+
+		return;
+	}
+
+	if (json.field(value, "media")) |action| {
+		context.media.action(json.text(action));
+		return;
+	}
+
 	const weather_cmd = json.field(value, "weather") orelse return;
 
 	if (json.field(weather_cmd, "shift")) |step| {
@@ -450,6 +469,12 @@ fn run(io: std.Io) !void {
 	launcher_provider.attach(apps_provider, system_provider, windows_provider);
 	try hub.add(launcher_provider.provider());
 
+	const media_provider = try media.Media.create(allocator, io, hub);
+	try hub.add(media_provider.provider());
+
+	const calendar_provider = try calendar.Calendar.create(allocator, io, hub);
+	try hub.add(calendar_provider.provider());
+
 	screen_provider.attachSettings(settings_provider);
 
 	const context = try allocator.create(Context);
@@ -479,6 +504,8 @@ fn run(io: std.Io) !void {
 		.supervisor = supervisor_provider,
 		.versions = versions_provider,
 		.windows = windows_provider,
+		.media = media_provider,
+		.calendar = calendar_provider,
 		.socket_path = socket_path,
 	};
 
@@ -511,6 +538,7 @@ fn run(io: std.Io) !void {
 	try bar_provider.start();
 	try launcher_provider.start();
 	try icons_provider.start();
+	try media_provider.start();
 	try subscriptions_provider.start();
 	try supervisor_provider.start();
 	try versions_provider.start();

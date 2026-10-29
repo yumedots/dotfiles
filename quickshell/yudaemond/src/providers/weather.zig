@@ -6,6 +6,7 @@ const proc = @import("../primitives/proc.zig");
 const sleep = @import("../primitives/sleep.zig");
 const config = @import("../primitives/config.zig");
 const setStr = @import("opencode.zig").setStr;
+const fmt = @import("../primitives/fmt.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -30,6 +31,9 @@ const DayOut = struct {
 	date: []const u8,
 	day: []const u8,
 	code: i64,
+	text: []const u8,
+	glyph: []const u8,
+	temps: []const u8,
 	tempMax: []const u8,
 	tempMin: []const u8,
 	feels: []const u8,
@@ -62,6 +66,10 @@ const SlotOut = struct {
 	wind: []const u8,
 	humidity: []const u8,
 	code: i64,
+	text: []const u8,
+	glyph: []const u8,
+	tempValue: []const u8,
+	tempUnit: []const u8,
 	stationCode: i64,
 	failed: bool,
 	days: []DayOut,
@@ -112,6 +120,7 @@ pub const Weather = struct {
 	refresh_ms: u64 = 120_000,
 	default_location: []u8 = &.{},
 	stale_after: i64 = 120_000,
+	codes: []const config.CodeRow = &.{},
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub, client: *http.Client) !*Weather {
 		const self = try allocator.create(Weather);
@@ -161,6 +170,7 @@ pub const Weather = struct {
 		self.refresh_ms = @intFromFloat(cfg.number("weatherRefreshMs", 120_000));
 		self.stale_after = @intFromFloat(cfg.number("weatherCacheMs", 120_000));
 		self.default_location = cfg.string("weatherLocation", self.allocator) orelse &.{};
+		self.codes = cfg.codeTable("weatherCodes", self.allocator) catch &.{};
 	}
 
 	fn placePath(self: *Weather, allocator: Allocator) []const u8 {
@@ -657,10 +667,15 @@ pub const Weather = struct {
 		for (self.slots) |slot| {
 			var days: std.ArrayListUnmanaged(DayOut) = .empty;
 			for (slot.days.items) |day| {
+				const info = describe(self.codes, day.code);
+
 				days.append(arena, .{
 					.date = day.date,
 					.day = day.day,
 					.code = day.code,
+					.text = info.text,
+					.glyph = info.glyph,
+					.temps = dayTemps(arena, day),
 					.tempMax = day.temp_max,
 					.tempMin = day.temp_min,
 					.feels = day.feels,
@@ -669,13 +684,20 @@ pub const Weather = struct {
 				}) catch {};
 			}
 
+			const code = slot.code();
+			const info = describe(self.codes, code);
+
 			saved.append(arena, .{
 				.place = slot.place,
 				.temp = slot.temp,
 				.feels = slot.feels,
 				.wind = slot.wind,
 				.humidity = slot.humidity,
-				.code = slot.code(),
+				.code = code,
+				.text = info.text,
+				.glyph = info.glyph,
+				.tempValue = splitTemp(slot.temp).value,
+				.tempUnit = splitTemp(slot.temp).unit,
 				.stationCode = slot.station_code,
 				.failed = slot.failed,
 				.days = days.items,
@@ -754,10 +776,15 @@ pub const Weather = struct {
 		for (self.slots) |slot| {
 			var days: std.ArrayListUnmanaged(DayOut) = .empty;
 			for (slot.days.items) |day| {
+				const info = describe(self.codes, day.code);
+
 				try days.append(arena, .{
 					.date = day.date,
 					.day = day.day,
 					.code = day.code,
+					.text = info.text,
+					.glyph = info.glyph,
+					.temps = dayTemps(arena, day),
 					.tempMax = day.temp_max,
 					.tempMin = day.temp_min,
 					.feels = day.feels,
@@ -766,13 +793,20 @@ pub const Weather = struct {
 				});
 			}
 
+			const code = slot.code();
+			const info = describe(self.codes, code);
+
 			try slots.append(arena, .{
 				.place = slot.place,
 				.temp = slot.temp,
 				.feels = slot.feels,
 				.wind = slot.wind,
 				.humidity = slot.humidity,
-				.code = slot.code(),
+				.code = code,
+				.text = info.text,
+				.glyph = info.glyph,
+				.tempValue = splitTemp(slot.temp).value,
+				.tempUnit = splitTemp(slot.temp).unit,
 				.stationCode = slot.station_code,
 				.failed = slot.failed,
 				.days = days.items,
@@ -797,6 +831,44 @@ pub const Weather = struct {
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
+
+const Info = struct {
+	text: []const u8 = "",
+	glyph: []const u8 = "",
+};
+
+const Split = struct {
+	value: []const u8 = "",
+	unit: []const u8 = "",
+};
+
+fn splitTemp(text: []const u8) Split {
+	const trimmed = std.mem.trim(u8, text, " ");
+
+	var end: usize = 0;
+	if (end < trimmed.len and (trimmed[end] == '+' or trimmed[end] == '-')) end += 1;
+
+	var digits: usize = 0;
+	while (end < trimmed.len and (std.ascii.isDigit(trimmed[end]) or trimmed[end] == '.')) : (end += 1) {
+		if (trimmed[end] != '.') digits += 1;
+	}
+
+	if (digits == 0) return .{ .value = trimmed };
+
+	return .{ .value = trimmed[0..end], .unit = std.mem.trim(u8, trimmed[end..], " ") };
+}
+
+fn dayTemps(arena: std.mem.Allocator, day: Day) []const u8 {
+	return std.fmt.allocPrint(arena, "{s}\u{00b0} {s}\u{00b0}", .{ splitTemp(day.temp_max).value, splitTemp(day.temp_min).value }) catch "";
+}
+
+fn describe(codes: []const config.CodeRow, code: i64) Info {
+	for (codes) |row| {
+		if (row.code == code) return .{ .text = row.name, .glyph = row.glyph };
+	}
+
+	return .{};
+}
 
 fn usablePlace(label: []const u8) bool {
 	var count: usize = 0;
@@ -824,23 +896,9 @@ fn dayLabel(date: []const u8) []const u8 {
 
 	if (month < 1 or month > 12 or day < 1 or day > 31) return "";
 
-	const days = daysFromCivil(year, month, day);
-	const weekday: usize = @intCast(@mod(days + 4, 7));
-
 	const names = [_][]const u8{ "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
 
-	return names[weekday];
-}
-
-fn daysFromCivil(year: i64, month: i64, day: i64) i64 {
-	const y = if (month <= 2) year - 1 else year;
-	const era = @divFloor(y, 400);
-	const yoe = y - era * 400;
-	const mp = @mod(month + 9, 12);
-	const doy = @divFloor(153 * mp + 2, 5) + day - 1;
-	const doe = yoe * 365 + @divFloor(yoe, 4) - @divFloor(yoe, 100) + doy;
-
-	return era * 146097 + doe - 719468;
+	return names[fmt.weekdayIndex(year, month, day)];
 }
 
 fn nearestStations(allocator: Allocator, stations: json.Value, lat: f64, lon: f64, count: i64) ![][]const u8 {
@@ -909,4 +967,33 @@ test "weather text maps to codes" {
 	try std.testing.expectEqual(@as(i64, 61), codeFromText("Light Rain"));
 	try std.testing.expectEqual(@as(i64, 0), codeFromText("Clear"));
 	try std.testing.expectEqual(@as(i64, -1), codeFromText(""));
+}
+
+test "temps split into value and unit" {
+	const split = splitTemp("82\u{00b0}F");
+	try std.testing.expectEqualStrings("82", split.value);
+	try std.testing.expectEqualStrings("\u{00b0}F", split.unit);
+
+	const negative = splitTemp("-3 \u{00b0}c");
+	try std.testing.expectEqualStrings("-3", negative.value);
+	try std.testing.expectEqualStrings("\u{00b0}c", negative.unit);
+
+	const blank = splitTemp("");
+	try std.testing.expectEqualStrings("", blank.value);
+	try std.testing.expectEqualStrings("", blank.unit);
+}
+
+test "codes describe the condition" {
+	const rows = [_]config.CodeRow{
+		.{ .code = 0, .name = "Clear", .glyph = "\u{f0599}" },
+		.{ .code = 61, .name = "Light rain", .glyph = "\u{f0597}" },
+	};
+
+	try std.testing.expectEqualStrings("Light rain", describe(&rows, 61).text);
+	try std.testing.expectEqualStrings("\u{f0597}", describe(&rows, 61).glyph);
+	try std.testing.expectEqualStrings("Clear", describe(&rows, 0).text);
+
+	const unknown = describe(&rows, 99);
+	try std.testing.expectEqualStrings("", unknown.text);
+	try std.testing.expectEqualStrings("", unknown.glyph);
 }

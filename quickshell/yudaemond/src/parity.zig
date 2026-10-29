@@ -127,6 +127,20 @@ fn live(io: Io, w: *std.Io.Writer) !void {
 	}
 
 	if (bad_percent) try fail(w, "limit percentages in range", "") else try pass(w, "limit percentages in range");
+
+	var undescribed = false;
+	if (json.field(state, "weather")) |weather| {
+		for (json.listAt(weather, "slots")) |slot| {
+			if (json.textAt(slot, "temp").len == 0) continue;
+			if (json.textAt(slot, "text").len == 0 or json.textAt(slot, "glyph").len == 0) undescribed = true;
+
+			for (json.listAt(slot, "days")) |day| {
+				if (json.textAt(day, "text").len == 0 or json.textAt(day, "glyph").len == 0) undescribed = true;
+			}
+		}
+	}
+
+	if (undescribed) try fail(w, "weather rows carry text and glyph", "") else try pass(w, "weather rows carry text and glyph");
 }
 
 fn fetch(io: Io) ?json.Value {
