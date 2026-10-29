@@ -7,6 +7,7 @@ const watch = @import("../primitives/watch.zig");
 const limitmod = @import("../primitives/limits.zig");
 const fmt = @import("../primitives/fmt.zig");
 const sleep = @import("../primitives/sleep.zig");
+const exec = @import("../primitives/exec.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -124,6 +125,13 @@ pub const Opencode = struct {
 	}
 
 	pub fn start(self: *Opencode) !void {
+		if (storedCredential(self.io, self.allocator)) |token| {
+			defer self.allocator.free(token);
+			self.mutex.lockUncancelable(self.io);
+			setStr(self.allocator, &self.access_token, token) catch {};
+			self.mutex.unlock(self.io);
+		}
+
 		const watcher = try std.Thread.spawn(.{}, watchLoop, .{self});
 		watcher.detach();
 
@@ -647,40 +655,13 @@ pub const Opencode = struct {
 	}
 
 	fn refreshUsage(self: *Opencode) void {
-		const url = self.baseUrl(self.allocator) orelse {
-			self.setUsageError("OpenCode offline");
-			return;
-		};
-		defer self.allocator.free(url);
-
-		const auth = self.authHeader() orelse return;
-		defer self.allocator.free(auth);
-
-		const target = std.fmt.allocPrint(self.allocator, "{s}/api/credential", .{url}) catch return;
-		defer self.allocator.free(target);
-
-		const parsed = self.http.getJson(self.allocator, target, auth, &.{}) catch {
-			self.setUsageError("credential unreadable");
-			return;
-		};
-		defer parsed.deinit();
-
-		var token: []const u8 = "";
-
-		for (json.listAt(parsed.value, "data")) |entry| {
-			if (!json.flag(entry, "active")) continue;
-			const value = json.deep(entry, &.{ "value", "access" }) orelse continue;
-			token = json.text(value);
-		}
-
+		const token = self.serverCredential() orelse self.cachedCredential();
 		if (token.len == 0) {
+			self.allocator.free(token);
 			self.setUsageError("not signed in");
 			return;
 		}
-
-		self.mutex.lockUncancelable(self.io);
-		setStr(self.allocator, &self.access_token, token) catch {};
-		self.mutex.unlock(self.io);
+		defer self.allocator.free(token);
 
 		const bearer = http.bearer(self.allocator, token) catch return;
 		defer self.allocator.free(bearer);
@@ -721,6 +702,37 @@ pub const Opencode = struct {
 		self.mutex.unlock(self.io);
 
 		self.hub.publish();
+	}
+
+	fn serverCredential(self: *Opencode) ?[]u8 {
+		const url = self.baseUrl(self.allocator) orelse return null;
+		defer self.allocator.free(url);
+		const auth = self.authHeader() orelse return null;
+		defer self.allocator.free(auth);
+		const target = std.fmt.allocPrint(self.allocator, "{s}/api/credential", .{url}) catch return null;
+		defer self.allocator.free(target);
+		const parsed = self.http.getJson(self.allocator, target, auth, &.{}) catch return null;
+		defer parsed.deinit();
+
+		var token: []const u8 = "";
+		for (json.listAt(parsed.value, "data")) |entry| {
+			if (!json.flag(entry, "active")) continue;
+			const value = json.deep(entry, &.{ "value", "access" }) orelse continue;
+			token = json.text(value);
+		}
+		if (token.len == 0) return null;
+
+		const copy = self.allocator.dupe(u8, token) catch return null;
+		self.mutex.lockUncancelable(self.io);
+		setStr(self.allocator, &self.access_token, token) catch {};
+		self.mutex.unlock(self.io);
+		return copy;
+	}
+
+	fn cachedCredential(self: *Opencode) []u8 {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+		return self.allocator.dupe(u8, self.access_token) catch &.{};
 	}
 
 	fn setUsageError(self: *Opencode, message: []const u8) void {
@@ -902,4 +914,77 @@ test "the active list clears a stale busy status" {
 	try std.testing.expectEqualStrings("idle", stale.status);
 	try std.testing.expectEqualStrings("busy", live.status);
 	try std.testing.expectEqualStrings("working", self.faceState());
+}
+
+const credential_query = "SELECT COALESCE(json_extract(value, '$.key'), json_extract(value, '$.access')) AS token FROM credential WHERE active = 1 AND integration_id IN ('opencode-go', 'opencode') AND json_valid(value) AND COALESCE(json_extract(value, '$.key'), json_extract(value, '$.access')) IS NOT NULL ORDER BY CASE integration_id WHEN 'opencode-go' THEN 0 ELSE 1 END, time_updated DESC LIMIT 1;";
+
+fn storedCredential(io: Io, allocator: Allocator) ?[]u8 {
+	if (proc.env(io, allocator, "OPENCODE_API_KEY")) |token| {
+		if (token.len > 0) return allocator.dupe(u8, token) catch null;
+	}
+
+	const xdg = proc.env(io, allocator, "XDG_DATA_HOME") orelse "";
+	const data = if (xdg.len > 0) allocator.dupe(u8, xdg) catch return null else std.fmt.allocPrint(allocator, "{s}/.local/share", .{proc.home(io, allocator)}) catch return null;
+	defer allocator.free(data);
+	const directory = std.fmt.allocPrint(allocator, "{s}/opencode", .{data}) catch return null;
+	defer allocator.free(directory);
+
+	const override = proc.env(io, allocator, "OPENCODE_DB");
+	if (override) |path| {
+		if (path.len == 0 or std.mem.eql(u8, path, ":memory:")) return legacyCredential(io, allocator, directory);
+	}
+	const database = if (override) |path|
+		if (std.fs.path.isAbsolute(path)) allocator.dupe(u8, path) catch return null else std.fmt.allocPrint(allocator, "{s}/{s}", .{ directory, path }) catch return null
+	else
+		std.fmt.allocPrint(allocator, "{s}/opencode.db", .{directory}) catch return null;
+	defer allocator.free(database);
+
+	const result = exec.run(io, allocator, &.{ "sqlite3", "-readonly", "-json", database, credential_query }) catch return legacyCredential(io, allocator, directory);
+	defer result.deinit(allocator);
+	if (result.code == 0) {
+		if (databaseToken(allocator, result.out)) |token| return token;
+	}
+	return legacyCredential(io, allocator, directory);
+}
+
+fn legacyCredential(io: Io, allocator: Allocator, directory: []const u8) ?[]u8 {
+	const auth_path = std.fmt.allocPrint(allocator, "{s}/auth.json", .{directory}) catch return null;
+	defer allocator.free(auth_path);
+	const body = proc.readFile(io, allocator, auth_path) catch return null;
+	defer allocator.free(body);
+	return legacyToken(allocator, body);
+}
+
+fn databaseToken(allocator: Allocator, body: []const u8) ?[]u8 {
+	var arena = std.heap.ArenaAllocator.init(allocator);
+	defer arena.deinit();
+	const parsed = json.parse(arena.allocator(), body) catch return null;
+	const rows = json.list(parsed.value);
+	if (rows.len == 0) return null;
+	const token = json.textAt(rows[0], "token");
+	if (token.len == 0) return null;
+	return allocator.dupe(u8, token) catch null;
+}
+
+fn legacyToken(allocator: Allocator, body: []const u8) ?[]u8 {
+	var arena = std.heap.ArenaAllocator.init(allocator);
+	defer arena.deinit();
+	const parsed = json.parse(arena.allocator(), body) catch return null;
+	for ([_][]const u8{ "opencode-go", "opencode" }) |provider| {
+		for ([_][]const u8{ "key", "access" }) |field| {
+			const token = json.textDeep(parsed.value, &.{ provider, field });
+			if (token.len > 0) return allocator.dupe(u8, token) catch null;
+		}
+	}
+	return null;
+}
+
+test "database credential output reads a token" {
+	const token = databaseToken(std.testing.allocator, "[{\"token\":\"secret-value\"}]") orelse return error.MissingToken;
+	defer std.testing.allocator.free(token);
+	try std.testing.expectEqualStrings("secret-value", token);
+}
+
+test "database credential output ignores missing credentials" {
+	try std.testing.expect(databaseToken(std.testing.allocator, "[]") == null);
 }
