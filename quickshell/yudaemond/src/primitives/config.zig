@@ -166,6 +166,25 @@ pub const Config = struct {
 		return out.toOwnedSlice(allocator);
 	}
 
+	pub fn tableString(self: Config, name: []const u8, index: usize, key: []const u8, allocator: Allocator) ?[]u8 {
+		const items = switch (find(self.root, name) orelse return null) {
+			.array => |items| items,
+			else => return null,
+		};
+
+		if (index >= items.len) return null;
+
+		const table = switch (items[index]) {
+			.table => |table| table,
+			else => return null,
+		};
+
+		return switch (find(table, key) orelse return null) {
+			.string => |value| allocator.dupe(u8, value) catch null,
+			else => null,
+		};
+	}
+
 	pub fn codeTable(self: Config, name: []const u8, allocator: Allocator) ![]CodeRow {
 		const items = switch (find(self.root, name) orelse return &.{}) {
 			.array => |items| items,

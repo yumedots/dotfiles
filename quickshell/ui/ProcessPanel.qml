@@ -195,7 +195,7 @@ Item {
 			model: panel.procs
 
 			onKillRequested: function (proc) {
-				Quickshell.execDetached(["kill", Config.procKillSignal, String(proc.pid)]);
+				Yudae.cmd("launcher", { kill: proc.pid });
 			}
 
 			delegate: Item {

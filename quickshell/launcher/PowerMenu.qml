@@ -53,8 +53,8 @@ PanelWindow {
 		root.shown = false;
 	}
 
-	function execute(entry) {
-		Quickshell.execDetached(["sh", "-c", entry.command]);
+	function execute() {
+		Yudae.cmd("launcher", { power: root.index });
 		root.close();
 	}
 
@@ -117,7 +117,7 @@ PanelWindow {
 			else if (event.key === Qt.Key_Right)
 				root.step(1);
 			else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
-				root.execute(root.actions[root.index]);
+				root.execute();
 		}
 
 		IconRow {
@@ -139,7 +139,7 @@ PanelWindow {
 			hoverEnabled: true
 
 			onPositionChanged: function (mouse) { root.index = Calc.clamp(Math.floor(mouse.x / Config.powerCellSize), 0, Math.max(0, root.count - 1)); }
-			onClicked: root.execute(root.actions[root.index])
+			onClicked: root.execute()
 		}
 	}
 }

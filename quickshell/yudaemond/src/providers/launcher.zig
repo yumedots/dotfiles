@@ -6,6 +6,7 @@ const windowsmod = @import("windows.zig");
 const calc = @import("../primitives/calc.zig");
 const json = @import("../primitives/json.zig");
 const exec = @import("../primitives/exec.zig");
+const config = @import("../primitives/config.zig");
 const environ = @import("../primitives/environ.zig");
 const proc = @import("../primitives/proc.zig");
 
@@ -643,11 +644,41 @@ pub const Launcher = struct {
 	}
 
 	pub fn killProcess(self: *Launcher, pid: i32) void {
-		_ = self;
-
 		if (pid <= 0) return;
 
-		_ = std.posix.kill(pid, std.posix.SIG.KILL) catch {};
+		var signal: u32 = @intFromEnum(std.posix.SIG.KILL);
+
+		if (config.Config.load(self.io, self.allocator)) |cfg| {
+			defer cfg.deinit();
+
+			if (cfg.string("procKillSignal", self.allocator)) |text| {
+				defer self.allocator.free(text);
+
+				signal = std.fmt.parseInt(u32, std.mem.trimStart(u8, text, "-"), 10) catch signal;
+			}
+		} else |_| {}
+
+		_ = std.posix.kill(pid, @enumFromInt(signal)) catch {};
+	}
+
+	pub fn power(self: *Launcher, index: usize) void {
+		const cfg = config.Config.load(self.io, self.allocator) catch return;
+		defer cfg.deinit();
+
+		const command = cfg.tableString("powerActions", index, "command", self.allocator) orelse return;
+
+		const thread = std.Thread.spawn(.{}, runDetached, .{ self, command }) catch {
+			self.allocator.free(command);
+			return;
+		};
+		thread.detach();
+	}
+
+	fn runDetached(self: *Launcher, command: []u8) void {
+		defer self.allocator.free(command);
+
+		const result = exec.run(self.io, self.allocator, &.{ "sh", "-c", command }) catch return;
+		result.deinit(self.allocator);
 	}
 
 	pub fn activate(self: *Launcher, id: []const u8) void {
