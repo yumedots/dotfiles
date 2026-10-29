@@ -7,6 +7,7 @@ Rectangle {
 	property alias text: input.text
 	property string glyph: Config.launcherPrompt
 	property string hintKey: ""
+	property string hintText: ""
 	property bool typing: false
 	property color boxColor: Config.launcherSearchBox
 	property real size: Config.launcherFontSize
@@ -21,6 +22,7 @@ Rectangle {
 	signal keyPressed(var event)
 
 	readonly property bool hint: !root.typing && root.hintKey !== "" && input.text === ""
+	readonly property string hintLabel: root.hintText.length > root.hintKey.length ? root.hintText.slice(root.hintKey.length).trim() : ""
 	readonly property real slot: root.glyphSlot > 0 ? root.glyphSlot : icon.implicitWidth
 	readonly property real lineHeight: Math.round(root.size * 1.6)
 
@@ -73,7 +75,7 @@ Rectangle {
 		font.family: Config.fontFamily
 		font.pixelSize: root.size
 		color: Config.muted
-		text: root.hintKey.indexOf(" ") > 0 ? root.hintKey : root.hintKey + " to type"
+		text: root.hintKey + (root.hintLabel !== "" ? " " + root.hintLabel : "")
 	}
 
 	TextInput {

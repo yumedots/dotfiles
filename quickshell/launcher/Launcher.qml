@@ -580,6 +580,7 @@ PanelWindow {
 				width: parent.width
 				boxHeight: Config.launcherInputHeight
 				hintKey: Config.procHintKey
+				hintText: Config.procSearchHint
 				padding: 0
 				gap: Config.launcherTextGap
 				glyphSlot: Config.launcherIconSlot
