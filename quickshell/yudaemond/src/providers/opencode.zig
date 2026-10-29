@@ -919,9 +919,7 @@ test "the active list clears a stale busy status" {
 const credential_query = "SELECT COALESCE(json_extract(value, '$.key'), json_extract(value, '$.access')) AS token FROM credential WHERE active = 1 AND integration_id IN ('opencode-go', 'opencode') AND json_valid(value) AND COALESCE(json_extract(value, '$.key'), json_extract(value, '$.access')) IS NOT NULL ORDER BY CASE integration_id WHEN 'opencode-go' THEN 0 ELSE 1 END, time_updated DESC LIMIT 1;";
 
 fn storedCredential(io: Io, allocator: Allocator) ?[]u8 {
-	if (proc.env(io, allocator, "OPENCODE_API_KEY")) |token| {
-		if (token.len > 0) return allocator.dupe(u8, token) catch null;
-	}
+	if (proc.env(io, allocator, "OPENCODE_API_KEY")) |token| if (token.len > 0) return allocator.dupe(u8, token) catch null;
 
 	const xdg = proc.env(io, allocator, "XDG_DATA_HOME") orelse "";
 	const data = if (xdg.len > 0) allocator.dupe(u8, xdg) catch return null else std.fmt.allocPrint(allocator, "{s}/.local/share", .{proc.home(io, allocator)}) catch return null;
@@ -930,9 +928,7 @@ fn storedCredential(io: Io, allocator: Allocator) ?[]u8 {
 	defer allocator.free(directory);
 
 	const override = proc.env(io, allocator, "OPENCODE_DB");
-	if (override) |path| {
-		if (path.len == 0 or std.mem.eql(u8, path, ":memory:")) return legacyCredential(io, allocator, directory);
-	}
+	if (override) |path| if (path.len == 0 or std.mem.eql(u8, path, ":memory:")) return legacyCredential(io, allocator, directory);
 	const database = if (override) |path|
 		if (std.fs.path.isAbsolute(path)) allocator.dupe(u8, path) catch return null else std.fmt.allocPrint(allocator, "{s}/{s}", .{ directory, path }) catch return null
 	else
@@ -941,10 +937,7 @@ fn storedCredential(io: Io, allocator: Allocator) ?[]u8 {
 
 	const result = exec.run(io, allocator, &.{ "sqlite3", "-readonly", "-json", database, credential_query }) catch return legacyCredential(io, allocator, directory);
 	defer result.deinit(allocator);
-	if (result.code == 0) {
-		if (databaseToken(allocator, result.out)) |token| return token;
-	}
-	return legacyCredential(io, allocator, directory);
+	return if (result.code == 0) parseCredential(allocator, result.out, true) orelse legacyCredential(io, allocator, directory) else legacyCredential(io, allocator, directory);
 }
 
 fn legacyCredential(io: Io, allocator: Allocator, directory: []const u8) ?[]u8 {
@@ -952,39 +945,33 @@ fn legacyCredential(io: Io, allocator: Allocator, directory: []const u8) ?[]u8 {
 	defer allocator.free(auth_path);
 	const body = proc.readFile(io, allocator, auth_path) catch return null;
 	defer allocator.free(body);
-	return legacyToken(allocator, body);
+	return parseCredential(allocator, body, false);
 }
 
-fn databaseToken(allocator: Allocator, body: []const u8) ?[]u8 {
+fn parseCredential(allocator: Allocator, body: []const u8, database: bool) ?[]u8 {
 	var arena = std.heap.ArenaAllocator.init(allocator);
 	defer arena.deinit();
 	const parsed = json.parse(arena.allocator(), body) catch return null;
-	const rows = json.list(parsed.value);
-	if (rows.len == 0) return null;
-	const token = json.textAt(rows[0], "token");
+	const token: []const u8 = if (database) blk: {
+		const rows = json.list(parsed.value);
+		break :blk if (rows.len > 0) json.textAt(rows[0], "token") else "";
+	} else blk: {
+		for ([_][]const u8{ "opencode-go", "opencode" }) |provider| for ([_][]const u8{ "key", "access" }) |field| {
+			const value = json.textDeep(parsed.value, &.{ provider, field });
+			if (value.len > 0) break :blk value;
+		};
+		break :blk "";
+	};
 	if (token.len == 0) return null;
 	return allocator.dupe(u8, token) catch null;
 }
 
-fn legacyToken(allocator: Allocator, body: []const u8) ?[]u8 {
-	var arena = std.heap.ArenaAllocator.init(allocator);
-	defer arena.deinit();
-	const parsed = json.parse(arena.allocator(), body) catch return null;
-	for ([_][]const u8{ "opencode-go", "opencode" }) |provider| {
-		for ([_][]const u8{ "key", "access" }) |field| {
-			const token = json.textDeep(parsed.value, &.{ provider, field });
-			if (token.len > 0) return allocator.dupe(u8, token) catch null;
-		}
-	}
-	return null;
-}
-
 test "database credential output reads a token" {
-	const token = databaseToken(std.testing.allocator, "[{\"token\":\"secret-value\"}]") orelse return error.MissingToken;
+	const token = parseCredential(std.testing.allocator, "[{\"token\":\"secret-value\"}]", true) orelse return error.MissingToken;
 	defer std.testing.allocator.free(token);
 	try std.testing.expectEqualStrings("secret-value", token);
 }
 
 test "database credential output ignores missing credentials" {
-	try std.testing.expect(databaseToken(std.testing.allocator, "[]") == null);
+	try std.testing.expect(parseCredential(std.testing.allocator, "[]", true) == null);
 }
