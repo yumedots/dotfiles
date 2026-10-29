@@ -285,6 +285,7 @@ QtObject {
 			return;
 
 		root.socket.write(JSON.stringify(message) + "\n");
+		root.socket.flush();
 	}
 
 	function receive(line) {
