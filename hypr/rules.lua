@@ -34,3 +34,10 @@ hl.window_rule({
     float = true,
 })
 
+
+hl.window_rule({
+    name  = "no-shadow-on-tiled",
+    match = { float = false },
+
+    no_shadow = true,
+})
