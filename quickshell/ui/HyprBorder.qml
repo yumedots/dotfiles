@@ -13,6 +13,9 @@ Item {
 	property color backgroundColor: Config.surfaceTranslucent
 	property real padding: 0
 	property real borderOpacity: 1
+	property bool shadowEnabled: true
+	property real shadowTopReach: -1
+	property real shadowBottomReach: -1
 
 	readonly property var hyprBorder: Yudae.screenBorder.colors ? Yudae.screenBorder : ({ colors: [], angle: 0, width: null })
 	readonly property var themeColors: root.borderColors !== null
@@ -52,6 +55,14 @@ Item {
 				end: sample(edge === "left" ? 0 : width, edge === "top" ? 0 : height)
 			};
 		});
+	}
+
+	HyprShadow {
+		z: -1
+		anchors.fill: parent
+		shadowEnabled: root.shadowEnabled
+		topReach: root.shadowTopReach
+		bottomReach: root.shadowBottomReach
 	}
 
 	Item {

@@ -243,6 +243,8 @@ PanelWindow {
 			borderColors: root.borderColors
 			borderWidth: root.borderWidth
 			borderOpacity: 1
+			shadowTopReach: root.fullscreen || root.centerScreen || root.atBottom ? -1 : Math.max(root.hang, 0)
+			shadowBottomReach: !root.fullscreen && !root.centerScreen && root.atBottom ? Math.max(root.hang, 0) : -1
 
 			Keys.onPressed: function (event) {
 				if (!Input.cancel(event))

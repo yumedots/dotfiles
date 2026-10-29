@@ -4,6 +4,7 @@ AgentRow 1.0 AgentRow.qml
 Braille 1.0 Braille.qml
 MenuLevel 1.0 MenuLevel.qml
 HyprBorder 1.0 HyprBorder.qml
+HyprShadow 1.0 HyprShadow.qml
 Tooltip 1.0 Tooltip.qml
 BarStat 1.0 BarStat.qml
 BarText 1.0 BarText.qml
