@@ -3,6 +3,7 @@ const std = @import("std");
 test {
 	_ = @import("primitives/json.zig");
 	_ = @import("primitives/fmt.zig");
+	_ = @import("primitives/localtime.zig");
 	_ = @import("primitives/http.zig");
 	_ = @import("primitives/proc.zig");
 	_ = @import("primitives/watch.zig");

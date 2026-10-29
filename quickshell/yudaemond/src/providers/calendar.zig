@@ -1,7 +1,7 @@
 const std = @import("std");
 const hubmod = @import("../hub.zig");
 const config = @import("../primitives/config.zig");
-const exec = @import("../primitives/exec.zig");
+const localtime = @import("../primitives/localtime.zig");
 const fmt = @import("../primitives/fmt.zig");
 
 const Allocator = std.mem.Allocator;
@@ -11,7 +11,6 @@ const Hub = hubmod.Hub;
 
 const month_names = [_][]const u8{ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
 const day_names = [_][]const u8{ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-const offset_refresh_ms: i64 = 600_000;
 
 const Cell = struct {
 	key: []const u8,
@@ -101,18 +100,7 @@ pub const Calendar = struct {
 
 	fn refreshOffset(self: *Calendar) void {
 		self.offset_at = fmt.nowMs(self.io);
-
-		const result = exec.run(self.io, self.allocator, &.{ "date", "+%z" }) catch return;
-		defer result.deinit(self.allocator);
-
-		const text = std.mem.trim(u8, result.out, " \t\r\n");
-		if (text.len < 5) return;
-
-		const sign: i64 = if (text[0] == '-') -1 else 1;
-		const hours = std.fmt.parseInt(i64, text[1..3], 10) catch return;
-		const minutes = std.fmt.parseInt(i64, text[3..5], 10) catch return;
-
-		self.offset_ms = sign * (hours * 3_600_000 + minutes * 60_000);
+		self.offset_ms = localtime.offsetMs(self.io, self.allocator) orelse return;
 	}
 
 	pub fn shiftDays(self: *Calendar, days: i64) void {
@@ -165,7 +153,7 @@ pub const Calendar = struct {
 		self.mutex.lockUncancelable(self.io);
 		defer self.mutex.unlock(self.io);
 
-		if (fmt.nowMs(self.io) - self.offset_at > offset_refresh_ms) self.refreshOffset();
+		if (fmt.nowMs(self.io) - self.offset_at > localtime.refresh_ms) self.refreshOffset();
 
 		_ = self.scratch.reset(.retain_capacity);
 		const arena = self.scratch.allocator();
