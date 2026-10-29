@@ -28,77 +28,6 @@ pub const CodeRow = struct {
 	glyph: []const u8,
 };
 
-var usage_lock: std.atomic.Value(bool) = .init(false);
-var usage_names: std.ArrayListUnmanaged([]const u8) = .empty;
-var usage_stamp: std.atomic.Value(usize) = .init(0);
-
-fn lockUsage() void {
-	while (usage_lock.swap(true, .acquire)) std.atomic.spinLoopHint();
-}
-
-fn unlockUsage() void {
-	usage_lock.store(false, .release);
-}
-
-pub fn markUsed(name: []const u8) void {
-	lockUsage();
-	defer unlockUsage();
-
-	for (usage_names.items) |known| {
-		if (std.mem.eql(u8, known, name)) return;
-	}
-
-	const copy = std.heap.smp_allocator.dupe(u8, name) catch return;
-	usage_names.append(std.heap.smp_allocator, copy) catch {
-		std.heap.smp_allocator.free(copy);
-		return;
-	};
-
-	usage_stamp.store(usage_names.items.len, .monotonic);
-}
-
-pub fn usageCount() usize {
-	return usage_stamp.load(.monotonic);
-}
-
-pub fn usedKeys(allocator: Allocator) ![]const []const u8 {
-	lockUsage();
-	defer unlockUsage();
-
-	var out: std.ArrayListUnmanaged([]const u8) = .empty;
-	errdefer {
-		for (out.items) |name| allocator.free(name);
-		out.deinit(allocator);
-	}
-
-	for (usage_names.items) |name| try out.append(allocator, try allocator.dupe(u8, name));
-
-	return out.toOwnedSlice(allocator);
-}
-
-pub fn resetUsage() void {
-	lockUsage();
-	defer unlockUsage();
-
-	for (usage_names.items) |name| std.heap.smp_allocator.free(name);
-	usage_names.clearRetainingCapacity();
-	usage_stamp.store(0, .monotonic);
-}
-
-pub fn renderUsage(writer: *std.Io.Writer) !void {
-	lockUsage();
-	defer unlockUsage();
-
-	try writer.writeAll("{\"used\":[");
-
-	for (usage_names.items, 0..) |name, index| {
-		if (index > 0) try writer.writeAll(",");
-		try writeKey(writer, name);
-	}
-
-	try writer.writeAll("]}");
-}
-
 pub const Config = struct {
 	arena: *std.heap.ArenaAllocator,
 	root: *Table,
@@ -116,18 +45,6 @@ pub const Config = struct {
 		defer if (body.len > 0) allocator.free(body);
 
 		return parse(allocator, body);
-	}
-
-	pub fn unknown(self: Config, allocator: Allocator, consumed: []const []const u8) ![][]u8 {
-		var out: std.ArrayListUnmanaged([]u8) = .empty;
-		errdefer {
-			for (out.items) |name| allocator.free(name);
-			out.deinit(allocator);
-		}
-
-		try collect(self.root, allocator, consumed, "", &out);
-
-		return out.toOwnedSlice(allocator);
 	}
 
 	pub fn parse(allocator: Allocator, text: []const u8) !Config {
@@ -152,8 +69,6 @@ pub const Config = struct {
 	}
 
 	fn find(table: *Table, name: []const u8) ?Value {
-		markUsed(name);
-
 		for (table.entries.items) |entry| {
 			switch (entry.value) {
 				.table => |inner| {
@@ -298,38 +213,6 @@ pub const Config = struct {
 		try writer.writeAll("}");
 	}
 };
-
-fn collect(table: *Table, allocator: Allocator, consumed: []const []const u8, prefix: []const u8, out: *std.ArrayListUnmanaged([]u8)) !void {
-	for (table.entries.items) |entry| {
-		const path = if (prefix.len == 0)
-			try std.fmt.allocPrint(allocator, "{s}", .{entry.key})
-		else
-			try std.fmt.allocPrint(allocator, "{s}.{s}", .{ prefix, entry.key });
-		errdefer allocator.free(path);
-
-		switch (entry.value) {
-			.table => |inner| {
-				try collect(inner, allocator, consumed, path, out);
-				allocator.free(path);
-			},
-			else => {
-				if (isConsumed(entry.key, consumed)) {
-					allocator.free(path);
-				} else {
-					try out.append(allocator, path);
-				}
-			},
-		}
-	}
-}
-
-fn isConsumed(name: []const u8, consumed: []const []const u8) bool {
-	for (consumed) |known| {
-		if (std.mem.eql(u8, known, name)) return true;
-	}
-
-	return false;
-}
 
 fn flatten(writer: *std.Io.Writer, table: *Table, first: *bool) !void {
 	for (table.entries.items) |entry| {
@@ -820,78 +703,4 @@ test "the snapshot renders every key once" {
 	try std.testing.expectEqual(@as(usize, 2), object.get("icons").?.array.items.len);
 	try std.testing.expectEqualStrings("Suspend", object.get("actions").?.array.items[0].object.get("name").?.string);
 	try std.testing.expectEqual(@as(usize, 6), object.count());
-}
-
-fn freeKeys(allocator: Allocator, keys: []const []const u8) void {
-	for (keys) |name| allocator.free(name);
-	allocator.free(keys);
-}
-
-test "a key no consumer asked for is reported" {
-	resetUsage();
-
-	const text =
-		"[colors]\n" ++
-		"surface = \"#101010\"\n" ++
-		"[bar]\n" ++
-		"barCells = 15\n" ++
-		"barCellz = 3\n" ++
-		"[weather]\n" ++
-		"codes = [\n\t{ code = 0, name = \"Clear\", glyph = \"a\" },\n]\n";
-
-	const cfg = try Config.parse(std.testing.allocator, text);
-	defer cfg.deinit();
-
-	try std.testing.expectEqualStrings("#101010", cfg.color("surface").?);
-	try std.testing.expectEqual(@as(i64, 15), cfg.integer("barCells", 15));
-	const rows = try cfg.codeTable("codes", std.testing.allocator);
-	defer {
-		for (rows) |row| {
-			std.testing.allocator.free(row.name);
-			std.testing.allocator.free(row.glyph);
-		}
-		std.testing.allocator.free(rows);
-	}
-
-	const used = try usedKeys(std.testing.allocator);
-	defer freeKeys(std.testing.allocator, used);
-
-	const unknown_keys = try cfg.unknown(std.testing.allocator, used);
-	defer freeKeys(std.testing.allocator, unknown_keys);
-
-	try std.testing.expectEqual(@as(usize, 1), unknown_keys.len);
-	try std.testing.expectEqualStrings("bar.barCellz", unknown_keys[0]);
-}
-
-test "consumed and seeded keys report nothing" {
-	resetUsage();
-
-	const text =
-		"[colors]\n" ++
-		"surface = \"#101010\"\n" ++
-		"[bar]\n" ++
-		"barCells = 15\n" ++
-		"[shell]\n" ++
-		"launcherFontSize = 16\n";
-
-	const cfg = try Config.parse(std.testing.allocator, text);
-	defer cfg.deinit();
-
-	_ = cfg.color("surface");
-	_ = cfg.integer("barCells", 15);
-	_ = cfg.integer("shellMissingDefault", 4);
-
-	const used = try usedKeys(std.testing.allocator);
-	defer freeKeys(std.testing.allocator, used);
-
-	const unknown_keys = try cfg.unknown(std.testing.allocator, used);
-	defer freeKeys(std.testing.allocator, unknown_keys);
-
-	try std.testing.expectEqual(@as(usize, 1), unknown_keys.len);
-	try std.testing.expectEqualStrings("shell.launcherFontSize", unknown_keys[0]);
-
-	const seeded = try cfg.unknown(std.testing.allocator, &.{ "surface", "barCells", "launcherFontSize" });
-	defer freeKeys(std.testing.allocator, seeded);
-
-	try std.testing.expectEqual(@as(usize, 0), seeded.len);
 }

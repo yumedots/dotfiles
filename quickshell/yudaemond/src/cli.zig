@@ -6,8 +6,6 @@ const benchmod = @import("bench.zig");
 const bench_widgets = @import("bench_widgets.zig");
 const paritymod = @import("parity.zig");
 const mcpmod = @import("mcp.zig");
-const configmod = @import("primitives/config.zig");
-const config_provider = @import("providers/config.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -46,7 +44,7 @@ pub fn fetch(io: Io) ![]u8 {
 	return std.heap.smp_allocator.dupe(u8, message);
 }
 
-pub fn doctor(io: Io, args: []const []const u8) !void {
+pub fn doctor(io: Io) !void {
 	const body = try fetch(io);
 	defer std.heap.smp_allocator.free(body);
 
@@ -93,39 +91,7 @@ pub fn doctor(io: Io, args: []const []const u8) !void {
 		try w.print("cursor    {s}\n", .{if (json.flag(provider, "valid")) "up  " else "down"});
 	}
 
-	try reportConfig(io, w, arena.allocator(), parsed.value, args);
-
 	try w.flush();
-}
-
-fn reportConfig(io: Io, w: *std.Io.Writer, allocator: Allocator, snapshot: json.Value, args: []const []const u8) !void {
-	var consumed: std.ArrayListUnmanaged([]const u8) = .empty;
-
-	if (json.field(snapshot, "config")) |section| {
-		for (json.listAt(section, "used")) |item| try consumed.append(allocator, json.text(item));
-	}
-
-	const shell = config_provider.shellKeys(io, allocator) catch &.{};
-	try consumed.appendSlice(allocator, shell);
-
-	const file = if (args.len > 2) args[2] else try std.fmt.allocPrint(allocator, "{s}/.config/quickshell/config.toml", .{proc.home(io, allocator)});
-
-	const cfg = configmod.Config.loadPath(io, allocator, file) catch {
-		try w.writeAll("config    unreadable\n");
-		return;
-	};
-	defer cfg.deinit();
-
-	const unknown = try cfg.unknown(allocator, consumed.items);
-
-	if (unknown.len == 0) {
-		try w.writeAll("config    ok\n");
-		return;
-	}
-
-	try w.print("config    {d} unknown:", .{unknown.len});
-	for (unknown) |name| try w.print(" {s}", .{name});
-	try w.writeAll("\n");
 }
 
 pub fn bench(io: Io, args: []const []const u8) !void {
