@@ -13,8 +13,10 @@ const daemon = @import("providers/daemon.zig");
 const github = @import("providers/github.zig");
 const agentname = @import("providers/agentname.zig");
 const workspaces = @import("providers/workspaces.zig");
+const tray = @import("providers/tray.zig");
 const notifications = @import("providers/notifications.zig");
 const weather = @import("providers/weather.zig");
+const radar = @import("providers/radar.zig");
 const system = @import("providers/system.zig");
 const apps = @import("providers/apps.zig");
 const screen = @import("providers/screen.zig");
@@ -55,6 +57,7 @@ pub const Context = struct {
 	github: *github.Github,
 	agent_name: *agentname.AgentName,
 	workspaces: *workspaces.Workspaces,
+	tray: *tray.Tray,
 	notifications: *notifications.Notifications,
 	weather: *weather.Weather,
 	system: *system.System,
@@ -211,6 +214,16 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 				json.textAt(target, "path"),
 			);
 		}
+
+		return;
+	}
+
+	if (json.field(value, "tray")) |tray_cmd| {
+		const key = json.textAt(tray_cmd, "key");
+
+		if (json.field(tray_cmd, "activate")) |kind| context.tray.activate(key, @intCast(json.integer(kind)));
+		if (json.field(tray_cmd, "menu")) |id| context.tray.menuEvent(key, @intCast(json.integer(id)));
+		if (json.flag(tray_cmd, "open")) context.tray.menuOpen(key);
 
 		return;
 	}
@@ -479,11 +492,17 @@ fn run(io: std.Io) !void {
 	const workspaces_provider = try workspaces.Workspaces.create(allocator, io, hub);
 	try hub.add(workspaces_provider.provider());
 
+	const tray_provider = try tray.Tray.create(allocator, io, hub);
+	try hub.add(tray_provider.provider());
+
 	const github_provider = try github.Github.create(allocator, io, hub, client);
 	try hub.add(github_provider.provider());
 
 	const weather_provider = try weather.Weather.create(allocator, io, hub, client);
 	try hub.add(weather_provider.provider());
+
+	const radar_provider = try radar.Radar.create(allocator, io, hub, client, weather_provider);
+	try hub.add(radar_provider.provider());
 
 	const system_provider = try system.System.create(allocator, io, hub);
 	try hub.add(system_provider.provider());
@@ -560,6 +579,7 @@ fn run(io: std.Io) !void {
 		.github = github_provider,
 		.agent_name = agent_name_provider,
 		.workspaces = workspaces_provider,
+		.tray = tray_provider,
 		.notifications = notify_provider,
 		.weather = weather_provider,
 		.system = system_provider,
@@ -602,9 +622,11 @@ fn run(io: std.Io) !void {
 	try activity_provider.start();
 	try cursor_provider.start();
 	try github_provider.start();
+	try tray_provider.start();
 	try workspaces_provider.start();
 	try notify_provider.start();
 	try weather_provider.start();
+	try radar_provider.start();
 	try apps_provider.start();
 	try screen_provider.start();
 	try settings_provider.start();
