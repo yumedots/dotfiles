@@ -378,12 +378,7 @@ PanelWindow {
 	function openWallpaper() {
 		root.close();
 
-		const pid = Quickshell.env("QS_MAIN_PID");
-
-		if (pid)
-			Quickshell.execDetached(["quickshell", "ipc", "--pid", pid, "call", "shell", "wallpaper"]);
-		else
-			Quickshell.execDetached(["quickshell", "ipc", "call", "shell", "wallpaper"]);
+		Yudae.cmd("route", { to: "main", fn: "wallpaper" });
 	}
 
 	function openPowerMenu() {

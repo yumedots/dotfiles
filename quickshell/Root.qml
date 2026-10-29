@@ -18,23 +18,11 @@ ShellRoot {
 	readonly property string launcherPath: Quickshell.shellDir + "/launcherShell.qml"
 
 	function toLauncher(fn, arg) {
-		const rest = arg !== undefined && arg !== null ? " " + shellQuote(arg) : "";
-		const line = "pid=$(pgrep -f launcherShell.qml | head -1); if [ -n \"$pid\" ]; then exec quickshell ipc --pid \"$pid\" call shell " + fn + rest + "; fi; exec quickshell ipc call shell " + fn + rest;
-
-		Quickshell.execDetached(["sh", "-c", line]);
-	}
-
-	function shellQuote(text) {
-		return "'" + String(text).split("'").join("'\\''") + "'";
+		Yudae.cmd("route", { to: "launcher", fn: fn, arg: arg === undefined || arg === null ? "" : String(arg) });
 	}
 
 	function toMain(fn) {
-		const pid = Quickshell.env("QS_MAIN_PID");
-
-		if (pid)
-			Quickshell.execDetached(["quickshell", "ipc", "--pid", pid, "call", "shell", fn]);
-		else
-			Quickshell.execDetached(["quickshell", "ipc", "call", "shell", fn]);
+		Yudae.cmd("route", { to: "main", fn: fn });
 	}
 
 	function launcher() {

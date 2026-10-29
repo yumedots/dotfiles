@@ -10,7 +10,6 @@ Root {
 	role: "launcher"
 
 	property bool linked: false
-	readonly property string mainPid: Quickshell.env("QS_MAIN_PID") || "0"
 
 	FileView {
 		id: wake
@@ -37,26 +36,12 @@ Root {
 				return;
 
 			launcherRoot.linked = false;
-			probe.running = true;
+			relink.start();
 		}
 
 		onError: {
-			if (!launcherRoot.linked && !probe.running && !relink.running)
+			if (!launcherRoot.linked && !relink.running)
 				Qt.quit();
-		}
-	}
-
-	Process {
-		id: probe
-		command: ["sh", "-c", "kill -0 " + launcherRoot.mainPid]
-
-		onExited: function (exitCode, exitStatus) {
-			if (exitCode !== 0) {
-				Qt.quit();
-				return;
-			}
-
-			relink.start();
 		}
 	}
 

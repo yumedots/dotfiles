@@ -209,6 +209,15 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		return;
 	}
 
+	if (json.field(value, "route")) |route_cmd| {
+		context.supervisor.route(
+			std.mem.eql(u8, json.textAt(route_cmd, "to"), "launcher"),
+			json.textAt(route_cmd, "fn"),
+			json.textAt(route_cmd, "arg"),
+		);
+		return;
+	}
+
 	if (json.field(value, "notify")) |note_cmd| {
 		if (json.flag(note_cmd, "dismissAll")) context.notifications.dismissAll();
 
