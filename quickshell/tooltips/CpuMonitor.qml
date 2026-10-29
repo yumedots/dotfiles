@@ -19,20 +19,12 @@ ProcessPanel {
 	detail: root.sys.spec || ""
 	detailColor: root.accentInk
 	listInk: root.accentInk
-	totalInk: root.colorFor(root.pct)
+	totalInk: root.sys.ink || root.accentInk
 	panelWidth: Config.cpuTooltipWidth
 	panelPadding: Config.cpuTooltipPadding
 	topCount: Config.cpuTopCount
 	psField: "pcpu"
-	rowColor: (value) => root.colorFor(value)
-
-	function colorFor(load) {
-		return Ink.mixColors(root.accentInk, root.peakInk, load / 100);
-	}
-
-	function blockColor(load) {
-		return Ink.mixColors(Config.cpuIdle, root.accentInk, load / 100);
-	}
+	rowColor: (row) => row.color || root.accentInk
 
 	viz: Item {
 		width: parent.width
@@ -43,7 +35,7 @@ ProcessPanel {
 			columns: Config.cpuBlockColumns
 			cellSize: root.blockSize
 			gap: Config.cpuBlockGap
-			colorFor: function (value) { return root.blockColor(value); }
+			colorFor: (value, index) => root.sys.coreInk ? root.sys.coreInk[index] : Config.cpuIdle
 		}
 	}
 }

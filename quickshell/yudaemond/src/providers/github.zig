@@ -2,6 +2,8 @@ const std = @import("std");
 const hubmod = @import("../hub.zig");
 const http = @import("../primitives/http.zig");
 const exec = @import("../primitives/exec.zig");
+const color = @import("../primitives/color.zig");
+const config = @import("../primitives/config.zig");
 const json = @import("../primitives/json.zig");
 const proc = @import("../primitives/proc.zig");
 const sleep = @import("../primitives/sleep.zig");
@@ -26,6 +28,7 @@ const DayOut = struct {
 };
 
 const Out = struct {
+	levelInk: [][]const u8,
 	login: []const u8,
 	total: i64,
 	fetched: i64,
@@ -44,6 +47,9 @@ pub const Github = struct {
 	status: []u8 = &.{},
 	days: std.ArrayListUnmanaged(Day) = .empty,
 	total: i64 = 0,
+	empty_ink: color.Rgb = .{ 0x1f, 0x1f, 0x1f },
+	base_ink: color.Rgb = .{ 0x7b, 0xd8, 0x8f },
+
 	fetched: i64 = 0,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub, client: *http.Client) !*Github {
@@ -69,8 +75,20 @@ pub const Github = struct {
 	}
 
 	pub fn start(self: *Github) !void {
+		self.loadPalette();
+
 		const thread = try std.Thread.spawn(.{}, loop, .{self});
 		thread.detach();
+	}
+
+	fn loadPalette(self: *Github) void {
+		const cfg = config.Config.load(self.io, self.allocator) catch return;
+		defer cfg.deinit();
+
+		const mono = cfg.boolean("mono", true);
+
+		self.empty_ink = color.parse(cfg.color("contribEmpty") orelse "") orelse self.empty_ink;
+		self.base_ink = color.parse(cfg.color(if (mono) "contribBase" else "contribBaseMono") orelse "") orelse self.base_ink;
 	}
 
 	pub fn refresh(self: *Github) void {
@@ -277,7 +295,15 @@ pub const Github = struct {
 			try days.append(arena, .{ .date = day.date, .level = day.level, .count = day.count });
 		}
 
+		var level_ink: std.ArrayListUnmanaged([]const u8) = .empty;
+		for (0..5) |level| {
+			var buffer: [7]u8 = undefined;
+
+			try level_ink.append(arena, try arena.dupe(u8, color.hex(&buffer, color.mix(self.empty_ink, self.base_ink, @as(f64, @floatFromInt(level)) / 4))));
+		}
+
 		const out = Out{
+			.levelInk = level_ink.items,
 			.login = self.login,
 			.total = self.total,
 			.fetched = self.fetched,

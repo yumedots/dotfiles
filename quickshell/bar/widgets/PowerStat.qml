@@ -26,7 +26,7 @@ BarStat {
 	dimColor: Config.muted
 	iconLift: 2
 	icon: root.batteryIcon(root.battery)
-	barColor: root.battery === null ? Config.foreground : Ink.dangerColor(Config.powerBase, Config.powerWarn, Config.powerDanger, Config.powerWarnAt, Config.powerDangerAt, root.battery.pct)
+	barColor: root.battery === null ? Config.foreground : (root.battery.color || Config.powerBase)
 	textColor: root.barColor
 	pct: root.battery ? root.battery.pct : 0
 	value: root.battery ? Math.round(root.battery.pct) + "%" : ""

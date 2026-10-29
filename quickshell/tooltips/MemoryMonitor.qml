@@ -18,16 +18,12 @@ ProcessPanel {
 	detail: root.mem ? root.mem.committedText + " of " + root.mem.poolText : ""
 	detailColor: root.accentInk
 	listInk: root.accentInk
-	totalInk: root.dangerColorFor(root.pct)
+	totalInk: root.mem ? root.mem.ink : root.accentInk
 	panelWidth: Config.memoryTooltipWidth
 	panelPadding: Config.memoryTooltipPadding
 	topCount: Config.memoryTopCount
 	psField: "rss"
-	rowColor: (value) => root.dangerColorFor(root.shareOf(value))
-
-	function dangerColorFor(load) {
-		return Ink.dangerColor(root.accentInk, root.warnInk, root.dangerInk, Config.memoryWarnAt, Config.memoryDangerAt, load);
-	}
+	rowColor: (row) => row.color || root.accentInk
 
 	function usage() {
 		const m = root.mem;
@@ -36,7 +32,7 @@ ProcessPanel {
 			return [];
 
 		const rows = [
-			{ label: "used", text: m.usedText, color: root.dangerColorFor(root.pct) },
+			{ label: "used", text: m.usedText, color: root.totalInk },
 			{ label: "cached", text: m.cachedText, color: root.cachedInk },
 			{ label: "buffers", text: m.buffersText, color: root.buffersInk }
 		];
@@ -57,7 +53,7 @@ ProcessPanel {
 
 		const divider = m.swapTotal > 0 ? Config.memorySeparator : 0;
 		const parts = [
-			{ value: m.used, color: root.dangerColorFor(root.pct) },
+			{ value: m.used, color: root.totalInk },
 			{ value: m.cached, color: root.cachedInk },
 			{ value: m.buffers, color: root.buffersInk },
 			{ value: m.ramFree, color: Config.memoryFree }
@@ -83,13 +79,6 @@ ProcessPanel {
 			x += out.width;
 			return out;
 		});
-	}
-
-	function shareOf(kb) {
-		if (!root.mem || root.mem.pool <= 0)
-			return 0;
-
-		return Calc.clamp(100 * kb / root.mem.pool, 0, 100);
 	}
 
 	viz: [

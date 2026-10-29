@@ -101,7 +101,14 @@ const PanelOut = struct {
 	groups: []GroupOut,
 };
 
+const BorderOut = struct {
+	colors: [][]const u8,
+	angle: f64,
+	width: ?i64,
+};
+
 const Out = struct {
+	border: BorderOut,
 	primary: i64,
 	monitors: []MonitorOut,
 	panel: PanelOut,
@@ -131,6 +138,9 @@ pub const Screen = struct {
 	fonts: [12]i64 = @splat(0),
 	font_count: usize = 0,
 	settings: ?*settings.Settings = null,
+	border_text: []u8 = &.{},
+	border_width: ?i64 = null,
+	border_tick: usize = 0,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Screen {
 		const self = try allocator.create(Screen);
@@ -254,6 +264,11 @@ pub const Screen = struct {
 	}
 
 	fn poll(self: *Screen) void {
+		self.border_tick += 1;
+
+		if (self.border_tick % 4 == 0)
+			self.pollBorder();
+
 		const body = hypr.request(self.io, self.allocator, "j/monitors") catch {
 			return;
 		};
@@ -314,6 +329,35 @@ pub const Screen = struct {
 		self.mutex.unlock(self.io);
 
 		self.hub.publish();
+	}
+
+	fn pollBorder(self: *Screen) void {
+		const option = hypr.request(self.io, self.allocator, "j/getoption general:col.active_border") catch return;
+		defer self.allocator.free(option);
+
+		const size = hypr.request(self.io, self.allocator, "j/getoption general:border_size") catch return;
+		defer self.allocator.free(size);
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const option_value = json.parse(arena.allocator(), option) catch return;
+		const size_value = json.parse(arena.allocator(), size) catch return;
+
+		const gradient = json.textAt(option_value.value, "gradient");
+		const width = json.integer(json.field(size_value.value, "int"));
+
+		self.mutex.lockUncancelable(self.io);
+		const same = std.mem.eql(u8, self.border_text, gradient) and self.border_width == width;
+
+		if (!same) {
+			self.allocator.free(self.border_text);
+			self.border_text = self.allocator.dupe(u8, gradient) catch &.{};
+			self.border_width = width;
+		}
+		self.mutex.unlock(self.io);
+
+		if (!same) self.hub.publish();
 	}
 
 	fn freeMonitor(self: *Screen, monitor: *Monitor) void {
@@ -949,7 +993,10 @@ pub const Screen = struct {
 			}
 		}
 
-		const out = Out{ .primary = primary, .monitors = monitors.items, .panel = panel, .raw = self.raw };
+		const stops = parseStops(arena, self.border_text);
+		const border = BorderOut{ .colors = stops.colors, .angle = stops.angle, .width = self.border_width };
+
+		const out = Out{ .border = border, .primary = primary, .monitors = monitors.items, .panel = panel, .raw = self.raw };
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
@@ -978,6 +1025,37 @@ fn workspaceString(workspace: json.Value) []const u8 {
 	if (id == 0) return "";
 
 	return std.fmt.allocPrint(std.heap.smp_allocator, "{d}", .{id}) catch "";
+}
+
+const Stops = struct {
+	colors: [][]const u8,
+	angle: f64,
+};
+
+fn parseStops(arena: Allocator, text: []const u8) Stops {
+	var colors: std.ArrayListUnmanaged([]const u8) = .empty;
+	var angle: f64 = 0;
+	var tokens = std.mem.tokenizeAny(u8, text, " \t\n");
+
+	while (tokens.next()) |token| {
+		if (std.mem.endsWith(u8, token, "deg")) {
+			angle = std.fmt.parseFloat(f64, token[0 .. token.len - 3]) catch angle;
+			continue;
+		}
+
+		if ((token.len == 6 or token.len == 8) and isHex(token))
+			colors.append(arena, std.fmt.allocPrint(arena, "#{s}", .{token}) catch continue) catch continue;
+	}
+
+	return .{ .colors = colors.items, .angle = angle };
+}
+
+fn isHex(text: []const u8) bool {
+	for (text) |byte| {
+		if (!std.ascii.isHex(byte)) return false;
+	}
+
+	return true;
 }
 
 fn parseMode(label: []const u8) ?Mode {
@@ -1030,4 +1108,23 @@ test "the newest pick replaces the queued one" {
 	try std.testing.expect(screen.clearPending());
 	try std.testing.expect(!screen.pending.load(.monotonic));
 	try std.testing.expect(!screen.clearPending());
+}
+
+test "hyprland border text becomes stops" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const gradient = parseStops(arena.allocator(), "ffa78bfa ffe05252 45deg");
+	try std.testing.expectEqual(@as(usize, 2), gradient.colors.len);
+	try std.testing.expectEqualStrings("#ffa78bfa", gradient.colors[0]);
+	try std.testing.expectEqualStrings("#ffe05252", gradient.colors[1]);
+	try std.testing.expectEqual(@as(f64, 45), gradient.angle);
+
+	const solid = parseStops(arena.allocator(), "eeffffff 0deg");
+	try std.testing.expectEqual(@as(usize, 1), solid.colors.len);
+	try std.testing.expectEqualStrings("#eeffffff", solid.colors[0]);
+
+	const plain = parseStops(arena.allocator(), "rgba(ffffffee)");
+	try std.testing.expectEqual(@as(usize, 0), plain.colors.len);
+	try std.testing.expectEqual(@as(f64, 0), plain.angle);
 }

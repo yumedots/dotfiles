@@ -41,10 +41,10 @@ Item {
 			root.bar.activateWidget(root, root.popupKeyboard);
 	}
 
-	readonly property var sampleInk: metrics.tightBoundingRect
+	readonly property var sample: metrics.tightBoundingRect
 
 	implicitWidth: label.implicitWidth + root.padding * 2
-	implicitHeight: root.sampleInk.height
+	implicitHeight: root.sample.height
 
 	Tooltip {
 		id: popupWindow

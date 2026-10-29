@@ -226,6 +226,7 @@ QtObject {
 	readonly property var mediaState: root.snapshot.media || ({})
 
 	readonly property var screenState: root.snapshot.screen || ({})
+	readonly property var screenBorder: root.screenState.border || ({})
 	readonly property var screenMonitors: root.screenState.monitors || []
 	readonly property int screenPrimary: root.screenState.primary || 0
 	readonly property var screenActive: root.screenMonitors[root.screenPrimary] || null

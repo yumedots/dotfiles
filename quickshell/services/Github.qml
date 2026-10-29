@@ -17,6 +17,7 @@ QtObject {
 	readonly property string status: root.source.status || ""
 	readonly property bool loading: false
 	readonly property var days: root.source.days || []
+	readonly property var levelInk: root.source ? (root.source.levelInk || []) : []
 
 	readonly property string dayStamp: root.dayKey(new Date())
 	readonly property var grid: contribGrid(root.days, Config.contribWeeks, root.dayStamp)

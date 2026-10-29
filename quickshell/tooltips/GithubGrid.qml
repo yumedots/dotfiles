@@ -23,13 +23,6 @@ Item {
 			Github.refresh(false);
 	}
 
-	function cellColor(value) {
-		if (!value || !value.level)
-			return Config.contribEmpty;
-
-		return Ink.mixColors(Config.contribEmpty, root.accentInk, Math.min(4, value.level) / 4);
-	}
-
 	function statusLine() {
 		if (Github.login === "")
 			return Github.status !== "" ? Github.status : "looking for your GitHub user";
@@ -140,7 +133,7 @@ Item {
 					anchors.verticalCenter: parent.verticalCenter
 					width: Config.contribCell
 					height: Config.contribCell
-					color: root.cellColor({ level: index })
+					color: Github.levelInk[index] || Config.contribEmpty
 				}
 			}
 
@@ -163,7 +156,7 @@ Item {
 			columns: root.weeks
 			cellSize: Config.contribCell
 			gap: Config.contribGap
-			colorFor: function (value) { return root.cellColor(value); }
+			colorFor: (value) => Github.levelInk[value ? value.level : 0] || Config.contribEmpty
 		}
 
 		Text {
