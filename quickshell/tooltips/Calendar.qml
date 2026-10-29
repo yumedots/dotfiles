@@ -13,8 +13,10 @@ Item {
 
 	property date today: clock.date
 	property int weekStart: Config.calendarWeekStart
+	property bool held: false
 
 	readonly property var grid: Yudae.calendarState.rows || []
+	readonly property bool arrowsShown: root.held || boxHover.hovered
 	readonly property real gridWidth: Config.calendarCellWidth * 7
 	readonly property string monthText: Yudae.calendarState.month || ""
 	readonly property string yearText: Yudae.calendarState.year || ""
@@ -49,6 +51,11 @@ Item {
 
 	onWeekStartChanged: Yudae.send({ cmd: { calendar: { weekStart: root.weekStart } } })
 
+	onMonthTextChanged: {
+		root.held = true;
+		holdTimer.restart();
+	}
+
 	function step(days) {
 		Yudae.send({ cmd: { calendar: { days: days } } });
 	}
@@ -78,6 +85,10 @@ Item {
 
 			width: card.width
 			height: Math.max(title.height, arrows.height)
+
+			HoverHandler {
+				id: boxHover
+			}
 
 			Row {
 				id: title
@@ -112,32 +123,22 @@ Item {
 				anchors.verticalCenter: parent.verticalCenter
 				spacing: Config.calendarArrowGap
 
-				Text {
-					font.family: Config.fontFamily
+				RevealIcon {
 					font.pixelSize: Config.calendarArrowSize
-					color: Config.calendarBase
+					baseColor: Config.calendarBase
+					shown: root.arrowsShown
+					hitMargin: -Config.calendarArrowSize / 2
 					text: Config.iconPrev
-
-					MouseArea {
-						anchors.fill: parent
-						anchors.margins: -Config.calendarArrowSize / 2
-
-						onClicked: root.stepMonths(-1)
-					}
+					onClicked: root.stepMonths(-1)
 				}
 
-				Text {
-					font.family: Config.fontFamily
+				RevealIcon {
 					font.pixelSize: Config.calendarArrowSize
-					color: Config.calendarBase
+					baseColor: Config.calendarBase
+					shown: root.arrowsShown
+					hitMargin: -Config.calendarArrowSize / 2
 					text: Config.iconNext
-
-					MouseArea {
-						anchors.fill: parent
-						anchors.margins: -Config.calendarArrowSize / 2
-
-						onClicked: root.stepMonths(1)
-					}
+					onClicked: root.stepMonths(1)
 				}
 			}
 		}
@@ -288,5 +289,12 @@ Item {
 				}
 			}
 		}
+	}
+
+	Timer {
+		id: holdTimer
+
+		interval: 1800
+		onTriggered: root.held = false
 	}
 }
