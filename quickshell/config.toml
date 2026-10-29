@@ -519,15 +519,16 @@ networkLockIcon = "\uF023"
 
 # agent panel
 [agent]
-agentFaceSize = 96
+agentFaceSize = 44
 agentMorphMs = 420
 agentSpinMs = 120000
 agentDoneWidth = 230
 agentColumnWidth = 230
 agentPlanWidth = 240
-agentPanelWidth = 742  # agentDoneWidth + agentColumnWidth + agentPlanWidth + 2 + 40
-agentPanelHeight = 398
+agentPanelWidth = 300
+agentPanelHeight = 240
 agentPanelPadding = 12
+agentTasksTitle = "Tasks"
 agentIdleText = "Idle"
 agentWorkingText = "Working"
 agentBlockedText = "a session needs attention"

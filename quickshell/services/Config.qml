@@ -500,14 +500,14 @@ QtObject {
 	readonly property var networkLockIcon: settings.networkLockIcon !== undefined ? settings.networkLockIcon : "\uf023"
 
 	// agent panel
-	readonly property var agentFaceSize: settings.agentFaceSize !== undefined ? settings.agentFaceSize : 96
+	readonly property var agentFaceSize: settings.agentFaceSize !== undefined ? settings.agentFaceSize : 44
 	readonly property var agentMorphMs: settings.agentMorphMs !== undefined ? settings.agentMorphMs : 420
 	readonly property var agentSpinMs: settings.agentSpinMs !== undefined ? settings.agentSpinMs : 120000
 	readonly property var agentDoneWidth: settings.agentDoneWidth !== undefined ? settings.agentDoneWidth : 230
 	readonly property var agentColumnWidth: settings.agentColumnWidth !== undefined ? settings.agentColumnWidth : 230
 	readonly property var agentPlanWidth: settings.agentPlanWidth !== undefined ? settings.agentPlanWidth : 240
-	readonly property var agentPanelWidth: settings.agentPanelWidth !== undefined ? settings.agentPanelWidth : 742
-	readonly property var agentPanelHeight: settings.agentPanelHeight !== undefined ? settings.agentPanelHeight : 398
+	readonly property var agentPanelWidth: settings.agentPanelWidth !== undefined ? settings.agentPanelWidth : 300
+	readonly property var agentPanelHeight: settings.agentPanelHeight !== undefined ? settings.agentPanelHeight : 240
 	readonly property var agentPanelPadding: settings.agentPanelPadding !== undefined ? settings.agentPanelPadding : 12
 	readonly property var agentIdleText: settings.agentIdleText !== undefined ? settings.agentIdleText : "Idle"
 	readonly property var agentWorkingText: settings.agentWorkingText !== undefined ? settings.agentWorkingText : "Working"
@@ -515,6 +515,7 @@ QtObject {
 	readonly property var agentErrorText: settings.agentErrorText !== undefined ? settings.agentErrorText : "Error"
 	readonly property var agentPanelTitle: settings.agentPanelTitle !== undefined ? settings.agentPanelTitle : "Agent"
 	readonly property var agentNameFile: settings.agentNameFile !== undefined ? settings.agentNameFile : "cache/agent-name"
+	readonly property var agentTasksTitle: settings.agentTasksTitle !== undefined ? settings.agentTasksTitle : "Tasks"
 	readonly property var agentDoneTitle: settings.agentDoneTitle !== undefined ? settings.agentDoneTitle : "Done"
 	readonly property var agentIconQuestion: settings.agentIconQuestion !== undefined ? settings.agentIconQuestion : "?"
 	readonly property var agentIconDone: settings.agentIconDone !== undefined ? settings.agentIconDone : "\uf00c"

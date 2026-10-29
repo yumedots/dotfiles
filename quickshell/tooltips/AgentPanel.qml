@@ -90,12 +90,12 @@ Item {
 		if (!win)
 			return Qt.point(0, 0);
 
-		const at = root.mapToItem(win.contentItem, 0, 0);
+		const at = face.mapToItem(win.contentItem, face.width / 2, face.height / 2);
 		const screen = root.source && root.source.bar ? root.source.bar.screen : null;
 		const originX = screen ? screen.x : 0;
 		const originY = screen ? screen.y : 0;
 
-		return Qt.point(originX + at.x + root.width / 2, originY + at.y);
+		return Qt.point(originX + at.x, originY + at.y);
 	}
 
 	// The pointer is read through a curve that rises quickly while it is near
@@ -170,88 +170,28 @@ Item {
 		return minutes + "m";
 	}
 
-	Row {
-		id: row
+	Item {
+		id: body
 
 		anchors.fill: parent
 		anchors.margins: Config.agentPanelPadding
 
-		spacing: 10
+		property int tab: 0
 
-		// The work that is done, on the left.
 		Item {
-			id: doneBox
+			id: header
 
-			width: Config.agentDoneWidth
-			height: row.height
+			anchors.top: parent.top
+			anchors.left: parent.left
+			anchors.right: parent.right
 
-			Text {
-				id: doneTitle
+			height: Math.max(face.height, stateBox.height)
 
-				anchors.top: parent.top
-				anchors.left: parent.left
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: Config.muted
-				text: Config.agentDoneTitle
-			}
-
-			ListView {
-				id: doneList
-
-				anchors.top: doneTitle.bottom
-				anchors.topMargin: 4
-				anchors.left: parent.left
-				anchors.right: parent.right
-				anchors.bottom: parent.bottom
-
-				clip: true
-				spacing: 2
-				model: Yudae.doneSessions
-
-				delegate: AgentRow {
-					required property var modelData
-
-					width: doneList.width - 8
-					height: root.rowHeight
-
-					kind: "done"
-					title: modelData.title
-					dismissable: true
-
-					onDismissed: Yudae.dismiss(modelData.id)
-				}
-			}
-
-			// The thumb of the list, which only shows when there is more done
-			// work than fits.
-			Scrollbar {
-				view: doneList
-				offset: 4
-			}
-		}
-
-		// The line that splits the done work from the agent.
-		Rectangle {
-			width: 1
-			height: row.height
-			color: Config.dim
-		}
-
-		// The agent itself, in the middle.
-		Item {
-			id: faceBox
-
-			width: Config.agentColumnWidth
-			height: row.height
-
-			// The face.
 			Item {
 				id: face
 
 				anchors.top: parent.top
-				anchors.horizontalCenter: parent.horizontalCenter
+				anchors.left: parent.left
 
 				width: Config.agentFaceSize
 				height: Config.agentFaceSize
@@ -265,25 +205,18 @@ Item {
 					gazeX: root.gazeX
 					gazeY: root.gazeY
 
-					// The face only moves while the panel is open, so a face
-					// that nobody sees costs nothing.
 					live: root.source ? root.source.popupVisible : true
 					paused: root.source ? !root.source.popupVisible : false
 
-					// The card behind the panel is flat, so the eyes are
-					// painted in it and the body can turn on its own.
 					paintEyes: true
 
 					bodyColor: Config.foreground
 					eyeColor: Config.surface
 				}
 
-				// The question mark, when the agent is waiting for the user.
 				Text {
 					anchors.left: parent.left
-					anchors.leftMargin: 4
 					anchors.top: parent.top
-					anchors.topMargin: 4
 
 					visible: root.state === "blocked"
 
@@ -294,15 +227,14 @@ Item {
 				}
 			}
 
-			// The state of the agent, and what it is asking about.
 			Column {
 				id: stateBox
 
-				anchors.top: face.bottom
-				anchors.topMargin: Config.agentPanelPadding
-				anchors.horizontalCenter: parent.horizontalCenter
+				anchors.left: face.right
+				anchors.leftMargin: 12
+				anchors.right: parent.right
+				anchors.verticalCenter: parent.verticalCenter
 
-				width: Config.agentColumnWidth
 				spacing: 2
 
 				TextInput {
@@ -311,7 +243,6 @@ Item {
 					width: parent.width
 					height: root.rowHeight
 					verticalAlignment: TextInput.AlignVCenter
-					horizontalAlignment: TextInput.AlignHCenter
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
@@ -331,310 +262,382 @@ Item {
 					}
 				}
 
-				// The state, with the spinner that turns while the agent is
-				// working. It sits in a box of its own, because a column
-				// puts its children on the left.
-				Item {
-					id: stateRow
-
-					width: parent.width
+				Row {
 					height: root.rowHeight
+					spacing: 5
 
-					Row {
-						id: stateContent
-
-						anchors.horizontalCenter: parent.horizontalCenter
+					Braille {
 						anchors.verticalCenter: parent.verticalCenter
-
-						spacing: 5
-
-						Braille {
-							visible: root.state === "working"
-							running: root.state === "working" && root.open
-							ink: Config.muted
-						}
-
-						Text {
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: root.state === "error" ? Config.red : Config.muted
-							text: Yudae.online ? root.stateText : "OpenCode offline"
-						}
-					}
-				}
-
-				// The detail always holds its place, so the work below it
-				// does not jump when a message comes and goes. The cross
-				// puts the message away.
-				Item {
-					width: parent.width
-					height: root.rowHeight
-
-					Row {
-						anchors.horizontalCenter: parent.horizontalCenter
-						anchors.verticalCenter: parent.verticalCenter
-
-						spacing: 6
-
-						Text {
-							width: Math.min(implicitWidth, parent.parent.width - 40)
-							visible: !root.detailHidden
-
-							elide: Text.ElideRight
-
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: Config.muted
-							text: root.detail
-						}
-
-						Text {
-							visible: root.detail !== "" && !root.detailHidden
-
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: dismissDetailHit.containsMouse ? Config.foreground : Config.muted
-							text: Config.iconClose
-
-							MouseArea {
-								id: dismissDetailHit
-
-								anchors.fill: parent
-								anchors.margins: -4
-								hoverEnabled: true
-
-								onClicked: root.dismissDetail()
-							}
-						}
-					}
-				}
-			}
-
-			// The work that is going on. Every session that is running gets a
-			// row, so several of them working at once are all of them visible.
-			ListView {
-				id: workList
-
-				anchors.top: stateBox.bottom
-				anchors.topMargin: Config.agentPanelPadding
-				anchors.left: parent.left
-				anchors.right: parent.right
-				anchors.bottom: parent.bottom
-
-				clip: true
-				spacing: 2
-				model: Yudae.working
-
-				delegate: AgentRow {
-					required property var modelData
-
-					width: workList.width - 8
-					height: root.rowHeight
-
-					kind: modelData.working ? "working" : (modelData.question ? "question" : "failed")
-					icon: modelData.icon
-					title: modelData.title
-				}
-			}
-
-			// The thumb of the work list, which only shows when there is more
-			// work than fits.
-			Scrollbar {
-				view: workList
-				offset: 4
-			}
-		}
-
-		// The line that splits the agent from the plan.
-		Rectangle {
-			width: 1
-			height: row.height
-			color: Config.dim
-		}
-
-		// The plan the agent runs on, and how much of it is left.
-		Item {
-			id: planBox
-
-			width: Config.agentPlanWidth
-			height: row.height
-
-			Text {
-				id: planTitle
-
-				anchors.top: parent.top
-				anchors.left: parent.left
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: Config.muted
-				text: Config.agentPlanTitle
-			}
-
-			Flickable {
-				id: planFlick
-
-				anchors.top: planTitle.bottom
-				anchors.topMargin: 4
-				anchors.left: parent.left
-				anchors.right: parent.right
-				anchors.bottom: parent.bottom
-
-				contentWidth: width
-				contentHeight: planStack.height
-				clip: true
-
-				Column {
-					id: planStack
-
-					width: planFlick.width
-					spacing: 6
-
-					// One block for each plan the shell knows about: its
-					// name, and the windows of what is left of it.
-					Repeater {
-						model: Yudae.plans
-
-						delegate: Column {
-							id: planBlock
-
-							required property var modelData
-
-							width: planStack.width
-							spacing: 6
-
-							Row {
-								spacing: 6
-
-								Image {
-									visible: planBlock.modelData.icon !== ""
-									width: 18
-									height: 18
-
-									source: planBlock.modelData.icon === ""
-										? ""
-										: "file://" + Quickshell.shellDir + "/assets/providers/" + planBlock.modelData.icon + ".svg?v=4"
-									sourceSize.width: Math.round(18 * root.dpr)
-									sourceSize.height: Math.round(18 * root.dpr)
-									fillMode: Image.PreserveAspectFit
-								}
-
-								Text {
-									font.family: Config.fontFamily
-									font.pixelSize: Settings.fontSize
-									color: Config.foreground
-									text: planBlock.modelData.title
-								}
-							}
-
-							Text {
-								width: planBlock.width
-								visible: planBlock.modelData.failure !== ""
-								elide: Text.ElideRight
-
-								font.family: Config.fontFamily
-								font.pixelSize: Settings.fontSize
-								color: Config.muted
-								text: planBlock.modelData.failure
-							}
-
-							Repeater {
-								model: planBlock.modelData.limits
-
-								delegate: Item {
-									id: limitRow
-
-									required property var modelData
-
-									width: planBlock.width
-									height: Math.max(limitLabel.implicitHeight, limitReset.implicitHeight)
-
-									readonly property bool alarming: modelData.percent >= 90
-
-									// The label and the numbers are fixed columns, so
-									// every bar starts and ends in the same place. The
-									// percentage sits before the bar, so the bar is
-									// read as the rest.
-									Text {
-										id: limitLabel
-
-										anchors.left: parent.left
-										anchors.verticalCenter: parent.verticalCenter
-										width: 68
-
-										font.family: Config.fontFamily
-										font.pixelSize: Settings.fontSize
-										color: Config.foreground
-										text: modelData.title
-									}
-
-									StepBar {
-										id: limitMeter
-
-										anchors.left: limitLabel.right
-										anchors.right: limitValue.left
-										anchors.leftMargin: 8
-										anchors.rightMargin: 10
-										anchors.verticalCenter: parent.verticalCenter
-
-										level: modelData.percent / 100
-										ink: limitRow.alarming ? Config.red : Config.foreground
-										track: Config.dim
-									}
-
-									Text {
-										id: limitValue
-
-										anchors.right: limitReset.left
-										anchors.rightMargin: 6
-										anchors.verticalCenter: parent.verticalCenter
-										width: 34
-
-										horizontalAlignment: Text.AlignRight
-
-										font.family: Config.fontFamily
-										font.pixelSize: Settings.fontSize
-										color: limitRow.alarming ? Config.red : Config.muted
-										text: Math.round(modelData.percent) + "%"
-									}
-
-									Text {
-										id: limitReset
-
-										anchors.right: parent.right
-										anchors.verticalCenter: parent.verticalCenter
-										width: 26
-
-										horizontalAlignment: Text.AlignRight
-
-										font.family: Config.fontFamily
-										font.pixelSize: Settings.fontSize
-										color: Config.muted
-										text: root.countdown(modelData.resetsAt)
-									}
-								}
-							}
-						}
+						visible: root.state === "working"
+						running: root.state === "working" && root.open
+						ink: Config.muted
 					}
 
 					Text {
-						width: parent.width
-						visible: Yudae.plans.length === 0 && root.planError !== ""
+						anchors.verticalCenter: parent.verticalCenter
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: root.state === "error" ? Config.red : Config.muted
+						text: Yudae.online ? root.stateText : "OpenCode offline"
+					}
+				}
+
+				Row {
+					height: root.rowHeight
+					visible: root.detail !== "" && !root.detailHidden
+					spacing: 6
+
+					Text {
+						anchors.verticalCenter: parent.verticalCenter
+						width: Math.min(implicitWidth, stateBox.width - 24)
 						elide: Text.ElideRight
 
 						font.family: Config.fontFamily
 						font.pixelSize: Settings.fontSize
 						color: Config.muted
-						text: root.planError
+						text: root.detail
+					}
+
+					Text {
+						anchors.verticalCenter: parent.verticalCenter
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: dismissDetailHit.containsMouse ? Config.foreground : Config.muted
+						text: Config.iconClose
+
+						MouseArea {
+							id: dismissDetailHit
+
+							anchors.fill: parent
+							anchors.margins: -4
+							hoverEnabled: true
+
+							onClicked: root.dismissDetail()
+						}
 					}
 				}
 			}
+		}
 
-			// The thumb of the plan, which only shows when there is more plan
-			// than fits.
-			Scrollbar {
-				view: planFlick
-				offset: -4
+		Row {
+			id: tabs
+
+			anchors.top: header.bottom
+			anchors.topMargin: 10
+			anchors.left: parent.left
+
+			spacing: 16
+
+			Repeater {
+				model: [Config.agentTasksTitle, Config.agentPlanTitle]
+
+				delegate: Item {
+					id: tabItem
+
+					required property int index
+					required property string modelData
+
+					width: tabLabel.implicitWidth
+					height: tabLabel.implicitHeight + 4
+
+					Text {
+						id: tabLabel
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: body.tab === tabItem.index ? Config.foreground : Config.muted
+						text: tabItem.modelData
+					}
+
+					Rectangle {
+						anchors.bottom: parent.bottom
+						width: parent.width
+						height: 1
+						color: Config.foreground
+						visible: body.tab === tabItem.index
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						onClicked: body.tab = tabItem.index
+					}
+				}
+			}
+		}
+
+		Rectangle {
+			id: tabLine
+
+			anchors.top: tabs.bottom
+			anchors.left: parent.left
+			anchors.right: parent.right
+
+			height: 1
+			color: Config.dim
+		}
+
+		Item {
+			id: content
+
+			anchors.top: tabLine.bottom
+			anchors.topMargin: 8
+			anchors.left: parent.left
+			anchors.right: parent.right
+			anchors.bottom: parent.bottom
+
+			Item {
+				id: tasksBox
+
+				anchors.fill: parent
+				visible: body.tab === 0
+
+				ListView {
+					id: workList
+
+					anchors.top: parent.top
+					anchors.left: parent.left
+					anchors.right: parent.right
+
+					height: Math.min(contentHeight, 3 * (root.rowHeight + 2))
+
+					clip: true
+					spacing: 2
+					model: Yudae.working
+
+					delegate: AgentRow {
+						required property var modelData
+
+						width: workList.width - 8
+						height: root.rowHeight
+
+						kind: modelData.working ? "working" : (modelData.question ? "question" : "failed")
+						icon: modelData.icon
+						title: modelData.title
+					}
+				}
+
+				Scrollbar {
+					view: workList
+					offset: 4
+				}
+
+				Text {
+					id: doneTitle
+
+					anchors.top: workList.bottom
+					anchors.topMargin: workList.count > 0 ? 6 : 0
+					anchors.left: parent.left
+
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: Config.muted
+					text: Config.agentDoneTitle
+				}
+
+				ListView {
+					id: doneList
+
+					anchors.top: doneTitle.bottom
+					anchors.topMargin: 4
+					anchors.left: parent.left
+					anchors.right: parent.right
+					anchors.bottom: parent.bottom
+
+					clip: true
+					spacing: 2
+					model: Yudae.doneSessions
+
+					delegate: AgentRow {
+						required property var modelData
+
+						width: doneList.width - 8
+						height: root.rowHeight
+
+						kind: "done"
+						title: modelData.title
+						dismissable: true
+
+						onDismissed: Yudae.dismiss(modelData.id)
+					}
+				}
+
+				Scrollbar {
+					view: doneList
+					offset: 4
+				}
+			}
+
+			Item {
+				id: planBox
+
+				anchors.fill: parent
+				visible: body.tab === 1
+
+				Flickable {
+					id: planFlick
+
+					anchors.top: parent.top
+					anchors.left: parent.left
+					anchors.right: parent.right
+					anchors.rightMargin: 10
+					anchors.bottom: parent.bottom
+
+					contentWidth: width
+					contentHeight: planStack.height
+					clip: true
+
+					Column {
+						id: planStack
+
+						width: planFlick.width
+						spacing: 6
+
+						// One block for each plan the shell knows about: its
+						// name, and the windows of what is left of it.
+						Repeater {
+							model: Yudae.plans
+
+							delegate: Column {
+								id: planBlock
+
+								required property var modelData
+
+								width: planStack.width
+								spacing: 6
+
+								Row {
+									spacing: 6
+
+									Image {
+										visible: planBlock.modelData.icon !== ""
+										width: 18
+										height: 18
+
+										source: planBlock.modelData.icon === ""
+											? ""
+											: "file://" + Quickshell.shellDir + "/assets/providers/" + planBlock.modelData.icon + ".svg?v=4"
+										sourceSize.width: Math.round(18 * root.dpr)
+										sourceSize.height: Math.round(18 * root.dpr)
+										fillMode: Image.PreserveAspectFit
+									}
+
+									Text {
+										font.family: Config.fontFamily
+										font.pixelSize: Settings.fontSize
+										color: Config.foreground
+										text: planBlock.modelData.title
+									}
+								}
+
+								Text {
+									width: planBlock.width
+									visible: planBlock.modelData.failure !== ""
+									elide: Text.ElideRight
+
+									font.family: Config.fontFamily
+									font.pixelSize: Settings.fontSize
+									color: Config.muted
+									text: planBlock.modelData.failure
+								}
+
+								Repeater {
+									model: planBlock.modelData.limits
+
+									delegate: Item {
+										id: limitRow
+
+										required property var modelData
+
+										width: planBlock.width
+										height: Math.max(limitLabel.implicitHeight, limitReset.implicitHeight)
+
+										readonly property bool alarming: modelData.percent >= 90
+
+										// The label and the numbers are fixed columns, so
+										// every bar starts and ends in the same place. The
+										// percentage sits before the bar, so the bar is
+										// read as the rest.
+										Text {
+											id: limitLabel
+
+											anchors.left: parent.left
+											anchors.verticalCenter: parent.verticalCenter
+											width: 68
+
+											font.family: Config.fontFamily
+											font.pixelSize: Settings.fontSize
+											color: Config.foreground
+											text: modelData.title
+										}
+
+										StepBar {
+											id: limitMeter
+
+											anchors.left: limitLabel.right
+											anchors.right: limitValue.left
+											anchors.leftMargin: 8
+											anchors.rightMargin: 10
+											anchors.verticalCenter: parent.verticalCenter
+
+											level: modelData.percent / 100
+											ink: limitRow.alarming ? Config.red : Config.foreground
+											track: Config.dim
+										}
+
+										Text {
+											id: limitValue
+
+											anchors.right: limitReset.left
+											anchors.rightMargin: 6
+											anchors.verticalCenter: parent.verticalCenter
+											width: 34
+
+											horizontalAlignment: Text.AlignRight
+
+											font.family: Config.fontFamily
+											font.pixelSize: Settings.fontSize
+											color: limitRow.alarming ? Config.red : Config.muted
+											text: Math.round(modelData.percent) + "%"
+										}
+
+										Text {
+											id: limitReset
+
+											anchors.right: parent.right
+											anchors.verticalCenter: parent.verticalCenter
+											width: 26
+
+											horizontalAlignment: Text.AlignRight
+
+											font.family: Config.fontFamily
+											font.pixelSize: Settings.fontSize
+											color: Config.muted
+											text: root.countdown(modelData.resetsAt)
+										}
+									}
+								}
+							}
+						}
+
+						Text {
+							width: parent.width
+							visible: Yudae.plans.length === 0 && root.planError !== ""
+							elide: Text.ElideRight
+
+							font.family: Config.fontFamily
+							font.pixelSize: Settings.fontSize
+							color: Config.muted
+							text: root.planError
+						}
+					}
+				}
+
+				Scrollbar {
+					view: planFlick
+					offset: 4
+				}
 			}
 		}
 	}
