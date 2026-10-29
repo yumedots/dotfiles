@@ -266,10 +266,6 @@ PanelWindow {
 			return;
 		}
 
-		if (!field.typing && root.types(event)) {
-			event.accepted = true;
-			return;
-		}
 
 		if (Input.save(event)) {
 			root.saveQuery();
@@ -344,16 +340,6 @@ PanelWindow {
 		}
 
 		root.pinKey(event);
-	}
-
-	function types(event) {
-		if (event.text.length !== 1)
-			return false;
-
-		if (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))
-			return false;
-
-		return event.text >= " ";
 	}
 
 	function navigate(dir) {
