@@ -1,5 +1,8 @@
 const std = @import("std");
 const hubmod = @import("../hub.zig");
+const config = @import("../primitives/config.zig");
+const json = @import("../primitives/json.zig");
+const views = @import("network_out.zig");
 const proc = @import("../primitives/proc.zig");
 const exec = @import("../primitives/exec.zig");
 const sleep = @import("../primitives/sleep.zig");
@@ -11,11 +14,6 @@ const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
 const Hist = struct {
-	down: f64,
-	up: f64,
-};
-
-const HistOut = struct {
 	down: f64,
 	up: f64,
 };
@@ -37,52 +35,7 @@ const Wifi = struct {
 	in_use: bool,
 };
 
-const WifiOut = struct {
-	ssid: []const u8,
-	security: []const u8,
-	signal: i64,
-	signalText: []const u8,
-	bars: i64,
-	channel: i64,
-	frequency: i64,
-	inUse: bool,
-};
-
 const Stage = enum { none, down, up };
-
-const SpeedOut = struct {
-	stage: []const u8,
-	live: f64,
-	best: f64,
-	down: f64,
-	up: f64,
-	text: []const u8,
-	downText: []const u8,
-	upText: []const u8,
-	ceiling: f64,
-};
-
-const Out = struct {
-	iface: []const u8,
-	kind: []const u8,
-	connected: bool,
-	ssid: []const u8,
-	signal: i64,
-	signalText: []const u8,
-	bars: i64,
-	down: f64,
-	up: f64,
-	downText: []const u8,
-	upText: []const u8,
-	linkSpeed: i64,
-	peak: f64,
-	history: []HistOut,
-	ip: []const u8,
-	gateway: []const u8,
-	dns: []const u8,
-	wifi: []WifiOut,
-	speed: SpeedOut,
-};
 
 pub const Network = struct {
 	allocator: Allocator,
@@ -106,6 +59,10 @@ pub const Network = struct {
 	ip: []u8 = &.{},
 	gateway: []u8 = &.{},
 	dns: []u8 = &.{},
+	dns_pending: bool = false,
+	dns_error: []u8 = &.{},
+	cells: usize = 26,
+	hold: std.atomic.Value(bool) = .init(false),
 	speed_stage: Stage = .none,
 	speed_live: f64 = 0,
 	speed_best: f64 = 0,
@@ -149,7 +106,7 @@ pub const Network = struct {
 		while (true) {
 			self.sample();
 
-			if (tick % 15 == 0) self.describe();
+			if (!self.hold.load(.monotonic) and tick % 15 == 0) self.describe();
 
 			tick += 1;
 			sleep_unused.ms(1000);
@@ -157,6 +114,8 @@ pub const Network = struct {
 	}
 
 	fn sample(self: *Network) void {
+		if (self.hold.load(.monotonic)) return;
+
 		self.refreshIface();
 
 		const body = proc.readFile(self.io, self.allocator, "/proc/net/dev") catch return;
@@ -194,6 +153,11 @@ pub const Network = struct {
 		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
 
 		self.mutex.lockUncancelable(self.io);
+		if (self.hold.load(.monotonic)) {
+			self.mutex.unlock(self.io);
+			return;
+		}
+
 		if (self.last_at > 0 and now > self.last_at) {
 			const seconds = @as(f64, @floatFromInt(now - self.last_at)) / 1000.0;
 			self.down = if (rx >= self.last_rx) @as(f64, @floatFromInt(rx - self.last_rx)) / seconds else 0;
@@ -277,6 +241,8 @@ pub const Network = struct {
 	}
 
 	fn describe(self: *Network) void {
+		self.readCells();
+
 		self.mutex.lockUncancelable(self.io);
 		const iface = self.allocator.dupe(u8, self.iface) catch {
 			self.mutex.unlock(self.io);
@@ -332,23 +298,52 @@ pub const Network = struct {
 
 		var ip: []const u8 = "";
 		var gateway: []const u8 = "";
-		var dns: []const u8 = "";
+		var servers: std.ArrayListUnmanaged(u8) = .empty;
+		defer servers.deinit(self.allocator);
 
 		var lines = std.mem.splitScalar(u8, result.out, '\n');
 		while (lines.next()) |line| {
 			if (std.mem.startsWith(u8, line, "IP4.ADDRESS")) ip = afterColon(line);
 			if (std.mem.startsWith(u8, line, "IP4.GATEWAY")) gateway = afterColon(line);
-			if (std.mem.startsWith(u8, line, "IP4.DNS")) dns = afterColon(line);
+			if (std.mem.startsWith(u8, line, "IP4.DNS")) pushServer(self.allocator, &servers, afterColon(line)) catch {};
 		}
 
 		self.mutex.lockUncancelable(self.io);
 		self.setStr(&self.ip, ip);
 		self.setStr(&self.gateway, gateway);
-		self.setStr(&self.dns, dns);
+		self.setStr(&self.dns, servers.items);
+		self.mutex.unlock(self.io);
+	}
+
+	fn readDns(self: *Network, iface: []const u8) void {
+		const result = exec.run(self.io, self.allocator, &.{ "nmcli", "-g", "IP4.DNS", "device", "show", iface }) catch return;
+		defer result.deinit(self.allocator);
+
+		const list = dnsList(self.allocator, result.out) catch return;
+		defer self.allocator.free(list);
+
+		self.mutex.lockUncancelable(self.io);
+		self.setStr(&self.dns, list);
+		self.mutex.unlock(self.io);
+	}
+
+	fn readCells(self: *Network) void {
+		var cfg = config.Config.load(self.io, self.allocator) catch return;
+		defer cfg.deinit();
+
+		const width = cfg.number("networkTooltipWidth", 260);
+		const step = @max(1, cfg.number("networkGraphHeight", 40) / 4);
+		const limit = cfg.integer("networkHistory", history_len);
+		const count: i64 = @intFromFloat(@floor(width / step));
+
+		self.mutex.lockUncancelable(self.io);
+		self.cells = @intCast(@max(4, @min(count, limit)));
 		self.mutex.unlock(self.io);
 	}
 
 	pub fn scan(self: *Network, rescan: bool) void {
+		if (self.hold.load(.monotonic)) return;
+
 		var argv: std.ArrayList([]const u8) = .empty;
 		defer argv.deinit(self.allocator);
 
@@ -404,21 +399,156 @@ pub const Network = struct {
 		self.hub.publish();
 	}
 
-	pub fn setDns(self: *Network, connection: []const u8, servers: []const u8) void {
+	pub fn dnsCmd(self: *Network, action: []const u8, server: []const u8) void {
+		self.mutex.lockUncancelable(self.io);
+		const iface = self.allocator.dupe(u8, self.iface) catch {
+			self.mutex.unlock(self.io);
+			return;
+		};
+		self.mutex.unlock(self.io);
+		defer self.allocator.free(iface);
+
+		if (iface.len == 0) {
+			self.finishDns("no link");
+			return;
+		}
+
+		if (std.mem.eql(u8, action, "show")) {
+			self.readDns(iface);
+			self.hub.publish();
+			return;
+		}
+
+		const reset = std.mem.eql(u8, action, "reset");
+		const write = std.mem.eql(u8, action, "set") and server.len > 0;
+		if (!reset and !write) return;
+
+		self.setPending(true);
+		self.hub.publish();
+
 		var argv: std.ArrayList([]const u8) = .empty;
 		defer argv.deinit(self.allocator);
 
-		for ([_][]const u8{ "nmcli", "connection", "modify", "id", connection, "ipv4.dns", servers, "ipv4.ignore-auto-dns", "yes" }) |arg|
-			argv.append(self.allocator, arg) catch return;
+		for ([_][]const u8{
+			"nmcli",       "device", "modify", iface,
+			"ipv4.dns",    if (reset) "" else server,
+			"ipv4.ignore-auto-dns", if (reset) "no" else "yes",
+		}) |arg| argv.append(self.allocator, arg) catch return;
 
-		const result = exec.run(self.io, self.allocator, argv.items) catch return;
-		result.deinit(self.allocator);
+		const result = exec.run(self.io, self.allocator, argv.items) catch {
+			self.finishDns("nmcli did not run");
+			return;
+		};
+		defer result.deinit(self.allocator);
 
-		const up = exec.run(self.io, self.allocator, &.{ "nmcli", "connection", "up", "id", connection }) catch return;
-		up.deinit(self.allocator);
+		const failure = if (result.code == 0) "" else failureText(&result);
 
-		self.sampleAddresses(connection);
+		self.readDns(iface);
+		self.finishDns(failure);
+	}
+
+	fn setPending(self: *Network, pending: bool) void {
+		self.mutex.lockUncancelable(self.io);
+		self.dns_pending = pending;
+		self.mutex.unlock(self.io);
+	}
+
+	fn finishDns(self: *Network, err: []const u8) void {
+		const copy = self.allocator.dupe(u8, err);
+
+		self.mutex.lockUncancelable(self.io);
+		self.dns_pending = false;
+
+		if (copy) |text| {
+			self.allocator.free(self.dns_error);
+			self.dns_error = text;
+		} else |_| {}
+
+		self.mutex.unlock(self.io);
+
 		self.hub.publish();
+	}
+
+	pub fn inject(self: *Network, target: json.Value) void {
+		self.hold.store(true, .monotonic);
+
+		self.mutex.lockUncancelable(self.io);
+		self.seedHistory(json.listAt(target, "history"));
+		self.seedWifi(json.listAt(target, "wifi"));
+
+		const kind = json.textAt(target, "kind");
+		if (kind.len > 0) self.setStr(&self.kind, kind);
+
+		const ssid = json.textAt(target, "ssid");
+		if (ssid.len > 0) self.setStr(&self.ssid, ssid);
+
+		const ip = json.textAt(target, "ip");
+		if (ip.len > 0) self.setStr(&self.ip, ip);
+
+		const signal = json.integer(json.field(target, "signal"));
+		if (signal > 0) self.signal = signal;
+
+		if (json.field(target, "connected") != null) self.connected = json.flag(target, "connected");
+
+		self.mutex.unlock(self.io);
+
+		self.hold.store(json.flag(target, "hold"), .monotonic);
+		self.hub.publish();
+	}
+
+	fn seedHistory(self: *Network, items: []const json.Value) void {
+		self.history_count = 0;
+		self.history_start = 0;
+
+		const first = if (items.len > history_len) items.len - history_len else 0;
+		var peak: f64 = 1;
+
+		for (items[first..]) |item| {
+			const pair = json.list(item);
+			const down = if (pair.len > 0) json.number(pair[0]) else 0;
+			const up = if (pair.len > 1) json.number(pair[1]) else 0;
+
+			self.history[self.history_count] = .{ .down = @round(down), .up = @round(up) };
+			self.history_count += 1;
+			self.down = @round(down);
+			self.up = @round(up);
+			peak = @max(peak, @max(down, up));
+		}
+
+		self.history_start = self.history_count % history_len;
+		self.peak = peak;
+	}
+
+	fn seedWifi(self: *Network, items: []const json.Value) void {
+		if (items.len == 0) return;
+
+		var next: std.ArrayListUnmanaged(Wifi) = .empty;
+
+		for (self.networks.items) |entry| {
+			self.allocator.free(entry.ssid);
+			self.allocator.free(entry.security);
+		}
+
+		self.networks.deinit(self.allocator);
+
+		for (items) |item| {
+			const ssid = self.allocator.dupe(u8, json.textAt(item, "ssid")) catch continue;
+			const security = self.allocator.dupe(u8, json.textAt(item, "security")) catch {
+				self.allocator.free(ssid);
+				continue;
+			};
+
+			next.append(self.allocator, .{
+				.ssid = ssid,
+				.security = security,
+				.signal = json.integer(json.field(item, "signal")),
+				.channel = 0,
+				.frequency = 0,
+				.in_use = json.flag(item, "inUse"),
+			}) catch continue;
+		}
+
+		self.networks = next;
 	}
 
 	pub fn speedTest(self: *Network) void {
@@ -609,24 +739,33 @@ pub const Network = struct {
 		const testing = self.speed_stage != .none;
 		const hero = if (testing) speed_live else speed_down;
 
-		const out = Out{
+		const history = try historyOut(arena, self);
+		var scale: f64 = 1;
+
+		for (history) |entry| scale = @max(scale, @max(entry.down, entry.up));
+
+		const out = views.Out{
 			.iface = self.iface,
 			.kind = self.kind,
 			.connected = self.connected,
 			.ssid = self.ssid,
 			.signal = self.signal,
-			.signalText = try signalText(arena, self.signal),
-			.bars = signalBars(self.signal),
+			.signalText = try views.signalText(arena, self.signal),
+			.bars = views.signalBars(self.signal),
 			.down = down,
 			.up = up,
-			.downText = try rateText(arena, down),
-			.upText = try rateText(arena, up),
+			.downText = try views.rateText(arena, down),
+			.upText = try views.rateText(arena, up),
 			.linkSpeed = self.link_speed,
 			.peak = @round(self.peak),
-			.history = try historyOut(arena, self),
+			.history = history,
+			.graph = try views.graph(arena, history, scale, self.cells),
+			.details = try detailsOut(arena, self),
 			.ip = self.ip,
 			.gateway = self.gateway,
 			.dns = self.dns,
+			.dnsPending = self.dns_pending,
+			.dnsError = self.dns_error,
 			.wifi = try wifiOut(arena, self),
 			.speed = .{
 				.stage = if (self.speed_stage == .none) "" else @tagName(self.speed_stage),
@@ -634,10 +773,10 @@ pub const Network = struct {
 				.best = speed_best,
 				.down = speed_down,
 				.up = speed_up,
-				.text = try speedText(arena, hero),
-				.downText = try speedText(arena, speed_down),
-				.upText = try speedText(arena, speed_up),
-				.ceiling = speedCeiling(if (testing) speed_best else speed_down),
+				.text = try views.speedText(arena, hero),
+				.downText = try views.speedText(arena, speed_down),
+				.upText = try views.speedText(arena, speed_up),
+				.ceiling = views.speedCeiling(if (testing) speed_best else speed_down),
 			},
 		};
 
@@ -645,8 +784,8 @@ pub const Network = struct {
 	}
 };
 
-fn historyOut(arena: Allocator, self: *Network) ![]HistOut {
-	var out: std.ArrayListUnmanaged(HistOut) = .empty;
+fn historyOut(arena: Allocator, self: *Network) ![]views.HistOut {
+	var out: std.ArrayListUnmanaged(views.HistOut) = .empty;
 	const start = (self.history_start + history_len - self.history_count) % history_len;
 
 	for (0..self.history_count) |index| {
@@ -655,6 +794,50 @@ fn historyOut(arena: Allocator, self: *Network) ![]HistOut {
 	}
 
 	return out.items;
+}
+
+fn detailsOut(arena: Allocator, self: *Network) ![]views.DetailOut {
+	var out: std.ArrayListUnmanaged(views.DetailOut) = .empty;
+
+	if (std.mem.eql(u8, self.kind, "wifi"))
+		try out.append(arena, .{ .label = "signal", .text = try views.signalText(arena, self.signal), .ink = "up" });
+
+	const link = if (self.connected) (if (self.ip.len > 0) self.ip else self.iface) else "";
+
+	try out.append(arena, .{ .label = "ipv4", .text = link, .ink = "text" });
+
+	return out.items;
+}
+
+fn pushServer(allocator: Allocator, list: *std.ArrayListUnmanaged(u8), server: []const u8) !void {
+	if (server.len == 0) return;
+
+	if (list.items.len > 0) try list.append(allocator, ' ');
+
+	try list.appendSlice(allocator, server);
+}
+
+fn dnsList(allocator: Allocator, body: []const u8) ![]u8 {
+	var out: std.ArrayListUnmanaged(u8) = .empty;
+	errdefer out.deinit(allocator);
+
+	var lines = std.mem.splitScalar(u8, body, '\n');
+	while (lines.next()) |line| {
+		var servers = std.mem.splitScalar(u8, line, '|');
+		while (servers.next()) |raw| try pushServer(allocator, &out, std.mem.trim(u8, raw, " \t\r"));
+	}
+
+	return out.toOwnedSlice(allocator);
+}
+
+fn failureText(result: *const exec.Result) []const u8 {
+	const text = std.mem.trim(u8, result.err, " \t\r\n");
+
+	return if (text.len > 0) text else "nmcli failed";
+}
+
+fn locked(security: []const u8) bool {
+	return security.len > 0 and !std.mem.eql(u8, security, "--");
 }
 
 fn terseField(line: []const u8, at: *usize) ?[]const u8 {
@@ -700,16 +883,17 @@ fn afterColon(line: []const u8) []const u8 {
 	return std.mem.trim(u8, line[at + 1 ..], " \t\r");
 }
 
-fn wifiOut(arena: Allocator, self: *Network) ![]WifiOut {
-	var out: std.ArrayListUnmanaged(WifiOut) = .empty;
+fn wifiOut(arena: Allocator, self: *Network) ![]views.WifiOut {
+	var out: std.ArrayListUnmanaged(views.WifiOut) = .empty;
 
 	for (self.networks.items) |entry| {
 		try out.append(arena, .{
 			.ssid = entry.ssid,
 			.security = entry.security,
+			.locked = views.locked(entry.security),
 			.signal = entry.signal,
-			.signalText = try signalText(arena, entry.signal),
-			.bars = signalBars(entry.signal),
+			.signalText = try views.signalText(arena, entry.signal),
+			.bars = views.signalBars(entry.signal),
 			.channel = entry.channel,
 			.frequency = entry.frequency,
 			.inUse = entry.in_use,
@@ -717,50 +901,6 @@ fn wifiOut(arena: Allocator, self: *Network) ![]WifiOut {
 	}
 
 	return out.items;
-}
-
-fn rateText(allocator: Allocator, rate: f64) ![]const u8 {
-	const value = @max(0, rate);
-
-	if (value >= 1024 * 1024) return std.fmt.allocPrint(allocator, "{d:.1} MB/s", .{value / (1024 * 1024)});
-	if (value >= 1024) return std.fmt.allocPrint(allocator, "{d:.0} KB/s", .{value / 1024});
-
-	return std.fmt.allocPrint(allocator, "{d:.0} B/s", .{value});
-}
-
-fn megaBits(rate: f64) f64 {
-	return @max(0, rate) * 8 / 1000000;
-}
-
-fn speedText(allocator: Allocator, rate: f64) ![]const u8 {
-	return std.fmt.allocPrint(allocator, "{d:.0}", .{megaBits(rate)});
-}
-
-fn speedCeiling(rate: f64) f64 {
-	const ladder = [_]f64{ 5, 10, 25, 50, 100, 250, 500, 1000 };
-	const mbps = megaBits(rate) * 1.5;
-
-	for (ladder) |step| {
-		if (mbps < step) return step * 125000;
-	}
-
-	return ladder[ladder.len - 1] * 125000;
-}
-
-fn signalBars(pct: i64) i64 {
-	const value = std.math.clamp(pct, 0, 100);
-
-	if (value > 80) return 4;
-	if (value > 55) return 3;
-	if (value > 30) return 2;
-
-	return if (value > 5) 1 else 0;
-}
-
-fn signalText(allocator: Allocator, pct: i64) ![]const u8 {
-	if (pct < 0) return "-";
-
-	return std.fmt.allocPrint(allocator, "{d}%", .{pct});
 }
 
 test "nmcli terse lines keep escaped colons inside the ssid" {
@@ -780,69 +920,34 @@ test "nmcli terse lines keep escaped colons inside the ssid" {
 	try std.testing.expect(terseField(line, &at) == null);
 }
 
-test "rates format" {
+test "dns list joins every server nmcli prints" {
 	const allocator = std.testing.allocator;
 
-	const idle = try rateText(allocator, 0);
-	defer allocator.free(idle);
-	try std.testing.expectEqualStrings("0 B/s", idle);
-
-	const bytes = try rateText(allocator, 512);
-	defer allocator.free(bytes);
-	try std.testing.expectEqualStrings("512 B/s", bytes);
-
-	const kb = try rateText(allocator, 1600);
-	defer allocator.free(kb);
-	try std.testing.expectEqualStrings("2 KB/s", kb);
-
-	const mb = try rateText(allocator, 1.2 * 1024 * 1024);
-	defer allocator.free(mb);
-	try std.testing.expectEqualStrings("1.2 MB/s", mb);
-}
-
-test "speed text is whole megabits" {
-	const allocator = std.testing.allocator;
-
-	const zero = try speedText(allocator, 0);
-	defer allocator.free(zero);
-	try std.testing.expectEqualStrings("0", zero);
-
-	const one = try speedText(allocator, 125000);
+	const one = try dnsList(allocator, "1.1.1.1\n");
 	defer allocator.free(one);
-	try std.testing.expectEqualStrings("1", one);
+	try std.testing.expectEqualStrings("1.1.1.1", one);
 
-	const twenty = try speedText(allocator, 2_500_000);
-	defer allocator.free(twenty);
-	try std.testing.expectEqualStrings("20", twenty);
+	const many = try dnsList(allocator, "1.1.1.1\n1.0.0.1\n\n");
+	defer allocator.free(many);
+	try std.testing.expectEqualStrings("1.1.1.1 1.0.0.1", many);
+
+	const dhcp = try dnsList(allocator, "75.75.75.75 | 75.75.76.76\n");
+	defer allocator.free(dhcp);
+	try std.testing.expectEqualStrings("75.75.75.75 75.75.76.76", dhcp);
+
+	const none = try dnsList(allocator, "\n");
+	defer allocator.free(none);
+	try std.testing.expectEqualStrings("", none);
 }
 
-test "speed ceiling climbs the ladder" {
-	try std.testing.expectEqual(@as(f64, 625000), speedCeiling(0));
-	try std.testing.expectEqual(@as(f64, 3125000), speedCeiling(1_000_000));
-	try std.testing.expectEqual(@as(f64, 125000000), speedCeiling(100_000_000));
+test "dns reads the servers out of the terse device fields" {
+	var list: std.ArrayListUnmanaged(u8) = .empty;
+	defer list.deinit(std.testing.allocator);
+
+	try pushServer(std.testing.allocator, &list, "9.9.9.9");
+	try pushServer(std.testing.allocator, &list, "");
+	try pushServer(std.testing.allocator, &list, "149.112.112.112");
+
+	try std.testing.expectEqualStrings("9.9.9.9 149.112.112.112", list.items);
 }
 
-test "signal percent maps to bars" {
-	try std.testing.expectEqual(@as(i64, 4), signalBars(100));
-	try std.testing.expectEqual(@as(i64, 4), signalBars(81));
-	try std.testing.expectEqual(@as(i64, 3), signalBars(80));
-	try std.testing.expectEqual(@as(i64, 3), signalBars(56));
-	try std.testing.expectEqual(@as(i64, 2), signalBars(55));
-	try std.testing.expectEqual(@as(i64, 2), signalBars(31));
-	try std.testing.expectEqual(@as(i64, 1), signalBars(30));
-	try std.testing.expectEqual(@as(i64, 1), signalBars(6));
-	try std.testing.expectEqual(@as(i64, 0), signalBars(5));
-	try std.testing.expectEqual(@as(i64, 0), signalBars(-20));
-	try std.testing.expectEqual(@as(i64, 4), signalBars(200));
-}
-
-test "signal text is a percent or a dash" {
-	const allocator = std.testing.allocator;
-
-	const some = try signalText(allocator, 83);
-	defer allocator.free(some);
-	try std.testing.expectEqualStrings("83%", some);
-
-	const none = try signalText(allocator, -1);
-	try std.testing.expectEqualStrings("-", none);
-}

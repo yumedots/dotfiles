@@ -6,9 +6,11 @@ pub const Allocator = std.mem.Allocator;
 pub const Result = struct {
 	code: u8,
 	out: []u8,
+	err: []u8,
 
 	pub fn deinit(self: Result, allocator: Allocator) void {
 		allocator.free(self.out);
+		allocator.free(self.err);
 	}
 };
 
@@ -21,26 +23,27 @@ pub fn runEnv(io: Io, allocator: Allocator, argv: []const []const u8, environ_ma
 		.argv = argv,
 		.stdin = .ignore,
 		.stdout = .pipe,
-		.stderr = .ignore,
+		.stderr = .pipe,
 		.environ_map = environ_map,
 	});
 
-	var buffer: [8192]u8 = undefined;
-	var reader = child.stdout.?.reader(io, &buffer);
+	var multi_buffer: Io.File.MultiReader.Buffer(2) = undefined;
+	var multi: Io.File.MultiReader = undefined;
+	multi.init(allocator, io, multi_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+	defer multi.deinit();
 
-	var out: std.ArrayList(u8) = .empty;
-	errdefer out.deinit(allocator);
-
-	var chunk: [8192]u8 = undefined;
-	while (true) {
-		const count = try reader.interface.readSliceShort(&chunk);
-		if (count == 0) break;
-		if (out.items.len + count > 4 * 1024 * 1024) break;
-		try out.appendSlice(allocator, chunk[0..count]);
+	while (multi.fill(64, .none)) |_| {
+		if (multi.reader(0).buffered().len > 4 * 1024 * 1024) break;
+		if (multi.reader(1).buffered().len > 64 * 1024) break;
+	} else |err| switch (err) {
+		error.EndOfStream => {},
+		else => |e| return e,
 	}
 
+	try multi.checkAnyError();
+
 	const term = child.wait(io) catch {
-		return .{ .code = 1, .out = try out.toOwnedSlice(allocator) };
+		return .{ .code = 1, .out = try multi.toOwnedSlice(0), .err = try multi.toOwnedSlice(1) };
 	};
 
 	const code: u8 = switch (term) {
@@ -48,7 +51,7 @@ pub fn runEnv(io: Io, allocator: Allocator, argv: []const []const u8, environ_ma
 		else => 1,
 	};
 
-	return .{ .code = code, .out = try out.toOwnedSlice(allocator) };
+	return .{ .code = code, .out = try multi.toOwnedSlice(0), .err = try multi.toOwnedSlice(1) };
 }
 
 pub fn selfPath(io: Io, allocator: Allocator) ![]u8 {

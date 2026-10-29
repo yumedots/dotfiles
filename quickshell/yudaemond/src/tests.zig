@@ -21,6 +21,7 @@ test {
 	_ = @import("providers/screen.zig");
 	_ = @import("providers/settings.zig");
 	_ = @import("providers/network.zig");
+	_ = @import("providers/network_out.zig");
 	_ = @import("providers/audio.zig");
 	_ = @import("providers/wallpaper.zig");
 	_ = @import("providers/ink.zig");
