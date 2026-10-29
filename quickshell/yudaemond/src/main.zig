@@ -6,6 +6,7 @@ const sock = @import("primitives/sock.zig");
 const http = @import("primitives/http.zig");
 const opencode = @import("providers/opencode.zig");
 const codex = @import("providers/codex.zig");
+const claude = @import("providers/claude.zig");
 const activity = @import("providers/activity.zig");
 const cursor = @import("providers/cursor.zig");
 const daemon = @import("providers/daemon.zig");
@@ -358,6 +359,11 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 }
 
 fn refreshThunk(ctx: *anyopaque) void {
+	const thread = std.Thread.spawn(.{}, refreshAll, .{ctx}) catch return;
+	thread.detach();
+}
+
+fn refreshAll(ctx: *anyopaque) void {
 	const context: *Context = @ptrCast(@alignCast(ctx));
 	context.opencode.refreshAll();
 	context.subscriptions.refresh();
@@ -473,7 +479,8 @@ fn run(io: std.Io) !void {
 	const supervisor_provider = try supervisor.Supervisor.create(allocator, io, hub);
 	try hub.add(supervisor_provider.provider());
 
-	const subscriptions_provider = try subscriptions.Subscriptions.create(allocator, io, hub, opencode_provider, codex_provider);
+	const claude_provider = try claude.Claude.create(allocator, io, client);
+	const subscriptions_provider = try subscriptions.Subscriptions.create(allocator, io, hub, opencode_provider, codex_provider, claude_provider);
 	try hub.add(subscriptions_provider.provider());
 
 	const icon_resolver = try iconsmod.Icons.create(allocator, io);
