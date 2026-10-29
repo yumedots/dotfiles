@@ -26,11 +26,21 @@ Item {
 
 	readonly property bool searching: searchField.typing
 	readonly property bool filtering: panel.searching || panel.filter !== ""
-	readonly property var procs: (Yudae.system.panel && Yudae.system.panel.rows) || []
+	property var procs: []
 	readonly property bool showList: panel.showProcessList && (panel.procs.length > 0 || panel.filtering)
 	readonly property real pct: panel.source ? panel.source.pct : 0
 	readonly property bool onScreen: panel.Window.window ? panel.Window.window.visible : false
 	property var keyAction: null
+
+	Component.onCompleted: panel.procs = Yudae.system.panel ? Yudae.system.panel.rows || [] : []
+
+	Connections {
+		target: Yudae
+
+		function onSystemChanged() {
+			panel.procs = Yudae.system.panel ? Yudae.system.panel.rows || [] : [];
+		}
+	}
 
 	focus: true
 

@@ -642,7 +642,8 @@ pub const System = struct {
 		const list = proc.listProcesses(self.io, self.allocator) catch return;
 		defer self.allocator.free(list);
 		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
-		const seconds = if (self.last_proc_at > 0 and now > self.last_proc_at)
+		const first = self.last_proc_at == 0;
+		const seconds = if (!first and now > self.last_proc_at)
 			@as(f64, @floatFromInt(now - self.last_proc_at)) / 1000.0
 		else
 			0;
@@ -671,10 +672,11 @@ pub const System = struct {
 
 			all.append(self.allocator, candidate) catch {};
 
-			if (delta <= 0) continue;
+			insertTopByMem(&mem_top, &mem_count, candidate);
+
+			if (delta <= 0 and !first) continue;
 
 			insertTop(&top, &top_count, candidate);
-			insertTopByMem(&mem_top, &mem_count, candidate);
 		}
 
 		self.previous.deinit(self.allocator);
@@ -968,6 +970,33 @@ test "one synchronous sample fills the list before the first snapshot" {
 
 	const rows = try system.allRows(allocator);
 	try std.testing.expectEqual(system.all.items.len, rows.len);
+}
+
+test "one synchronous sample seeds the cpu and the rss lists" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	const system = try System.create(allocator, io, &hub);
+
+	system.sampleProcesses();
+
+	try std.testing.expect(system.top_count > 0);
+	try std.testing.expect(system.mem_count > 0);
+	try std.testing.expect(system.mem_top[0].rss_kb > 0);
+
+	var index: usize = 1;
+	while (index < system.mem_count) : (index += 1) {
+		try std.testing.expect(system.mem_top[index - 1].rss_kb >= system.mem_top[index].rss_kb);
+	}
+
+	system.sampleProcesses();
+
+	try std.testing.expect(system.mem_count > 0);
+	try std.testing.expect(system.mem_top[0].rss_kb > 0);
 }
 
 test "memory sizes read the way the panel prints them" {
