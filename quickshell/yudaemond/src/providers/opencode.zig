@@ -24,6 +24,7 @@ const Session = struct {
 	blocked: []u8 = &.{},
 	failure: []u8 = &.{},
 	updated: i64 = 0,
+	local: bool = false,
 };
 
 const Done = struct {
@@ -553,7 +554,7 @@ pub const Opencode = struct {
 		var it = self.sessions.iterator();
 		while (it.next()) |entry| {
 			const session = entry.value_ptr.*;
-			if (!isBusy(session.status)) continue;
+			if (session.local or !isBusy(session.status)) continue;
 			if (inList(running, session.id)) continue;
 
 			setStr(self.allocator, &session.status, "idle") catch {};
@@ -772,6 +773,26 @@ pub const Opencode = struct {
 		}
 
 		return "";
+	}
+
+	pub fn track(self: *Opencode, id: []const u8, title: []const u8, provider_name: []const u8, working: bool, blocked: bool, at: i64) void {
+		self.mutex.lockUncancelable(self.io);
+		const session = self.sessionFor(id) catch {
+			self.mutex.unlock(self.io);
+			return;
+		};
+
+		const was = isBusy(session.status);
+		setStr(self.allocator, &session.title, title) catch {};
+		setStr(self.allocator, &session.provider, provider_name) catch {};
+		setStr(self.allocator, &session.status, if (working) "busy" else "idle") catch {};
+		session.updated = at;
+		session.local = true;
+		setStr(self.allocator, &session.blocked, if (blocked) "permission" else "") catch {};
+		self.mutex.unlock(self.io);
+
+		if (was and !working) self.finish(id);
+		self.hub.publish();
 	}
 
 	pub fn faceState(self: *Opencode) []const u8 {

@@ -6,6 +6,7 @@ const sock = @import("primitives/sock.zig");
 const http = @import("primitives/http.zig");
 const opencode = @import("providers/opencode.zig");
 const codex = @import("providers/codex.zig");
+const activity = @import("providers/activity.zig");
 const cursor = @import("providers/cursor.zig");
 const daemon = @import("providers/daemon.zig");
 const github = @import("providers/github.zig");
@@ -540,6 +541,8 @@ fn run(io: std.Io) !void {
 	try system_provider.start();
 	try opencode_provider.start();
 	try codex_provider.start();
+	const activity_provider = try activity.Activity.create(allocator, io, opencode_provider);
+	try activity_provider.start();
 	try cursor_provider.start();
 	try github_provider.start();
 	try weather_provider.start();
