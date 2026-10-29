@@ -1,21 +1,11 @@
-# Everything the shell draws with. yudaemond reads this file, publishes it in the
-# snapshot as `settings`, and reloads it when it changes; the shell never parses it.
-# Colours are #rrggbb strings, sizes are pixels, durations are milliseconds.
-# Values are final: an expression in the old config.js is written here as its result.
-
-# base surface, ink and the mono ink that replaces the hue when mono is on
 [colors]
 surface = "#101010"
-surfaceAlpha = 1
 surfaceTranslucent = "#ff101010"  # "#" + ("0" + Math.round(surfaceAlpha * 255).toString(16)).slice(-2) + surface.slice(1)
 foreground = "#ffffff"
 dim = "#3f3f3f"
 red = "#e05252"
 muted = "#5c5c5c"
 mono = true
-monoLight = "#cfcfcf"
-monoMid = "#9a9a9a"
-monoSoft = "#6f6f6f"
 
 # things that are not a widget: font, spacing, workspace morph
 [shell]
@@ -121,7 +111,6 @@ cpuBaseMono = "#ffffff"  # same as foreground
 cpuPeak = "#e05252"  # same as red
 cpuPeakMono = "#9a9a9a"  # same as monoMid
 cpuIdle = "#2f2f2f"
-cpuPollMs = 1000
 cpuTopCount = 5
 cpuTooltipWidth = 240
 cpuTooltipPadding = 12
@@ -137,7 +126,6 @@ procKillSignal = "-9"
 procNoMatch = "Nothing matches"
 procHintKey = "f"
 procKillKey = "q"
-terminalClasses = ["foot", "footclient"]
 
 # memory bars and tooltip
 [memory]
@@ -177,7 +165,6 @@ mixerStepCount = 10
 mixerStep = 0.1  # 1 / mixerStepCount
 mixerShiftStep = 0.05
 mixerOnlyPlaying = true
-mixerPollMs = 1000
 mixerHoldMs = 2000
 mixerRecordDotSize = 5
 mixerHitPad = 6
@@ -191,9 +178,7 @@ mediaTitleSize = 16
 mediaRowGap = 6
 mediaButtonGlyphSize = 16
 mediaButtonGap = 18
-mediaTextGap = 8
 mediaLineGap = 2
-mediaTickMs = 1000
 mediaEmpty = "Nothing playing"
 volumeBase = "#ffffff"
 
@@ -230,8 +215,6 @@ wallpaperTileGap = 8
 wallpaperNameSize = 13
 wallpaperHoverScale = 1.04
 wallpaperTileDim = 0.6
-wallpaperThumbJobs = 4
-wallpaperThumbQuality = 82
 wallpaperRingWidth = 2
 wallpaperMarkSize = 11
 wallpaperFadeMs = 160
@@ -263,19 +246,12 @@ powerLabelSize = 12
 powerBase = "#7bd88f"
 powerBaseMono = "#ffffff"  # same as foreground
 powerWarn = "#d8b04a"
-powerWarnMono = "#cfcfcf"  # same as monoLight
 powerDanger = "#e05252"  # same as red
-powerDangerMono = "#6f6f6f"  # same as monoSoft
 powerWarnAt = 30
 powerDangerAt = 15
 powerTooltipWidth = 240  # same as cpuTooltipWidth
 powerTooltipPadding = 12  # same as cpuTooltipPadding
-powerTopCount = 5
-powerTitle = "Power"
 powerGovernorTitle = "Governor"
-powerWarnText = "low battery"
-powerNoBattery = "No battery"
-powerDrainTitle = "Top consumers"
 
 # calendar, meters and the life dial
 [calendar]
@@ -322,19 +298,15 @@ calendarOutside = "#4f4f4f"
 # weather card and its code table
 [weather]
 weatherLocation = ""
-weatherCoords = ""
-weatherPlaceCount = 4
 weatherPlaceDefaults = ["San Francisco", "Miami"]
 weatherStationCount = 3
 weatherRefreshMs = 120000
-weatherRetryMs = 5000
 weatherCacheMs = 120000
 weatherIcon = "\U000F0F2F"
 weatherLoadingIcon = "\U000F18F6"
 weatherBase = "#7cc4f0"
 weatherBaseMono = "#ffffff"  # same as foreground
 weatherTempUnit = "fahrenheit"
-weatherWindUnit = "mph"  # weatherTempUnit === "celsius" ? "kmh" : "mph"
 weatherDays = 7
 weatherCardWidth = 470
 weatherCardPadding = 18
@@ -351,7 +323,6 @@ weatherDayLabelSize = 12
 weatherDayTempSize = 17
 weatherDayGap = 10
 weatherPlaceSize = 13
-weatherActionSize = 12
 weatherIconLeft = "\uF104"
 weatherIconRight = "\uF105"
 weatherIconAdd = "\uF067"
@@ -408,11 +379,8 @@ notifyVisibleRows = 5
 notifyHistory = 50
 notifyGoneOpacity = 0.55
 notifyEmpty = "Nothing yet"
-notifyTitle = "Notifications"
-notifyRowGap = 6
 notifySeparator = 1
 notifySeparatorColor = "#3f3f3f"  # same as dim
-notifyImageMax = 140
 notifySweepWidth = 30
 notifyTimeout = 6000
 notifyDismissKey = "d"
@@ -426,8 +394,6 @@ contribEmpty = "#1f1f1f"
 contribWeeks = 19
 contribCell = 10
 contribGap = 3
-contribCacheMs = 21600000
-contribUser = ""
 contribTooltipWidth = 244
 contribTooltipPadding = 12  # same as cpuTooltipPadding
 contribAvatar = 24
@@ -471,10 +437,8 @@ networkDownMono = "#ffffff"  # same as foreground
 networkUp = "#e06c9f"
 networkUpMono = "#9a9a9a"  # same as monoMid
 networkIdle = "#2f2f2f"
-networkPollMs = 1000
 networkHistory = 60
 networkGraphHeight = 40
-networkGraphFontSize = 16.666666666666668
 networkGraphGap = 2
 networkTooltipWidth = 260
 networkTooltipPadding = 12  # same as cpuTooltipPadding
@@ -484,7 +448,6 @@ networkBarCount = 4
 networkBarWidth = 3
 networkBarGap = 2
 networkBarStep = 3
-networkBarsInk = "#ffffff"  # same as foreground
 networkBarsOff = "#2f2f2f"
 networkSpeedCancelKey = "k"
 networkSpeedNone = "Run a speed test"
@@ -506,13 +469,8 @@ speedNeedleWidth = 2
 speedButtonPadX = 10
 speedButtonPadY = 4
 networkTitle = "Network"
-networkScanTitle = "Wi-Fi"
-networkWifiNothing = "No networks found"
 networkWiredNothing = "No connection"
 networkPasswordHint = "Password"
-networkForget = "Forget"
-networkConnect = "Connect"
-networkScanIcon = "\uF021"
 networkWifiIcons = ["\U000F08BC", "\U000F08BD", "\U000F08BE", "\U000F08BF"]
 networkLanIcon = "\U000F0200"
 networkLockIcon = "\uF023"
@@ -522,19 +480,16 @@ networkLockIcon = "\uF023"
 agentFaceSize = 44
 agentMorphMs = 420
 agentSpinMs = 120000
-agentDoneWidth = 230
-agentColumnWidth = 230
-agentPlanWidth = 240
 agentPanelWidth = 300
 agentPanelHeight = 240
 agentPanelPadding = 12
-agentTasksTitle = "Tasks"
 agentIdleText = "Idle"
 agentWorkingText = "Working"
 agentBlockedText = "a session needs attention"
 agentErrorText = "Error"
 agentPanelTitle = "Agent"
 agentNameFile = "cache/agent-name"
+agentTasksTitle = "Tasks"
 agentDoneTitle = "Done"
 agentIconQuestion = "?"
 agentIconDone = "\uF00C"
