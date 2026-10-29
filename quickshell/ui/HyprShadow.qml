@@ -10,6 +10,7 @@ Item {
 	readonly property color tint: Qt.color(root.qmlColor(root.settings.color))
 	readonly property int steps: 24
 	readonly property real reach: root.settings.range * 0.8
+	readonly property real inset: Math.abs(root.settings.offsetY) * 0.55
 	readonly property real falloff: 2.3
 	property real topReach: -1
 	property real bottomReach: -1
@@ -51,10 +52,10 @@ Item {
 				readonly property real before: root.tint.a * 0.95 * Math.pow(1 - index / root.steps, root.falloff)
 				readonly property real after: root.tint.a * 0.95 * Math.pow(1 - (index + 1) / root.steps, root.falloff)
 
-				x: root.clipSide + root.settings.offsetX - grow
-				y: root.clipTop + root.settings.offsetY - grow
-				width: root.width + 2 * grow
-				height: root.height + 2 * grow
+				x: root.clipSide + root.settings.offsetX - grow + root.inset
+				y: root.clipTop + root.settings.offsetY - grow + root.inset
+				width: root.width + 2 * (grow - root.inset)
+				height: root.height + 2 * (grow - root.inset)
 				radius: grow
 				color: Qt.rgba(root.tint.r, root.tint.g, root.tint.b, 1 - (1 - before) / (1 - after))
 			}

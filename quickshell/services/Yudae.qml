@@ -227,7 +227,7 @@ QtObject {
 
 	readonly property var screenState: root.snapshot.screen || ({})
 	readonly property var screenBorder: root.screenState.border || ({})
-	readonly property var screenShadow: root.screenState.shadow || ({ enabled: true, range: 40, color: "rgba(00000070)", offsetX: 0, offsetY: 6 })
+	readonly property var screenShadow: root.screenState.shadow || ({ enabled: true, range: 48, color: "rgba(00000070)", offsetX: 0, offsetY: 14 })
 	readonly property var screenMonitors: root.screenState.monitors || []
 	readonly property int screenPrimary: root.screenState.primary || 0
 	readonly property var screenActive: root.screenMonitors[root.screenPrimary] || null
