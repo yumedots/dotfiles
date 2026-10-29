@@ -234,10 +234,11 @@ QtObject {
 	readonly property var networkState: root.snapshot.network || ({})
 	readonly property var network: root.networkState
 
-	readonly property var settingsState: root.snapshot.settings || ({})
-	readonly property int settingsFontSize: root.settingsState.fontSize || 0
-	readonly property int settingsIconSize: root.settingsState.iconSize || 0
-	readonly property string settingsRecord: root.settingsState.record || ""
+	readonly property var settings: root.snapshot.settings || ({})
+	readonly property var displayState: root.snapshot.display || ({})
+	readonly property int settingsFontSize: root.displayState.fontSize || 0
+	readonly property int settingsIconSize: root.displayState.iconSize || 0
+	readonly property string settingsRecord: root.displayState.record || ""
 
 	readonly property var screenPanel: root.screenState.panel || ({})
 	readonly property var screenGroups: root.screenPanel.groups || []

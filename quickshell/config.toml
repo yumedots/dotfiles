@@ -1,0 +1,543 @@
+# Everything the shell draws with. yudaemond reads this file, publishes it in the
+# snapshot as `settings`, and reloads it when it changes; the shell never parses it.
+# Colours are #rrggbb strings, sizes are pixels, durations are milliseconds.
+# Values are final: an expression in the old config.js is written here as its result.
+
+# base surface, ink and the mono ink that replaces the hue when mono is on
+[colors]
+surface = "#101010"
+surfaceAlpha = 1
+surfaceTranslucent = "#ff101010"  # "#" + ("0" + Math.round(surfaceAlpha * 255).toString(16)).slice(-2) + surface.slice(1)
+foreground = "#ffffff"
+dim = "#3f3f3f"
+red = "#e05252"
+muted = "#5c5c5c"
+mono = true
+monoLight = "#cfcfcf"
+monoMid = "#9a9a9a"
+monoSoft = "#6f6f6f"
+
+# things that are not a widget: font, spacing, workspace morph
+[shell]
+workspaceSpacing = 6
+workspaceMorphMs = 320
+figureLobes = 9
+figureScallop = 0.16
+fontFamily = "GoogleSansCode Nerd Font"
+fontSize = 12
+valueSample = "0123456789.%G"
+iconSize = 10
+spacing = 12
+lineLength = 45
+scrollbarWidth = 2
+gapsIn = 4
+gapsOut = 8
+
+# tray icons and their menu
+[tray]
+trayIconSize = 15
+trayIconGap = 10
+trayGroupSize = 15
+trayChevronBoost = 1
+trayMenuWidth = 120
+trayMenuPadding = 6
+trayMenuRowHeight = 18
+trayMenuSeparator = 1
+
+# the bar itself, its cells and the sweep that runs through them
+[bar]
+barHitPadding = 4
+barStatSpacing = 16
+barCells = 15
+barInset = 8
+barPadding = 8
+barFloating = false
+barBorderWidth = 0  # barFloating ? -1 : 0
+barStatMode = "icon"
+barStatMono = true
+barThickness = 1.5
+barSweepMs = 1400
+sweepFade = 0.45
+sweepSteps = 5
+clockFormat = "ddd MMM d h:mm AP"
+borderFallbackWidth = 1
+borderFallbackColor = "#ffffff"
+
+# every panel's fade, slide and position
+[popup]
+popupCloseDelay = 60
+popupFadeMs = 140
+popupSlideMs = 400
+barFadeMs = 300
+popupPos = "top-center"
+popupX = -1
+popupY = -1
+popupBorderWidth = 1
+volumeOsdMs = 1500
+
+# the tooltip body and its close button
+[tooltip]
+tooltipCloseSize = 14
+tooltipCloseInset = 6
+tooltipOffsetX = 0
+tooltipGap = 7
+tooltipGapRight = 3
+tooltipHang = 3
+
+# nerd font glyphs
+[icons]
+iconClose = "\uF00D"
+iconCpu = "\uF2DB"
+iconChevron = "\uF053"
+iconMemory = "\uEFC5"
+iconBell = "\uF0F3"
+iconDown = "\uF078"
+iconUp = "\uF077"
+iconRight = "\uF054"
+iconGithub = "\uF09B"
+iconVolumeLow = "\uF026"
+iconVolumeMid = "\uF027"
+iconVolumeHigh = "\uF028"
+iconPlay = "\uF04B"
+iconPause = "\uF04C"
+iconApp = "\uF001"
+iconOutput = "\U000F0379"
+iconInput = "\U000F036C"
+iconPrev = "\U000F0141"
+iconNext = "\U000F0142"
+iconDisplay = "\U000F0379"
+iconPowerPlug = "\U000F06A5"
+iconBatteryFull = "\U000F0082"
+iconBatteryHigh = "\U000F0081"
+iconBatteryMid = "\U000F007F"
+iconBatteryLow = "\U000F007C"
+iconBatteryAlert = "\U000F0083"
+iconBatteryCharge = "\U000F0084"
+
+# cpu and process list
+[cpu]
+cpuBase = "#a78bfa"
+cpuBaseMono = "#ffffff"  # same as foreground
+cpuPeak = "#e05252"  # same as red
+cpuPeakMono = "#9a9a9a"  # same as monoMid
+cpuIdle = "#2f2f2f"
+cpuPollMs = 1000
+cpuTopCount = 5
+cpuTooltipWidth = 240
+cpuTooltipPadding = 12
+cpuBlockGap = 4
+cpuBlockColumns = 16
+topProcessTitle = "Top processes"
+procsGap = 6
+psIgnore = ["ps", "ps <defunct>"]
+procSearchHint = "f to type"
+procSearchPadding = 4
+procSearchMinWidth = 140
+procKillSignal = "-9"
+procNoMatch = "Nothing matches"
+procHintKey = "f"
+procKillKey = "q"
+terminalClasses = ["foot", "footclient"]
+
+# memory bars and tooltip
+[memory]
+memoryBase = "#7bd88f"
+memoryBaseMono = "#ffffff"  # same as foreground
+memoryCached = "#44774f"
+memoryCachedMono = "#cfcfcf"  # same as monoLight
+memoryBuffers = "#2f5136"
+memoryBuffersMono = "#9a9a9a"  # same as monoMid
+memoryFree = "#3f3f3f"  # same as dim
+memorySwap = "#ffffff"  # same as foreground
+memoryWarn = "#d8b04a"
+memoryWarnMono = "#cfcfcf"  # same as monoLight
+memoryDanger = "#e05252"  # same as red
+memoryDangerMono = "#6f6f6f"  # same as monoSoft
+memorySeparator = 3
+memorySeparatorColor = "#101010"  # same as surface
+memoryVizHeight = 12
+memoryWarnAt = 60
+memoryDangerAt = 85
+memoryTooltipWidth = 240  # same as cpuTooltipWidth
+memoryTooltipPadding = 12  # same as cpuTooltipPadding
+memoryTopCount = 5
+
+# volume mixer
+[mixer]
+mixerWidth = 246
+mixerChannelGap = 6
+mixerFaderThickness = 4
+mixerPadding = 12
+mixerIconSize = 22
+mixerDeviceIconSize = 26
+mixerListRowHeight = 20
+mixerListGap = 8
+mixerMaxVolume = 1
+mixerStepCount = 10
+mixerStep = 0.1  # 1 / mixerStepCount
+mixerShiftStep = 0.05
+mixerOnlyPlaying = true
+mixerPollMs = 1000
+mixerHoldMs = 2000
+mixerRecordDotSize = 5
+mixerHitPad = 6
+
+# now playing
+[media]
+mediaTooltipWidth = 228
+mediaTooltipPadding = 12  # same as cpuTooltipPadding
+mediaArtHeight = 228  # same as mediaTooltipWidth
+mediaTitleSize = 16
+mediaRowGap = 6
+mediaButtonGlyphSize = 16
+mediaButtonGap = 18
+mediaTextGap = 8
+mediaLineGap = 2
+mediaTickMs = 1000
+mediaEmpty = "Nothing playing"
+volumeBase = "#ffffff"
+
+# launcher box
+[launcher]
+launcherWidth = 270
+launcherPadding = 12
+launcherGap = 8
+launcherInputHeight = 30
+launcherRowHeight = 28
+launcherFontSize = 16
+launcherIconSize = 20
+launcherIconSlot = 24
+launcherTextGap = 10
+launcherSearchBox = "#1f1f1f"
+launcherHighlight = "#2f2f2f"
+launcherHighlightText = "#ffffff"  # same as foreground
+launcherPrompt = "\uEA6D"
+launcherMaxRows = 12
+launcherIconPin = "\uEBA0"
+launcherIconActive = "\uF00C"
+
+# wallpaper picker
+[wallpaper]
+wallpaperTransitionMs = 400
+wallpaperEmpty = "No wallpapers found"
+wallpaperPickerWidth = 1100
+wallpaperStageWidth = 680
+wallpaperPreviewRatio = 1.78
+wallpaperPickerPadding = 16
+wallpaperSectionGap = 16
+wallpaperColumns = 3
+wallpaperTileGap = 8
+wallpaperNameSize = 13
+wallpaperHoverScale = 1.04
+wallpaperTileDim = 0.6
+wallpaperThumbJobs = 4
+wallpaperThumbQuality = 82
+wallpaperRingWidth = 2
+wallpaperMarkSize = 11
+wallpaperFadeMs = 160
+wallpaperScrim = 0.45
+wallpaperScrimMs = 180
+
+# window switcher
+[windows]
+windowsGridCell = 92
+windowsRowMargin = 60
+windowsHighlightSize = 84
+windowsLabelGap = 2
+windowStepMs = 80
+windowsIconSize = 76
+windowsTitleSize = 11
+
+# power menu and battery
+[power]
+powerActions = [
+	{ name = "Suspend", command = "systemctl suspend", glyph = "\U000F04B2" },
+	{ name = "Log out", command = "hyprctl dispatch 'hl.dsp.exit()'", glyph = "\uEA6E" },
+	{ name = "Reboot", command = "systemctl reboot", glyph = "\uEAD2" },
+	{ name = "Shut down", command = "systemctl poweroff", glyph = "\uF011" }
+]
+powerCellSize = 96
+powerIconSize = 48
+powerHighlightSize = 80
+powerLabelSize = 12
+powerBase = "#7bd88f"
+powerBaseMono = "#ffffff"  # same as foreground
+powerWarn = "#d8b04a"
+powerWarnMono = "#cfcfcf"  # same as monoLight
+powerDanger = "#e05252"  # same as red
+powerDangerMono = "#6f6f6f"  # same as monoSoft
+powerWarnAt = 30
+powerDangerAt = 15
+powerTooltipWidth = 240  # same as cpuTooltipWidth
+powerTooltipPadding = 12  # same as cpuTooltipPadding
+powerTopCount = 5
+powerTitle = "Power"
+powerGovernorTitle = "Governor"
+powerWarnText = "low battery"
+powerNoBattery = "No battery"
+powerDrainTitle = "Top consumers"
+
+# calendar, meters and the life dial
+[calendar]
+calendarCellWidth = 60
+calendarCellHeight = 34
+calendarRows = 6
+calendarWeekStart = 1
+calendarCursor = "#ffffff"  # same as foreground
+calendarCursorBorder = 1
+calendarPadding = 16
+calendarBase = "#ffffff"  # same as foreground
+calendarIconDay = "\uF017"
+calendarIconMonth = "\uF133"
+calendarIconYear = "\uF254"
+calendarIconLife = "\uF004"
+calendarMonthSize = 30
+calendarTitleGap = 12
+calendarWeekdaySize = 14
+calendarDaySize = 20
+calendarArrowSize = 18
+calendarArrowGap = 12
+calendarTodayBox = "#1f1f1f"  # same as launcherSearchBox
+calendarTrack = "#1f1f1f"
+calendarGap = 16
+calendarMeterHeight = 8
+calendarMeterRow = 26
+calendarMeterGap = 8
+calendarMeterLabelSize = 15
+calendarMeterValueSize = 18
+calendarMeterLabelWidth = 96
+calendarMeterValueWidth = 64
+calendarDialSize = 116
+calendarDialRingWidth = 6
+calendarDialGlyphSize = 23
+calendarDialMoonLift = 5
+calendarDialDayStart = 6
+calendarDialDayEnd = 18
+calendarIconSun = "\uF522"
+calendarIconMoon = "\uE3A4"
+calendarBirthYear = 0
+calendarLifeExpectancy = 90
+calendarOutside = "#4f4f4f"
+
+# weather card and its code table
+[weather]
+weatherLocation = ""
+weatherCoords = ""
+weatherPlaceCount = 4
+weatherPlaceDefaults = ["San Francisco", "Miami"]
+weatherStationCount = 3
+weatherRefreshMs = 120000
+weatherRetryMs = 5000
+weatherCacheMs = 120000
+weatherIcon = "\U000F0F2F"
+weatherLoadingIcon = "\U000F18F6"
+weatherBase = "#7cc4f0"
+weatherBaseMono = "#ffffff"  # same as foreground
+weatherTempUnit = "fahrenheit"
+weatherWindUnit = "mph"  # weatherTempUnit === "celsius" ? "kmh" : "mph"
+weatherDays = 7
+weatherCardWidth = 470
+weatherCardPadding = 18
+weatherCardGap = 16
+weatherCardHeaderGap = 12
+weatherHeroGlyphSize = 54
+weatherHeroTempSize = 52
+weatherHeroUnitSize = 19
+weatherHeroUnitTop = 4
+weatherHeroLabelSize = 11
+weatherHeroValueSize = 19
+weatherDayGlyphSize = 30
+weatherDayLabelSize = 12
+weatherDayTempSize = 17
+weatherDayGap = 10
+weatherPlaceSize = 13
+weatherActionSize = 12
+weatherIconLeft = "\uF104"
+weatherIconRight = "\uF105"
+weatherIconAdd = "\uF067"
+weatherSeparator = 1
+weatherSeparatorColor = "#2b2b2b"
+weatherCardSearchDebounce = 60
+weatherCodes = [
+	{ code = 0, name = "Clear", glyph = "\U000F0599" },
+	{ code = 1, name = "Mainly clear", glyph = "\U000F0595" },
+	{ code = 2, name = "Partly cloudy", glyph = "\U000F0595" },
+	{ code = 3, name = "Overcast", glyph = "\U000F0590" },
+	{ code = 45, name = "Fog", glyph = "\U000F0591" },
+	{ code = 48, name = "Freezing fog", glyph = "\U000F0591" },
+	{ code = 51, name = "Light drizzle", glyph = "\U000F0F33" },
+	{ code = 53, name = "Drizzle", glyph = "\U000F0597" },
+	{ code = 55, name = "Dense drizzle", glyph = "\U000F0597" },
+	{ code = 56, name = "Freezing drizzle", glyph = "\U000F067F" },
+	{ code = 57, name = "Freezing drizzle", glyph = "\U000F067F" },
+	{ code = 61, name = "Light rain", glyph = "\U000F0597" },
+	{ code = 63, name = "Rain", glyph = "\U000F0597" },
+	{ code = 65, name = "Heavy rain", glyph = "\U000F0596" },
+	{ code = 66, name = "Freezing rain", glyph = "\U000F067F" },
+	{ code = 67, name = "Freezing rain", glyph = "\U000F067F" },
+	{ code = 71, name = "Light snow", glyph = "\U000F0598" },
+	{ code = 73, name = "Snow", glyph = "\U000F0598" },
+	{ code = 75, name = "Heavy snow", glyph = "\U000F0F36" },
+	{ code = 77, name = "Snow grains", glyph = "\U000F0598" },
+	{ code = 80, name = "Light showers", glyph = "\U000F0F33" },
+	{ code = 81, name = "Rain showers", glyph = "\U000F0597" },
+	{ code = 82, name = "Violent showers", glyph = "\U000F0596" },
+	{ code = 85, name = "Snow showers", glyph = "\U000F0F34" },
+	{ code = 86, name = "Heavy snow showers", glyph = "\U000F0F36" },
+	{ code = 95, name = "Thunderstorm", glyph = "\U000F0593" },
+	{ code = 96, name = "Storm with hail", glyph = "\U000F067E" },
+	{ code = 99, name = "Storm with hail", glyph = "\U000F067E" }
+]
+
+# notification toasts
+[notify]
+notifyBase = "#ffffff"  # same as foreground
+# the size of a notification; 1 is the house size, 1.25 is the roomy one
+notifyScale = 1.25
+# the width stays fixed, so a toast does not change size with its text
+notifyWidth = 350  # Math.round(280 * notifyScale)
+notifyPadding = 15  # Math.round(12 * notifyScale)
+notifyPaddingY = 0
+notifyRowHeight = 48  # Math.round(38 * notifyScale)
+notifyRowPadding = 3  # Math.round(2 * notifyScale)
+notifySlot = 33  # Math.round(26 * notifyScale)
+notifySlotGap = 13  # Math.round(10 * notifyScale)
+notifyBellSize = 30  # Math.round(24 * notifyScale)
+notifyAppFontSize = 14  # Math.round(11 * notifyScale)
+notifyVisibleRows = 5
+notifyHistory = 50
+notifyGoneOpacity = 0.55
+notifyEmpty = "Nothing yet"
+notifyTitle = "Notifications"
+notifyRowGap = 6
+notifySeparator = 1
+notifySeparatorColor = "#3f3f3f"  # same as dim
+notifyImageMax = 140
+notifySweepWidth = 30
+notifyTimeout = 6000
+notifyDismissKey = "d"
+notifyClearKey = "x"
+
+# contribution graph
+[contrib]
+contribBase = "#7bd88f"
+contribBaseMono = "#ffffff"  # same as foreground
+contribEmpty = "#1f1f1f"
+contribWeeks = 19
+contribCell = 10
+contribGap = 3
+contribCacheMs = 21600000
+contribUser = ""
+contribTooltipWidth = 244
+contribTooltipPadding = 12  # same as cpuTooltipPadding
+contribAvatar = 24
+
+# display panel
+[display]
+displayFile = "cache/display.lua"
+displayBase = "#7aa2f7"
+displayBaseMono = "#ffffff"  # same as foreground
+displayPanelWidth = 296
+displayPanelPadding = 12  # same as cpuTooltipPadding
+displayRowHeight = 18
+displayRowGap = 3
+displayGroupGap = 10
+displayLabelSize = 10
+displayDetailSize = 10
+displayDetailGap = 3
+displayValueGap = 6
+stepBarHeight = 6
+stepBarGap = 2
+displaySeparatorColor = "#3f3f3f"  # same as dim
+displaySeparatorHeight = 1
+displayScaleMin = 1
+displayScaleMax = 2
+displayFonts = [10, 11, 12, 13, 14, 16, 18]
+displayResolutionLimit = 6
+displayTitle = "Display"
+displayResolutionTitle = "Resolution"
+displayRefreshTitle = "Refresh"
+displayScaleTitle = "Scale"
+displayFontTitle = "Font"
+displayNothing = "No display found"
+displayIconRefresh = "\uF021"
+
+# network and speed test
+[network]
+networkBase = "#61afef"
+networkBaseMono = "#ffffff"  # same as foreground
+networkDown = "#7bd88f"
+networkDownMono = "#ffffff"  # same as foreground
+networkUp = "#e06c9f"
+networkUpMono = "#9a9a9a"  # same as monoMid
+networkIdle = "#2f2f2f"
+networkPollMs = 1000
+networkHistory = 60
+networkGraphHeight = 40
+networkGraphFontSize = 16.666666666666668
+networkGraphGap = 2
+networkTooltipWidth = 260
+networkTooltipPadding = 12  # same as cpuTooltipPadding
+networkRowHeight = 18
+networkRowGap = 3
+networkBarCount = 4
+networkBarWidth = 3
+networkBarGap = 2
+networkBarStep = 3
+networkBarsInk = "#ffffff"  # same as foreground
+networkBarsOff = "#2f2f2f"
+networkSpeedCancelKey = "k"
+networkSpeedNone = "Run a speed test"
+networkSpeedUnit = "Mbps"
+networkSpeedTestingDown = "Testing download speed\u2026"
+networkSpeedTestingUp = "Testing upload speed\u2026"
+networkSpeedAgain = "Enter to try again"
+speedGaugeSize = 160
+speedRingSegs = 44
+speedRingWidth = 9
+speedRingGap = 3
+speedValueSize = 36
+speedUnitSize = 12
+speedArrowSize = 16
+speedArrowGap = 6
+speedNeedleBase = 40
+speedNeedleLen = 22
+speedNeedleWidth = 2
+speedButtonPadX = 10
+speedButtonPadY = 4
+networkTitle = "Network"
+networkScanTitle = "Wi-Fi"
+networkWifiNothing = "No networks found"
+networkWiredNothing = "No connection"
+networkPasswordHint = "Password"
+networkForget = "Forget"
+networkConnect = "Connect"
+networkScanIcon = "\uF021"
+networkWifiIcons = ["\U000F08BC", "\U000F08BD", "\U000F08BE", "\U000F08BF"]
+networkLanIcon = "\U000F0200"
+networkLockIcon = "\uF023"
+
+# agent panel
+[agent]
+agentFaceSize = 96
+agentMorphMs = 420
+agentSpinMs = 120000
+agentDoneWidth = 230
+agentColumnWidth = 230
+agentPlanWidth = 240
+agentPanelWidth = 742  # agentDoneWidth + agentColumnWidth + agentPlanWidth + 2 + 40
+agentPanelHeight = 398
+agentPanelPadding = 12
+agentIdleText = "Idle"
+agentWorkingText = "Working"
+agentBlockedText = "a session needs attention"
+agentErrorText = "Error"
+agentPanelTitle = "Agent"
+agentNameFile = "cache/agent-name"
+agentDoneTitle = "Done"
+agentIconQuestion = "?"
+agentIconDone = "\uF00C"
+agentIconClose = "\uF00D"
+agentPlanTitle = "Subscription"
+agentPlanName = "OpenCode Go"
+agentPlanIcon = "opencode"
