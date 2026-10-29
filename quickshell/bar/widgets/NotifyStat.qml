@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell.Services.Notifications
 import qs.ui
 import qs.services
 import qs
@@ -50,12 +49,12 @@ BarStat {
 				root.openPopup();
 		}
 
-		if (notification && notification.urgency === NotificationUrgency.Critical) {
+		if (notification && notification.urgent === true) {
 			toastTimer.stop();
 			return;
 		}
 
-		toastTimer.interval = notification && notification.expireTimeout > 0 ? notification.expireTimeout : Config.notifyTimeout;
+		toastTimer.interval = notification && notification.timeout > 0 ? notification.timeout : Config.notifyTimeout;
 		toastTimer.restart();
 	}
 

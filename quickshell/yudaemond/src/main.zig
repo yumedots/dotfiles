@@ -12,6 +12,7 @@ const cursor = @import("providers/cursor.zig");
 const daemon = @import("providers/daemon.zig");
 const github = @import("providers/github.zig");
 const agentname = @import("providers/agentname.zig");
+const notifications = @import("providers/notifications.zig");
 const weather = @import("providers/weather.zig");
 const system = @import("providers/system.zig");
 const apps = @import("providers/apps.zig");
@@ -52,6 +53,7 @@ pub const Context = struct {
 	daemon: *daemon.Daemon,
 	github: *github.Github,
 	agent_name: *agentname.AgentName,
+	notifications: *notifications.Notifications,
 	weather: *weather.Weather,
 	system: *system.System,
 	apps: *apps.Apps,
@@ -202,6 +204,20 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 				json.integer(json.field(target, "pid")),
 				json.textAt(target, "path"),
 			);
+		}
+
+		return;
+	}
+
+	if (json.field(value, "notify")) |note_cmd| {
+		if (json.flag(note_cmd, "dismissAll")) context.notifications.dismissAll();
+
+		const dismiss = json.integer(json.field(note_cmd, "dismiss"));
+		if (dismiss > 0) context.notifications.dismiss(@intCast(dismiss));
+
+		if (json.field(note_cmd, "invoke")) |target| {
+			const id = json.integer(json.field(target, "id"));
+			if (id > 0) context.notifications.invoke(@intCast(id), json.textAt(target, "key"));
 		}
 
 		return;
@@ -435,6 +451,9 @@ fn run(io: std.Io) !void {
 	const agent_name_provider = try agentname.AgentName.create(allocator, io, hub);
 	try hub.add(agent_name_provider.provider());
 
+	const notify_provider = try notifications.Notifications.create(allocator, io, hub);
+	try hub.add(notify_provider.provider());
+
 	const github_provider = try github.Github.create(allocator, io, hub, client);
 	try hub.add(github_provider.provider());
 
@@ -515,6 +534,7 @@ fn run(io: std.Io) !void {
 		.daemon = daemon_provider,
 		.github = github_provider,
 		.agent_name = agent_name_provider,
+		.notifications = notify_provider,
 		.weather = weather_provider,
 		.system = system_provider,
 		.apps = apps_provider,
@@ -556,6 +576,7 @@ fn run(io: std.Io) !void {
 	try activity_provider.start();
 	try cursor_provider.start();
 	try github_provider.start();
+	try notify_provider.start();
 	try weather_provider.start();
 	try apps_provider.start();
 	try screen_provider.start();

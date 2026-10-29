@@ -112,11 +112,11 @@ Item {
 		if (row === null)
 			return;
 
-		const actions = row.notification.actions || [];
+		const actions = row.actions || [];
 
 		for (let i = 0; i < actions.length; i++) {
-			if (actions[i].identifier === "default") {
-				actions[i].invoke();
+			if (actions[i].key === "default") {
+				Notifications.invoke(row, "default");
 				break;
 			}
 		}

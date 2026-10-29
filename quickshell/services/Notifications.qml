@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Services.Notifications
 import qs
 
 QtObject {
@@ -10,93 +9,48 @@ QtObject {
 
 	signal arrived(var notification)
 
-	property var list: []
-	property int nextId: 0
-
-	property NotificationServer server: NotificationServer {
-		keepOnReload: true
-		bodySupported: true
-		bodyMarkupSupported: true
-		bodyHyperlinksSupported: true
-		imageSupported: true
-		actionsSupported: true
-
-		onNotification: function (notification) {
-			const row = root.rowOf(notification);
-
-			notification.closed.connect(function () {
-				root.markGone(row.id);
-			});
-
-			root.list = root.list.concat([row]).slice(-Config.notifyHistory);
-			root.arrived(notification);
-		}
-	}
-
+	readonly property var source: Yudae.notifications
+	readonly property var list: root.source.list || []
 	readonly property int count: root.list.length
 	readonly property bool empty: root.count === 0
 
-	function rowOf(notification) {
-		root.nextId += 1;
+	property real seen: -1
 
-		const hints = notification.hints || {};
-		const senderPid = Number(hints["sender-pid"] || 0);
+	function announce() {
+		const seq = root.source.seq || 0;
 
-		AppIcons.walkPid(senderPid);
+		if (root.seen < 0) {
+			root.seen = seq;
+			return;
+		}
 
-		return {
-			id: root.nextId,
-			appName: notification.appName || "",
-			summary: notification.summary || "",
-			body: notification.body || "",
-			image: notification.image || "",
-			icon: notification.appIcon || "",
-			desktopEntry: notification.desktopEntry || "",
-			senderPid: senderPid,
-			urgent: notification.urgency === NotificationUrgency.Critical,
-			gone: false,
-			notification: notification
-		};
-	}
-
-	function alive(row) {
-		return !!row && !!row.notification && typeof row.notification.dismiss === "function";
-	}
-
-	function markGone(id) {
-		let touched = false;
-
-		const next = root.list.map(function (row) {
-			if (row.id !== id)
-				return row;
-
-			touched = true;
-			return Object.assign({}, row, { gone: true });
-		});
-
-		if (!touched)
+		if (seq === root.seen)
 			return;
 
-		root.list = next;
+		root.seen = seq;
+
+		for (let i = 0; i < root.list.length; i++) {
+			if (root.list[i].id !== root.source.last)
+				continue;
+
+			AppIcons.walkPid(root.list[i].senderPid);
+			root.arrived(root.list[i]);
+			return;
+		}
 	}
 
-	function remove(row) {
-		root.list = root.list.filter(function (item) {
-			return item.id !== row.id;
-		});
-	}
+	onSourceChanged: root.announce()
 
 	function dismiss(row) {
-		if (!row)
-			return;
-
-		if (root.alive(row))
-			row.notification.dismiss();
-
-		root.remove(row);
+		if (row)
+			Yudae.cmd("notify", { dismiss: row.id });
 	}
 
 	function dismissAll() {
-		root.list.slice().forEach(root.dismiss);
+		Yudae.cmd("notify", { dismissAll: true });
+	}
+
+	function invoke(row, key) {
+		Yudae.cmd("notify", { invoke: { id: row.id, key: key } });
 	}
 }
