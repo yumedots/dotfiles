@@ -876,10 +876,27 @@ pub const Launcher = struct {
 		return self.rank(arena, rows.items, search, true);
 	}
 
+	fn appendGroup(arena: Allocator, entry: Group, rows: *std.ArrayListUnmanaged(Row)) !void {
+		try rows.append(arena, .{
+			.id = try std.fmt.allocPrint(arena, "group:{s}", .{entry.id}),
+			.kind = "group",
+			.name = entry.name,
+			.glyph = entry.glyph,
+			.group = entry.id,
+			.keywords = entry.keywords,
+		});
+	}
+
 	fn modeRows(self: *Launcher, arena: Allocator, mode: []const u8, search: []const u8, rows: *std.ArrayListUnmanaged(Row)) !void {
 		_ = self;
 		_ = mode;
 		_ = search;
+
+		for (groups) |entry| {
+			if (!std.mem.eql(u8, entry.id, "apps")) continue;
+
+			try appendGroup(arena, entry, rows);
+		}
 
 		for (modes) |entry| {
 			if (entry.mode.len == 0) continue;
@@ -895,14 +912,9 @@ pub const Launcher = struct {
 		}
 
 		for (groups) |entry| {
-			try rows.append(arena, .{
-				.id = try std.fmt.allocPrint(arena, "group:{s}", .{entry.id}),
-				.kind = "group",
-				.name = entry.name,
-				.glyph = entry.glyph,
-				.group = entry.id,
-				.keywords = entry.keywords,
-			});
+			if (std.mem.eql(u8, entry.id, "apps")) continue;
+
+			try appendGroup(arena, entry, rows);
 		}
 	}
 
