@@ -22,6 +22,8 @@ Item {
 
 	readonly property var days: root.focused.days || []
 	readonly property var suggestions: root.source.suggestions || []
+	readonly property var matches: root.source.rows || []
+	readonly property string ghost: root.source.ghost || ""
 	readonly property string status: root.source.status || ""
 	readonly property real fetched: root.source.fetched || 0
 	readonly property bool loading: (root.focused.tempValue || "") === ""
@@ -52,6 +54,10 @@ Item {
 
 	function search(query) {
 		Yudae.weather({ search: String(query || "") });
+	}
+
+	function query(value) {
+		Yudae.weather({ query: String(value || "") });
 	}
 
 	function refresh(force) {

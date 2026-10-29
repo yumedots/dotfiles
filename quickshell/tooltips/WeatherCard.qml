@@ -25,10 +25,10 @@ Item {
 	readonly property string placeName: root.now.place ? root.now.place : root.savedPlace
 	readonly property string tempValue: root.loading || !root.now.tempValue ? "--" : root.now.tempValue
 	readonly property string tempUnit: root.loading || !root.now.tempUnit ? "" : root.now.tempUnit
-	readonly property var match: root.bestMatch()
-	readonly property string ghost: root.ghostText()
+	readonly property var match: root.suggestionRows.length > 0 ? root.suggestionRows[0] : null
+	readonly property string ghost: Weather.ghost
 	readonly property bool hasGhost: root.editing && root.match !== null && root.ghost !== ""
-	readonly property var suggestionRows: root.matchingRows()
+	readonly property var suggestionRows: Weather.matches
 	readonly property bool headerShown: root.editing || root.held || heroHover.hovered || headerHover.hovered
 	readonly property int dayCount: root.rows.length > 0 ? Math.min(root.rows.length, 7) : 7
 	readonly property real dayTextWidth: dayTempMetrics.width * 1.04 + 2
@@ -45,38 +45,15 @@ Item {
 	implicitWidth: Config.weatherCardWidth + Config.weatherCardPadding * 2
 	implicitHeight: card.implicitHeight + Config.weatherCardPadding * 2
 
-	onQueryChanged: root.pickIndex = 0
+	onQueryChanged: {
+		root.pickIndex = 0;
+		Weather.query(root.query);
+	}
 	onSuggestionRowsChanged: root.pickIndex = Calc.clamp(root.pickIndex, 0, Math.max(0, root.suggestionRows.length - 1))
 
 	onPlaceNameChanged: {
 		root.held = true;
 		holdTimer.restart();
-	}
-
-	function bestMatch() {
-		const rows = Weather.suggestions || [];
-
-		if (rows.length === 0 || root.query.trim() === "")
-			return null;
-
-		const typed = root.query.trim().toLowerCase();
-
-		for (let i = 0; i < rows.length; i++) {
-			if (String(rows[i].label).toLowerCase().indexOf(typed) === 0)
-				return rows[i];
-		}
-
-		return null;
-	}
-
-	function ghostText() {
-		const typed = root.query;
-		const name = root.match ? String(root.match.name) : "";
-
-		if (typed === "")
-			return "";
-
-		return name.toLowerCase().indexOf(typed.toLowerCase()) === 0 ? name.slice(typed.length) : "";
 	}
 
 	function pickRow(step) {
@@ -97,25 +74,6 @@ Item {
 		}
 
 		root.pick(rows[Calc.clamp(root.pickIndex, 0, rows.length - 1)]);
-	}
-
-	function matchingRows() {
-		const rows = Weather.suggestions || [];
-		const typed = root.query.trim().toLowerCase();
-		const out = [];
-
-		if (rows.length === 0)
-			return out;
-
-		if (typed === "")
-			return rows.slice(0, 5);
-
-		for (let i = 0; i < rows.length && out.length < 5; i++) {
-			if (String(rows[i].label).toLowerCase().indexOf(typed) === 0)
-				out.push(rows[i]);
-		}
-
-		return out;
 	}
 
 	function regionOf(row) {

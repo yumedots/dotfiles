@@ -129,10 +129,11 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		}
 
 		if (json.field(net_cmd, "dns")) |target| {
-			const connection = json.textAt(target, "connection");
-			const servers = json.textAt(target, "servers");
+			context.network.dnsCmd(json.textAt(target, "action"), json.textAt(target, "server"));
+		}
 
-			if (connection.len > 0 and servers.len > 0) context.network.setDns(connection, servers);
+		if (json.field(net_cmd, "inject")) |target| {
+			context.network.inject(target);
 		}
 
 		if (json.flag(net_cmd, "speed")) context.network.speedTest();
@@ -324,6 +325,11 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 
 	if (json.field(weather_cmd, "focus")) |at| {
 		context.weather.focus(@intCast(json.integer(at)));
+		return;
+	}
+
+	if (json.field(weather_cmd, "query")) |query| {
+		context.weather.setQuery(json.text(query));
 		return;
 	}
 

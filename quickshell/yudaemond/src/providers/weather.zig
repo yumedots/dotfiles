@@ -95,6 +95,8 @@ const Out = struct {
 	index: usize,
 	slots: []SlotOut,
 	suggestions: []SuggestOut,
+	rows: []SuggestOut,
+	ghost: []const u8,
 	status: []const u8,
 	fetched: i64,
 	unit: []const u8,
@@ -111,6 +113,7 @@ pub const Weather = struct {
 	slots: [max_places]Slot = .{ .{}, .{}, .{}, .{} },
 	index: usize = 0,
 	suggestions: std.ArrayListUnmanaged(Suggest) = .empty,
+	query: []u8 = &.{},
 	status: []u8 = &.{},
 	fetched: i64 = 0,
 	temp_unit: []u8 = &.{},
@@ -539,6 +542,14 @@ pub const Weather = struct {
 		self.hub.publish();
 	}
 
+	pub fn setQuery(self: *Weather, query: []const u8) void {
+		self.mutex.lockUncancelable(self.io);
+		setStr(self.allocator, &self.query, query) catch {};
+		self.mutex.unlock(self.io);
+
+		self.hub.publish();
+	}
+
 	pub fn shift(self: *Weather, step: i64) void {
 		self.mutex.lockUncancelable(self.io);
 
@@ -818,11 +829,15 @@ pub const Weather = struct {
 			try suggestions.append(arena, .{ .label = item.label, .name = item.name, .lat = item.lat, .lon = item.lon });
 		}
 
+		const matches = matchRows(arena, self.suggestions.items, self.query);
+
 		const out = Out{
 			.places = places.items,
 			.index = self.index,
 			.slots = slots.items,
 			.suggestions = suggestions.items,
+			.rows = matches.rows,
+			.ghost = matches.ghost,
 			.status = self.status,
 			.fetched = self.fetched,
 			.unit = self.temp_unit,
@@ -868,6 +883,38 @@ fn describe(codes: []const config.CodeRow, code: i64) Info {
 	}
 
 	return .{};
+}
+
+const Matches = struct {
+	rows: []SuggestOut,
+	ghost: []const u8,
+};
+
+fn matchRows(arena: Allocator, items: []const Suggest, query: []const u8) Matches {
+	const typed = std.mem.trim(u8, query, " \r\t");
+	const lowered = std.ascii.allocLowerString(arena, typed) catch return .{ .rows = &.{}, .ghost = "" };
+
+	var rows: std.ArrayListUnmanaged(SuggestOut) = .empty;
+
+	for (items) |item| {
+		if (rows.items.len >= 5) break;
+
+		if (lowered.len > 0) {
+			const label = std.ascii.allocLowerString(arena, item.label) catch continue;
+			if (!std.mem.startsWith(u8, label, lowered)) continue;
+		}
+
+		rows.append(arena, .{ .label = item.label, .name = item.name, .lat = item.lat, .lon = item.lon }) catch break;
+	}
+
+	if (rows.items.len == 0 or query.len == 0) return .{ .rows = rows.items, .ghost = "" };
+
+	const raw = std.ascii.allocLowerString(arena, query) catch return .{ .rows = rows.items, .ghost = "" };
+	const name = std.ascii.allocLowerString(arena, rows.items[0].name) catch return .{ .rows = rows.items, .ghost = "" };
+
+	if (!std.mem.startsWith(u8, name, raw)) return .{ .rows = rows.items, .ghost = "" };
+
+	return .{ .rows = rows.items, .ghost = rows.items[0].name[query.len..] };
 }
 
 fn usablePlace(label: []const u8) bool {
@@ -981,6 +1028,47 @@ test "temps split into value and unit" {
 	const blank = splitTemp("");
 	try std.testing.expectEqualStrings("", blank.value);
 	try std.testing.expectEqualStrings("", blank.unit);
+}
+
+test "suggestions match the query best first and complete it" {
+	var state = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer state.deinit();
+	const arena = state.allocator();
+
+	const items = [_]Suggest{
+		.{ .label = @constCast("Paris, Ile-de-France"), .name = @constCast("Paris"), .lat = 1, .lon = 2 },
+		.{ .label = @constCast("Parma, Emilia-Romagna"), .name = @constCast("Parma"), .lat = 3, .lon = 4 },
+		.{ .label = @constCast("Berlin, Berlin"), .name = @constCast("Berlin"), .lat = 5, .lon = 6 },
+	};
+
+	const par = matchRows(arena, &items, "par");
+	try std.testing.expectEqual(@as(usize, 2), par.rows.len);
+	try std.testing.expectEqualStrings("Paris, Ile-de-France", par.rows[0].label);
+	try std.testing.expectEqualStrings("Parma, Emilia-Romagna", par.rows[1].label);
+	try std.testing.expectEqualStrings("is", par.ghost);
+
+	const spaced = matchRows(arena, &items, " Par ");
+	try std.testing.expectEqual(@as(usize, 2), spaced.rows.len);
+	try std.testing.expectEqualStrings("", spaced.ghost);
+
+	const none = matchRows(arena, &items, "Zurich");
+	try std.testing.expectEqual(@as(usize, 0), none.rows.len);
+	try std.testing.expectEqualStrings("", none.ghost);
+
+	const blank = matchRows(arena, &items, "");
+	try std.testing.expectEqual(@as(usize, 3), blank.rows.len);
+	try std.testing.expectEqualStrings("", blank.ghost);
+}
+
+test "the matching rows stop at five" {
+	var state = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer state.deinit();
+
+	var items: [7]Suggest = undefined;
+	for (&items, 0..) |*item, i| item.* = .{ .label = @constCast("Town"), .name = @constCast("Town"), .lat = @floatFromInt(i), .lon = 0 };
+
+	const rows = matchRows(state.allocator(), &items, "t");
+	try std.testing.expectEqual(@as(usize, 5), rows.rows.len);
 }
 
 test "codes describe the condition" {
