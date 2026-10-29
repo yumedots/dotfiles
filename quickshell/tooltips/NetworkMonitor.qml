@@ -8,23 +8,21 @@ import qs.services
 ProcessPanel {
 	id: root
 
-	property bool dnsFocus: false
-	property bool dnsEditing: false
-	property string dnsCustom: ""
+	property bool dnsOpen: false
+	property bool dnsTyping: false
+	property string dnsDraft: ""
 	property string wifiTarget: ""
 	property string wifiPassword: ""
 
 	readonly property var net: Yudae.network
 	readonly property var speed: root.net.speed || ({})
 	readonly property var wifi: root.net.wifi || []
-	readonly property var history: root.net.history || []
 	readonly property string connection: root.net.ssid || root.net.iface || ""
 	readonly property string dns: root.net.dns || ""
 	readonly property bool linked: root.net.connected === true
 	readonly property bool isWifi: root.net.kind === "wifi"
 	readonly property color downInk: Config.mono ? Config.networkDownMono : Config.networkDown
 	readonly property color upInk: Config.mono ? Config.networkUpMono : Config.networkUp
-	readonly property string link: root.linked ? (root.net.ip !== "" ? root.net.ip : root.net.iface) : Config.networkWiredNothing
 	readonly property bool testing: (root.speed.stage || "") !== ""
 	readonly property bool done: !root.testing && (root.speed.down || 0) > 0
 	readonly property real hero: root.testing ? (root.speed.live || 0) : (root.speed.down || 0)
@@ -53,9 +51,9 @@ ProcessPanel {
 			return false;
 		}
 
-		if (root.dnsEditing) {
+		if (root.dnsTyping) {
 			if (Input.accept(event)) {
-				root.confirmDns();
+				root.sendDns();
 				event.accepted = true;
 				return true;
 			}
@@ -63,16 +61,23 @@ ProcessPanel {
 			return false;
 		}
 
-		if (root.dnsFocus)
-			return Input.act(event, {
-				up: () => root.leaveDns(),
-				down: () => root.leaveDns(),
-				accept: () => root.editDns(),
-				space: () => root.editDns()
-			});
+		const openDns = function() {
+			root.dnsOpen = true;
+			root.dnsTyping = true;
+			root.dnsDraft = root.dns;
+			Yudae.cmd("network", { dns: { action: "show", server: "" } });
+		};
+
+		const closeDns = function() {
+			root.dnsOpen = false;
+			root.selectRun();
+		};
+
+		if (root.dnsOpen)
+			return Input.act(event, { up: closeDns, down: closeDns, accept: openDns, space: openDns });
 
 		if (!root.testing && event.key === Qt.Key_Down && root.dns !== "") {
-			root.enterDns();
+			root.dnsOpen = true;
 			event.accepted = true;
 			return true;
 		}
@@ -82,95 +87,6 @@ ProcessPanel {
 	panelWidth: Config.networkTooltipWidth
 	panelPadding: Config.networkTooltipPadding
 
-	function graphValues(dir) {
-		return root.history.map(function (point) {
-			return dir === "up" ? point.up : point.down;
-		});
-	}
-
-	function pushDots(out, masks, top, ink, cells, pitch, size) {
-		for (let c = 0; c < cells; c++) {
-			const mask = masks[c] || 0;
-
-			for (let k = 0; k < 2; k++)
-				for (let b = 0; b < 4; b++)
-					if ((mask >> (k * 4 + b)) & 1)
-						out.push({ x: Math.round((c * 2 + k + 0.5) * pitch - size / 2), y: Math.round((top + b + 0.5) * pitch - size / 2), c: ink });
-		}
-	}
-
-	function brailleMasks(values, peak, cells, dir) {
-		const cols = cells * 2;
-		const top = peak > 0 ? peak : 1;
-		const quiet = 16 * 1024;
-		const count = values.length;
-		const masks = [];
-
-		let i = count - cols;
-
-		for (let c = 0; c < cells; c++) {
-			let mask = 0;
-
-			for (let k = 0; k < 2; k++) {
-				const sample = i >= 0 && i < count ? values[i] : 0;
-
-				i++;
-				const value = Math.max(0, Number(sample) || 0);
-				const lit = value < quiet ? 0 : Math.min(4, Math.floor(value / top * 4 + 0.5));
-
-				if (lit > 0) {
-					const dots = (1 << lit) - 1;
-					mask |= dir === "up" ? dots << (k * 4) : dots << (4 - lit) << (k * 4);
-				}
-			}
-
-			masks.push(mask);
-		}
-
-		return masks;
-	}
-
-	function graphDots(cells) {
-		const out = [];
-		const pitch = Config.networkGraphHeight / 8;
-		const size = pitch * 0.76;
-		const peak = root.scaleOf();
-
-		pushDots(out, root.brailleMasks(graphValues("up"), peak, cells, "up"), 0, root.upInk, cells, pitch, size);
-		pushDots(out, root.brailleMasks(graphValues("down"), peak, cells, "down"), 4, root.downInk, cells, pitch, size);
-
-		return out;
-	}
-
-	function details() {
-		const out = [];
-
-		if (!root.net)
-			return out;
-
-
-		if (root.isWifi)
-			out.push({ label: "signal", text: root.net.signalText, color: root.upInk });
-
-		out.push({ label: "ipv4", text: root.link, color: Config.foreground });
-
-		return out;
-	}
-
-	function scaleOf() {
-		let top = 1;
-
-		root.history.forEach(function (point) {
-			top = Math.max(top, point.down, point.up);
-		});
-
-		return top;
-	}
-
-	function secured(security) {
-		return security !== "" && security !== "--";
-	}
-
 	function openWifi(ssid, locked) {
 		if (locked) {
 			root.wifiTarget = ssid;
@@ -178,14 +94,14 @@ ProcessPanel {
 			return;
 		}
 
-		Yudae.networkConnect(ssid, "");
+		Yudae.cmd("network", { connect: { ssid: ssid, password: "" } });
 	}
 
 	function connectWifi() {
 		if (root.wifiTarget === "")
 			return;
 
-		Yudae.networkConnect(root.wifiTarget, root.wifiPassword);
+		Yudae.cmd("network", { connect: { ssid: root.wifiTarget, password: root.wifiPassword || "" } });
 		root.cancelWifi();
 	}
 
@@ -196,45 +112,19 @@ ProcessPanel {
 	}
 
 	function primaryAction() {
-		root.dnsFocus = false;
+		root.dnsOpen = false;
 
 		if (root.testing)
-			Yudae.networkSpeedCancel();
+			Yudae.cmd("network", { speedCancel: true });
 		else
-			Yudae.networkSpeedTest();
+			Yudae.cmd("network", { speed: true });
 	}
 
-	function enterDns() {
-		if (root.dns === "")
-			return;
+	function sendDns() {
+		const draft = root.dnsDraft.trim();
 
-		root.dnsFocus = true;
-		root.forceActiveFocus();
-	}
-
-	function leaveDns() {
-		root.dnsFocus = false;
-		root.selectRun();
-	}
-
-	function editDns() {
-		if (root.dns === "")
-			return;
-
-		root.dnsFocus = true;
-		root.dnsEditing = true;
-		root.dnsCustom = root.dns;
-	}
-
-	function confirmDns() {
-		const list = root.dnsCustom.trim();
-		const conn = root.connection;
-
-		if (!list || !conn)
-			return;
-
-		root.dnsEditing = false;
-		Yudae.networkDns(conn, list);
+		root.dnsTyping = false;
+		Yudae.cmd("network", { dns: { action: draft === "" ? "reset" : "set", server: draft } });
 		root.selectRun();
 	}
 
@@ -275,27 +165,27 @@ ProcessPanel {
 			}
 		},
 		Item {
-			id: graph
 			width: parent.width
 			height: Config.networkGraphHeight
 			clip: true
 
-			readonly property int cells: Math.max(4, Math.min(Config.networkHistory, Math.floor(width / (Config.networkGraphHeight / 4))))
-			readonly property real dotPitch: Config.networkGraphHeight / 8
+			Text {
+				width: parent.width
 
-			Repeater {
-				model: root.graphDots(graph.cells)
+				font.family: Config.fontFamily
+				font.pixelSize: Config.networkGraphFontSize
+				color: root.upInk
+				text: root.net.graph ? root.net.graph.up : ""
+			}
 
-				delegate: Rectangle {
-					required property var modelData
+			Text {
+				y: Config.networkGraphHeight / 2
+				width: parent.width
 
-					x: modelData.x
-					y: modelData.y
-					width: Math.round(graph.dotPitch * 0.75)
-					height: width
-					radius: width / 2
-					color: modelData.c
-				}
+				font.family: Config.fontFamily
+				font.pixelSize: Config.networkGraphFontSize
+				color: root.downInk
+				text: root.net.graph ? root.net.graph.down : ""
 			}
 		},
 
@@ -306,7 +196,7 @@ ProcessPanel {
 		},
 
 		Repeater {
-			model: root.details()
+			model: root.net.details || []
 
 			delegate: Item {
 				required property var modelData
@@ -319,7 +209,7 @@ ProcessPanel {
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
-					color: modelData.color
+					color: modelData.ink === "up" ? root.upInk : Config.foreground
 					text: modelData.label
 				}
 
@@ -333,8 +223,8 @@ ProcessPanel {
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
-					color: modelData.color
-					text: modelData.text
+					color: modelData.ink === "up" ? root.upInk : Config.foreground
+					text: modelData.text || Config.networkWiredNothing
 				}
 			}
 		},
@@ -360,7 +250,7 @@ ProcessPanel {
 
 						readonly property bool current: wifiRow.modelData.inUse
 						readonly property bool picked: root.wifiTarget === wifiRow.modelData.ssid
-						readonly property bool locked: root.secured(wifiRow.modelData.security)
+						readonly property bool locked: wifiRow.modelData.locked === true
 						readonly property bool hot: wifiRow.picked || wifiHit.containsMouse
 
 						width: wifiColumn.width
@@ -465,12 +355,12 @@ ProcessPanel {
 		Item {
 			id: dnsRow
 
-			visible: root.dns !== ""
+			visible: root.dns !== "" || root.net.dnsError !== ""
 			width: parent.width
 			height: Math.max(dnsLabel.implicitHeight, dnsValue.implicitHeight)
 
-			readonly property bool hot: !root.dnsEditing && (root.dnsFocus || dnsHit.containsMouse)
-			readonly property bool live: root.dnsEditing
+			readonly property bool hot: !dnsRow.live && (root.dnsOpen || dnsHit.containsMouse)
+			readonly property bool live: root.dnsTyping || root.net.dnsPending === true
 
 			Text {
 				id: dnsLabel
@@ -502,7 +392,7 @@ ProcessPanel {
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
 				color: dnsRow.hot ? Config.launcherHighlightText : Config.foreground
-				text: root.dns
+				text: root.net.dnsError || root.dns
 			}
 
 			TextInput {
@@ -517,14 +407,14 @@ ProcessPanel {
 				color: Config.foreground
 				selectByMouse: true
 				focus: dnsRow.live
-				text: root.dnsCustom
+				text: root.dnsDraft
 
-				onTextEdited: root.dnsCustom = text
-				onAccepted: root.confirmDns()
+				onTextEdited: root.dnsDraft = text
+				onAccepted: root.sendDns()
 				onActiveFocusChanged: if (activeFocus) selectAll()
 
 				Keys.onEscapePressed: (event) => {
-					root.dnsEditing = false;
+					root.dnsTyping = false;
 					root.forceActiveFocus();
 					event.accepted = true;
 				}
@@ -536,7 +426,12 @@ ProcessPanel {
 				hoverEnabled: true
 				visible: !dnsRow.live
 
-				onClicked: root.editDns()
+				onClicked: {
+					root.dnsOpen = true;
+					root.dnsTyping = true;
+					root.dnsDraft = root.dns;
+					Yudae.cmd("network", { dns: { action: "show", server: "" } });
+				}
 			}
 		},
 
@@ -603,7 +498,7 @@ ProcessPanel {
 
 		function onOnScreenChanged() {
 			if (root.onScreen && root.isWifi)
-				Yudae.networkScan();
+				Yudae.cmd("network", { scan: true });
 		}
 	}
 
@@ -613,7 +508,7 @@ ProcessPanel {
 		function onTestPendingChanged() {
 			if (root.source && root.source.testPending) {
 				root.source.clearSpeedTest();
-				Yudae.networkSpeedTest();
+				Yudae.cmd("network", { speed: true });
 			}
 		}
 	}
