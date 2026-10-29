@@ -2,7 +2,6 @@ local programs = require("programs")
 local actions = require("actions")
 local versions = require("versions")
 local mainMod = "SUPER"
-local launcherConfig = "$HOME/.config/quickshell/launcherShell.qml"
 
 hl.config({ binds = { scroll_event_delay = 0 } })
 
@@ -14,65 +13,11 @@ local function switcherOpen()
     return false
 end
 
-local pidFile = (os.getenv("XDG_RUNTIME_DIR") or "/run/user/1000") .. "/qs-launcher.pid"
-
-local function pidFromFile()
-    local file = io.open(pidFile, "r")
-    local pid = file and file:read("*l") or ""
-
-    if file then file:close() end
-
-    return pid:match("(%d+)")
-end
-
-local function procHolds(pid)
-    local file = io.open("/proc/" .. pid .. "/cmdline", "r")
-    local cmd = file and file:read("*a") or ""
-
-    if file then file:close() end
-
-    return cmd:find("launcherShell.qml", 1, true) ~= nil
-end
-
-local function savePid(pid)
-    local file = io.open(pidFile, "w")
-    if not file then return end
-
-    file:write(pid)
-    file:close()
-end
-
-local function launcherAlive()
-    local pid = pidFromFile()
-
-    if pid and procHolds(pid) then return true end
-
-    local pipe = io.popen("pgrep -f '^quickshell -p .*launcherShell\\.qml'")
-    local pids = pipe and pipe:read("*a") or ""
-
-    if pipe then pipe:close() end
-
-    pid = pids:match("(%d+)")
-    if not pid then return false end
-
-    savePid(pid)
-    return true
-end
+local yudaemond = (os.getenv("HOME") or "") .. "/.config/quickshell/yudaemond/zig-out/bin/yudaemond"
 
 local function wakeLauncher(action)
-    local ipc = "qs ipc -p " .. launcherConfig .. " call shell " .. action
-    local start = "ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid quickshell -p " .. launcherConfig
-    local wake = "printf %s " .. action .. " > \"$XDG_RUNTIME_DIR/qs-launcher-wake\"; "
-        .. start .. " >/dev/null 2>&1 & echo $! > \"$XDG_RUNTIME_DIR/qs-launcher.pid\"; "
-        .. "sleep 0.6; if [ -e \"$XDG_RUNTIME_DIR/qs-launcher-wake\" ]; then " .. ipc .. "; fi"
-
     return function()
-        if launcherAlive() then
-            hl.dispatch(hl.dsp.global("quickshell:" .. action))
-            return
-        end
-
-        hl.exec_cmd(wake)
+        hl.exec_cmd(yudaemond .. " wake " .. action)
     end
 end
 
