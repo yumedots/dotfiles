@@ -86,6 +86,7 @@ const Suggest = struct {
 const SuggestOut = struct {
 	label: []const u8,
 	name: []const u8,
+	region: []const u8,
 	lat: f64,
 	lon: f64,
 };
@@ -114,6 +115,8 @@ pub const Weather = struct {
 	index: usize = 0,
 	suggestions: std.ArrayListUnmanaged(Suggest) = .empty,
 	query: []u8 = &.{},
+	search_gen: std.atomic.Value(u64) = .init(0),
+	debounce_ms: u64 = 60,
 	status: []u8 = &.{},
 	fetched: i64 = 0,
 	temp_unit: []u8 = &.{},
@@ -171,6 +174,7 @@ pub const Weather = struct {
 		self.days_wanted = cfg.integer("weatherDays", 7);
 		self.station_count = cfg.integer("weatherStationCount", 0);
 		self.refresh_ms = @intFromFloat(cfg.number("weatherRefreshMs", 120_000));
+		self.debounce_ms = @intCast(@max(0, cfg.integer("weatherCardSearchDebounce", 60)));
 		self.stale_after = @intFromFloat(cfg.number("weatherCacheMs", 120_000));
 		self.default_location = cfg.string("weatherLocation", self.allocator) orelse &.{};
 		self.codes = cfg.codeTable("weatherCodes", self.allocator) catch &.{};
@@ -545,9 +549,42 @@ pub const Weather = struct {
 	pub fn setQuery(self: *Weather, query: []const u8) void {
 		self.mutex.lockUncancelable(self.io);
 		setStr(self.allocator, &self.query, query) catch {};
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const typed = std.mem.trim(u8, query, " \r\t");
+		const covered = matchRows(arena.allocator(), self.suggestions.items, query).rows.len > 0;
+		const stale = self.suggestions.items.len > 0;
 		self.mutex.unlock(self.io);
 
 		self.hub.publish();
+
+		const gen = self.search_gen.fetchAdd(1, .monotonic) + 1;
+
+		if (typed.len == 0) {
+			if (stale) self.dismissSuggestions();
+			return;
+		}
+
+		if (covered or typed.len < 3) return;
+
+		const copy = self.allocator.dupe(u8, query) catch return;
+		const thread = std.Thread.spawn(.{}, debounced, .{ self, copy, gen }) catch {
+			self.allocator.free(copy);
+			return;
+		};
+		thread.detach();
+	}
+
+	fn debounced(self: *Weather, query: []u8, gen: u64) void {
+		defer self.allocator.free(query);
+
+		sleep.ms(self.debounce_ms);
+
+		if (self.search_gen.load(.monotonic) != gen) return;
+
+		self.search(query);
 	}
 
 	pub fn shift(self: *Weather, step: i64) void {
@@ -826,7 +863,7 @@ pub const Weather = struct {
 
 		var suggestions: std.ArrayListUnmanaged(SuggestOut) = .empty;
 		for (self.suggestions.items) |item| {
-			try suggestions.append(arena, .{ .label = item.label, .name = item.name, .lat = item.lat, .lon = item.lon });
+			try suggestions.append(arena, .{ .label = item.label, .name = item.name, .region = regionOf(item.label, item.name), .lat = item.lat, .lon = item.lon });
 		}
 
 		const matches = matchRows(arena, self.suggestions.items, self.query);
@@ -904,7 +941,7 @@ fn matchRows(arena: Allocator, items: []const Suggest, query: []const u8) Matche
 			if (!std.mem.startsWith(u8, label, lowered)) continue;
 		}
 
-		rows.append(arena, .{ .label = item.label, .name = item.name, .lat = item.lat, .lon = item.lon }) catch break;
+		rows.append(arena, .{ .label = item.label, .name = item.name, .region = regionOf(item.label, item.name), .lat = item.lat, .lon = item.lon }) catch break;
 	}
 
 	if (rows.items.len == 0 or query.len == 0) return .{ .rows = rows.items, .ghost = "" };
@@ -915,6 +952,19 @@ fn matchRows(arena: Allocator, items: []const Suggest, query: []const u8) Matche
 	if (!std.mem.startsWith(u8, name, raw)) return .{ .rows = rows.items, .ghost = "" };
 
 	return .{ .rows = rows.items, .ghost = rows.items[0].name[query.len..] };
+}
+
+fn regionOf(label: []const u8, name: []const u8) []const u8 {
+	if (name.len == 0 or !std.mem.startsWith(u8, label, name)) return "";
+
+	return std.mem.trimStart(u8, label[name.len..], ", \t");
+}
+
+test "the region is what follows the name in the label" {
+	try std.testing.expectEqualStrings("Paris", regionOf("Paris, Paris", "Paris")[0..5]);
+	try std.testing.expectEqualStrings("Texas", regionOf("Paris, Texas", "Paris"));
+	try std.testing.expectEqualStrings("", regionOf("Paris", "Paris"));
+	try std.testing.expectEqualStrings("", regionOf("Rome", "Paris"));
 }
 
 fn usablePlace(label: []const u8) bool {

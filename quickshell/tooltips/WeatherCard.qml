@@ -76,38 +76,6 @@ Item {
 		root.pick(rows[Calc.clamp(root.pickIndex, 0, rows.length - 1)]);
 	}
 
-	function regionOf(row) {
-		const label = String(row.label || "");
-		const name = String(row.name || "");
-
-		if (name === "" || label.indexOf(name) !== 0)
-			return "";
-
-		return label.slice(name.length).replace(/^,\s*/, "");
-	}
-
-	function syncSuggest() {
-		const typed = root.query.trim().toLowerCase();
-		const label = root.match ? String(root.match.label).toLowerCase() : "";
-
-		if (typed === "") {
-			if ((Weather.suggestions || []).length > 0)
-				Weather.search("");
-
-			return;
-		}
-
-		if (label.indexOf(typed) === 0)
-			return;
-
-		if (typed.length < 3) {
-			weatherSearch.stop();
-			return;
-		}
-
-		weatherSearch.restart();
-	}
-
 	function pushQuery(select) {
 		root.selectQuery = select;
 		root.queryStamp = root.queryStamp + 1;
@@ -124,7 +92,6 @@ Item {
 		root.editing = false;
 		root.adding = false;
 		root.query = "";
-		Weather.search("");
 		root.forceActiveFocus();
 	}
 
@@ -425,7 +392,6 @@ Item {
 
 					onTextEdited: {
 						root.query = nameInput.text;
-						root.syncSuggest();
 					}
 					onActiveFocusChanged: if (activeFocus) selectAll()
 
@@ -519,7 +485,7 @@ Item {
 					font.family: Config.fontFamily
 					font.pixelSize: Config.weatherPlaceSize
 					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.muted
-					text: root.regionOf(suggestRow.modelData)
+					text: suggestRow.modelData.region
 				}
 
 				MouseArea {
@@ -760,13 +726,6 @@ Item {
 
 	}
 
-
-	Timer {
-		id: weatherSearch
-
-		interval: Config.weatherCardSearchDebounce
-		onTriggered: Weather.search(root.query)
-	}
 
 	Timer {
 		id: holdTimer
