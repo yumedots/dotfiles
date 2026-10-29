@@ -14,6 +14,11 @@ pub fn build(b: *std.Build) void {
 		}),
 	});
 
+	exe.root_module.link_libc = true;
+	exe.root_module.addIncludePath(b.path("src/c"));
+	exe.root_module.addCSourceFile(.{ .file = b.path("src/c/notifybus.c"), .flags = &.{"-std=c11"} });
+	exe.root_module.linkSystemLibrary("libsystemd", .{});
+
 	b.installArtifact(exe);
 
 	const run = b.addRunArtifact(exe);
@@ -26,6 +31,11 @@ pub fn build(b: *std.Build) void {
 			.optimize = optimize,
 		}),
 	});
+
+	tests.root_module.link_libc = true;
+	tests.root_module.addIncludePath(b.path("src/c"));
+	tests.root_module.addCSourceFile(.{ .file = b.path("src/c/notifybus.c"), .flags = &.{"-std=c11"} });
+	tests.root_module.linkSystemLibrary("libsystemd", .{});
 
 	const run_tests = b.addRunArtifact(tests);
 	b.step("test", "run the logic checks").dependOn(&run_tests.step);
