@@ -1,6 +1,7 @@
 //@ pragma IconTheme breeze
 import QtQuick
 import qs
+import qs.services
 import Quickshell
 import Quickshell.Io
 import "launcher"
