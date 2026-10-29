@@ -57,6 +57,28 @@ pub const Config = struct {
 		return allocator.dupe(u8, value[start + 1 .. end]) catch null;
 	}
 
+	pub fn color(self: Config, name: []const u8) ?[]const u8 {
+		var key = name;
+
+		for (0..4) |_| {
+			const value = self.raw(key) orelse return null;
+			const end = std.mem.indexOfScalar(u8, value, ';') orelse value.len;
+			const trimmed = std.mem.trim(u8, value[0..end], " \t");
+
+			if (trimmed.len == 0) return null;
+
+			if (trimmed[0] == '"') {
+				const close = std.mem.indexOfScalarPos(u8, trimmed, 1, '"') orelse return null;
+
+				return trimmed[1..close];
+			}
+
+			key = trimmed;
+		}
+
+		return null;
+	}
+
 	pub fn boolean(self: Config, name: []const u8, fallback: bool) bool {
 		const value = self.raw(name) orelse return fallback;
 		const end = std.mem.indexOfScalar(u8, value, ';') orelse value.len;
@@ -261,3 +283,12 @@ test "escapes decode both glyph forms" {
 	try std.testing.expectEqualStrings("a\u{f017}b", mixed);
 }
 
+test "config follows colour aliases" {
+	const text = "const red = \"#e05252\";\nconst danger = red;\nconst mono = true;\n";
+
+	var config = Config{ .allocator = std.testing.allocator, .text = @constCast(text) };
+
+	try std.testing.expectEqualStrings("#e05252", config.color("danger").?);
+	try std.testing.expectEqual(@as(?[]const u8, null), config.color("mono"));
+	try std.testing.expectEqual(@as(?[]const u8, null), config.color("missing"));
+}
