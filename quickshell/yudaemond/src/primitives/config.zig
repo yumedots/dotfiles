@@ -57,6 +57,28 @@ pub const Config = struct {
 		return allocator.dupe(u8, value[start + 1 .. end]) catch null;
 	}
 
+	pub fn color(self: Config, name: []const u8) ?[]const u8 {
+		var key = name;
+
+		for (0..4) |_| {
+			const value = self.raw(key) orelse return null;
+			const end = std.mem.indexOfScalar(u8, value, ';') orelse value.len;
+			const trimmed = std.mem.trim(u8, value[0..end], " \t");
+
+			if (trimmed.len == 0) return null;
+
+			if (trimmed[0] == '"') {
+				const close = std.mem.indexOfScalarPos(u8, trimmed, 1, '"') orelse return null;
+
+				return trimmed[1..close];
+			}
+
+			key = trimmed;
+		}
+
+		return null;
+	}
+
 	pub fn boolean(self: Config, name: []const u8, fallback: bool) bool {
 		const value = self.raw(name) orelse return fallback;
 		const end = std.mem.indexOfScalar(u8, value, ';') orelse value.len;
@@ -166,22 +188,26 @@ pub fn unescape(allocator: Allocator, text: []const u8) ![]const u8 {
 	var index: usize = 0;
 
 	while (index < text.len) {
-		const escaped = text[index] == '\\' and index + 2 < text.len and text[index + 1] == 'u' and text[index + 2] == '{';
-
-		if (!escaped) {
+		if (text[index] != '\\' or index + 2 >= text.len or text[index + 1] != 'u') {
 			try out.append(allocator, text[index]);
 			index += 1;
 			continue;
 		}
 
-		const close = std.mem.indexOfScalarPos(u8, text, index + 3, '}') orelse break;
-		const point = std.fmt.parseInt(u21, text[index + 3 .. close], 16) catch break;
+		const braced = text[index + 2] == '{';
+		const start = if (braced) index + 3 else index + 2;
+		const end = if (braced)
+			(std.mem.indexOfScalarPos(u8, text, start, '}') orelse break)
+		else
+			@min(text.len, start + 4);
+
+		const point = std.fmt.parseInt(u21, text[start..end], 16) catch break;
 
 		var buffer: [4]u8 = undefined;
 		const length = std.unicode.utf8Encode(point, &buffer) catch break;
 
 		try out.appendSlice(allocator, buffer[0..length]);
-		index = close + 1;
+		index = if (braced) end + 1 else end;
 	}
 
 	return out.toOwnedSlice(allocator);
@@ -240,3 +266,29 @@ test "config reads a code table" {
 	try std.testing.expectEqual(@as(usize, 0), (try config.codeTable("missing", std.testing.allocator)).len);
 }
 
+test "escapes decode both glyph forms" {
+	const plain = try unescape(std.testing.allocator, "\\uf017");
+	defer std.testing.allocator.free(plain);
+
+	try std.testing.expectEqualStrings("\u{f017}", plain);
+
+	const braced = try unescape(std.testing.allocator, "\\u{f0599}");
+	defer std.testing.allocator.free(braced);
+
+	try std.testing.expectEqualStrings("\u{f0599}", braced);
+
+	const mixed = try unescape(std.testing.allocator, "a\\uf017b");
+	defer std.testing.allocator.free(mixed);
+
+	try std.testing.expectEqualStrings("a\u{f017}b", mixed);
+}
+
+test "config follows colour aliases" {
+	const text = "const red = \"#e05252\";\nconst danger = red;\nconst mono = true;\n";
+
+	var config = Config{ .allocator = std.testing.allocator, .text = @constCast(text) };
+
+	try std.testing.expectEqualStrings("#e05252", config.color("danger").?);
+	try std.testing.expectEqual(@as(?[]const u8, null), config.color("mono"));
+	try std.testing.expectEqual(@as(?[]const u8, null), config.color("missing"));
+}

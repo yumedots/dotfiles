@@ -1,6 +1,8 @@
 const std = @import("std");
 const setStr = @import("opencode.zig").setStr;
 const hubmod = @import("../hub.zig");
+const color = @import("../primitives/color.zig");
+const config = @import("../primitives/config.zig");
 const proc = @import("../primitives/proc.zig");
 const sleep = @import("../primitives/sleep.zig");
 
@@ -51,10 +53,14 @@ const ProcessOut = struct {
 	cmd: []const u8,
 	value: f64,
 	valueText: []const u8,
+	color: []const u8 = "",
 };
 
 const CpuOut = struct {
 	pct: f64,
+	color: []const u8,
+	ink: []const u8,
+	coreInk: [][]const u8,
 	cores: []f64,
 	model: []const u8,
 	spec: []const u8,
@@ -65,6 +71,8 @@ const CpuOut = struct {
 };
 
 const MemoryOut = struct {
+	color: []const u8,
+	ink: []const u8,
 	total: i64,
 	used: i64,
 	available: i64,
@@ -93,10 +101,17 @@ const MemoryOut = struct {
 };
 
 const BatteryOut = struct {
+	color: []const u8,
 	present: bool,
 	pct: f64,
 	charging: bool,
 	state: []const u8,
+};
+
+const PanelOut = struct {
+	field: []const u8,
+	query: []const u8,
+	rows: []ProcessOut,
 };
 
 const Out = struct {
@@ -108,7 +123,99 @@ const Out = struct {
 	processes: []ProcessOut,
 	byCpu: []ProcessOut,
 	byMem: []ProcessOut,
+	panel: PanelOut,
 };
+
+const Palette = struct {
+	mono: bool = true,
+	red: color.Rgb = .{ 0xe0, 0x52, 0x52 },
+	cpu_base: color.Rgb = .{ 0xa7, 0x8b, 0xfa },
+	cpu_base_mono: color.Rgb = .{ 0xff, 0xff, 0xff },
+	cpu_peak: color.Rgb = .{ 0xe0, 0x52, 0x52 },
+	cpu_peak_mono: color.Rgb = .{ 0x9a, 0x9a, 0x9a },
+	cpu_idle: color.Rgb = .{ 0x2f, 0x2f, 0x2f },
+	memory_base: color.Rgb = .{ 0x7b, 0xd8, 0x8f },
+	memory_base_mono: color.Rgb = .{ 0xff, 0xff, 0xff },
+	memory_warn: color.Rgb = .{ 0xd8, 0xb0, 0x4a },
+	memory_warn_mono: color.Rgb = .{ 0xcf, 0xcf, 0xcf },
+	memory_danger: color.Rgb = .{ 0xe0, 0x52, 0x52 },
+	memory_danger_mono: color.Rgb = .{ 0x6f, 0x6f, 0x6f },
+	memory_warn_at: f64 = 60,
+	memory_danger_at: f64 = 85,
+	power_base: color.Rgb = .{ 0x7b, 0xd8, 0x8f },
+	power_warn: color.Rgb = .{ 0xd8, 0xb0, 0x4a },
+	power_danger: color.Rgb = .{ 0xe0, 0x52, 0x52 },
+	power_warn_at: f64 = 30,
+	power_danger_at: f64 = 15,
+
+	fn load(io: Io, allocator: Allocator) Palette {
+		var palette: Palette = .{};
+
+		const cfg = config.Config.load(io, allocator) catch return palette;
+		defer cfg.deinit();
+
+		palette.mono = cfg.boolean("mono", palette.mono);
+		palette.red = pick(cfg, "red", palette.red);
+		palette.cpu_base = pick(cfg, "cpuBase", palette.cpu_base);
+		palette.cpu_base_mono = pick(cfg, "cpuBaseMono", palette.cpu_base_mono);
+		palette.cpu_peak = pick(cfg, "cpuPeak", palette.cpu_peak);
+		palette.cpu_peak_mono = pick(cfg, "cpuPeakMono", palette.cpu_peak_mono);
+		palette.cpu_idle = pick(cfg, "cpuIdle", palette.cpu_idle);
+		palette.memory_base = pick(cfg, "memoryBase", palette.memory_base);
+		palette.memory_base_mono = pick(cfg, "memoryBaseMono", palette.memory_base_mono);
+		palette.memory_warn = pick(cfg, "memoryWarn", palette.memory_warn);
+		palette.memory_warn_mono = pick(cfg, "memoryWarnMono", palette.memory_warn_mono);
+		palette.memory_danger = pick(cfg, "memoryDanger", palette.memory_danger);
+		palette.memory_danger_mono = pick(cfg, "memoryDangerMono", palette.memory_danger_mono);
+		palette.memory_warn_at = cfg.number("memoryWarnAt", palette.memory_warn_at);
+		palette.memory_danger_at = cfg.number("memoryDangerAt", palette.memory_danger_at);
+		palette.power_base = pick(cfg, "powerBase", palette.power_base);
+		palette.power_warn = pick(cfg, "powerWarn", palette.power_warn);
+		palette.power_danger = pick(cfg, "powerDanger", palette.power_danger);
+		palette.power_warn_at = cfg.number("powerWarnAt", palette.power_warn_at);
+		palette.power_danger_at = cfg.number("powerDangerAt", palette.power_danger_at);
+
+		return palette;
+	}
+
+	fn cpuAccent(self: Palette) color.Rgb {
+		return if (self.mono) self.cpu_base else self.cpu_base_mono;
+	}
+
+	fn cpuPeakColor(self: Palette) color.Rgb {
+		return if (self.mono) self.cpu_peak else self.cpu_peak_mono;
+	}
+
+	fn memoryAccent(self: Palette) color.Rgb {
+		return if (self.mono) self.memory_base else self.memory_base_mono;
+	}
+
+	fn memoryWarnColor(self: Palette) color.Rgb {
+		return if (self.mono) self.memory_warn else self.memory_warn_mono;
+	}
+
+	fn memoryDangerColor(self: Palette) color.Rgb {
+		return if (self.mono) self.memory_danger else self.memory_danger_mono;
+	}
+
+	fn cpuInk(self: Palette, pct: f64) color.Rgb {
+		return color.mix(self.cpuAccent(), self.cpuPeakColor(), pct / 100);
+	}
+
+	fn memoryInk(self: Palette, pct: f64) color.Rgb {
+		return color.danger(self.memoryAccent(), self.memoryWarnColor(), self.memoryDangerColor(), self.memory_warn_at, self.memory_danger_at, pct);
+	}
+};
+
+fn pick(cfg: config.Config, name: []const u8, fallback: color.Rgb) color.Rgb {
+	return color.parse(cfg.color(name) orelse "") orelse fallback;
+}
+
+fn inkText(arena: Allocator, rgb: color.Rgb) ![]const u8 {
+	var buffer: [7]u8 = undefined;
+
+	return arena.dupe(u8, color.hex(&buffer, rgb));
+}
 
 pub const System = struct {
 	allocator: Allocator,
@@ -151,6 +258,12 @@ pub const System = struct {
 	cpu_threads: i64 = 0,
 	cpu_mhz: f64 = 0,
 	cpu_cache: f64 = 0,
+	panel_field: []u8 = &.{},
+	panel_query: []u8 = &.{},
+	ignore: [][]u8 = &.{},
+	panel_cpu: []i32 = &.{},
+	panel_mem: []i32 = &.{},
+	palette: Palette = .{},
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*System {
 		const self = try allocator.create(System);
@@ -198,11 +311,82 @@ pub const System = struct {
 	}
 
 	pub fn start(self: *System) !void {
+		self.palette = Palette.load(self.io, self.allocator);
 		self.loadCpuInfo();
+		self.loadPanel();
 		self.sampleProcesses();
 
 		const thread = try std.Thread.spawn(.{}, loop, .{self});
 		thread.detach();
+	}
+
+	fn loadPanel(self: *System) void {
+		setStr(self.allocator, &self.panel_field, "pcpu") catch {};
+
+		const cfg = config.Config.load(self.io, self.allocator) catch return;
+		defer cfg.deinit();
+
+		self.ignore = cfg.strings("psIgnore", self.allocator) catch &.{};
+	}
+
+	pub fn setPanel(self: *System, field: []const u8, query: []const u8) void {
+		self.mutex.lockUncancelable(self.io);
+
+		if (field.len > 0) setStr(self.allocator, &self.panel_field, field) catch {};
+		setStr(self.allocator, &self.panel_query, query) catch {};
+
+		self.mutex.unlock(self.io);
+
+		self.hub.publish();
+	}
+
+	fn ignored(self: *System, name: []const u8) bool {
+		for (self.ignore) |entry| {
+			if (std.mem.eql(u8, entry, name)) return true;
+		}
+
+		return false;
+	}
+
+	fn wanted(self: *System, row: ProcessOut) bool {
+		if (self.ignored(row.name)) return false;
+		if (self.panel_query.len == 0) return true;
+
+		return containsIgnoreCase(row.name, self.panel_query) or containsIgnoreCase(row.cmd, self.panel_query);
+	}
+
+	fn panelRows(self: *System, arena: Allocator, rss: bool, rows: []const ProcessOut) ![]ProcessOut {
+		var kept: std.ArrayListUnmanaged(ProcessOut) = .empty;
+
+		for (rows) |row| {
+			if (!self.wanted(row)) continue;
+
+			try kept.append(arena, row);
+		}
+
+		if (self.panel_query.len > 0) return kept.items;
+
+		var pids: std.ArrayListUnmanaged(i32) = .empty;
+		for (kept.items) |row| try pids.append(arena, row.pid);
+
+		const previous = if (rss) &self.panel_mem else &self.panel_cpu;
+		const held = try holdOrder(arena, previous.*, pids.items);
+
+		self.allocator.free(previous.*);
+		previous.* = self.allocator.dupe(i32, held) catch &.{};
+
+		var ordered: std.ArrayListUnmanaged(ProcessOut) = .empty;
+
+		for (held) |pid| {
+			for (kept.items) |row| {
+				if (row.pid != pid) continue;
+
+				try ordered.append(arena, row);
+				break;
+			}
+		}
+
+		return ordered.items;
 	}
 
 	const CpuInfo = struct { model: []const u8 = "", cores: i64 = 0, threads: i64 = 0, mhz: f64 = 0, cache: f64 = 0 };
@@ -581,27 +765,39 @@ pub const System = struct {
 		var cores: std.ArrayListUnmanaged(f64) = .empty;
 		for (self.cores[0..self.core_count]) |core| try cores.append(arena, @round(core * 10) / 10);
 
+		var core_ink: std.ArrayListUnmanaged([]const u8) = .empty;
+		for (cores.items) |core| try core_ink.append(arena, try inkText(arena, color.mix(self.palette.cpu_idle, self.palette.cpuAccent(), core / 100)));
+
 		var processes: std.ArrayListUnmanaged(ProcessOut) = .empty;
 		for (self.top[0..self.top_count]) |*entry| {
+			const load = @round(entry.cpu * 10) / 10;
+
 			try processes.append(arena, .{
 				.pid = entry.pid,
 				.name = entry.name(),
 				.cmd = entry.name(),
-				.value = @round(entry.cpu * 10) / 10,
+				.value = load,
 				.valueText = try std.fmt.allocPrint(arena, "{d:.1}%", .{entry.cpu}),
+				.color = try inkText(arena, self.palette.cpuInk(load)),
 			});
 		}
 
 		var by_mem: std.ArrayListUnmanaged(ProcessOut) = .empty;
 		for (self.mem_top[0..self.mem_count]) |*entry| {
+			const share = if (self.mem_pool > 0) std.math.clamp(100 * @as(f64, @floatFromInt(entry.rss_kb)) / @as(f64, @floatFromInt(self.mem_pool)), 0, 100) else 0;
+
 			try by_mem.append(arena, .{
 				.pid = entry.pid,
 				.name = entry.name(),
 				.cmd = entry.name(),
 				.value = @floatFromInt(entry.rss_kb),
 				.valueText = try kbText(arena, entry.rss_kb),
+				.color = try inkText(arena, self.palette.memoryInk(share)),
 			});
 		}
+
+		const cpu_pct = @round(self.cpu_pct * 10) / 10;
+		const memory_pct = @round(self.mem_pct * 10) / 10;
 
 		const ram_free = @max(0, self.mem_total - self.mem_used - self.mem_cached - self.mem_buffers);
 		const swap_free = @max(0, self.swap_total - self.swap_used);
@@ -611,7 +807,10 @@ pub const System = struct {
 			.governor = self.governor,
 			.governors = governor_list.items,
 			.cpu = .{
-				.pct = @round(self.cpu_pct * 10) / 10,
+				.pct = cpu_pct,
+				.color = try inkText(arena, color.mix(self.palette.cpu_base, self.palette.red, cpu_pct / 100)),
+				.ink = try inkText(arena, self.palette.cpuInk(cpu_pct)),
+				.coreInk = core_ink.items,
 				.cores = cores.items,
 				.model = self.cpu_model,
 				.spec = self.cpu_spec,
@@ -621,6 +820,8 @@ pub const System = struct {
 				.cache = self.cpu_cache,
 			},
 			.memory = .{
+				.color = try inkText(arena, color.danger(self.palette.memory_base, self.palette.memory_warn, self.palette.memory_danger, self.palette.memory_warn_at, self.palette.memory_danger_at, memory_pct)),
+				.ink = try inkText(arena, self.palette.memoryInk(memory_pct)),
 				.total = self.mem_total,
 				.used = self.mem_used,
 				.available = self.mem_available,
@@ -633,7 +834,7 @@ pub const System = struct {
 				.ramFree = ram_free,
 				.swapFree = swap_free,
 				.free = pool_free,
-				.pct = @round(self.mem_pct * 10) / 10,
+				.pct = memory_pct,
 				.totalText = try kbText(arena, self.mem_total),
 				.usedText = try kbText(arena, self.mem_used),
 				.availableText = try kbText(arena, self.mem_available),
@@ -648,6 +849,7 @@ pub const System = struct {
 				.freeText = try kbText(arena, pool_free),
 			},
 			.battery = .{
+				.color = try inkText(arena, color.danger(self.palette.power_base, self.palette.power_warn, self.palette.power_danger, self.palette.power_warn_at, self.palette.power_danger_at, self.battery_pct)),
 				.present = self.battery_present,
 				.pct = self.battery_pct,
 				.charging = self.battery_charging,
@@ -656,11 +858,52 @@ pub const System = struct {
 			.processes = processes.items,
 			.byCpu = processes.items,
 			.byMem = by_mem.items,
+			.panel = .{
+				.field = self.panel_field,
+				.query = self.panel_query,
+				.rows = try self.panelRows(arena, std.mem.eql(u8, self.panel_field, "rss"), if (std.mem.eql(u8, self.panel_field, "rss")) by_mem.items else processes.items),
+			},
 		};
 
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
+
+fn containsIgnoreCase(text: []const u8, needle: []const u8) bool {
+	if (needle.len == 0) return true;
+	if (needle.len > text.len) return false;
+
+	var at: usize = 0;
+
+	while (at + needle.len <= text.len) : (at += 1) {
+		if (std.ascii.eqlIgnoreCase(text[at .. at + needle.len], needle)) return true;
+	}
+
+	return false;
+}
+
+fn holdOrder(arena: Allocator, previous: []const i32, incoming: []const i32) ![]i32 {
+	var out: std.ArrayListUnmanaged(i32) = .empty;
+	const used = try arena.alloc(bool, incoming.len);
+
+	@memset(used, false);
+
+	for (previous) |pid| {
+		for (incoming, 0..) |value, index| {
+			if (value != pid or used[index]) continue;
+
+			used[index] = true;
+			try out.append(arena, pid);
+			break;
+		}
+	}
+
+	for (incoming, 0..) |value, index| {
+		if (!used[index]) try out.append(arena, value);
+	}
+
+	return out.items;
+}
 
 fn kbText(arena: Allocator, kb: i64) ![]const u8 {
 	const value: f64 = @floatFromInt(kb);
@@ -773,4 +1016,64 @@ test "cpuinfo names the model and the spec line" {
 
 	const tiny = try System.specLine(allocator, .{ .threads = 4, .cores = 4 });
 	try std.testing.expectEqualStrings("4 threads", tiny);
+}
+
+test "the panel keeps the row order it had" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+
+	const held = try holdOrder(allocator, &.{ 5, 3, 9 }, &.{ 9, 4, 3, 5 });
+	try std.testing.expectEqualSlices(i32, &.{ 5, 3, 9, 4 }, held);
+
+	const fresh = try holdOrder(allocator, &.{}, &.{ 2, 1 });
+	try std.testing.expectEqualSlices(i32, &.{ 2, 1 }, fresh);
+
+	const gone = try holdOrder(allocator, &.{ 7, 5 }, &.{ 5 });
+	try std.testing.expectEqualSlices(i32, &.{5}, gone);
+}
+
+test "the panel drops the ignored names and matches the query" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+
+	var ignore: [][]u8 = try allocator.alloc([]u8, 1);
+	ignore[0] = try allocator.dupe(u8, "ps");
+
+	var system: System = .{
+		.allocator = allocator,
+		.io = std.Io.Threaded.global_single_threaded.io(),
+		.hub = undefined,
+		.scratch = std.heap.ArenaAllocator.init(allocator),
+		.ignore = ignore,
+		.panel_field = try allocator.dupe(u8, "pcpu"),
+		.panel_query = try allocator.dupe(u8, ""),
+	};
+
+	try std.testing.expect(system.ignored("ps"));
+	try std.testing.expect(!system.ignored("psx"));
+
+	const rows = [_]ProcessOut{
+		.{ .pid = 1, .name = "ps", .cmd = "ps", .value = 0, .valueText = "" },
+		.{ .pid = 2, .name = "Hyprland", .cmd = "Hyprland", .value = 0, .valueText = "" },
+		.{ .pid = 3, .name = "alacritty", .cmd = "alacritty", .value = 0, .valueText = "" },
+	};
+
+	const kept = try system.panelRows(allocator, false, &rows);
+	try std.testing.expectEqual(@as(usize, 2), kept.len);
+	try std.testing.expectEqual(@as(i32, 2), kept[0].pid);
+	try std.testing.expectEqual(@as(i32, 3), kept[1].pid);
+
+	try setStr(allocator, &system.panel_query, "YPRL");
+
+	const filtered = try system.panelRows(allocator, false, &rows);
+	try std.testing.expectEqual(@as(usize, 1), filtered.len);
+	try std.testing.expectEqualStrings("Hyprland", filtered[0].name);
+
+	try std.testing.expect(containsIgnoreCase("Hyprland", "yprl"));
+	try std.testing.expect(!containsIgnoreCase("Hyprland", "zzz"));
+	try std.testing.expect(!containsIgnoreCase("ps", "psx"));
 }

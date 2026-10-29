@@ -18,17 +18,15 @@ Item {
 	property real panelPadding: Config.cpuTooltipPadding
 	property int topCount: Config.cpuTopCount
 	property string psField: "pcpu"
-	property var rowColor: (value) => Config.foreground
+	property var rowColor: (row) => row.color || Config.foreground
 	property bool showProcessList: true
 	property alias viz: vizColumn.data
 
-	readonly property var allProcs: panel.psField === "rss" ? (Yudae.system.byMem || []) : (Yudae.system.byCpu || [])
-	property var heldProcs: []
 	property string filter: ""
 
 	readonly property bool searching: searchField.typing
 	readonly property bool filtering: panel.searching || panel.filter !== ""
-	readonly property var procs: panel.filtering ? panel.allProcs.filter(panel.matches) : (panel.heldProcs.length > 0 ? panel.heldProcs : panel.kept(panel.allProcs))
+	readonly property var procs: (Yudae.system.panel && Yudae.system.panel.rows) || []
 	readonly property bool showList: panel.showProcessList && (panel.procs.length > 0 || panel.filtering)
 	readonly property real pct: panel.source ? panel.source.pct : 0
 	readonly property bool onScreen: panel.Window.window ? panel.Window.window.visible : false
@@ -42,6 +40,8 @@ Item {
 	implicitHeight: column.implicitHeight + panel.panelPadding * 2
 
 	onOnScreenChanged: {
+		Yudae.systemCommand({ panel: { field: panel.psField, query: panel.filter } });
+
 		if (!panel.onScreen) {
 			searchField.clear();
 			searchField.typing = false;
@@ -49,12 +49,13 @@ Item {
 			return;
 		}
 
-		panel.heldProcs = panel.kept(panel.allProcs);
 		procList.currentIndex = -1;
 
 		if (panel.source && panel.source.refresh)
 			panel.source.refresh();
 	}
+
+	onFilterChanged: Yudae.systemCommand({ panel: { field: panel.psField, query: panel.filter } })
 
 	onSearchingChanged: {
 		if (!panel.searching)
@@ -76,68 +77,6 @@ Item {
 		} else {
 			procList.handleKey(event);
 		}
-	}
-
-	onAllProcsChanged: panel.heldProcs = panel.order(panel.heldProcs, panel.kept(panel.allProcs))
-
-	function kept(rows) {
-		return (rows || []).filter(function (row) {
-			return Config.psIgnore.indexOf(row.name) < 0;
-		});
-	}
-
-	function matches(row) {
-		const wanted = panel.filter.toLowerCase();
-
-		return Config.psIgnore.indexOf(row.name) < 0
-			&& (row.name.toLowerCase().indexOf(wanted) >= 0 || String(row.cmd || "").toLowerCase().indexOf(wanted) >= 0);
-	}
-
-	function order(previous, incoming) {
-		const rows = incoming || [];
-		const heldRows = previous || [];
-
-		if (heldRows.length === 0)
-			return rows;
-
-		const alive = {};
-		const out = [];
-		const stale = [];
-
-		rows.forEach(function (row) {
-			alive[row.pid] = row;
-		});
-
-		heldRows.forEach(function (row) {
-			const fresh = alive[row.pid];
-
-			if (fresh === undefined) {
-				out.push(row);
-				stale.push(out.length - 1);
-				return;
-			}
-
-			out.push(fresh);
-			delete alive[row.pid];
-		});
-
-		const spare = [];
-
-		rows.forEach(function (row) {
-			if (alive[row.pid] !== undefined) {
-				spare.push(row);
-				delete alive[row.pid];
-			}
-		});
-
-		let used = 0;
-
-		stale.forEach(function (slot) {
-			if (used < spare.length)
-				out[slot] = spare[used++];
-		});
-
-		return out.concat(spare.slice(used));
 	}
 
 	Column {
@@ -285,7 +224,7 @@ Item {
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
-					color: panel.rowColor(modelData.value)
+					color: panel.rowColor(modelData)
 					text: modelData.valueText
 				}
 
