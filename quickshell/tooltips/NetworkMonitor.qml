@@ -169,23 +169,20 @@ ProcessPanel {
 			height: Config.networkGraphHeight
 			clip: true
 
-			Text {
+			DotGraph {
 				width: parent.width
-
-				font.family: Config.fontFamily
-				font.pixelSize: Config.networkGraphFontSize
-				color: root.upInk
-				text: root.net.graph ? root.net.graph.up : ""
+				height: Config.networkGraphHeight / 2
+				levels: root.net.graph ? root.net.graph.up : []
+				ink: root.upInk
 			}
 
-			Text {
+			DotGraph {
 				y: Config.networkGraphHeight / 2
 				width: parent.width
-
-				font.family: Config.fontFamily
-				font.pixelSize: Config.networkGraphFontSize
-				color: root.downInk
-				text: root.net.graph ? root.net.graph.down : ""
+				height: Config.networkGraphHeight / 2
+				flip: true
+				levels: root.net.graph ? root.net.graph.down : []
+				ink: root.downInk
 			}
 		},
 

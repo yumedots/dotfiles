@@ -14,6 +14,7 @@ Scrollbar 1.0 Scrollbar.qml
 SearchField 1.0 SearchField.qml
 NotificationRow 1.0 NotificationRow.qml
 CellGrid 1.0 CellGrid.qml
+DotGraph 1.0 DotGraph.qml
 SignalBars 1.0 SignalBars.qml
 SpeedGauge 1.0 SpeedGauge.qml
 StepBar 1.0 StepBar.qml
