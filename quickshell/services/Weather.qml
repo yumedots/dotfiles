@@ -18,24 +18,22 @@ Item {
 	readonly property var focused: root.rawSlots[root.index] || ({})
 
 	readonly property int code: root.focused.code === undefined ? -1 : root.focused.code
-	readonly property var codeInfo: Format.weatherCodeInfo(root.code, Config.weatherCodes, Config.weatherIcon)
-	readonly property string icon: root.codeInfo.glyph
-	readonly property string description: root.codeInfo.name
+	readonly property string icon: root.focused.glyph || Config.weatherIcon
 
 	readonly property var days: root.focused.days || []
 	readonly property var suggestions: root.source.suggestions || []
 	readonly property string status: root.source.status || ""
 	readonly property real fetched: root.source.fetched || 0
-	readonly property bool loading: (root.focused.temp || "") === ""
+	readonly property bool loading: (root.focused.tempValue || "") === ""
 
 	readonly property var current: ({
-		temp: root.focused.temp || "",
+		tempValue: root.focused.tempValue || "",
+		tempUnit: root.focused.tempUnit || "",
 		feels: root.focused.feels || "",
 		wind: root.focused.wind || "",
 		humidity: root.focused.humidity || "",
 		code: root.code,
 		icon: root.icon,
-		description: root.description,
 		place: String(root.places[root.index] || "").split(",")[0].trim(),
 		loading: root.loading
 	})

@@ -1,7 +1,7 @@
 import QtQuick
-import Quickshell.Services.Mpris
 import qs.ui
 import qs
+import qs.services
 import "../../tooltips"
 
 BarStat {
@@ -9,19 +9,15 @@ BarStat {
 
 	inkId: "media"
 
-	readonly property var player: Format.pickPlayer(Mpris.players.values ? Mpris.players.values : [])
-
 	icon: Config.iconApp
-	readonly property bool wanted: Format.hasContent(root.player)
+	readonly property bool wanted: Yudae.mediaState.wanted === true
 	visible: root.wanted
 	popupPreload: true
 
-	onPlayerChanged: if (!root.visible) root.closePopup()
+	onWantedChanged: if (!root.visible) root.closePopup()
 
 	popupContent: Component {
 		MediaControl {
-			player: root.player
-
 			onCloseRequested: root.closePopup()
 		}
 	}

@@ -222,6 +222,9 @@ QtObject {
 
 	readonly property var weatherState: root.snapshot.weather || ({})
 
+	readonly property var calendarState: root.snapshot.calendar || ({})
+	readonly property var mediaState: root.snapshot.media || ({})
+
 	readonly property var screenState: root.snapshot.screen || ({})
 	readonly property var screenMonitors: root.screenState.monitors || []
 	readonly property int screenPrimary: root.screenState.primary || 0

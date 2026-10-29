@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
-import Quickshell.Services.Mpris
 import qs
 import qs.ui
 import qs.services
@@ -198,10 +197,7 @@ ShellRoot {
 	}
 
 	function media(action) {
-		const command = Format.command(Mpris.players.values ? Mpris.players.values : [], action);
-
-		if (command.length > 0)
-			Quickshell.execDetached(command);
+		Yudae.send({ cmd: { media: action } });
 	}
 
 	Instantiator {

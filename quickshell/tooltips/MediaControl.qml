@@ -1,20 +1,19 @@
 import QtQuick
-import Quickshell
 import qs.ui
 import qs
+import qs.services
 
 Item {
 	id: root
 
-	property var player: null
-	property real position: 0
-
-	readonly property bool playing: root.player !== null && root.player.isPlaying
-	readonly property string title: root.player !== null ? root.player.trackTitle : ""
-	readonly property string artist: root.player !== null ? root.player.trackArtist : ""
-	readonly property string album: root.player !== null ? root.player.trackAlbum : ""
-	readonly property string art: root.player !== null ? root.player.trackArtUrl : ""
-	readonly property var clock: Format.clock(root.player, root.position)
+	readonly property var media: Yudae.mediaState
+	readonly property bool playing: root.media.playing === true
+	readonly property string title: root.media.title || ""
+	readonly property string artist: root.media.artist || ""
+	readonly property string album: root.media.album || ""
+	readonly property string art: root.media.art || ""
+	readonly property bool known: root.media.known === true
+	readonly property bool present: (root.media.name || "") !== ""
 
 	focus: true
 
@@ -23,15 +22,8 @@ Item {
 	implicitWidth: Config.mediaTooltipWidth + Config.mediaTooltipPadding * 2
 	implicitHeight: body.implicitHeight + Config.mediaTooltipPadding * 2
 
-	function readPosition() {
-		root.position = root.player !== null ? root.player.position : 0;
-	}
-
 	function send(action) {
-		const command = Format.command([root.player], action);
-
-		if (command.length > 0)
-			Quickshell.execDetached(command);
+		Yudae.send({ cmd: { media: action } });
 	}
 
 	function togglePlay() {
@@ -46,18 +38,8 @@ Item {
 		root.send("next");
 	}
 
-	onPlayerChanged: root.readPosition()
-
 	Keys.onPressed: function (event) {
 		Input.media(event, root);
-	}
-
-	Timer {
-		interval: Config.mediaTickMs
-		running: root.playing
-		repeat: true
-		triggeredOnStart: true
-		onTriggered: root.readPosition()
 	}
 
 	component Button: Item {
@@ -189,8 +171,8 @@ Item {
 				elide: Text.ElideRight
 				font.family: Config.fontFamily
 				font.pixelSize: Config.mediaTitleSize
-				color: root.player !== null ? Config.foreground : Config.muted
-				text: root.player !== null && root.title !== "" ? root.title : Config.mediaEmpty
+				color: root.present ? Config.foreground : Config.muted
+				text: root.title !== "" ? root.title : Config.mediaEmpty
 			}
 
 			Text {
@@ -210,7 +192,7 @@ Item {
 
 			width: parent.width
 			height: elapsed.implicitHeight
-			visible: root.clock.known
+			visible: root.known
 
 			Text {
 				id: elapsed
@@ -220,7 +202,7 @@ Item {
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
 				color: Config.foreground
-				text: root.clock.elapsed
+				text: root.media.elapsed || ""
 			}
 
 			Text {
@@ -229,14 +211,14 @@ Item {
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
 				color: Config.muted
-				text: root.clock.total
+				text: root.media.total || ""
 			}
 		}
 
 		StepBar {
 			width: parent.width
-			visible: root.clock.known
-			level: root.clock.percent / 100
+			visible: root.known
+			level: (root.media.percent || 0) / 100
 		}
 
 		Item {
@@ -244,7 +226,7 @@ Item {
 
 			width: parent.width
 			height: Config.mediaButtonGlyphSize
-			visible: root.player !== null
+			visible: root.present
 
 			Row {
 				anchors.horizontalCenter: parent.horizontalCenter

@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import qs.ui
 import qs
+import qs.services
 
 Item {
 	id: root
@@ -10,18 +11,14 @@ Item {
 
 	focus: true
 
-	property date cursor: new Date()
 	property date today: clock.date
 	property int weekStart: Config.calendarWeekStart
 
-	readonly property string cursorKey: Format.dateKey(root.cursor)
-	readonly property string todayKey: Format.dateKey(root.today)
-	readonly property var grid: Format.monthGrid(root.cursor.getFullYear(), root.cursor.getMonth(), root.weekStart, root.todayKey, root.cursorKey, Config.calendarRows)
-	readonly property var weekdays: Format.weekdayLabels(root.weekStart)
-	readonly property var meters: Format.meters(root.today, Config.calendarBirthYear, Config.calendarLifeExpectancy, [Config.calendarIconDay, Config.calendarIconMonth, Config.calendarIconYear, Config.calendarIconLife])
+	readonly property var grid: Yudae.calendarState.rows || []
 	readonly property real gridWidth: Config.calendarCellWidth * 7
-	readonly property string monthText: Qt.formatDate(new Date(root.cursor.getFullYear(), root.cursor.getMonth(), 1), "MMMM")
-	readonly property string yearText: String(root.cursor.getFullYear())
+	readonly property string monthText: Yudae.calendarState.month || ""
+	readonly property string yearText: Yudae.calendarState.year || ""
+	readonly property var weekdays: Yudae.calendarState.weekdays || []
 	readonly property real mondayInk: (Config.calendarCellWidth - weekdayMetrics.width) / 2 + weekdayMetrics.tightBoundingRect.x
 	readonly property real titleX: root.mondayInk - monthMetrics.tightBoundingRect.x
 
@@ -47,19 +44,21 @@ Item {
 
 		font.family: Config.fontFamily
 		font.pixelSize: Config.calendarWeekdaySize
-		text: root.weekdays.length > 0 ? root.weekdays[0] : ""
+		text: root.weekdays ? root.weekdays[0] : ""
 	}
 
+	onWeekStartChanged: Yudae.send({ cmd: { calendar: { weekStart: root.weekStart } } })
+
 	function step(days) {
-		root.cursor = Format.shiftDays(root.cursor, days);
+		Yudae.send({ cmd: { calendar: { days: days } } });
 	}
 
 	function stepMonths(months) {
-		root.cursor = Format.shiftMonths(root.cursor, months);
+		Yudae.send({ cmd: { calendar: { months: months } } });
 	}
 
 	function stepYears(years) {
-		root.cursor = Format.shiftYears(root.cursor, years);
+		Yudae.send({ cmd: { calendar: { years: years } } });
 	}
 
 	Keys.onPressed: function (event) {
@@ -237,7 +236,7 @@ Item {
 				spacing: Config.calendarMeterGap
 
 				Repeater {
-					model: root.meters
+					model: Yudae.calendarState.meters || []
 
 					delegate: Item {
 						required property var modelData
