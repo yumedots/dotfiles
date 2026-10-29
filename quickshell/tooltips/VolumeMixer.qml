@@ -33,18 +33,9 @@ Item {
 		root.shift = false;
 	}
 
-	Timer {
-		id: nodeRefreshTimer
-
-		interval: 1000
-		onTriggered: root.pruneHolds()
-	}
-
-	onNodesChanged: nodeRefreshTimer.restart()
-
 	readonly property real contentWidth: Config.mixerWidth
-	readonly property var devices: root.picker === "" ? [] : root.sortedDevices(root.picker === "input")
-	readonly property bool hasApps: root.nodes.some(function (node) { return root.streamVisible(node); })
+	readonly property var devices: root.picker === "input" ? (root.mix.sources || []) : (root.mix.sinks || [])
+	readonly property bool hasApps: (root.mix.streams || []).length > 0
 	readonly property var steps: Array(Config.mixerStepCount).fill(1)
 
 	implicitWidth: root.contentWidth + Config.mixerPadding * 2
@@ -54,16 +45,7 @@ Item {
 		root.pickerIndex = 0;
 	}
 
-	readonly property var targetNodes: {
-		const list = [];
-
-		if (root.sink)
-			list.push(root.sink);
-		if (root.hasInput && root.source)
-			list.push(root.source);
-
-		return list.concat(root.streams(Config.mixerOnlyPlaying));
-	}
+	readonly property var targetNodes: (root.mix.order || []).map(root.nodeOf)
 
 	property bool keyboard: false
 	property bool shift: false
@@ -71,32 +53,6 @@ Item {
 	readonly property var selectedNode: root.targetNodes.length > 0
 		? root.targetNodes[Calc.clamp(root.targetIndex, 0, root.targetNodes.length - 1)]
 		: null
-
-	function same(a, b) {
-		return !!a && !!b && a.id === b.id;
-	}
-
-	function shownStream(node) {
-		return !!node && node.shown === true;
-	}
-
-	function playing(node) {
-		return !!node && node.playing === true;
-	}
-
-	function streamHeld(node) {
-		return !!node && root.held[node.id] !== undefined;
-	}
-
-	function streams(onlyPlaying) {
-		return root.nodes.filter(function (node) {
-			return root.shownStream(node) && (!onlyPlaying || root.playing(node));
-		});
-	}
-
-	function streamVisible(node) {
-		return root.shownStream(node) && (root.streamHeld(node) || !Config.mixerOnlyPlaying || root.playing(node));
-	}
 
 	function moveTarget(step) {
 		const last = root.targetNodes.length - 1;
@@ -111,15 +67,9 @@ Item {
 		const nodes = root.targetNodes;
 
 		for (let i = 0; i < nodes.length; i++) {
-			if (root.same(nodes[i], node))
+			if (nodes[i] && node && nodes[i].id === node.id)
 				root.targetIndex = i;
 		}
-	}
-
-	function nodeAt(index) {
-		const list = root.mix.nodes || [];
-
-		return list[index] || null;
 	}
 
 	function nodeOf(id) {
@@ -210,19 +160,6 @@ Item {
 		Yudae.audioMute(node.id, node.muted !== true);
 	}
 
-	function sortedDevices(input) {
-		const active = input ? root.source : root.sink;
-		const found = root.nodes.filter(function (node) {
-			return !!node && !node.isStream && node.isSink !== !!input;
-		});
-		const at = found.findIndex(function (node) { return root.same(node, active); });
-
-		if (at > 0)
-			found.unshift(found.splice(at, 1)[0]);
-
-		return found;
-	}
-
 	function iconFor(node) {
 		if (!node)
 			return "";
@@ -248,25 +185,7 @@ Item {
 		root.picker = "";
 	}
 
-	property var held: ({})
 	property var drag: ({ id: -1, from: 0, width: 0, last: -1 })
-
-	function hold(node, until) {
-		if (node)
-			root.held = Object.assign({}, root.held, { [node.id]: until });
-	}
-
-	function pruneHolds() {
-		const now = Date.now();
-		const next = {};
-
-		Object.keys(root.held).forEach(function (id) {
-			if (root.held[id] > now)
-				next[id] = root.held[id];
-		});
-
-		root.held = next;
-	}
 
 	component MixChannel: Item {
 		id: channel
@@ -279,7 +198,7 @@ Item {
 		readonly property string percentText: channel.node ? channel.node.volumeText : "0%"
 		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 
-		readonly property bool selected: root.same(channel.node, root.selectedNode)
+		readonly property bool selected: channel.node !== null && channel.node === root.selectedNode
 		readonly property real level: Calc.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(channel.level * Config.mixerStepCount) - 1
 
@@ -395,7 +314,7 @@ Item {
 		readonly property bool muted: !!line.node && line.node.muted === true
 		readonly property real volume: line.node ? line.node.volume : 0
 		readonly property string percentText: line.node ? line.node.volumeText : "0%"
-		readonly property bool selected: root.same(line.node, root.selectedNode)
+		readonly property bool selected: line.node !== null && line.node === root.selectedNode
 		readonly property real level: Calc.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(line.level * Config.mixerStepCount) - 1
 
@@ -545,34 +464,13 @@ Item {
 		}
 
 		Repeater {
-			model: root.nodes.length
+			model: root.showApps ? (root.mix.streams || []) : []
 
-			delegate: Item {
-				id: holder
-
-				required property int index
-
-				readonly property var node: root.nodeAt(holder.index)
-				readonly property bool shown: root.shownStream(holder.node)
-				readonly property bool active: holder.shown && (!Config.mixerOnlyPlaying || root.playing(holder.node))
-				visible: root.showApps && root.streamVisible(holder.node)
+			delegate: MixChannel {
 				width: parent.width
-				height: channel.implicitHeight
-				clip: true
-
-				onActiveChanged: {
-					if (!holder.active)
-						root.hold(holder.node, Date.now() + Config.mixerHoldMs);
-				}
-
-				MixChannel {
-					id: channel
-
-					width: parent.width
-					node: holder.shown ? holder.node : null
-					glyph: Config.iconApp
-					appIcon: holder.shown
-				}
+				node: root.nodeOf(modelData)
+				glyph: Config.iconApp
+				appIcon: true
 			}
 		}
 	}
@@ -607,8 +505,7 @@ Item {
 					required property var modelData
 					required property int index
 
-					readonly property var node: option.modelData
-					readonly property bool active: !!option.node && option.node.isDefault === true
+					readonly property bool active: option.modelData.default === true
 					readonly property bool highlighted: option.index === root.pickerIndex
 
 					width: options.width
@@ -638,7 +535,7 @@ Item {
 						font.family: Config.fontFamily
 						font.pixelSize: Settings.fontSize
 						color: option.active || option.highlighted ? Config.launcherHighlightText : Config.muted
-						text: option.node ? option.node.description : ""
+						text: option.modelData.name || ""
 					}
 				}
 			}

@@ -1,4 +1,5 @@
 const std = @import("std");
+const config = @import("../primitives/config.zig");
 const hubmod = @import("../hub.zig");
 const json = @import("../primitives/json.zig");
 const exec = @import("../primitives/exec.zig");
@@ -33,6 +34,7 @@ const Node = struct {
 	state: []u8,
 	pending: f64 = -1,
 	pending_until: i64 = 0,
+	shown_until: i64 = 0,
 };
 
 const PropsOut = struct {
@@ -65,8 +67,19 @@ const NodeOut = struct {
 	props: PropsOut,
 };
 
+const DeviceOut = struct {
+	id: i64,
+	name: []const u8,
+	sink: bool,
+	default: bool,
+};
+
 const Out = struct {
 	nodes: []NodeOut,
+	sinks: []DeviceOut,
+	sources: []DeviceOut,
+	streams: []i64,
+	order: []i64,
 	sink: i64,
 	source: i64,
 	hasInput: bool,
@@ -91,6 +104,8 @@ pub const Audio = struct {
 	writes: [16]Write = undefined,
 	write_count: usize = 0,
 	write_ready: std.atomic.Value(bool) = .init(false),
+	hold_ms: i64 = 1500,
+	only_playing: bool = true,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Audio {
 		const self = try allocator.create(Audio);
@@ -100,6 +115,8 @@ pub const Audio = struct {
 			.hub = hub,
 			.scratch = std.heap.ArenaAllocator.init(allocator),
 		};
+
+		self.loadConfig();
 
 		return self;
 	}
@@ -266,10 +283,54 @@ pub const Audio = struct {
 		while (true) {
 			if (self.dirty.swap(false, .monotonic)) self.sampleSerial();
 			if (tick % 5 == 0) self.sampleSerial();
+			if (self.expireHolds()) self.hub.publish();
 
 			tick +%= 1;
 			sleep.ms(1000);
 		}
+	}
+
+	fn loadConfig(self: *Audio) void {
+		const cfg = config.Config.load(self.io, self.allocator) catch return;
+		defer cfg.deinit();
+
+		self.hold_ms = cfg.integer("mixerHoldMs", self.hold_ms);
+		self.only_playing = cfg.boolean("mixerOnlyPlaying", self.only_playing);
+	}
+
+	fn playing(node: Node) bool {
+		return std.mem.eql(u8, node.state, "running");
+	}
+
+	fn live(self: *Audio, node: Node) bool {
+		const input = std.mem.indexOf(u8, node.class, "Input") != null;
+
+		if (node.state.len == 0 or !node.is_stream or input) return false;
+
+		return !self.only_playing or playing(node);
+	}
+
+	fn shown(self: *Audio, node: Node, now: i64) bool {
+		return self.live(node) or (node.shown_until != 0 and now < node.shown_until);
+	}
+
+	fn expireHolds(self: *Audio) bool {
+		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
+
+		self.mutex.lockUncancelable(self.io);
+
+		var changed = false;
+
+		for (self.nodes.items) |*node| {
+			if (node.shown_until == 0 or now < node.shown_until) continue;
+
+			node.shown_until = 0;
+			changed = true;
+		}
+
+		self.mutex.unlock(self.io);
+
+		return changed;
 	}
 
 	pub fn setWatch(self: *Audio, watched: bool) void {
@@ -474,6 +535,14 @@ pub const Audio = struct {
 				node.pending_until = old.pending_until;
 
 				if (old.pending >= 0 and now < old.pending_until) node.volume = old.pending;
+
+				if (self.live(node.*)) {
+					node.shown_until = 0;
+				} else if (self.live(old)) {
+					node.shown_until = now + self.hold_ms;
+				} else {
+					node.shown_until = old.shown_until;
+				}
 			}
 		}
 
@@ -544,15 +613,28 @@ pub const Audio = struct {
 		_ = self.scratch.reset(.retain_capacity);
 		const arena = self.scratch.allocator();
 
+		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
+
 		var nodes: std.ArrayListUnmanaged(NodeOut) = .empty;
+		var streams: std.ArrayListUnmanaged(i64) = .empty;
+		var order: std.ArrayListUnmanaged(i64) = .empty;
 		var recording = false;
+
+		if (self.sink != 0) try order.append(arena, self.sink);
+		if (self.has_input and self.source != 0) try order.append(arena, self.source);
 
 		for (self.nodes.items) |node| {
 			const running = std.mem.eql(u8, node.state, "running");
 			const ready = node.state.len > 0;
 			const input = std.mem.indexOf(u8, node.class, "Input") != null;
+			const visible = self.shown(node, now);
 
 			if (node.is_stream and running and input) recording = true;
+
+			if (visible) {
+				try streams.append(arena, node.id);
+				try order.append(arena, node.id);
+			}
 
 			try nodes.append(arena, .{
 				.id = node.id,
@@ -569,7 +651,7 @@ pub const Audio = struct {
 				.isStream = node.is_stream,
 				.isSink = node.is_sink,
 				.isDefault = node.id == self.sink or node.id == self.source,
-				.shown = ready and node.is_stream and !input,
+				.shown = visible,
 				.playing = running,
 				.ready = ready,
 				.running = running,
@@ -585,6 +667,10 @@ pub const Audio = struct {
 
 		try writer.print("{f}", .{std.json.fmt(Out{
 			.nodes = nodes.items,
+			.sinks = try deviceList(arena, self.nodes.items, true, self.sink),
+			.sources = try deviceList(arena, self.nodes.items, false, self.source),
+			.streams = streams.items,
+			.order = order.items,
 			.sink = self.sink,
 			.source = self.source,
 			.hasInput = self.has_input,
@@ -593,6 +679,31 @@ pub const Audio = struct {
 		}, .{})});
 	}
 };
+
+fn deviceList(arena: Allocator, nodes: []const Node, sink: bool, active: i64) ![]DeviceOut {
+	var list: std.ArrayListUnmanaged(DeviceOut) = .empty;
+
+	for (nodes) |node| {
+		if (node.is_stream or node.is_sink != sink) continue;
+
+		try list.append(arena, .{
+			.id = node.id,
+			.name = node.description,
+			.sink = node.is_sink,
+			.default = node.id == active,
+		});
+	}
+
+	for (list.items, 0..) |entry, index| {
+		if (!entry.default) continue;
+
+		if (index > 0) try list.insert(arena, 0, list.orderedRemove(index));
+
+		break;
+	}
+
+	return list.items;
+}
 
 fn percentText(arena: Allocator, volume: f64) ![]const u8 {
 	return std.fmt.allocPrint(arena, "{d}%", .{@as(i64, @intFromFloat(@round(volume * 100)))});
@@ -839,4 +950,114 @@ test "render emits the node fields the mixer binds" {
 	const input = nodes[2];
 	try std.testing.expect(!json.flag(input, "shown"));
 	try std.testing.expect(json.flag(input, "playing"));
+
+	const sinks = json.listAt(parsed.value, "sinks");
+	try std.testing.expectEqual(@as(usize, 1), sinks.len);
+	try std.testing.expectEqualStrings("Speakers", json.textAt(sinks[0], "name"));
+	try std.testing.expect(json.flag(sinks[0], "default"));
+	try std.testing.expect(json.flag(sinks[0], "sink"));
+
+	const streams = json.listAt(parsed.value, "streams");
+	try std.testing.expectEqual(@as(usize, 1), streams.len);
+	try std.testing.expectEqual(@as(i64, 60), json.integer(streams[0]));
+
+	const order = json.listAt(parsed.value, "order");
+	try std.testing.expectEqual(@as(usize, 2), order.len);
+	try std.testing.expectEqual(@as(i64, 52), json.integer(order[0]));
+	try std.testing.expectEqual(@as(i64, 60), json.integer(order[1]));
+}
+
+test "devices come back with the active one first" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+
+	var nodes: std.ArrayListUnmanaged(Node) = .empty;
+
+	for ([_]struct { id: i64, sink: bool, stream: bool }{
+		.{ .id = 1, .sink = true, .stream = false },
+		.{ .id = 2, .sink = true, .stream = false },
+		.{ .id = 3, .sink = true, .stream = false },
+		.{ .id = 4, .sink = false, .stream = false },
+		.{ .id = 5, .sink = true, .stream = true },
+	}) |spec| {
+		try nodes.append(allocator, .{
+			.id = spec.id,
+			.name = @constCast("node"),
+			.app = @constCast(""),
+			.class = @constCast(""),
+			.description = try std.fmt.allocPrint(allocator, "device {d}", .{spec.id}),
+			.binary = @constCast(""),
+			.pid = @constCast(""),
+			.volume = 0,
+			.mute = false,
+			.is_stream = spec.stream,
+			.is_sink = spec.sink,
+			.state = @constCast(""),
+		});
+	}
+
+	const sinks = try deviceList(allocator, nodes.items, true, 3);
+
+	try std.testing.expectEqual(@as(usize, 3), sinks.len);
+	try std.testing.expectEqual(@as(i64, 3), sinks[0].id);
+	try std.testing.expect(sinks[0].default);
+	try std.testing.expectEqual(@as(i64, 1), sinks[1].id);
+	try std.testing.expectEqual(@as(i64, 2), sinks[2].id);
+
+	const sources = try deviceList(allocator, nodes.items, false, 4);
+
+	try std.testing.expectEqual(@as(usize, 1), sources.len);
+	try std.testing.expectEqual(@as(i64, 4), sources[0].id);
+	try std.testing.expect(sources[0].default);
+}
+
+test "a stream that stops keeps showing until the hold runs out" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+
+	var audio: Audio = .{
+		.allocator = allocator,
+		.io = std.Io.Threaded.global_single_threaded.io(),
+		.hub = undefined,
+		.scratch = std.heap.ArenaAllocator.init(allocator),
+		.hold_ms = 2000,
+	};
+
+	var node = Node{
+		.id = 7,
+		.name = @constCast("player"),
+		.app = @constCast(""),
+		.class = @constCast("Stream/Output/Audio"),
+		.description = @constCast(""),
+		.binary = @constCast(""),
+		.pid = @constCast(""),
+		.volume = 1,
+		.mute = false,
+		.is_stream = true,
+		.is_sink = false,
+		.state = @constCast("running"),
+	};
+
+	try std.testing.expect(audio.shown(node, 5000));
+
+	node.state = @constCast("suspended");
+	node.shown_until = 7000;
+
+	try std.testing.expect(!audio.live(node));
+	try std.testing.expect(audio.shown(node, 6999));
+	try std.testing.expect(!audio.shown(node, 7000));
+
+	audio.only_playing = false;
+	try std.testing.expect(audio.live(node));
+
+	audio.only_playing = true;
+	try audio.nodes.append(allocator, node);
+
+	try std.testing.expect(audio.expireHolds());
+	try std.testing.expectEqual(@as(i64, 0), audio.nodes.items[0].shown_until);
+	try std.testing.expect(!audio.expireHolds());
 }
