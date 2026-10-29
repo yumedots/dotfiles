@@ -12,6 +12,7 @@ const cursor = @import("providers/cursor.zig");
 const daemon = @import("providers/daemon.zig");
 const github = @import("providers/github.zig");
 const agentname = @import("providers/agentname.zig");
+const workspaces = @import("providers/workspaces.zig");
 const notifications = @import("providers/notifications.zig");
 const weather = @import("providers/weather.zig");
 const system = @import("providers/system.zig");
@@ -53,6 +54,7 @@ pub const Context = struct {
 	daemon: *daemon.Daemon,
 	github: *github.Github,
 	agent_name: *agentname.AgentName,
+	workspaces: *workspaces.Workspaces,
 	notifications: *notifications.Notifications,
 	weather: *weather.Weather,
 	system: *system.System,
@@ -195,6 +197,10 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 
 		if (json.flag(l_cmd, "clips")) context.launcher.refreshClips();
 
+		if (json.flag(l_cmd, "takeWake")) {
+			if (context.launcher.takeWake()) |action| context.supervisor.route(true, action, "");
+		}
+
 		const power = json.integer(json.field(l_cmd, "power"));
 		if (json.field(l_cmd, "power") != null and power >= 0) context.launcher.power(@intCast(power));
 
@@ -205,6 +211,13 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 				json.textAt(target, "path"),
 			);
 		}
+
+		return;
+	}
+
+	if (json.field(value, "workspaces")) |ws_cmd| {
+		const focus = json.integer(json.field(ws_cmd, "focus"));
+		if (focus > 0) context.workspaces.focus(focus);
 
 		return;
 	}
@@ -463,6 +476,9 @@ fn run(io: std.Io) !void {
 	const notify_provider = try notifications.Notifications.create(allocator, io, hub);
 	try hub.add(notify_provider.provider());
 
+	const workspaces_provider = try workspaces.Workspaces.create(allocator, io, hub);
+	try hub.add(workspaces_provider.provider());
+
 	const github_provider = try github.Github.create(allocator, io, hub, client);
 	try hub.add(github_provider.provider());
 
@@ -543,6 +559,7 @@ fn run(io: std.Io) !void {
 		.daemon = daemon_provider,
 		.github = github_provider,
 		.agent_name = agent_name_provider,
+		.workspaces = workspaces_provider,
 		.notifications = notify_provider,
 		.weather = weather_provider,
 		.system = system_provider,
@@ -585,6 +602,7 @@ fn run(io: std.Io) !void {
 	try activity_provider.start();
 	try cursor_provider.start();
 	try github_provider.start();
+	try workspaces_provider.start();
 	try notify_provider.start();
 	try weather_provider.start();
 	try apps_provider.start();

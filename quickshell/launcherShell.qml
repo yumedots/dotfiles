@@ -11,14 +11,6 @@ Root {
 
 	property bool linked: false
 
-	FileView {
-		id: wake
-		path: Quickshell.env("XDG_RUNTIME_DIR") + "/qs-launcher-wake"
-		preload: true
-		blockLoading: true
-		printErrors: false
-	}
-
 	Socket {
 		id: link
 		path: Quickshell.env("QS_MAIN_SOCK") || ((Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/qs-main-" + Quickshell.instanceId + ".sock")
@@ -53,19 +45,18 @@ Root {
 			link.connected = true;
 	}
 
-	Component.onCompleted: {
-		const action = (wake.text() || "").trim();
-
-		if (action === "launcher")
-			launcher();
-		else if (action === "windows")
-			windowSwitcher();
-		else if (action === "clipboard")
-			clipboard();
-		else if (action === "powerMenu")
-			powerMenu();
-
-		if (action)
-			Quickshell.execDetached(["rm", wake.path]);
+	function takeWake() {
+		if (Yudae.connected)
+			Yudae.cmd("launcher", { takeWake: true });
 	}
+
+	Connections {
+		target: Yudae
+
+		function onConnectedChanged() {
+			launcherRoot.takeWake();
+		}
+	}
+
+	Component.onCompleted: launcherRoot.takeWake()
 }

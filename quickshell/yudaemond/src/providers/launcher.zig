@@ -15,6 +15,7 @@ const Io = std.Io;
 const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
+const wake_actions = [_][]const u8{ "launcher", "windows", "clipboard", "powerMenu" };
 const max_results = 60;
 const usage_max = 10;
 const preview_bytes = 20000;
@@ -804,6 +805,24 @@ pub const Launcher = struct {
 		if (exec.runEnv(self.io, allocator, argv, &map)) |result| {
 			result.deinit(allocator);
 		} else |_| {}
+	}
+
+	pub fn takeWake(self: *Launcher) ?[]const u8 {
+		const path = std.fmt.allocPrint(self.allocator, "{s}/qs-launcher-wake", .{proc.runtimeDir(self.io, self.allocator)}) catch return null;
+		defer self.allocator.free(path);
+
+		const body = proc.readFile(self.io, self.allocator, path) catch return null;
+		defer self.allocator.free(body);
+
+		std.Io.Dir.cwd().deleteFile(self.io, path) catch {};
+
+		const action = std.mem.trim(u8, body, " \t\r\n");
+
+		for (wake_actions) |known| {
+			if (std.mem.eql(u8, known, action)) return known;
+		}
+
+		return null;
 	}
 
 	pub fn copyText(self: *Launcher, text: []const u8) void {

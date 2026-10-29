@@ -15,6 +15,7 @@ test {
 	_ = @import("providers/cursor.zig");
 	_ = @import("providers/daemon.zig");
 	_ = @import("providers/github.zig");
+	_ = @import("providers/workspaces.zig");
 	_ = @import("providers/weather.zig");
 	_ = @import("providers/media.zig");
 	_ = @import("providers/calendar.zig");

@@ -47,3 +47,16 @@ pub fn monitorPath(io: Io, allocator: Allocator) ?[]u8 {
 	const runtime = proc.runtimeDir(io, allocator);
 	return std.fmt.allocPrint(allocator, "{s}/hypr/{s}/.socket2.sock", .{ runtime, signature }) catch null;
 }
+
+pub fn usingLua(io: Io, allocator: Allocator) bool {
+	const override = proc.env(io, allocator, "XDG_CONFIG_HOME");
+
+	const base = override orelse
+		(std.fmt.allocPrint(allocator, "{s}/.config", .{proc.home(io, allocator)}) catch return false);
+	defer if (override == null) allocator.free(base);
+
+	const path = std.fmt.allocPrint(allocator, "{s}/hypr/hyprland.lua", .{base}) catch return false;
+	defer allocator.free(path);
+
+	return proc.exists(io, path);
+}

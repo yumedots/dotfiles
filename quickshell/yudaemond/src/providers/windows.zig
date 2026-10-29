@@ -128,14 +128,7 @@ pub const Windows = struct {
 	}
 
 	fn usingLua(self: *Windows) bool {
-		const base = proc.env(self.io, self.allocator, "XDG_CONFIG_HOME") orelse
-			std.fmt.allocPrint(self.allocator, "{s}/.config", .{proc.home(self.io, self.allocator)}) catch return false;
-		defer if (proc.env(self.io, self.allocator, "XDG_CONFIG_HOME") == null) self.allocator.free(base);
-
-		const path = std.fmt.allocPrint(self.allocator, "{s}/hypr/hyprland.lua", .{base}) catch return false;
-		defer self.allocator.free(path);
-
-		return proc.exists(self.io, path);
+		return hypr.usingLua(self.io, self.allocator);
 	}
 
 	pub fn setQuery(self: *Windows, query: []const u8) void {
