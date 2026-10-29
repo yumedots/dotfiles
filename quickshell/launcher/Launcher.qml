@@ -196,8 +196,6 @@ PanelWindow {
 		root.shown = false;
 		root.anchorId = "";
 		root.anchorKey = "";
-		Yudae.cmd("launcher", { query: "", forced: "", group: "" });
-		Yudae.cmd("windows", { query: "" });
 	}
 
 	function settle() {
