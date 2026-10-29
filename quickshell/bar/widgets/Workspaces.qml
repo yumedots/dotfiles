@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell.Hyprland
 import qs
 import qs.services
 import qs.ui
@@ -10,120 +9,16 @@ Row {
 	property var bar: null
 
 	readonly property real baselineLift: Math.ceil(Config.barThickness)
-	readonly property var persistentIds: [1, 2, 3, 4]
-	readonly property int highest: root.ids.length > 0 ? root.ids[root.ids.length - 1] : 0
-	readonly property int pool: Math.max(root.persistentIds.length, root.highest)
-	property var ids: []
-	readonly property var focused: {
-		const workspace = Hyprland.focusedWorkspace;
-		const name = workspace ? (workspace.name || "") : "";
-		const match = /^v(\d+)\.(\d+)$/.exec(name);
-
-		return {
-			name: name,
-			match: match,
-			slot: match ? Number(match[1]) : (workspace ? workspace.id : -1),
-			version: match ? Number(match[2]) : 1
-		};
-	}
-	readonly property string focusedName: root.focused.name
-	readonly property var versionMatch: root.focused.match
-	readonly property int focusedVersion: root.focused.version
-	readonly property int focusedSlot: root.focused.slot
-	property var rememberedVersions: ({})
-	readonly property var slotVersions: {
-		const versions = Object.assign({}, root.rememberedVersions);
-		const live = root.focused;
-
-		if (live.name !== "")
-			versions[live.slot] = live.version;
-
-		return versions;
-	}
+	readonly property var source: Yudae.workspaces
+	readonly property var ids: root.source.ids || []
+	readonly property int pool: root.ids.length > 0 ? root.ids[root.ids.length - 1] : 0
+	readonly property int focusedSlot: root.source.focusedSlot === undefined ? -1 : root.source.focusedSlot
+	readonly property var slotVersions: root.source.versions || []
 
 	property color ink: BarInk.pick(root.bar, "workspaces", Config.foreground)
 
-	readonly property string liveState: {
-		const workspaces = Hyprland.workspaces.values;
-		return workspaces.map(function (w) { return w.id; }).join(",") + "|" + (Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1);
-	}
-
 	function focusWorkspace(id) {
-		Hyprland.dispatch(Hyprland.usingLua
-			? "hl.dsp.focus({ workspace = " + id + " })"
-			: "workspace " + id);
-	}
-
-	function scroll(step) {
-		const count = root.ids.length;
-
-		if (!count)
-			return;
-
-		const index = root.ids.indexOf(root.focusedSlot);
-
-		root.focusWorkspace(root.ids[(index + step + count) % count]);
-	}
-
-	function same(next) {
-		return root.ids.length === next.length && next.every(function (id, index) { return root.ids[index] === id; });
-	}
-
-	function settle() {
-		const ids = root.persistentIds.concat(Hyprland.workspaces.values.filter(function (w) { return w.id > 0; }).map(function (w) { return w.id; }));
-		const next = Array.from(new Set(ids)).sort(function (left, right) { return left - right; });
-
-		if (!root.same(next))
-			root.ids = next;
-
-	}
-
-	function rememberVersions() {
-		const versions = Object.assign({}, root.rememberedVersions);
-		const live = root.focused;
-
-		Hyprland.workspaces.values.forEach(function (w) {
-			const match = /^v(\d+)\.(\d+)$/.exec(w.name || "");
-			const slot = match ? Number(match[1]) : -1;
-
-			if (slot > 0 && versions[slot] === undefined)
-				versions[slot] = Number(match[2]);
-		});
-
-		if (live.name !== "")
-			versions[live.slot] = live.version;
-
-		root.rememberedVersions = versions;
-	}
-
-	Component.onCompleted: {
-		root.settle();
-		root.rememberVersions();
-	}
-
-	onLiveStateChanged: root.recheck()
-
-	onFocusedNameChanged: root.recheck()
-
-	function recheck() {
-		debounce.restart();
-		remember.restart();
-	}
-
-	Timer {
-		id: debounce
-
-		interval: 7
-
-		onTriggered: root.settle()
-	}
-
-	Timer {
-		id: remember
-
-		interval: 40
-
-		onTriggered: root.rememberVersions()
+		Yudae.cmd("workspaces", { focus: id });
 	}
 
 	TextMetrics {

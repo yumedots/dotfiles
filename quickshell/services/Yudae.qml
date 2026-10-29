@@ -221,6 +221,7 @@ QtObject {
 	}
 
 	readonly property var notifications: root.snapshot.notifications || ({})
+	readonly property var workspaces: root.snapshot.workspaces || ({})
 	readonly property var github: root.snapshot.github || ({})
 	readonly property string agentName: root.snapshot.agentName || ""
 	readonly property var weatherState: root.snapshot.weather || ({})
