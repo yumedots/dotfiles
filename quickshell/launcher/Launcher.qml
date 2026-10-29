@@ -260,10 +260,13 @@ PanelWindow {
 			return;
 		}
 
-		if (!field.typing && root.types(event)) {
+		if (!field.typing && event.text === Config.procHintKey) {
 			field.startTyping();
-			field.text = event.text;
-			root.query = field.text;
+			event.accepted = true;
+			return;
+		}
+
+		if (!field.typing && root.types(event)) {
 			event.accepted = true;
 			return;
 		}
