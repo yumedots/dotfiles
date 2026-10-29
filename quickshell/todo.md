@@ -76,7 +76,7 @@ by shape, using the workspace indicator's own version table.
 - `ui/AgentFace.qml` — the face: body shape, blinking eyes, lean.
 - `bar/widgets/AgentStat.qml` — the topbar widget: the face as a bar icon, eyes still.
 - `tooltips/AgentPanel.qml` — the panel: the face at full size, the state, the work, the plan.
-- `config.js` — `agent*` constants.
+- `config.toml` — `agent*` constants.
 - `qmldir` files — register the new module entries.
 - `Bar.qml` + `topbarlayout.json` — the widget slot.
 - `~/.config/hypr/plugins/agent-cursor/` — Hyprland plugin source + Makefile.
