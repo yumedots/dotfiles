@@ -52,14 +52,14 @@ QtObject {
 		for (let i = 0; i < root.subscriptions.length; i++) {
 			const entry = root.subscriptions[i];
 
-			if (!entry.limits || entry.limits.length === 0)
+			if ((!entry.limits || entry.limits.length === 0) && !entry.failure)
 				continue;
 
 			out.push({
 				title: entry.id === "opencode" ? Config.agentPlanName : entry.title + (entry.plan ? " " + entry.plan : ""),
 				icon: entry.id === "opencode" ? Config.agentPlanIcon : "openai",
 				limits: entry.limits,
-				error: entry.failure || "",
+				failure: entry.failure || "",
 			});
 		}
 

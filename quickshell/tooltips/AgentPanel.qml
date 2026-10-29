@@ -530,6 +530,17 @@ Item {
 								}
 							}
 
+							Text {
+								width: planBlock.width
+								visible: planBlock.modelData.failure !== ""
+								elide: Text.ElideRight
+
+								font.family: Config.fontFamily
+								font.pixelSize: Settings.fontSize
+								color: Config.muted
+								text: planBlock.modelData.failure
+							}
+
 							Repeater {
 								model: planBlock.modelData.limits
 
