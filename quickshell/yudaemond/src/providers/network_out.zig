@@ -3,7 +3,6 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 const quiet_rate: f64 = 16 * 1024;
-const braille_base: u21 = 0x2800;
 
 pub const HistOut = struct {
 	down: f64,
@@ -29,8 +28,8 @@ pub const DetailOut = struct {
 };
 
 pub const GraphOut = struct {
-	up: []const u8,
-	down: []const u8,
+	up: []const u32,
+	down: []const u32,
 };
 
 pub const SpeedOut = struct {
@@ -73,54 +72,29 @@ pub const Out = struct {
 
 pub fn graph(arena: Allocator, history: []const HistOut, scale: f64, cells: usize) !GraphOut {
 	return .{
-		.up = try line(arena, history, scale, cells, true),
-		.down = try line(arena, history, scale, cells, false),
+		.up = try levels(arena, history, scale, cells, true),
+		.down = try levels(arena, history, scale, cells, false),
 	};
 }
 
-pub fn line(arena: Allocator, history: []const HistOut, scale: f64, cells: usize, up: bool) ![]const u8 {
-	var out: std.ArrayListUnmanaged(u8) = .empty;
+pub fn levels(arena: Allocator, history: []const HistOut, scale: f64, cells: usize, up: bool) ![]const u32 {
+	const out = try arena.alloc(u32, cells * 2);
 	const top = if (scale > 0) scale else 1;
 	var index: i64 = @as(i64, @intCast(history.len)) - @as(i64, @intCast(cells * 2));
 
-	for (0..cells) |_| {
-		var mask: u8 = 0;
+	for (out) |*level| {
+		var value: f64 = 0;
 
-		for (0..2) |column| {
-			var value: f64 = 0;
-
-			if (index >= 0 and index < history.len) {
-				const entry = history[@intCast(index)];
-				value = if (up) entry.up else entry.down;
-			}
-
-			index += 1;
-
-			if (value < quiet_rate) continue;
-
-			const lit: u8 = @intFromFloat(@min(4, @floor(@max(0, value) / top * 4 + 0.5)));
-			const dots: u8 = (@as(u8, 1) << @intCast(lit)) - 1;
-			const bits: u8 = if (up) dots << @intCast(column * 4) else dots << @intCast(4 - lit) << @intCast(column * 4);
-
-			mask |= bits;
+		if (index >= 0 and index < history.len) {
+			const entry = history[@intCast(index)];
+			value = if (up) entry.up else entry.down;
 		}
 
-		const point: u21 = brailleChar(mask);
-		var buffer: [4]u8 = undefined;
-		const size = std.unicode.utf8Encode(point, &buffer) catch continue;
-
-		try out.appendSlice(arena, buffer[0..size]);
+		index += 1;
+		level.* = if (value < quiet_rate) 0 else @intFromFloat(@min(4, @floor(@max(0, value) / top * 4 + 0.5)));
 	}
 
-	return out.items;
-}
-
-pub fn brailleChar(mask: u8) u21 {
-	const lower_left: u21 = mask & 0x7;
-	const lower_right: u21 = (mask >> 4) & 0x7;
-	const tail: u21 = ((mask >> 3) & 0x1) << 6 | ((mask >> 7) & 0x1) << 7;
-
-	return braille_base + lower_left + (lower_right << 3) + tail;
+	return out;
 }
 
 pub fn locked(security: []const u8) bool {
@@ -238,15 +212,6 @@ test "signal text is a percent or a dash" {
 	try std.testing.expectEqualStrings("-", none);
 }
 
-test "braille cells take the 2x4 dot grid the graph paints" {
-	try std.testing.expectEqual(@as(u21, 0x2800), brailleChar(0));
-	try std.testing.expectEqual(@as(u21, 0x2801), brailleChar(0x01));
-	try std.testing.expectEqual(@as(u21, 0x2840), brailleChar(0x08));
-	try std.testing.expectEqual(@as(u21, 0x28B8), brailleChar(0xF0));
-	try std.testing.expectEqual(@as(u21, 0x2847), brailleChar(0x0F));
-	try std.testing.expectEqual(@as(u21, 0x28FF), brailleChar(0xFF));
-}
-
 test "a full sample column fills its half of the cell" {
 	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
 	defer arena.deinit();
@@ -254,8 +219,8 @@ test "a full sample column fills its half of the cell" {
 	const allocator = arena.allocator();
 	const history = [_]HistOut{ .{ .down = 0, .up = 0 }, .{ .down = 0, .up = 1_000_000 } };
 
-	try std.testing.expectEqualStrings("\u{28B8}", try line(allocator, &history, 1_000_000, 1, true));
-	try std.testing.expectEqualStrings("\u{2800}", try line(allocator, &history, 1_000_000, 1, false));
+	try std.testing.expectEqualSlices(u32, &.{ 0, 4 }, try levels(allocator, &history, 1_000_000, 1, true));
+	try std.testing.expectEqualSlices(u32, &.{ 0, 0 }, try levels(allocator, &history, 1_000_000, 1, false));
 }
 
 test "quiet traffic lights no dots" {
@@ -265,7 +230,7 @@ test "quiet traffic lights no dots" {
 	const allocator = arena.allocator();
 	const history = [_]HistOut{ .{ .down = 1024, .up = 2048 }, .{ .down = 4096, .up = 8192 } };
 
-	try std.testing.expectEqualStrings("\u{2800}\u{2800}", try line(allocator, &history, 8192, 2, false));
+	try std.testing.expectEqualSlices(u32, &.{ 0, 0, 0, 0 }, try levels(allocator, &history, 8192, 2, false));
 }
 
 test "the graph keeps the newest samples when the history runs long" {
@@ -277,10 +242,153 @@ test "the graph keeps the newest samples when the history runs long" {
 
 	for (&history, 0..) |*entry, index| entry.* = .{ .down = if (index == 59) 1_000_000 else 0, .up = 0 };
 
-	const text = try line(allocator, &history, 1_000_000, 2, false);
+	const out = try levels(allocator, &history, 1_000_000, 2, false);
 
-	try std.testing.expectEqual(@as(usize, 2 * 3), text.len);
-	try std.testing.expect(std.mem.endsWith(u8, text, "\u{28B8}"));
+	try std.testing.expectEqualSlices(u32, &.{ 0, 0, 0, 4 }, out);
+}
+
+test "per-column levels paint the shape the braille mask did" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const cells: usize = 2;
+	const scale: f64 = 1_000_000;
+	const history = [_]HistOut{
+		.{ .down = 1_000_000, .up = 0 },
+		.{ .down = 500_000, .up = 1_000_000 },
+		.{ .down = 0, .up = 250_000 },
+		.{ .down = 800_000, .up = 0 },
+	};
+
+	const down = try levels(allocator, &history, scale, cells, false);
+	const up = try levels(allocator, &history, scale, cells, true);
+
+	try std.testing.expectEqualSlices(u32, &.{ 4, 2, 0, 3 }, down);
+	try std.testing.expectEqualSlices(u32, &.{ 0, 4, 1, 0 }, up);
+
+	const down_art = try art(allocator, try levelGrid(allocator, down, false), down.len);
+	const up_art = try art(allocator, try levelGrid(allocator, up, true), up.len);
+
+	try std.testing.expectEqualStrings("#...\n#..#\n##.#\n##.#\n", down_art);
+	try std.testing.expectEqualStrings(".##.\n.#..\n.#..\n.#..\n", up_art);
+	try std.testing.expectEqual(@as(usize, 9), std.mem.count(u8, down_art, "#"));
+	try std.testing.expectEqual(@as(usize, 5), std.mem.count(u8, up_art, "#"));
+
+	for ([_]bool{ true, false }) |low| {
+		const mine = try levelGrid(allocator, try levels(allocator, &history, scale, cells, low), low);
+		const theirs = try maskGrid(allocator, try refMask(allocator, &history, scale, cells, low), low);
+
+		try std.testing.expectEqualSlices(bool, theirs, mine);
+	}
+}
+
+test "levels match the braille mask on a full history" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	var history: [60]HistOut = @splat(.{ .down = 0, .up = 0 });
+
+	for (&history, 0..) |*entry, index| {
+		const wave = @as(f64, @floatFromInt(index % 7)) / 6;
+
+		entry.* = .{ .down = wave * 900_000, .up = (1 - wave) * 700_000 };
+	}
+
+	const cells: usize = 26;
+	var lit = [_]usize{ 0, 0 };
+
+	for ([_]bool{ true, false }, 0..) |low, side| {
+		const mine = try levelGrid(allocator, try levels(allocator, &history, 900_000, cells, low), low);
+		const theirs = try maskGrid(allocator, try refMask(allocator, &history, 900_000, cells, low), low);
+
+		try std.testing.expectEqual(@as(usize, cells * 2 * 4), mine.len);
+		try std.testing.expectEqualSlices(bool, theirs, mine);
+
+		for (mine) |dot| {
+			if (dot) lit[side] += 1;
+		}
+	}
+
+	const columns = try levels(allocator, &history, 900_000, cells, true);
+	try std.testing.expectEqual(@as(usize, 52), columns.len);
+	try std.testing.expectEqual(@as(usize, 91), lit[0]);
+	try std.testing.expectEqual(@as(usize, 102), lit[1]);
+}
+
+fn refMask(allocator: Allocator, history: []const HistOut, scale: f64, cells: usize, up: bool) ![]const u8 {
+	const out = try allocator.alloc(u8, cells);
+	const top = if (scale > 0) scale else 1;
+	var index: i64 = @as(i64, @intCast(history.len)) - @as(i64, @intCast(cells * 2));
+
+	for (out) |*mask| {
+		mask.* = 0;
+
+		for (0..2) |column| {
+			var value: f64 = 0;
+
+			if (index >= 0 and index < history.len) {
+				const entry = history[@intCast(index)];
+				value = if (up) entry.up else entry.down;
+			}
+
+			index += 1;
+
+			if (value < quiet_rate) continue;
+
+			const count: u8 = @intFromFloat(@min(4, @floor(@max(0, value) / top * 4 + 0.5)));
+			const dots: u8 = (@as(u8, 1) << @intCast(count)) - 1;
+			const bits: u8 = if (up) dots << @intCast(column * 4) else dots << @intCast(4 - count) << @intCast(column * 4);
+
+			mask.* |= bits;
+		}
+	}
+
+	return out;
+}
+
+fn maskGrid(allocator: Allocator, mask: []const u8, up: bool) ![]bool {
+	_ = up;
+
+	const out = try allocator.alloc(bool, mask.len * 8);
+	@memset(out, false);
+
+	for (mask, 0..) |cell, cell_index| {
+		for (0..8) |bit| {
+			if (cell >> @intCast(bit) & 1 == 0) continue;
+
+			out[(bit % 4) * mask.len * 2 + cell_index * 2 + bit / 4] = true;
+		}
+	}
+
+	return out;
+}
+
+fn levelGrid(allocator: Allocator, levels_out: []const u32, up: bool) ![]bool {
+	const out = try allocator.alloc(bool, levels_out.len * 4);
+	@memset(out, false);
+
+	for (levels_out, 0..) |level, column| {
+		for (0..level) |step| {
+			const row = if (up) step else 3 - step;
+
+			out[row * levels_out.len + column] = true;
+		}
+	}
+
+	return out;
+}
+
+fn art(allocator: Allocator, grid: []const bool, columns: usize) ![]const u8 {
+	var out: std.ArrayListUnmanaged(u8) = .empty;
+
+	for (0..4) |row| {
+		for (0..columns) |column| try out.append(allocator, if (grid[row * columns + column]) '#' else '.');
+		try out.append(allocator, '\n');
+	}
+
+	return out.items;
 }
 
 test "wifi security decides whether a network is locked" {
