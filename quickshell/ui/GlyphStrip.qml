@@ -9,6 +9,8 @@ Item {
 	property int count: 1
 	property int filled: 0
 	property bool glyphs: true
+	property bool revealed: false
+	property string text: ""
 	property var pool: []
 	property var marks: []
 	property color ink: Config.foreground
@@ -95,11 +97,11 @@ Item {
 					font.family: Config.fontFamily
 					font.pixelSize: root.glyphSize
 					font.weight: Font.Medium
-					text: root.marks[box.slot] || ""
+					text: root.revealed ? (root.text[box.slot] || "") : (root.marks[box.slot] || "")
 				}
 
 				Text {
-					visible: box.lit && root.glyphs
+					visible: box.lit && (root.revealed || root.glyphs)
 					x: (root.boxWidth - metrics.tightBoundingRect.width) / 2 - metrics.tightBoundingRect.x
 					y: (root.boxHeight - metrics.tightBoundingRect.height) / 2 - metrics.tightBoundingRect.y + metrics.boundingRect.y
 					font.family: Config.fontFamily

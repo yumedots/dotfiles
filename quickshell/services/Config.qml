@@ -265,9 +265,12 @@ QtObject {
 	readonly property var lockIconSize: settings.lockIconSize !== undefined ? settings.lockIconSize : 22
 	readonly property var lockIcon: settings.lockIcon !== undefined ? settings.lockIcon : "\uf023"
 	readonly property var lockOpenIcon: settings.lockOpenIcon !== undefined ? settings.lockOpenIcon : "\uf09c"
+	readonly property var lockRevealIcon: settings.lockRevealIcon !== undefined ? settings.lockRevealIcon : "\uf06e"
+	readonly property var lockHideIcon: settings.lockHideIcon !== undefined ? settings.lockHideIcon : "\uf070"
 	readonly property var lockPowerIcon: settings.lockPowerIcon !== undefined ? settings.lockPowerIcon : "\uf011"
 	readonly property var lockPowerSize: settings.lockPowerSize !== undefined ? settings.lockPowerSize : 18
 	readonly property var lockNoteSize: settings.lockNoteSize !== undefined ? settings.lockNoteSize : 12
+	readonly property var lockFieldMin: settings.lockFieldMin !== undefined ? settings.lockFieldMin : 5
 	readonly property var lockBoxes: settings.lockBoxes !== undefined ? settings.lockBoxes : 10
 	readonly property var lockBoxWidth: settings.lockBoxWidth !== undefined ? settings.lockBoxWidth : 44
 	readonly property var lockBoxHeight: settings.lockBoxHeight !== undefined ? settings.lockBoxHeight : 44

@@ -16,6 +16,7 @@ PanelWindow {
 	property bool power: true
 	property var actions: []
 	property bool menuOpen: false
+	property bool reveal: false
 
 	signal powerRequested()
 	signal actionPicked(var action)
@@ -234,10 +235,38 @@ PanelWindow {
 				GlyphStrip {
 					id: strip
 
-					count: Math.min(Config.lockBoxes, Math.max(1, filled + 1))
+					count: Math.min(Config.lockBoxes, Math.max(Config.lockFieldMin, filled))
 					filled: root.source ? root.source.filled : 0
+					revealed: root.reveal
+					text: root.source ? root.source.password : ""
 					pool: Config.lockGlyphPool
 					glyphs: true
+				}
+
+				Item {
+					width: Config.lockBoxWidth
+					height: Config.lockBoxHeight
+
+					Text {
+						anchors.centerIn: parent
+						font.family: Config.fontFamily
+						font.pixelSize: Config.lockIconSize
+						color: Config.foreground
+						opacity: revealHit.containsMouse ? 1 : 0.55
+						text: root.reveal ? Config.lockHideIcon : Config.lockRevealIcon
+
+						Behavior on opacity {
+							NumberAnimation { duration: 120 }
+						}
+					}
+
+					MouseArea {
+						id: revealHit
+
+						anchors.fill: parent
+						hoverEnabled: true
+						onClicked: root.reveal = !root.reveal
+					}
 				}
 			}
 		}
@@ -408,5 +437,8 @@ PanelWindow {
 	onModeChanged: {
 		if (root.mode === "wrong")
 			strip.reject();
+
+		if (root.mode !== "locked")
+			root.reveal = false;
 	}
 }
