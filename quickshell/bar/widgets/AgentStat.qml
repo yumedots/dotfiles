@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell.Hyprland
 import qs
 import qs.services
 import qs.ui
@@ -39,6 +40,8 @@ BarStat {
 
 			size: Math.min(parent.width, parent.height)
 			state: Yudae.state
+
+			paused: Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.hasFullscreen
 
 			// The bar icon keeps its eyes still. The panel face tracks the cursor.
 			followCursor: false
