@@ -205,24 +205,29 @@ PanelWindow {
 			Row {
 				id: row
 
-				spacing: Config.lockIconGap
+				spacing: Config.lockBoxGap
 
-				Text {
-					id: mark
+				Item {
+					width: Config.lockBoxWidth
+					height: Config.lockBoxHeight
 
-					anchors.verticalCenter: parent.verticalCenter
-					font.family: Config.fontFamily
-					font.pixelSize: Config.lockIconSize
-					color: root.mode === "wrong" ? Config.red : (root.open ? Config.powerBase : Config.foreground)
-					opacity: root.mode === "checking" ? 0.4 : 1
-					text: root.open ? Config.lockOpenIcon : Config.lockIcon
+					Text {
+						id: mark
 
-					Behavior on opacity {
-						NumberAnimation { duration: 140 }
-					}
+						anchors.centerIn: parent
+						font.family: Config.fontFamily
+						font.pixelSize: Config.lockIconSize
+						color: root.mode === "wrong" ? Config.red : Config.foreground
+						opacity: root.mode === "checking" ? 0.4 : 1
+						text: root.open ? Config.lockOpenIcon : Config.lockIcon
 
-					Behavior on color {
-						ColorAnimation { duration: 200 }
+						Behavior on opacity {
+							NumberAnimation { duration: 140 }
+						}
+
+						Behavior on color {
+							ColorAnimation { duration: 200 }
+						}
 					}
 				}
 

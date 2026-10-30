@@ -267,7 +267,6 @@ lockClockFormat = "HH:mm"
 lockDateFormat = "dddd d MMMM"
 lockDateSize = 20
 lockCardPadding = 12
-lockIconGap = 12
 lockIconSize = 22
 lockIcon = "\uF023"
 lockOpenIcon = "\uF09C"

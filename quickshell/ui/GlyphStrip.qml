@@ -12,8 +12,7 @@ Item {
 	property var pool: []
 	property var marks: []
 	property color ink: Config.foreground
-	property color emptyColor: Config.launcherSearchBox
-	property color filledColor: Config.launcherHighlight
+	property color fieldColor: Config.launcherSearchBox
 	property real boxWidth: Config.lockBoxWidth
 	property real boxHeight: Config.lockBoxHeight
 	property real gap: Config.lockBoxGap
@@ -67,6 +66,11 @@ Item {
 		NumberAnimation { target: root; property: "nudge"; to: 0; duration: 45; easing.type: Easing.OutCubic }
 	}
 
+	Rectangle {
+		anchors.fill: parent
+		color: root.fieldColor
+	}
+
 	Row {
 		x: root.nudge
 		spacing: root.gap
@@ -74,7 +78,7 @@ Item {
 		Repeater {
 			model: root.count
 
-			delegate: Rectangle {
+			delegate: Item {
 				id: box
 
 				required property int index
@@ -84,7 +88,6 @@ Item {
 
 				width: root.boxWidth
 				height: root.boxHeight
-				color: box.lit ? root.filledColor : root.emptyColor
 
 				TextMetrics {
 					id: metrics

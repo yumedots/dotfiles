@@ -262,7 +262,6 @@ QtObject {
 	readonly property var lockDateFormat: settings.lockDateFormat !== undefined ? settings.lockDateFormat : "dddd d MMMM"
 	readonly property var lockDateSize: settings.lockDateSize !== undefined ? settings.lockDateSize : 20
 	readonly property var lockCardPadding: settings.lockCardPadding !== undefined ? settings.lockCardPadding : 12
-	readonly property var lockIconGap: settings.lockIconGap !== undefined ? settings.lockIconGap : 12
 	readonly property var lockIconSize: settings.lockIconSize !== undefined ? settings.lockIconSize : 22
 	readonly property var lockIcon: settings.lockIcon !== undefined ? settings.lockIcon : "\uf023"
 	readonly property var lockOpenIcon: settings.lockOpenIcon !== undefined ? settings.lockOpenIcon : "\uf09c"
