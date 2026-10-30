@@ -13,26 +13,10 @@ import "wallpaper"
 ShellRoot {
 	id: shellRoot
 
-	property string role: "main"
 	property double hyprBootAt: Date.now()
-	readonly property bool isLauncher: role === "launcher"
-	readonly property string launcherPath: Quickshell.shellDir + "/launcherShell.qml"
 	readonly property string lockScript: Quickshell.shellDir + "/scripts/lock"
 
-	function toLauncher(fn, arg) {
-		Yudae.cmd("route", { to: "launcher", fn: fn, arg: arg === undefined || arg === null ? "" : String(arg) });
-	}
-
-	function toMain(fn) {
-		Yudae.cmd("route", { to: "main", fn: fn });
-	}
-
 	function launcher() {
-		if (!shellRoot.isLauncher) {
-			shellRoot.toLauncher("launcher");
-			return;
-		}
-
 		const wasOpen = launcherWindow.shown;
 
 		launcherWindow.toggle();
@@ -42,20 +26,10 @@ ShellRoot {
 	}
 
 	function clipboard() {
-		if (!shellRoot.isLauncher) {
-			shellRoot.toLauncher("clipboard");
-			return;
-		}
-
 		launcherWindow.openClipboard();
 	}
 
 	function windowSwitcher() {
-		if (!shellRoot.isLauncher) {
-			shellRoot.toLauncher("windows");
-			return;
-		}
-
 		if (launcherWindow.shown && launcherWindow.windows) {
 			launcherWindow.stepWindows(1);
 			return;
@@ -85,21 +59,11 @@ ShellRoot {
 	}
 
 	function closeWidgetsUnderLauncher() {
-		if (shellRoot.isLauncher) {
-			shellRoot.toMain("closeBarPopups");
-			return;
-		}
-
 		if (launcherWindow.shown)
-			shellRoot.closeWidgets();
+			shellRoot.closeBarPopups();
 	}
 
 	function closeLauncherUnderWidget() {
-		if (!shellRoot.isLauncher) {
-			shellRoot.toLauncher("closeLauncher");
-			return;
-		}
-
 		if (!launcherWindow.shown)
 			return;
 
@@ -121,11 +85,6 @@ ShellRoot {
 	}
 
 	function wallpaper() {
-		if (shellRoot.isLauncher) {
-			shellRoot.toMain("wallpaper");
-			return;
-		}
-
 		if (wallpaperWindow.shown)
 			return;
 
@@ -201,7 +160,7 @@ ShellRoot {
 	}
 
 	Instantiator {
-		model: shellRoot.isLauncher ? [["launcher", "launcher"], ["windows", "windows"], ["powerMenu", "powerMenu"]] : []
+		model: [["launcher", "launcher"], ["windows", "windows"], ["powerMenu", "powerMenu"]]
 
 		delegate: GlobalShortcut {
 			required property var modelData
@@ -212,10 +171,8 @@ ShellRoot {
 		}
 	}
 
-	// The launcher clipboard. The keybind that wakes the launcher sends its
-	// shortcut here when the launcher is already running.
 	Instantiator {
-		model: shellRoot.isLauncher ? [] : [["clipboard", "clipboard"], ["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["weather", "weather"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"], ["bareBar", "bareBar"]]
+		model: [["clipboard", "clipboard"], ["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["weather", "weather"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"], ["bareBar", "bareBar"]]
 
 		delegate: GlobalShortcut {
 			required property var modelData
@@ -227,7 +184,7 @@ ShellRoot {
 	}
 
 	Instantiator {
-		model: shellRoot.isLauncher ? [] : ["playPause", "next", "previous"]
+		model: ["playPause", "next", "previous"]
 
 		delegate: GlobalShortcut {
 			required property string modelData
@@ -254,11 +211,6 @@ ShellRoot {
 		}
 
 		function windowsStep(direction: string) {
-			if (!shellRoot.isLauncher) {
-				shellRoot.toLauncher("windowsStep", direction);
-				return;
-			}
-
 			launcherWindow.stepWindows({ left: -1, right: 1, up: -launcherWindow.windowColumns, down: launcherWindow.windowColumns }[direction] || 0);
 		}
 
@@ -307,16 +259,7 @@ ShellRoot {
 		}
 
 		function killPopups() {
-			if (shellRoot.isLauncher) {
-				launcherWindow.close();
-				return;
-			}
-
 			shellRoot.closeWidgets();
-			shellRoot.toLauncher("killPopupsLocal");
-		}
-
-		function killPopupsLocal() {
 			launcherWindow.close();
 		}
 
@@ -402,8 +345,7 @@ ShellRoot {
 			if (!Hyprland.activeToplevel)
 				return;
 
-			if (shellRoot.isLauncher)
-				Hyprland.refreshToplevels();
+			Hyprland.refreshToplevels();
 
 			shellRoot.closeWidgets();
 			launcherWindow.close();
@@ -421,7 +363,7 @@ ShellRoot {
 	Variants {
 		id: bars
 
-		model: shellRoot.isLauncher ? [] : Quickshell.screens
+		model: Quickshell.screens
 
 		Bar {
 			onWidgetActivated: Handoff.run(shellRoot.closeLauncherUnderWidget)
@@ -431,22 +373,20 @@ ShellRoot {
 
 	Launcher {
 		id: launcherWindow
-		alwaysMapped: shellRoot.isLauncher
 		onPowerRequested: shellRoot.powerMenu()
+		onWallpaperRequested: shellRoot.wallpaper()
 	}
 
 	WallpaperPicker {
 		id: wallpaperWindow
-		active: !shellRoot.isLauncher
 	}
 
 	PowerMenu {
 		id: powerMenuWindow
-		alwaysMapped: shellRoot.isLauncher
 	}
 
 	IdleMonitor {
-		enabled: !shellRoot.isLauncher && Config.lockAfterMinutes > 0
+		enabled: Config.lockAfterMinutes > 0
 		timeout: Math.max(1, Config.lockAfterMinutes * 60)
 
 		onIsIdleChanged: if (isIdle)

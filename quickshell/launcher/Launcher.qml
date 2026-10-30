@@ -9,6 +9,7 @@ PanelWindow {
 	id: root
 
 	signal powerRequested()
+	signal wallpaperRequested()
 
 	property bool shown: false
 	property string query: ""
@@ -375,8 +376,7 @@ PanelWindow {
 
 	function openWallpaper() {
 		root.close();
-
-		Yudae.cmd("route", { to: "main", fn: "wallpaper" });
+		root.wallpaperRequested();
 	}
 
 	function openPowerMenu() {
