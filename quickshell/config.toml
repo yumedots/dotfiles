@@ -328,6 +328,8 @@ weatherIconRight = "\uF105"
 weatherIconAdd = "\uF067"
 weatherSeparator = 1
 weatherSeparatorColor = "#2b2b2b"
+weatherDayCardColor = "#181818"
+weatherDayCardRadius = 8
 weatherCardSearchDebounce = 60
 weatherCodes = [
 	{ code = 0, name = "Clear", glyph = "\U000F0599" },

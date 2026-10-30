@@ -10,6 +10,10 @@ Item {
 
 	focus: true
 
+	HoverHandler {
+		id: cardHover
+	}
+
 	property bool editing: false
 	property bool adding: false
 	property bool held: false
@@ -29,18 +33,17 @@ Item {
 	readonly property string ghost: Weather.ghost
 	readonly property bool hasGhost: root.editing && root.match !== null && root.ghost !== ""
 	readonly property var suggestionRows: Weather.matches
-	readonly property bool headerShown: root.editing || root.held || heroHover.hovered || headerHover.hovered
+	readonly property bool headerShown: root.editing || root.held || cardHover.hovered
 	readonly property int dayCount: root.rows.length > 0 ? Math.min(root.rows.length, 7) : 7
 	readonly property real dayTextWidth: dayTempMetrics.width * 1.04 + 2
-	readonly property real dayCellWidth: Math.max(1, Math.min(
-		Math.max(root.dayTextWidth, dayLabelMetrics.width, Config.weatherDayGlyphSize),
-		(card.width - Config.weatherDayGap * (root.dayCount - 1)) / root.dayCount))
+	readonly property real dayCellWidth: Math.max(1, (card.width - Config.weatherDayGap * (root.dayCount - 1)) / root.dayCount)
 	readonly property real dayTempPixel: root.dayCellWidth >= root.dayTextWidth
 		? Config.weatherDayTempSize
 		: Math.max(8, Math.floor(Config.weatherDayTempSize * (root.dayCellWidth - 2) / root.dayTextWidth))
-	readonly property real placeMaxWidth: card.width - leftArrow.width - rightArrow.width - addIcon.width - Config.weatherCardHeaderGap * 3
+	readonly property real statsWidth: root.statWidth * 3 + Config.weatherCardGap * 2
+	readonly property real placeMaxWidth: root.statsWidth - leftArrow.width - rightArrow.width - addIcon.width - Config.weatherCardHeaderGap * 3
 	readonly property real statWidth: (card.width - heroGlyphMetrics.width - Config.weatherCardGap * 4 - heroTempMetrics.width - heroUnitMetrics.width) / 3
-	readonly property real dayHeight: dayGlyphMetrics.height + Config.weatherDayGap * 2 + dayLabelMetrics.height + dayTempMetrics.height
+	readonly property real dayCardHeight: Config.weatherDayGap * 6 + dayLabelMetrics.height + dayGlyphMetrics.height + dayTempMetrics.height * 3
 
 	implicitWidth: Config.weatherCardWidth + Config.weatherCardPadding * 2
 	implicitHeight: card.implicitHeight + Config.weatherCardPadding * 2
@@ -249,7 +252,7 @@ Item {
 
 		font.family: Config.fontFamily
 		font.pixelSize: Config.weatherDayTempSize
-		text: "00° 00°"
+		text: "100°"
 	}
 
 	TextMetrics {
@@ -269,246 +272,10 @@ Item {
 		spacing: Config.weatherCardGap
 
 		Item {
-			id: header
-
-			width: card.width
-			height: placeMetrics.height
-
-			HoverHandler {
-				id: headerHover
-			}
-
-			Text {
-				id: placeText
-
-				visible: !root.editing
-				anchors.left: parent.left
-				anchors.verticalCenter: parent.verticalCenter
-				width: Math.min(implicitWidth, root.placeMaxWidth)
-				height: placeMetrics.height
-				elide: Text.ElideRight
-				font.family: Config.fontFamily
-				font.pixelSize: Config.weatherPlaceSize
-				color: placeHit.containsMouse ? Config.foreground : Config.muted
-				text: root.placeName
-
-				MouseArea {
-					id: placeHit
-
-					anchors.fill: parent
-					anchors.margins: -4
-					hoverEnabled: true
-					onClicked: root.startEdit(root.placeName)
-				}
-			}
-
-			RevealIcon {
-				id: leftArrow
-
-				visible: !root.editing
-				anchors.left: placeText.right
-				anchors.leftMargin: Config.weatherCardHeaderGap
-				anchors.verticalCenter: parent.verticalCenter
-				height: placeMetrics.height
-				shown: root.headerShown
-				font.pixelSize: Config.weatherPlaceSize
-				text: Config.weatherIconLeft
-				onClicked: Weather.shift(-1)
-			}
-
-			RevealIcon {
-				id: rightArrow
-
-				visible: !root.editing
-				anchors.left: leftArrow.right
-				anchors.leftMargin: Config.weatherCardHeaderGap
-				anchors.verticalCenter: parent.verticalCenter
-				height: placeMetrics.height
-				shown: root.headerShown
-				font.pixelSize: Config.weatherPlaceSize
-				text: Config.weatherIconRight
-				onClicked: Weather.shift(1)
-			}
-
-			RevealIcon {
-				id: addIcon
-
-				visible: !root.editing
-				anchors.right: parent.right
-				anchors.verticalCenter: parent.verticalCenter
-				height: placeMetrics.height
-				shown: root.headerShown
-				font.pixelSize: Config.weatherPlaceSize
-				text: Config.weatherIconAdd
-				onClicked: root.startEdit("", true)
-			}
-
-			Item {
-				id: inputBox
-
-				visible: root.editing
-				anchors.left: parent.left
-				anchors.right: parent.right
-				anchors.verticalCenter: parent.verticalCenter
-				height: placeMetrics.height
-
-				Text {
-					id: queryMeasure
-
-					visible: false
-					font.family: Config.fontFamily
-					font.pixelSize: Config.weatherPlaceSize
-					text: root.query
-				}
-
-				Text {
-					id: ghostText
-
-					visible: root.hasGhost
-					x: queryMeasure.implicitWidth
-					anchors.verticalCenter: parent.verticalCenter
-					width: Math.max(0, inputBox.width - queryMeasure.implicitWidth)
-					height: placeMetrics.height
-					elide: Text.ElideRight
-					font.family: Config.fontFamily
-					font.pixelSize: Config.weatherPlaceSize
-					color: Config.muted
-					text: root.ghost
-				}
-
-				TextInput {
-					id: nameInput
-
-					anchors.fill: parent
-					focus: root.editing
-					clip: true
-					selectByMouse: false
-
-					font.family: Config.fontFamily
-					font.pixelSize: Config.weatherPlaceSize
-					color: Config.foreground
-					selectionColor: Config.launcherHighlight
-					selectedTextColor: Config.launcherHighlightText
-
-					onTextEdited: {
-						root.query = nameInput.text;
-					}
-					onActiveFocusChanged: if (activeFocus) selectAll()
-
-					Keys.onPressed: function (event) {
-						if (Input.cancel(event)) {
-							root.stopEdit();
-							event.accepted = true;
-							return;
-						}
-
-						if (Input.accept(event)) {
-							root.takeChosen();
-							event.accepted = true;
-							return;
-						}
-
-						if (event.key === Qt.Key_Down) {
-							root.pickRow(1);
-							event.accepted = true;
-							return;
-						}
-
-						if (event.key === Qt.Key_Up) {
-							root.pickRow(-1);
-							event.accepted = true;
-							return;
-						}
-
-						if (event.key === Qt.Key_Tab) {
-							root.completeGhost();
-							event.accepted = true;
-						}
-					}
-				}
-
-				Connections {
-					target: root
-
-					function onQueryStampChanged() {
-						nameInput.text = root.query;
-
-						if (root.selectQuery) {
-							root.selectQuery = false;
-							nameInput.selectAll();
-						} else
-							nameInput.cursorPosition = nameInput.text.length;
-					}
-				}
-			}
-		}
-
-		Repeater {
-			model: root.editing ? root.suggestionRows : []
-
-			delegate: Item {
-				id: suggestRow
-
-				required property var modelData
-				required property int index
-
-				readonly property bool chosen: suggestRow.index === root.pickIndex
-
-				width: card.width
-				height: suggestMetrics.height + Config.weatherCardGap
-
-				Highlight {
-					active: suggestRow.chosen || suggestHit.containsMouse
-				}
-
-				Text {
-					id: suggestName
-
-					anchors.left: parent.left
-					anchors.leftMargin: Config.weatherCardGap
-					anchors.verticalCenter: parent.verticalCenter
-					width: Math.min(implicitWidth, suggestRow.width * 0.55)
-					elide: Text.ElideRight
-					font.family: Config.fontFamily
-					font.pixelSize: Config.weatherPlaceSize
-					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.foreground
-					text: String(suggestRow.modelData.name || "")
-				}
-
-				Text {
-					anchors.left: suggestName.right
-					anchors.leftMargin: Config.weatherCardGap
-					anchors.right: parent.right
-					anchors.rightMargin: Config.weatherCardGap
-					anchors.verticalCenter: parent.verticalCenter
-					elide: Text.ElideRight
-					font.family: Config.fontFamily
-					font.pixelSize: Config.weatherPlaceSize
-					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.muted
-					text: suggestRow.modelData.region
-				}
-
-				MouseArea {
-					id: suggestHit
-
-					anchors.fill: parent
-					hoverEnabled: true
-
-					onEntered: root.pickIndex = suggestRow.index
-					onClicked: root.pick(suggestRow.modelData)
-				}
-			}
-		}
-
-		Item {
 			id: hero
 
 			width: card.width
 			height: tempBox.height
-
-			HoverHandler {
-				id: heroHover
-			}
 
 			Text {
 				id: heroGlyph
@@ -562,11 +329,184 @@ Item {
 
 				anchors.right: parent.right
 				anchors.verticalCenter: parent.verticalCenter
-				width: root.statWidth * 3 + Config.weatherCardGap * 2
-				height: statRow.height
+				width: root.statsWidth
+				height: header.height + Config.weatherCardHeaderGap + statRow.height
+
+				Item {
+					id: header
+
+					width: root.statsWidth
+					height: placeMetrics.height
+
+					Text {
+						id: placeText
+
+						visible: !root.editing
+						anchors.left: parent.left
+						anchors.verticalCenter: parent.verticalCenter
+						width: Math.min(implicitWidth, root.placeMaxWidth)
+						height: placeMetrics.height
+						elide: Text.ElideRight
+						font.family: Config.fontFamily
+						font.pixelSize: Config.weatherPlaceSize
+						color: placeHit.containsMouse ? Config.foreground : Config.muted
+						text: root.placeName
+
+						MouseArea {
+							id: placeHit
+
+							anchors.fill: parent
+							anchors.margins: -4
+							hoverEnabled: true
+							onClicked: root.startEdit(root.placeName)
+						}
+					}
+
+					RevealIcon {
+						id: leftArrow
+
+						visible: !root.editing
+						anchors.left: placeText.right
+						anchors.leftMargin: Config.weatherCardHeaderGap
+						anchors.verticalCenter: parent.verticalCenter
+						height: placeMetrics.height
+						shown: root.headerShown
+						font.pixelSize: Config.weatherPlaceSize
+						text: Config.weatherIconLeft
+						onClicked: Weather.shift(-1)
+					}
+
+					RevealIcon {
+						id: rightArrow
+
+						visible: !root.editing
+						anchors.left: leftArrow.right
+						anchors.leftMargin: Config.weatherCardHeaderGap
+						anchors.verticalCenter: parent.verticalCenter
+						height: placeMetrics.height
+						shown: root.headerShown
+						font.pixelSize: Config.weatherPlaceSize
+						text: Config.weatherIconRight
+						onClicked: Weather.shift(1)
+					}
+
+					RevealIcon {
+						id: addIcon
+
+						visible: !root.editing
+						anchors.right: parent.right
+						anchors.verticalCenter: parent.verticalCenter
+						height: placeMetrics.height
+						shown: root.headerShown
+						font.pixelSize: Config.weatherPlaceSize
+						text: Config.weatherIconAdd
+						onClicked: root.startEdit("", true)
+					}
+
+					Item {
+						id: inputBox
+
+						visible: root.editing
+						anchors.left: parent.left
+						anchors.right: parent.right
+						anchors.verticalCenter: parent.verticalCenter
+						height: placeMetrics.height
+
+						Text {
+							id: queryMeasure
+
+							visible: false
+							font.family: Config.fontFamily
+							font.pixelSize: Config.weatherPlaceSize
+							text: root.query
+						}
+
+						Text {
+							id: ghostText
+
+							visible: root.hasGhost
+							x: queryMeasure.implicitWidth
+							anchors.verticalCenter: parent.verticalCenter
+							width: Math.max(0, inputBox.width - queryMeasure.implicitWidth)
+							height: placeMetrics.height
+							elide: Text.ElideRight
+							font.family: Config.fontFamily
+							font.pixelSize: Config.weatherPlaceSize
+							color: Config.muted
+							text: root.ghost
+						}
+
+						TextInput {
+							id: nameInput
+
+							anchors.fill: parent
+							focus: root.editing
+							clip: true
+							selectByMouse: false
+
+							font.family: Config.fontFamily
+							font.pixelSize: Config.weatherPlaceSize
+							color: Config.foreground
+							selectionColor: Config.launcherHighlight
+							selectedTextColor: Config.launcherHighlightText
+
+							onTextEdited: {
+								root.query = nameInput.text;
+							}
+							onActiveFocusChanged: if (activeFocus) selectAll()
+
+							Keys.onPressed: function (event) {
+								if (Input.cancel(event)) {
+									root.stopEdit();
+									event.accepted = true;
+									return;
+								}
+
+								if (Input.accept(event)) {
+									root.takeChosen();
+									event.accepted = true;
+									return;
+								}
+
+								if (event.key === Qt.Key_Down) {
+									root.pickRow(1);
+									event.accepted = true;
+									return;
+								}
+
+								if (event.key === Qt.Key_Up) {
+									root.pickRow(-1);
+									event.accepted = true;
+									return;
+								}
+
+								if (event.key === Qt.Key_Tab) {
+									root.completeGhost();
+									event.accepted = true;
+								}
+							}
+						}
+
+						Connections {
+							target: root
+
+							function onQueryStampChanged() {
+								nameInput.text = root.query;
+
+								if (root.selectQuery) {
+									root.selectQuery = false;
+									nameInput.selectAll();
+								} else
+									nameInput.cursorPosition = nameInput.text.length;
+							}
+						}
+					}
+				}
 
 				Row {
 					id: statRow
+					y: header.height + Config.weatherCardHeaderGap
+
 
 					spacing: Config.weatherCardGap
 
@@ -645,6 +585,63 @@ Item {
 			}
 		}
 
+		Repeater {
+			model: root.editing ? root.suggestionRows : []
+
+			delegate: Item {
+				id: suggestRow
+
+				required property var modelData
+				required property int index
+
+				readonly property bool chosen: suggestRow.index === root.pickIndex
+
+				width: card.width
+				height: suggestMetrics.height + Config.weatherCardGap
+
+				Highlight {
+					active: suggestRow.chosen || suggestHit.containsMouse
+				}
+
+				Text {
+					id: suggestName
+
+					anchors.left: parent.left
+					anchors.leftMargin: Config.weatherCardGap
+					anchors.verticalCenter: parent.verticalCenter
+					width: Math.min(implicitWidth, suggestRow.width * 0.55)
+					elide: Text.ElideRight
+					font.family: Config.fontFamily
+					font.pixelSize: Config.weatherPlaceSize
+					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.foreground
+					text: String(suggestRow.modelData.name || "")
+				}
+
+				Text {
+					anchors.left: suggestName.right
+					anchors.leftMargin: Config.weatherCardGap
+					anchors.right: parent.right
+					anchors.rightMargin: Config.weatherCardGap
+					anchors.verticalCenter: parent.verticalCenter
+					elide: Text.ElideRight
+					font.family: Config.fontFamily
+					font.pixelSize: Config.weatherPlaceSize
+					color: suggestRow.chosen || suggestHit.containsMouse ? Config.launcherHighlightText : Config.muted
+					text: suggestRow.modelData.region
+				}
+
+				MouseArea {
+					id: suggestHit
+
+					anchors.fill: parent
+					hoverEnabled: true
+
+					onEntered: root.pickIndex = suggestRow.index
+					onClicked: root.pick(suggestRow.modelData)
+				}
+			}
+		}
+
 		Rectangle {
 			id: separator
 
@@ -657,7 +654,7 @@ Item {
 			id: daysSection
 
 			width: card.width
-			height: root.dayHeight
+			height: root.dayCardHeight
 
 			Row {
 				id: daysRow
@@ -667,63 +664,93 @@ Item {
 				Repeater {
 					model: root.dayCount
 
-					delegate: Item {
+					delegate: Rectangle {
 						id: dayCell
 
 						required property int index
 
 						readonly property var row: dayCell.index < root.rows.length ? root.rows[dayCell.index] : null
+						readonly property string glyph: dayCell.row ? (dayCell.row.glyph || Config.weatherIcon) : Config.weatherLoadingIcon
 
 						width: root.dayCellWidth
-						height: root.dayHeight
+						height: root.dayCardHeight
+						radius: Config.weatherDayCardRadius
+						color: Config.weatherDayCardColor
 
-						Text {
-							id: dayGlyph
-
-							anchors.horizontalCenter: parent.horizontalCenter
-							anchors.top: parent.top
-							height: dayGlyphMetrics.height
-							font.family: Config.fontFamily
-							font.pixelSize: Config.weatherDayGlyphSize
-							color: Config.foreground
-							text: dayCell.row
-								? (dayCell.row.glyph || Config.weatherIcon)
-								: Config.weatherLoadingIcon
-						}
-
-						Text {
-							id: dayLabel
-
-							anchors.horizontalCenter: parent.horizontalCenter
-							anchors.top: dayGlyph.bottom
-							anchors.topMargin: Config.weatherDayGap
-							height: dayLabelMetrics.height
-							font.family: Config.fontFamily
-							font.pixelSize: Config.weatherDayLabelSize
-							color: Config.muted
-							text: dayCell.row ? dayCell.row.day : ""
-						}
-
-						Text {
-							id: dayTemps
-
-							anchors.horizontalCenter: parent.horizontalCenter
-							anchors.top: dayLabel.bottom
-							anchors.topMargin: Config.weatherDayGap
+						Column {
 							width: parent.width
-							height: dayTempMetrics.height
-							horizontalAlignment: Text.AlignHCenter
-							elide: Text.ElideRight
-							font.family: Config.fontFamily
-							font.pixelSize: root.dayTempPixel
-							color: Config.foreground
-							text: dayCell.row ? dayCell.row.temps : ""
+							topPadding: Config.weatherDayGap
+							spacing: Config.weatherDayGap
+
+							Text {
+								width: parent.width
+								height: dayLabelMetrics.height
+								horizontalAlignment: Text.AlignHCenter
+								font.family: Config.fontFamily
+								font.pixelSize: Config.weatherDayLabelSize
+								color: Config.muted
+								text: dayCell.row ? dayCell.row.day : ""
+							}
+
+							TextMetrics {
+								id: glyphInk
+
+								font.family: Config.fontFamily
+								font.pixelSize: Config.weatherDayGlyphSize
+								text: dayCell.glyph
+							}
+
+							Item {
+								width: parent.width
+								height: dayGlyphMetrics.height
+
+								Text {
+									x: parent.width / 2 - (glyphInk.tightBoundingRect.x + glyphInk.tightBoundingRect.width / 2)
+									font.family: Config.fontFamily
+									font.pixelSize: Config.weatherDayGlyphSize
+									color: Config.foreground
+									text: dayCell.glyph
+								}
+							}
+
+							Text {
+								width: parent.width
+								height: dayTempMetrics.height
+								horizontalAlignment: Text.AlignHCenter
+								elide: Text.ElideRight
+								font.family: Config.fontFamily
+								font.pixelSize: root.dayTempPixel
+								color: Config.foreground
+								text: dayCell.row ? dayCell.row.high : ""
+							}
+
+							Text {
+								width: parent.width
+								height: dayTempMetrics.height
+								horizontalAlignment: Text.AlignHCenter
+								elide: Text.ElideRight
+								font.family: Config.fontFamily
+								font.pixelSize: root.dayTempPixel
+								color: Config.muted
+								text: dayCell.row ? dayCell.row.low : ""
+							}
+
+							Text {
+								width: parent.width
+								height: dayTempMetrics.height
+								horizontalAlignment: Text.AlignHCenter
+								elide: Text.ElideRight
+								font.family: Config.fontFamily
+								font.pixelSize: root.dayTempPixel
+								color: Config.muted
+								text: dayCell.row ? dayCell.row.precip : ""
+							}
 						}
 					}
 				}
 			}
 		}
-
+		
 	}
 
 
