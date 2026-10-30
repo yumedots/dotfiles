@@ -277,8 +277,10 @@ Item {
 	// The outline of the body, with the spikes turned on it. The eyes are
 	// holes in the body, so the body is turned on its own and the eyes stay
 	// where they are.
+	// A face that paints its eyes draws the body on its own, so that one turns
+	// on a transform and never rebuilds its geometry.
 	readonly property var outline: {
-		if (!root.live)
+		if (!root.live || root.paintEyes)
 			return root.body;
 
 		return rotatePoints(root.body, root.bodyWidth / 2, root.bodyHeight / 2, root.spin);
@@ -300,13 +302,17 @@ Item {
 		transformOrigin: Item.Center
 
 		// The body and the eyes are one path, so the eyes are holes in the
-		// body.
+		// body. A face that paints its eyes keeps the body to itself, so the
+		// spin is a rotation on the item and the points stay put.
 		DynamicIcon {
 			anchors.fill: parent
 
 			ink: root.bodyColor
 
-			subpaths: root.paintEyes ? [root.outline] : [root.outline].concat(root.eyePaths)
+			rotation: root.paintEyes && root.live ? root.spin * 180 / Math.PI : 0
+			transformOrigin: Item.Center
+
+			subpaths: root.paintEyes ? [root.body] : [root.outline].concat(root.eyePaths)
 		}
 
 		// A face that is drawn on a flat background paints its eyes in that
