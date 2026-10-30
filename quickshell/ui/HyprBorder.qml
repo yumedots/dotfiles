@@ -16,6 +16,8 @@ Item {
 	property bool shadowEnabled: true
 	property real shadowTopReach: -1
 	property real shadowBottomReach: -1
+	property real stripWidth: 1
+	property color stripColor: "#ff000000"
 
 	readonly property var hyprBorder: Yudae.screenBorder.colors ? Yudae.screenBorder : ({ colors: [], angle: 0, width: null })
 	readonly property var themeColors: root.borderColors !== null
@@ -25,8 +27,9 @@ Item {
 	readonly property real wantedWidth: root.borderWidth >= 0 ? root.borderWidth : (root.hyprBorder.width == null ? Config.borderFallbackWidth : root.hyprBorder.width)
 	readonly property real themeWidth: Math.round(root.wantedWidth * root.scale) / root.scale
 	readonly property real themeAngle: root.hyprBorder.angle || 0
-	readonly property var edges: root.edgeRects(root.themeColors, root.themeAngle, frame.width, frame.height, root.themeWidth)
-	readonly property real inset: root.themeWidth + root.padding
+	readonly property real strip: root.stripWidth > 0 ? Math.round(root.stripWidth * root.scale) / root.scale : 0
+	readonly property var edges: root.edgeRects(root.themeColors, root.themeAngle, frame.width - root.strip * 2, frame.height - root.strip * 2, root.themeWidth)
+	readonly property real inset: root.strip + root.themeWidth + root.padding
 
 	readonly property alias contentWidth: body.childrenRect.width
 	readonly property alias contentHeight: body.childrenRect.height
@@ -73,7 +76,13 @@ Item {
 
 		Rectangle {
 			anchors.fill: parent
-			anchors.margins: root.themeWidth
+			color: root.stripColor
+			visible: root.strip > 0
+		}
+
+		Rectangle {
+			anchors.fill: parent
+			anchors.margins: root.strip + root.themeWidth
 			color: root.backgroundColor
 		}
 
@@ -83,8 +92,8 @@ Item {
 			delegate: Rectangle {
 				required property var modelData
 
-				x: modelData.x
-				y: modelData.y
+				x: modelData.x + root.strip
+				y: modelData.y + root.strip
 				width: modelData.width
 				height: modelData.height
 				visible: modelData.width > 0 && modelData.height > 0
