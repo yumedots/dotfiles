@@ -16,8 +16,8 @@ Item {
 	property bool shadowEnabled: true
 	property real shadowTopReach: -1
 	property real shadowBottomReach: -1
-	property real stripWidth: 1
-	property color stripColor: "#ff000000"
+	property real stripWidth: -1
+	property var stripColor: null
 
 	readonly property var hyprBorder: Yudae.screenBorder.colors ? Yudae.screenBorder : ({ colors: [], angle: 0, width: null })
 	readonly property var themeColors: root.borderColors !== null
@@ -27,7 +27,10 @@ Item {
 	readonly property real wantedWidth: root.borderWidth >= 0 ? root.borderWidth : (root.hyprBorder.width == null ? Config.borderFallbackWidth : root.hyprBorder.width)
 	readonly property real themeWidth: Math.round(root.wantedWidth * root.scale) / root.scale
 	readonly property real themeAngle: root.hyprBorder.angle || 0
-	readonly property real strip: root.stripWidth > 0 ? Math.round(root.stripWidth * root.scale) / root.scale : 0
+	readonly property var hyprStrip: Yudae.screenBorder.strip ? Yudae.screenBorder.strip : ({ color: "#ff000000", width: 0 })
+	readonly property real wantedStrip: root.stripWidth >= 0 ? root.stripWidth : (root.hyprStrip.width || 0)
+	readonly property color themeStripColor: root.stripColor !== null ? root.stripColor : Qt.color(root.hyprStrip.color)
+	readonly property real strip: root.wantedStrip > 0 ? Math.round(root.wantedStrip * root.scale) / root.scale : 0
 	readonly property var edges: root.edgeRects(root.themeColors, root.themeAngle, frame.width - root.strip * 2, frame.height - root.strip * 2, root.themeWidth)
 	readonly property real inset: root.strip + root.themeWidth + root.padding
 
@@ -76,7 +79,7 @@ Item {
 
 		Rectangle {
 			anchors.fill: parent
-			color: root.stripColor
+			color: root.themeStripColor
 			visible: root.strip > 0
 		}
 

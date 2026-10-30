@@ -105,6 +105,12 @@ const BorderOut = struct {
 	colors: [][]const u8,
 	angle: f64,
 	width: ?i64,
+	strip: StripOut,
+};
+
+const StripOut = struct {
+	color: []const u8,
+	width: i64,
 };
 
 const ShadowOut = struct {
@@ -142,6 +148,7 @@ pub const Screen = struct {
 	step: i64 = 0,
 	keyboard: bool = false,
 	apply_mutex: std.Io.Mutex = .init,
+	apply_ready: std.Io.Condition = .init,
 	queued: ?Apply = null,
 	pending: std.atomic.Value(bool) = .init(false),
 	fonts: [12]i64 = @splat(0),
@@ -149,6 +156,8 @@ pub const Screen = struct {
 	settings: ?*settings.Settings = null,
 	border_text: []u8 = &.{},
 	border_width: ?i64 = null,
+	strip_color: []u8 = &.{},
+	strip_width: i64 = 0,
 	shadow_enabled: bool = true,
 	shadow_range: i64 = 8,
 	shadow_color: []u8 = &.{},
@@ -215,37 +224,34 @@ pub const Screen = struct {
 
 	fn applyLoop(self: *Screen) void {
 		while (true) {
-			const item = self.takeApply() orelse {
-				if (self.clearPending()) self.hub.publish();
-				sleep.ms(10);
-				continue;
-			};
+			const item = self.takeApply();
 
 			self.applyValue(item.kind, item.value);
 
 			self.allocator.free(item.kind);
 			self.allocator.free(item.value);
 
+			self.releaseApply();
 			self.hub.publish();
 		}
 	}
 
-	fn takeApply(self: *Screen) ?Apply {
+	fn takeApply(self: *Screen) Apply {
 		self.apply_mutex.lockUncancelable(self.io);
 		defer self.apply_mutex.unlock(self.io);
 
-		const item = self.queued;
+		while (self.queued == null) self.apply_ready.waitUncancelable(self.io, &self.apply_mutex);
+
+		const item = self.queued.?;
 		self.queued = null;
 		return item;
 	}
 
-	fn clearPending(self: *Screen) bool {
+	fn releaseApply(self: *Screen) void {
 		self.apply_mutex.lockUncancelable(self.io);
 		defer self.apply_mutex.unlock(self.io);
 
-		if (self.queued != null) return false;
-
-		return self.pending.swap(false, .monotonic);
+		if (self.queued == null) self.pending.store(false, .monotonic);
 	}
 
 	fn queueApply(self: *Screen, kind: []const u8, value: []const u8) void {
@@ -266,6 +272,7 @@ pub const Screen = struct {
 		self.pending.store(true, .monotonic);
 
 		self.apply_mutex.unlock(self.io);
+		self.apply_ready.signal(self.io);
 	}
 
 	fn loop(self: *Screen) void {
@@ -354,6 +361,15 @@ pub const Screen = struct {
 		const size = hypr.request(self.io, self.allocator, "j/getoption general:border_size") catch return;
 		defer self.allocator.free(size);
 
+		const strip_color = hypr.request(self.io, self.allocator, "j/getoption plugin:borders-plus-plus:col.border_1") catch null;
+		defer if (strip_color) |value| self.allocator.free(value);
+
+		const strip_size = hypr.request(self.io, self.allocator, "j/getoption plugin:borders-plus-plus:border_size_1") catch null;
+		defer if (strip_size) |value| self.allocator.free(value);
+
+		const strip_count = hypr.request(self.io, self.allocator, "j/getoption plugin:borders-plus-plus:add_borders") catch null;
+		defer if (strip_count) |value| self.allocator.free(value);
+
 		var arena = std.heap.ArenaAllocator.init(self.allocator);
 		defer arena.deinit();
 
@@ -363,13 +379,21 @@ pub const Screen = struct {
 		const gradient = json.textAt(option_value.value, "gradient");
 		const width = json.integer(json.field(size_value.value, "int"));
 
+		var strip = StripOut{ .color = "#ff000000", .width = 0 };
+
+		if (strip_color != null and strip_size != null and strip_count != null)
+			strip = stripFrom(arena.allocator(), strip_color.?, strip_size.?, strip_count.?, width) orelse strip;
+
 		self.mutex.lockUncancelable(self.io);
-		const same = std.mem.eql(u8, self.border_text, gradient) and self.border_width == width;
+		const same = std.mem.eql(u8, self.border_text, gradient) and self.border_width == width and self.strip_width == strip.width and std.mem.eql(u8, self.strip_color, strip.color);
 
 		if (!same) {
 			self.allocator.free(self.border_text);
 			self.border_text = self.allocator.dupe(u8, gradient) catch &.{};
 			self.border_width = width;
+			self.allocator.free(self.strip_color);
+			self.strip_color = self.allocator.dupe(u8, strip.color) catch &.{};
+			self.strip_width = strip.width;
 		}
 		self.mutex.unlock(self.io);
 
@@ -1054,7 +1078,8 @@ pub const Screen = struct {
 		}
 
 		const stops = parseStops(arena, self.border_text);
-		const border = BorderOut{ .colors = stops.colors, .angle = stops.angle, .width = self.border_width };
+		const strip = StripOut{ .color = if (self.strip_color.len > 0) self.strip_color else "#ff000000", .width = self.strip_width };
+		const border = BorderOut{ .colors = stops.colors, .angle = stops.angle, .width = self.border_width, .strip = strip };
 		const shadow = ShadowOut{ .enabled = self.shadow_enabled, .range = self.shadow_range, .color = if (self.shadow_color.len > 0) self.shadow_color else "rgba(00000070)", .offsetX = self.shadow_offset_x, .offsetY = self.shadow_offset_y };
 
 		const out = Out{ .border = border, .shadow = shadow, .primary = primary, .monitors = monitors.items, .panel = panel, .raw = self.raw };
@@ -1092,6 +1117,25 @@ const Stops = struct {
 	colors: [][]const u8,
 	angle: f64,
 };
+
+fn stripFrom(arena: Allocator, color: []const u8, size: []const u8, count: []const u8, border_width: ?i64) ?StripOut {
+	const color_value = json.parse(arena, color) catch return null;
+	const size_value = json.parse(arena, size) catch return null;
+	const count_value = json.parse(arena, count) catch return null;
+
+	const borders = json.integer(json.field(count_value.value, "int"));
+	if (borders <= 0) return .{ .color = "#ff000000", .width = 0 };
+
+	const wanted = json.integer(json.field(size_value.value, "int"));
+	const thickness = if (wanted < 0) (border_width orelse 0) else wanted;
+	const hex = argbText(arena, json.integer(json.field(color_value.value, "int"))) catch return null;
+
+	return .{ .color = hex, .width = thickness * borders };
+}
+
+fn argbText(arena: Allocator, value: i64) ![]const u8 {
+	return std.fmt.allocPrint(arena, "#{x:0>8}", .{@as(u32, @truncate(@as(u64, @bitCast(value))))});
+}
 
 fn parseStops(arena: Allocator, text: []const u8) Stops {
 	var colors: std.ArrayListUnmanaged([]const u8) = .empty;
@@ -1159,16 +1203,16 @@ test "the newest pick replaces the queued one" {
 
 	try std.testing.expect(screen.pending.load(.monotonic));
 
-	const item = screen.takeApply() orelse return error.NoPick;
+	const item = screen.takeApply();
 	defer std.testing.allocator.free(item.kind);
 	defer std.testing.allocator.free(item.value);
 
 	try std.testing.expectEqualStrings("scale", item.kind);
 	try std.testing.expectEqualStrings("1.6667", item.value);
-	try std.testing.expect(screen.takeApply() == null);
-	try std.testing.expect(screen.clearPending());
+	try std.testing.expect(screen.queued == null);
+	try std.testing.expect(screen.pending.load(.monotonic));
+	screen.releaseApply();
 	try std.testing.expect(!screen.pending.load(.monotonic));
-	try std.testing.expect(!screen.clearPending());
 }
 
 test "hyprland border text becomes stops" {
@@ -1188,4 +1232,20 @@ test "hyprland border text becomes stops" {
 	const plain = parseStops(arena.allocator(), "rgba(ffffffee)");
 	try std.testing.expectEqual(@as(usize, 0), plain.colors.len);
 	try std.testing.expectEqual(@as(f64, 0), plain.angle);
+}
+
+test "plugin border option becomes a strip" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const strip = stripFrom(arena.allocator(), "{\"int\":4278190080,\"set\":true}", "{\"int\":1}", "{\"int\":1}", 2).?;
+	try std.testing.expectEqualStrings("#ff000000", strip.color);
+	try std.testing.expectEqual(@as(i64, 1), strip.width);
+
+	const inherited = stripFrom(arena.allocator(), "{\"int\":-1}", "{\"int\":-1}", "{\"int\":2}", 2).?;
+	try std.testing.expectEqualStrings("#ffffffff", inherited.color);
+	try std.testing.expectEqual(@as(i64, 4), inherited.width);
+
+	const off = stripFrom(arena.allocator(), "{\"int\":4278190080}", "{\"int\":1}", "{\"int\":0}", 2).?;
+	try std.testing.expectEqual(@as(i64, 0), off.width);
 }
