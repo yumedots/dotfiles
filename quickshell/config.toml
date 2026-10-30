@@ -234,6 +234,7 @@ windowsTitleSize = 11
 # power menu and battery
 [power]
 powerActions = [
+	{ name = "Lock", command = "\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/scripts/lock\"", glyph = "\uF023" },
 	{ name = "Suspend", command = "systemctl suspend", glyph = "\U000F04B2" },
 	{ name = "Log out", command = "hyprctl dispatch 'hl.dsp.exit()'", glyph = "\uEA6E" },
 	{ name = "Reboot", command = "systemctl reboot", glyph = "\uEAD2" },
@@ -252,6 +253,43 @@ powerDangerAt = 15
 powerTooltipWidth = 240  # same as cpuTooltipWidth
 powerTooltipPadding = 12  # same as cpuTooltipPadding
 powerGovernorTitle = "Governor"
+
+# lock screen
+[lock]
+lockAfterMinutes = 10  # idle before the shell locks, 0 disables
+lockSleepAfterMinutes = 30  # idle while locked before suspend, 0 disables
+lockSaver = "drift"  # none | drift | rain | embers
+lockSaverOpacity = 0.5
+lockSaverFadeMs = 600
+lockScrim = 0.52
+lockInset = 96
+lockClockFormat = "HH:mm"
+lockDateFormat = "dddd d MMMM"
+lockDateSize = 13
+lockCardPadding = 12
+lockIconGap = 12
+lockIconSize = 22
+lockIcon = "\uF023"
+lockOpenIcon = "\uF09C"
+lockPowerIcon = "\uF011"
+lockPowerSize = 18
+lockNoteSize = 12
+lockBoxes = 10  # most boxes shown at once
+lockBoxWidth = 34
+lockBoxHeight = 34
+lockBoxGap = 6
+lockGlyphSize = 16
+lockCooldownMs = 3000
+lockPamService = "quickshell"
+lockWrongText = "Wrong password"
+lockPamError = "Authentication unavailable"
+greeterUnavailableText = "greeter is not running"
+lockGlyphPool = [
+	"\uF023", "\uF084", "\uF2F6", "\uF21B", "\uF06E",
+	"\uF1C0", "\uEBC8", "\uF126", "\uF1BB", "\uF1B3",
+	"\uF0E7", "\uF0C2", "\uF2C2", "\uF2DB", "\uF233",
+	"\uF188", "\uF06D", "\uF013", "\uF049", "\uF1EB"
+]
 
 # calendar, meters and the life dial
 [calendar]

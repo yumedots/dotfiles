@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+
+dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+shell="$dir/../lockShell.qml"
+pidfile="${XDG_RUNTIME_DIR:-/tmp}/qs-lock.pid"
+
+runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+alive() {
+	[ -r "$pidfile" ] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null
+}
+
+live_display() {
+	if [ -S "$runtime/${WAYLAND_DISPLAY:-none}" ]; then
+		return
+	fi
+
+	for socket in "$runtime"/wayland-*; do
+		case "${socket##*/}" in
+			wayland-[0-9] | wayland-[0-9][0-9]) ;;
+			*) continue ;;
+		esac
+
+		[ -S "$socket" ] || continue
+		WAYLAND_DISPLAY="${socket##*/}"
+		export WAYLAND_DISPLAY
+		return
+	done
+}
+
+launch() {
+	live_display
+	ulimit -Sn 65536 2>/dev/null || true
+	export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic
+	setsid quickshell -p "$shell" >/dev/null 2>&1 &
+	echo $! >"$pidfile"
+}
+
+case "${1:-lock}" in
+	list)
+		echo "none drift rain embers"
+		;;
+	preview)
+		name=${2:-drift}
+		if alive; then
+			quickshell ipc --pid "$(cat "$pidfile")" call lock screensaver "$name" 2>/dev/null || true
+			exit 0
+		fi
+		QS_LOCK_PREVIEW=1 QS_LOCK_SAVER="$name" launch
+		;;
+	*)
+		alive && exit 0
+		launch
+		;;
+esac

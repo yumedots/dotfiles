@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import Quickshell.Wayland
 import qs
 import qs.ui
 import qs.services
@@ -16,6 +17,7 @@ ShellRoot {
 	property double hyprBootAt: Date.now()
 	readonly property bool isLauncher: role === "launcher"
 	readonly property string launcherPath: Quickshell.shellDir + "/launcherShell.qml"
+	readonly property string lockScript: Quickshell.shellDir + "/scripts/lock"
 
 	function toLauncher(fn, arg) {
 		Yudae.cmd("route", { to: "launcher", fn: fn, arg: arg === undefined || arg === null ? "" : String(arg) });
@@ -139,6 +141,16 @@ ShellRoot {
 		powerMenuWindow.open();
 		shellRoot.closeBarPopups();
 		Handoff.run(shellRoot.closeLauncherUnderWidget);
+	}
+
+	function lock() {
+		shellRoot.closeWidgets();
+
+		if (powerMenuWindow.shown)
+			powerMenuWindow.close();
+
+		Handoff.run(shellRoot.closeLauncherUnderWidget);
+		Quickshell.execDetached([shellRoot.lockScript]);
 	}
 
 	function trayGroup() {
@@ -339,6 +351,10 @@ ShellRoot {
 		function wallpaper() {
 			shellRoot.wallpaper();
 		}
+
+		function lock() {
+			shellRoot.lock();
+		}
 	}
 
 	property var watchedScripts: []
@@ -428,5 +444,13 @@ ShellRoot {
 	PowerMenu {
 		id: powerMenuWindow
 		alwaysMapped: true
+	}
+
+	IdleMonitor {
+		enabled: !shellRoot.isLauncher && Config.lockAfterMinutes > 0
+		timeout: Math.max(1, Config.lockAfterMinutes * 60)
+
+		onIsIdleChanged: if (isIdle)
+			shellRoot.lock()
 	}
 }

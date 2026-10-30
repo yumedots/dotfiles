@@ -230,6 +230,7 @@ QtObject {
 
 	// power menu and battery
 	readonly property var powerActions: settings.powerActions !== undefined ? settings.powerActions : [
+		{ name: "Lock", command: "\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/scripts/lock\"", glyph: "\uf023" },
 		{ name: "Suspend", command: "systemctl suspend", glyph: "\udb81\udcb2" },
 		{ name: "Log out", command: "hyprctl dispatch 'hl.dsp.exit()'", glyph: "\uea6e" },
 		{ name: "Reboot", command: "systemctl reboot", glyph: "\uead2" },
@@ -248,6 +249,42 @@ QtObject {
 	readonly property var powerTooltipWidth: settings.powerTooltipWidth !== undefined ? settings.powerTooltipWidth : 240
 	readonly property var powerTooltipPadding: settings.powerTooltipPadding !== undefined ? settings.powerTooltipPadding : 12
 	readonly property var powerGovernorTitle: settings.powerGovernorTitle !== undefined ? settings.powerGovernorTitle : "Governor"
+
+	// lock screen
+	readonly property var lockAfterMinutes: settings.lockAfterMinutes !== undefined ? settings.lockAfterMinutes : 10
+	readonly property var lockSleepAfterMinutes: settings.lockSleepAfterMinutes !== undefined ? settings.lockSleepAfterMinutes : 30
+	readonly property var lockSaver: settings.lockSaver !== undefined ? settings.lockSaver : "drift"
+	readonly property var lockSaverOpacity: settings.lockSaverOpacity !== undefined ? settings.lockSaverOpacity : 0.5
+	readonly property var lockSaverFadeMs: settings.lockSaverFadeMs !== undefined ? settings.lockSaverFadeMs : 600
+	readonly property var lockScrim: settings.lockScrim !== undefined ? settings.lockScrim : 0.52
+	readonly property var lockInset: settings.lockInset !== undefined ? settings.lockInset : 96
+	readonly property var lockClockFormat: settings.lockClockFormat !== undefined ? settings.lockClockFormat : "HH:mm"
+	readonly property var lockDateFormat: settings.lockDateFormat !== undefined ? settings.lockDateFormat : "dddd d MMMM"
+	readonly property var lockDateSize: settings.lockDateSize !== undefined ? settings.lockDateSize : 13
+	readonly property var lockCardPadding: settings.lockCardPadding !== undefined ? settings.lockCardPadding : 12
+	readonly property var lockIconGap: settings.lockIconGap !== undefined ? settings.lockIconGap : 12
+	readonly property var lockIconSize: settings.lockIconSize !== undefined ? settings.lockIconSize : 22
+	readonly property var lockIcon: settings.lockIcon !== undefined ? settings.lockIcon : "\uf023"
+	readonly property var lockOpenIcon: settings.lockOpenIcon !== undefined ? settings.lockOpenIcon : "\uf09c"
+	readonly property var lockPowerIcon: settings.lockPowerIcon !== undefined ? settings.lockPowerIcon : "\uf011"
+	readonly property var lockPowerSize: settings.lockPowerSize !== undefined ? settings.lockPowerSize : 18
+	readonly property var lockNoteSize: settings.lockNoteSize !== undefined ? settings.lockNoteSize : 12
+	readonly property var lockBoxes: settings.lockBoxes !== undefined ? settings.lockBoxes : 10
+	readonly property var lockBoxWidth: settings.lockBoxWidth !== undefined ? settings.lockBoxWidth : 34
+	readonly property var lockBoxHeight: settings.lockBoxHeight !== undefined ? settings.lockBoxHeight : 34
+	readonly property var lockBoxGap: settings.lockBoxGap !== undefined ? settings.lockBoxGap : 6
+	readonly property var lockGlyphSize: settings.lockGlyphSize !== undefined ? settings.lockGlyphSize : 16
+	readonly property var lockCooldownMs: settings.lockCooldownMs !== undefined ? settings.lockCooldownMs : 3000
+	readonly property var lockPamService: settings.lockPamService !== undefined ? settings.lockPamService : "quickshell"
+	readonly property var lockWrongText: settings.lockWrongText !== undefined ? settings.lockWrongText : "Wrong password"
+	readonly property var lockPamError: settings.lockPamError !== undefined ? settings.lockPamError : "Authentication unavailable"
+	readonly property var greeterUnavailableText: settings.greeterUnavailableText !== undefined ? settings.greeterUnavailableText : "greeter is not running"
+	readonly property var lockGlyphPool: settings.lockGlyphPool !== undefined ? settings.lockGlyphPool : [
+		"\uf023", "\uf084", "\uf2f6", "\uf21b", "\uf06e",
+		"\uf1c0", "\uebc8", "\uf126", "\uf1bb", "\uf1b3",
+		"\uf0e7", "\uf0c2", "\uf2c2", "\uf2db", "\uf233",
+		"\uf188", "\uf06d", "\uf013", "\uf049", "\uf1eb"
+	]
 
 	// calendar, meters and the life dial
 	readonly property var calendarCellWidth: settings.calendarCellWidth !== undefined ? settings.calendarCellWidth : 60
