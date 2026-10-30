@@ -254,7 +254,7 @@ QtObject {
 	// desktop saver
 	readonly property var saverAfterMinutes: settings.saverAfterMinutes !== undefined ? settings.saverAfterMinutes : 5
 	readonly property var saverName: settings.saverName !== undefined ? settings.saverName : "drift"
-	readonly property var saverScrim: settings.saverScrim !== undefined ? settings.saverScrim : 0.35
+	readonly property var saverGround: settings.saverGround !== undefined ? settings.saverGround : "#202020"
 
 	// lock screen
 	readonly property var lockAfterMinutes: settings.lockAfterMinutes !== undefined ? settings.lockAfterMinutes : 10

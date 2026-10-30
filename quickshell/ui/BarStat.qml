@@ -121,8 +121,6 @@ Item {
 		text: Config.iconCpu + Config.iconMemory + Config.iconVolumeLow + Config.iconVolumeMid + Config.iconVolumeHigh + Config.iconBatteryFull + Config.iconBatteryHigh + Config.iconBatteryMid + Config.iconBatteryLow + Config.iconBatteryAlert + Config.iconBatteryCharge + Config.iconPowerPlug
 	}
 
-	Component.onCompleted: console.log("DBG metrics iconSize=", root.iconSize, "inkAbove=", root.inkAbove, "inkBelow=", root.inkBelow, "baseline=", root.iconBaseline, "iconsInkAbove=", root.iconsInkAbove, "iconsInkBelow=", root.iconsInkBelow, "inkCentre=", root.iconInkCentre, "inkHeight=", root.iconInkHeight);
-
 	TextMetrics {
 		id: iconMetrics
 		font.family: Config.fontFamily

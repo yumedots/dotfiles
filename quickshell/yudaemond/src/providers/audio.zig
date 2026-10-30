@@ -101,9 +101,9 @@ pub const Audio = struct {
 	watch: std.atomic.Value(bool) = .init(false),
 	dirty: std.atomic.Value(bool) = .init(true),
 	write_mutex: std.Io.Mutex = .init,
+	write_ready: std.Io.Condition = .init,
 	writes: [16]Write = undefined,
 	write_count: usize = 0,
-	write_ready: std.atomic.Value(bool) = .init(false),
 	hold_ms: i64 = 1500,
 	only_playing: bool = true,
 
@@ -143,10 +143,9 @@ pub const Audio = struct {
 
 	fn writeLoop(self: *Audio) void {
 		while (true) {
-			if (!self.write_ready.swap(false, .monotonic)) {
-				sleep.ms(15);
-				continue;
-			}
+			self.write_mutex.lockUncancelable(self.io);
+			while (self.write_count == 0) self.write_ready.waitUncancelable(self.io, &self.write_mutex);
+			self.write_mutex.unlock(self.io);
 
 			while (self.takeWrite()) |item| self.runWrite(item);
 		}
@@ -219,7 +218,7 @@ pub const Audio = struct {
 
 		self.write_mutex.unlock(self.io);
 
-		self.write_ready.store(true, .monotonic);
+		self.write_ready.signal(self.io);
 	}
 
 	fn subscribe(self: *Audio) void {

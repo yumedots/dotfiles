@@ -1,7 +1,6 @@
 const std = @import("std");
 const hubmod = @import("../hub.zig");
 const proc = @import("../primitives/proc.zig");
-const exec = @import("../primitives/exec.zig");
 const sleep = @import("../primitives/sleep.zig");
 
 const Allocator = std.mem.Allocator;
@@ -79,80 +78,11 @@ pub const Supervisor = struct {
 		if (previous and (was_shell != shell_now or was_launcher != launcher_now)) self.hub.publish();
 	}
 
-	pub fn route(self: *Supervisor, to_launcher: bool, name: []const u8, arg: []const u8) void {
-		if (name.len == 0) return;
-
-		const job = self.allocator.create(Route) catch return;
-		job.* = .{
-			.supervisor = self,
-			.to_launcher = to_launcher,
-			.name = self.allocator.dupe(u8, name) catch return,
-			.arg = self.allocator.dupe(u8, arg) catch return,
-		};
-
-		const thread = std.Thread.spawn(.{}, Route.run, .{job}) catch {
-			job.deinit();
-			return;
-		};
-		thread.detach();
-	}
-
 	fn render(self: *Supervisor, writer: *Writer) !void {
 		self.mutex.lockUncancelable(self.io);
 		defer self.mutex.unlock(self.io);
 
 		try writer.print("{f}", .{std.json.fmt(Out{ .shell = self.shell, .launcher = self.launcher }, .{})});
-	}
-};
-
-const Route = struct {
-	supervisor: *Supervisor,
-	to_launcher: bool,
-	name: []u8,
-	arg: []u8,
-
-	fn deinit(self: *Route) void {
-		const allocator = self.supervisor.allocator;
-
-		allocator.free(self.name);
-		allocator.free(self.arg);
-		allocator.destroy(self);
-	}
-
-	fn run(self: *Route) void {
-		defer self.deinit();
-
-		const sup = self.supervisor;
-		const found = find(sup.io, sup.allocator) catch return;
-		const pid = if (self.to_launcher) found.launcher else found.shell;
-
-		var pid_text: [16]u8 = undefined;
-		var argv: [9][]const u8 = undefined;
-		var count: usize = 0;
-
-		for ([_][]const u8{ "quickshell", "ipc" }) |word| {
-			argv[count] = word;
-			count += 1;
-		}
-
-		if (pid > 0) {
-			argv[count] = "--pid";
-			argv[count + 1] = std.fmt.bufPrint(&pid_text, "{d}", .{pid}) catch return;
-			count += 2;
-		}
-
-		for ([_][]const u8{ "call", "shell", self.name }) |word| {
-			argv[count] = word;
-			count += 1;
-		}
-
-		if (self.arg.len > 0) {
-			argv[count] = self.arg;
-			count += 1;
-		}
-
-		const result = exec.run(sup.io, sup.allocator, argv[0..count]) catch return;
-		result.deinit(sup.allocator);
 	}
 };
 

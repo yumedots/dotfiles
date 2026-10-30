@@ -118,14 +118,6 @@ PanelWindow {
 				Behavior on opacity {
 					NumberAnimation { duration: Config.wallpaperTransitionMs; easing.type: Easing.OutCubic }
 				}
-
-				SequentialAnimation on scale {
-					running: root.saver === "drift"
-					loops: Animation.Infinite
-
-					NumberAnimation { to: 1.1; duration: 42000; easing.type: Easing.InOutSine }
-					NumberAnimation { to: 1.03; duration: 42000; easing.type: Easing.InOutSine }
-				}
 			}
 		}
 
@@ -140,6 +132,7 @@ PanelWindow {
 		ScreenSaver {
 			anchors.fill: parent
 			name: root.saver
+			strength: Config.lockSaverOpacity
 		}
 
 		MouseArea {

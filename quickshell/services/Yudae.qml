@@ -340,7 +340,7 @@ QtObject {
 	// timer keeps the bar in step without anything else watching the socket.
 	property Timer retry: Timer {
 		interval: 1000
-		running: true
+		running: !root.connected
 		repeat: true
 
 		onTriggered: if (!root.socket.connected)

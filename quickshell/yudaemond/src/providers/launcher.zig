@@ -9,14 +9,12 @@ const exec = @import("../primitives/exec.zig");
 const config = @import("../primitives/config.zig");
 const environ = @import("../primitives/environ.zig");
 const proc = @import("../primitives/proc.zig");
-const hypr = @import("../primitives/hypr.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
-const wake_actions = [_][]const u8{ "launcher", "windows", "clipboard", "powerMenu" };
 const max_results = 60;
 const usage_max = 10;
 const preview_bytes = 20000;
@@ -155,8 +153,6 @@ pub const Launcher = struct {
 	hub: *Hub,
 	mutex: std.Io.Mutex = .init,
 	wake_mutex: std.Io.Mutex = .init,
-	remembered: ?Wake = null,
-	pending: ?[]const u8 = null,
 	scratch: std.heap.ArenaAllocator,
 	apps: ?*appsmod.Apps = null,
 	system: ?*sysmod.System = null,
@@ -771,8 +767,6 @@ pub const Launcher = struct {
 
 		const args = Wake{ .sock = sock_copy, .pid = pid, .path = path_copy };
 
-		self.keepWake(sock, pid, path);
-
 		const thread = std.Thread.spawn(.{}, wakeThread, .{ self, args }) catch {
 			self.allocator.free(sock_copy);
 			self.allocator.free(path_copy);
@@ -810,88 +804,6 @@ pub const Launcher = struct {
 		if (exec.runEnv(self.io, allocator, argv, &map)) |result| {
 			result.deinit(allocator);
 		} else |_| {}
-	}
-
-	fn keepWake(self: *Launcher, sock: []const u8, pid: i64, path: []const u8) void {
-		const sock_copy = self.allocator.dupe(u8, sock) catch return;
-		const path_copy = self.allocator.dupe(u8, path) catch {
-			self.allocator.free(sock_copy);
-			return;
-		};
-
-		self.wake_mutex.lockUncancelable(self.io);
-		defer self.wake_mutex.unlock(self.io);
-
-		if (self.remembered) |old| {
-			self.allocator.free(old.sock);
-			self.allocator.free(old.path);
-		}
-
-		self.remembered = .{ .sock = sock_copy, .pid = pid, .path = path_copy };
-	}
-
-	pub fn requestWake(self: *Launcher, action: []const u8) void {
-		const known = knownWake(action) orelse return;
-
-		const thread = std.Thread.spawn(.{}, requestThread, .{ self, known }) catch return;
-		thread.detach();
-	}
-
-	fn requestThread(self: *Launcher, action: []const u8) void {
-		var arena = std.heap.ArenaAllocator.init(self.allocator);
-		defer arena.deinit();
-
-		const allocator = arena.allocator();
-
-		const path = std.fmt.allocPrint(allocator, "{s}/.config/quickshell/launcherShell.qml", .{proc.home(self.io, allocator)}) catch return;
-
-		if (launcherUp(self.io, allocator, path)) {
-			self.dispatchGlobal(allocator, action);
-			return;
-		}
-
-		self.wake_mutex.lockUncancelable(self.io);
-
-		const saved = self.remembered orelse {
-			self.wake_mutex.unlock(self.io);
-			return;
-		};
-
-		const sock_copy = allocator.dupe(u8, saved.sock) catch {
-			self.wake_mutex.unlock(self.io);
-			return;
-		};
-		const pid = saved.pid;
-
-		self.pending = action;
-		self.wake_mutex.unlock(self.io);
-
-		self.wake(sock_copy, pid, path);
-	}
-
-	fn dispatchGlobal(self: *Launcher, allocator: Allocator, action: []const u8) void {
-		var buffer: [96]u8 = undefined;
-
-		if (hypr.usingLua(self.io, allocator)) {
-			const script = std.fmt.bufPrint(&buffer, "hl.dispatch(hl.dsp.global(\"quickshell:{s}\"))", .{action}) catch return;
-			const result = exec.run(self.io, allocator, &.{ "hyprctl", "eval", script }) catch return;
-			result.deinit(allocator);
-			return;
-		}
-
-		const command = std.fmt.bufPrint(&buffer, "dispatch global quickshell:{s}", .{action}) catch return;
-		const answer = hypr.request(self.io, allocator, command) catch return;
-		allocator.free(answer);
-	}
-
-	pub fn takeWake(self: *Launcher) ?[]const u8 {
-		self.wake_mutex.lockUncancelable(self.io);
-		defer self.wake_mutex.unlock(self.io);
-
-		const action = self.pending;
-		self.pending = null;
-
-		return action;
 	}
 
 	pub fn copyText(self: *Launcher, text: []const u8) void {
@@ -1264,14 +1176,6 @@ pub const Launcher = struct {
 	}
 };
 
-fn knownWake(action: []const u8) ?[]const u8 {
-	for (wake_actions) |known| {
-		if (std.mem.eql(u8, known, action)) return known;
-	}
-
-	return null;
-}
-
 const Wake = struct {
 	sock: []u8,
 	pid: i64,
@@ -1281,11 +1185,14 @@ const Wake = struct {
 const wake_script = "pgrep -f \"^quickshell -p $1\" >/dev/null || { ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid quickshell -p \"$1\" >/dev/null 2>&1 & echo $! > \"$XDG_RUNTIME_DIR/qs-launcher.pid\"; }";
 
 fn launcherUp(io: Io, allocator: Allocator, path: []const u8) bool {
-	const pattern = std.fmt.allocPrint(allocator, "^quickshell -p {s}$", .{path}) catch return false;
-	const result = exec.run(io, allocator, &.{ "pgrep", "-f", pattern }) catch return false;
-	defer result.deinit(allocator);
+	const file = std.fmt.allocPrint(allocator, "{s}/qs-launcher.pid", .{proc.runtimeDir(io, allocator)}) catch return false;
+	const body = proc.readFile(io, allocator, file) catch return false;
+	const pid = std.fmt.parseInt(i32, std.mem.trim(u8, body, " \t\r\n"), 10) catch return false;
 
-	return result.code == 0;
+	const cmdline = std.fmt.allocPrint(allocator, "/proc/{d}/cmdline", .{pid}) catch return false;
+	const raw = proc.readFile(io, allocator, cmdline) catch return false;
+
+	return std.mem.indexOf(u8, raw, path) != null;
 }
 
 fn wakeArgv(allocator: Allocator, path: []const u8) ![]const []const u8 {

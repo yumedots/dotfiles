@@ -8,12 +8,15 @@ import qs.ui
 import qs.services
 import "bar"
 import "launcher"
+import "lock"
 import "wallpaper"
 
 ShellRoot {
 	id: shellRoot
 
 	property double hyprBootAt: Date.now()
+	property bool saverShown: false
+	property string saverName: "none"
 	readonly property string lockScript: Quickshell.shellDir + "/scripts/lock"
 
 	function launcher() {
@@ -102,7 +105,25 @@ ShellRoot {
 		Handoff.run(shellRoot.closeLauncherUnderWidget);
 	}
 
+	function showSaver(name) {
+		shellRoot.saverName = name === "" ? Config.saverName : name;
+		shellRoot.saverShown = true;
+		shellRoot.closeWidgets();
+	}
+
+	function hideSaver() {
+		shellRoot.saverShown = false;
+	}
+
+	function saver(name) {
+		if (name === "off" || name === "stop")
+			shellRoot.hideSaver();
+		else
+			shellRoot.showSaver(name);
+	}
+
 	function lock() {
+		shellRoot.hideSaver();
 		shellRoot.closeWidgets();
 
 		if (powerMenuWindow.shown)
@@ -298,6 +319,10 @@ ShellRoot {
 		function lock() {
 			shellRoot.lock();
 		}
+
+		function saver(name: string) {
+			shellRoot.saver(name);
+		}
 	}
 
 	property var watchedScripts: []
@@ -371,6 +396,17 @@ ShellRoot {
 		}
 	}
 
+	Variants {
+		model: Quickshell.screens
+
+		Saver {
+			shown: shellRoot.saverShown
+			name: shellRoot.saverName
+
+			onDismissed: shellRoot.hideSaver()
+		}
+	}
+
 	Launcher {
 		id: launcherWindow
 		onPowerRequested: shellRoot.powerMenu()
@@ -391,5 +427,13 @@ ShellRoot {
 
 		onIsIdleChanged: if (isIdle)
 			shellRoot.lock()
+	}
+
+	IdleMonitor {
+		enabled: Config.saverAfterMinutes > 0
+		timeout: Math.max(1, Config.saverAfterMinutes * 60)
+
+		onIsIdleChanged: if (isIdle)
+			shellRoot.showSaver(Config.saverName)
 	}
 }

@@ -18,13 +18,16 @@ Item {
 	readonly property var panel: Yudae.screenPanel
 	readonly property var groups: root.panel.groups || []
 	readonly property var monitor: Yudae.screenActive
-	readonly property bool ready: root.monitor !== null
+	readonly property bool ready: root.monitor !== null && root.monitor !== undefined
 	readonly property color ink: Config.mono ? Config.displayBaseMono : Config.displayBase
 	readonly property var resolutions: root.ready ? root.monitor.resolutions : []
 	readonly property int resolutionRows: Math.min(root.resolutions.length, Config.displayResolutionLimit)
 	readonly property string currentRow: root.panel.cursor || ""
 	readonly property int cursorStep: root.panel.step || 0
 	readonly property int resolutionCursor: root.currentRow === "resolution" ? root.cursorStep : -1
+	readonly property string modeText: root.ready ? root.monitor.width + "x" + root.monitor.height + " \u00b7 " + Math.round(root.monitor.refresh) + " Hz" : ""
+	readonly property string title: !root.ready ? Config.displayTitle : (root.monitor.name || root.monitor.description || "")
+	readonly property string detail: root.ready && root.monitor.description !== root.title ? root.monitor.description || "" : ""
 
 	implicitWidth: Config.displayPanelWidth + Config.displayPanelPadding * 2
 	implicitHeight: body.implicitHeight + Config.displayPanelPadding * 2
@@ -34,7 +37,20 @@ Item {
 	onShownChanged: if (root.shown) resList.reset()
 	onCursorStepChanged: if (root.resolutionCursor >= 0) resList.ensureVisible(root.resolutionCursor)
 
-	Keys.onPressed: Yudae.cmd("screen", { keyCode: event.key })
+	Keys.onPressed: function (event) { Yudae.cmd("screen", { keyCode: event.key }) }
+
+	function format(kind, value) {
+		if (kind !== "scale" || value === "")
+			return value;
+
+		const number = Number(value);
+
+		return isFinite(number) ? number.toFixed(2) : value;
+	}
+
+	function isCurrent(row) {
+		return root.ready && row.width === root.monitor.width && row.height === root.monitor.height;
+	}
 
 	component Header: Item {
 		id: header
@@ -43,7 +59,7 @@ Item {
 		property string value: ""
 
 		width: Config.displayPanelWidth
-		height: headerLabel.implicitHeight
+		height: Math.max(headerLabel.implicitHeight, headerValue.implicitHeight)
 
 		Text {
 			id: headerLabel
@@ -52,16 +68,18 @@ Item {
 			font.family: Config.fontFamily
 			font.pixelSize: Config.displayLabelSize
 			font.letterSpacing: 1
-			color: Config.foreground
+			color: Config.muted
 			text: header.label
 		}
 
 		Text {
+			id: headerValue
+
 			anchors.right: parent.right
 			anchors.verticalCenter: parent.verticalCenter
 			font.family: Config.fontFamily
 			font.pixelSize: Config.displayLabelSize
-			color: Config.foreground
+			color: root.ink
 			text: header.value
 		}
 	}
@@ -81,7 +99,7 @@ Item {
 
 		Header {
 			label: group.label
-			value: steps.hoverLabel !== "" ? steps.hoverLabel : group.shown
+			value: root.format(group.kind, steps.hoverLabel !== "" ? steps.hoverLabel : group.shown)
 		}
 
 		StepBar {
@@ -92,6 +110,7 @@ Item {
 			selected: group.selected
 			cursor: group.cursor
 			ink: root.ink
+			formatter: (value) => root.format(group.kind, value)
 
 			onPick: function (value) { Yudae.cmd("screen", { pick: { kind: group.kind, value: value } }) }
 		}
@@ -103,6 +122,7 @@ Item {
 		property string label: ""
 		property string hint: ""
 		property bool lit: false
+		property bool current: false
 		property real lineWidth: Config.displayPanelWidth
 		property var onPick
 
@@ -112,7 +132,7 @@ Item {
 		Highlight {
 			id: hl
 
-			active: line.lit || hit.containsMouse
+			active: line.lit || line.current || hit.containsMouse
 		}
 
 		Text {
@@ -128,7 +148,7 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			font.family: Config.fontFamily
 			font.pixelSize: Settings.fontSize
-			color: hl.ink
+			color: hl.active ? hl.ink : Config.muted
 			text: line.hint
 		}
 
@@ -174,17 +194,29 @@ Item {
 			width: parent.width
 			spacing: Config.displayDetailGap
 
-			Row {
-				spacing: Config.displayValueGap
+			Item {
+				width: parent.width
+				height: Math.max(nameText.implicitHeight, refreshGlyph.implicitHeight)
 
 				Text {
+					id: nameText
+
+					anchors.left: parent.left
+					anchors.right: refreshGlyph.left
+					anchors.rightMargin: Config.displayValueGap
+					anchors.verticalCenter: parent.verticalCenter
+					elide: Text.ElideRight
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
 					color: Config.foreground
-					text: root.ready ? root.monitor.name : Config.displayTitle
+					text: root.title
 				}
 
 				Glyph {
+					id: refreshGlyph
+
+					anchors.right: parent.right
+					anchors.verticalCenter: parent.verticalCenter
 					text: Config.displayIconRefresh
 					onActivate: function () { Yudae.cmd("screen", { detect: true }) }
 				}
@@ -192,12 +224,21 @@ Item {
 
 			Text {
 				width: parent.width
-				elide: Text.ElideRight
-				visible: root.ready && root.monitor.description !== ""
+				visible: root.ready
 				font.family: Config.fontFamily
 				font.pixelSize: Config.displayDetailSize
-				color: Config.foreground
-				text: root.ready ? root.monitor.description : ""
+				color: root.ink
+				text: root.modeText
+			}
+
+			Text {
+				width: parent.width
+				elide: Text.ElideRight
+				visible: root.detail !== ""
+				font.family: Config.fontFamily
+				font.pixelSize: Config.displayDetailSize
+				color: Config.muted
+				text: root.detail
 			}
 
 			Text {
@@ -205,9 +246,16 @@ Item {
 				visible: !root.ready
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
-				color: Config.foreground
+				color: Config.muted
 				text: Config.displayNothing
 			}
+		}
+
+		Rectangle {
+			width: Config.displayPanelWidth
+			height: Config.displaySeparatorHeight
+			color: Config.displaySeparatorColor
+			visible: root.ready
 		}
 
 		Repeater {
@@ -226,26 +274,22 @@ Item {
 			}
 		}
 
+		Rectangle {
+			width: Config.displayPanelWidth
+			height: Config.displaySeparatorHeight
+			color: Config.displaySeparatorColor
+			visible: root.ready && root.resolutions.length > 0
+		}
+
 		Item {
 			width: Config.displayPanelWidth
-			height: resHead.implicitHeight + Config.displayRowGap + resList.height
-			visible: root.ready
+			height: resHead.height + Config.displayRowGap + resList.height
+			visible: root.ready && root.resolutions.length > 0
 
-			Column {
+			Header {
 				id: resHead
 
-				width: parent.width
-				spacing: Config.displayRowGap
-
-				Header {
-					label: Config.displayResolutionTitle.toUpperCase()
-				}
-
-				Rectangle {
-					width: Config.displayPanelWidth
-					height: Config.displaySeparatorHeight
-					color: Config.displaySeparatorColor
-				}
+				label: Config.displayResolutionTitle.toUpperCase()
 			}
 
 			Selector {
@@ -266,6 +310,7 @@ Item {
 					lineWidth: ListView.view.rowWidth
 					label: modelData.label
 					hint: modelData.maxRefresh > 0 ? modelData.maxRefresh + " Hz" : ""
+					current: root.isCurrent(modelData)
 					lit: root.resolutionCursor === index
 					onPick: function () { Yudae.cmd("screen", { pick: { kind: "resolution", value: modelData.label } }) }
 				}

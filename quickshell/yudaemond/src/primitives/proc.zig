@@ -214,11 +214,6 @@ pub fn listProcesses(io: Io, allocator: Allocator) ![]ProcessInfo {
 	return out.toOwnedSlice(allocator);
 }
 
-pub fn cpuTicks(io: Io, allocator: Allocator, pid: i32) i64 {
-	const info = readProcess(io, allocator, pid) orelse return 0;
-	return info.ticks;
-}
-
 pub fn threadTicks(io: Io, allocator: Allocator, pid: i32) i64 {
 	const path = std.fmt.allocPrint(allocator, "/proc/{d}/task", .{pid}) catch return 0;
 	defer allocator.free(path);

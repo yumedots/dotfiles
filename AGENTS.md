@@ -44,6 +44,8 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 
 Saving a file live-reloads quickshell — never restart it for a normal edit, never run a second `quickshell` instance.
 
+Everything the shell runs lives in ~/.config/quickshell and is tracked in git. Never copy QML, scripts or config into /etc or /usr; system files (greetd, systemd drop-ins, polkit) may only point at the repo. The greeter runs the same tracked shell as the user session.
+
 console.log and runtime errors: /run/user/1000/quickshell/by-id/<newest>/log.qslog (grep -a).
 
 QML lint: `ln -sfn ~/.config/quickshell /tmp/qmlimport/qs` then `/usr/lib/qt6/bin/qmllint -I /tmp/qmlimport <files>` (exit 255 = syntax error; quickshell-dialect warnings are noise). lib/*.js changes: `node quickshell/lib/check.js`.

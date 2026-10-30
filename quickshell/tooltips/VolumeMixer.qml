@@ -31,6 +31,8 @@ Item {
 	onShownChanged: if (!root.shown) {
 		root.keyboard = false;
 		root.shift = false;
+		root.pending = { id: -1, volume: -1 };
+		root.grabbing = -1;
 	}
 
 	readonly property real contentWidth: Config.mixerWidth
@@ -93,9 +95,11 @@ Item {
 		if (!isFinite(level))
 			return;
 
-		if (node.volume !== undefined && Math.abs(node.volume - level) < 0.004)
+		if (node.volume !== undefined && Math.abs(root.volumeOf(node) - level) < 0.004)
 			return;
 
+		root.pending = { id: node.id, volume: level };
+		settle.restart();
 		Yudae.cmd("audio", { volume: { id: node.id, level: level } });
 	}
 
@@ -132,7 +136,7 @@ Item {
 		if (!node)
 			return;
 
-		root.setFader(node, Calc.clamp((node.volume || 0) + step, 0, Config.mixerMaxVolume));
+		root.setFader(node, Calc.clamp(root.volumeOf(node) + step, 0, Config.mixerMaxVolume));
 	}
 
 	Keys.onPressed: function (event) {
@@ -186,6 +190,41 @@ Item {
 	}
 
 	property var drag: ({ id: -1, from: 0, width: 0, last: -1 })
+	property var pending: ({ id: -1, volume: -1 })
+	property int grabbing: -1
+
+	onMixChanged: root.reconcile()
+
+	Timer {
+		id: settle
+
+		interval: Config.mixerPendingMs
+		onTriggered: root.pending = { id: -1, volume: -1 }
+	}
+
+	function grabs(node) {
+		return root.grabbing >= 0 && node !== null && root.grabbing === node.id;
+	}
+
+	function volumeOf(node) {
+		if (!node)
+			return 0;
+
+		if (root.pending.id === node.id)
+			return root.pending.volume;
+
+		return node.volume;
+	}
+
+	function reconcile() {
+		if (root.pending.id < 0)
+			return;
+
+		const node = root.nodeOf(root.pending.id);
+
+		if (!node || Math.abs(node.volume - root.pending.volume) < 0.004)
+			root.pending = { id: -1, volume: -1 };
+	}
 
 	component MixChannel: Item {
 		id: channel
@@ -194,8 +233,8 @@ Item {
 		property string glyph: ""
 		property bool appIcon: false
 		readonly property bool muted: !!channel.node && channel.node.muted === true
-		readonly property real volume: channel.node ? channel.node.volume : 0
-		readonly property string percentText: channel.node ? channel.node.volumeText : "0%"
+		readonly property real volume: root.volumeOf(channel.node)
+		readonly property string percentText: Math.round(channel.volume * 100) + "%"
 		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 
 		readonly property bool selected: channel.node !== null && channel.node === root.selectedNode
@@ -286,6 +325,7 @@ Item {
 				selected: channel.step
 				level: root.shift ? channel.level : -1
 				ink: channel.muted ? Config.muted : Config.foreground
+				grabbed: root.grabs(channel.node)
 			}
 
 			MouseArea {
@@ -295,9 +335,12 @@ Item {
 				preventStealing: true
 
 				onPressed: (mouse) => {
+					root.grabbing = channel.node ? channel.node.id : -1;
 					root.beginDrag(channel.node, lineFader, mouse.x);
 					root.dragFader(channel.node, lineFader, mouse.x, mouse.modifiers);
 				}
+				onReleased: root.grabbing = -1
+				onCanceled: root.grabbing = -1
 				onPositionChanged: (mouse) => root.dragFader(channel.node, lineFader, mouse.x, mouse.modifiers)
 			}
 		}
@@ -312,8 +355,8 @@ Item {
 		property var onActivate
 
 		readonly property bool muted: !!line.node && line.node.muted === true
-		readonly property real volume: line.node ? line.node.volume : 0
-		readonly property string percentText: line.node ? line.node.volumeText : "0%"
+		readonly property real volume: root.volumeOf(line.node)
+		readonly property string percentText: Math.round(line.volume * 100) + "%"
 		readonly property bool selected: line.node !== null && line.node === root.selectedNode
 		readonly property real level: Calc.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(line.level * Config.mixerStepCount) - 1
@@ -409,6 +452,7 @@ Item {
 				selected: line.step
 				level: root.shift ? line.level : -1
 				ink: line.muted ? Config.muted : Config.foreground
+				grabbed: root.grabs(line.node)
 			}
 
 			MouseArea {
@@ -418,9 +462,12 @@ Item {
 				preventStealing: true
 
 				onPressed: (mouse) => {
+					root.grabbing = line.node ? line.node.id : -1;
 					root.beginDrag(line.node, lineFader, mouse.x);
 					root.dragFader(line.node, lineFader, mouse.x, mouse.modifiers);
 				}
+				onReleased: root.grabbing = -1
+				onCanceled: root.grabbing = -1
 				onPositionChanged: (mouse) => root.dragFader(line.node, lineFader, mouse.x, mouse.modifiers)
 			}
 		}

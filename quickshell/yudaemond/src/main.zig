@@ -40,7 +40,6 @@ const json = @import("primitives/json.zig");
 const sleep = @import("primitives/sleep.zig");
 const environ = @import("primitives/environ.zig");
 const exec = @import("primitives/exec.zig");
-const fmtmod = @import("primitives/fmt.zig");
 
 pub const allocator = std.heap.smp_allocator;
 
@@ -199,14 +198,8 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 
 		if (json.flag(l_cmd, "clips")) context.launcher.refreshClips();
 
-		if (json.flag(l_cmd, "takeWake")) {
-			if (context.launcher.takeWake()) |action| context.supervisor.route(true, action, "");
-		}
-
 		const power = json.integer(json.field(l_cmd, "power"));
 		if (json.field(l_cmd, "power") != null and power >= 0) context.launcher.power(@intCast(power));
-
-		if (json.field(l_cmd, "requestWake") != null) context.launcher.requestWake(json.textAt(l_cmd, "requestWake"));
 
 		if (json.field(l_cmd, "wake")) |target| {
 			context.launcher.wake(
@@ -233,15 +226,6 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		const focus = json.integer(json.field(ws_cmd, "focus"));
 		if (focus > 0) context.workspaces.focus(focus);
 
-		return;
-	}
-
-	if (json.field(value, "route")) |route_cmd| {
-		context.supervisor.route(
-			std.mem.eql(u8, json.textAt(route_cmd, "to"), "launcher"),
-			json.textAt(route_cmd, "fn"),
-			json.textAt(route_cmd, "arg"),
-		);
 		return;
 	}
 
@@ -290,12 +274,8 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 			const band = json.integer(json.field(target, "band"));
 
 			if (path.len > 0) {
-				const t0 = fmtmod.nowMs(context.io);
 				context.wallpaper.save(path);
-				const t1 = fmtmod.nowMs(context.io);
 				context.ink.apply(path, band);
-				const t2 = fmtmod.nowMs(context.io);
-				std.debug.print("DBG cmd save={d} apply={d}\n", .{ t1 - t0, t2 - t1 });
 			}
 		}
 
@@ -438,7 +418,6 @@ pub fn main() !void {
 		return cli.state(io, args);
 	}
 
-	if (std.mem.eql(u8, command, "wake")) return cli.wake(io, args);
 	if (std.mem.eql(u8, command, "logout")) return cli.logout(io);
 	if (std.mem.eql(u8, command, "doctor")) return cli.doctor(io);
 	if (std.mem.eql(u8, command, "bench")) return cli.bench(io, args);
@@ -446,7 +425,7 @@ pub fn main() !void {
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudaemond [run|state|wake <action>|doctor|bench [widgets]|parity|mcp|logout]\n", .{});
+		std.debug.print("usage: yudaemond [run|state|doctor|bench [widgets]|parity|mcp|logout]\n", .{});
 		return;
 	}
 

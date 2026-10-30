@@ -252,10 +252,8 @@ pub const Ink = struct {
 
 		const stamp = self.stampOf(path);
 		const ink = self.inkStamp(allocator);
-		const started = fmt.nowMs(self.io);
 		const result = exec.run(self.io, self.allocator, argv.items) catch return;
 		defer result.deinit(self.allocator);
-		std.debug.print("DBG t={d} img code={d} ms={d}\n", .{ fmt.nowMs(self.io), result.code, fmt.nowMs(self.io) - started });
 
 		if (result.code != 0) {
 			if (expected.len > 0) self.paint(expected);
@@ -668,8 +666,6 @@ pub const Ink = struct {
 		self.mutex.unlock(self.io);
 
 		if (gone.items.len == 0) return;
-
-		std.debug.print("DBG ink drop gone={d}\n", .{gone.items.len});
 
 		for (gone.items) |path| self.drop(path);
 

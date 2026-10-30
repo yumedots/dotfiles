@@ -54,9 +54,3 @@ pub fn runEnv(io: Io, allocator: Allocator, argv: []const []const u8, environ_ma
 	return .{ .code = code, .out = try multi.toOwnedSlice(0), .err = try multi.toOwnedSlice(1) };
 }
 
-pub fn selfPath(io: Io, allocator: Allocator) ![]u8 {
-	const proc = @import("proc.zig");
-	const raw = try proc.readFile(io, allocator, "/proc/self/exe");
-
-	return raw;
-}

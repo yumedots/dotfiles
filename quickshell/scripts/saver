@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+name=${1:-list}
+
+case "$name" in
+	list | names)
+		echo "none drift rain embers stars pipes mystify"
+		echo "usage: saver <name>  (any key or click dismisses)"
+		;;
+	*)
+		quickshell ipc call shell saver "$name"
+		echo "saver: $name"
+		;;
+esac

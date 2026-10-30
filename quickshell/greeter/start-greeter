@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
 export HOME=/var/lib/greetd
 export XDG_CACHE_HOME=/var/lib/greetd/cache
 export XDG_STATE_HOME=/var/lib/greetd/state
@@ -8,6 +10,7 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/greeter}"
 export XDG_SESSION_TYPE=wayland
 export XDG_CURRENT_DESKTOP=Hyprland
 export XDG_SESSION_DESKTOP=Hyprland
+export QS_GREETER_SHELL="$dir/../greeterShell.qml"
 
 if [ -n "${GREETD_SOCK:-}" ]; then
 	waited=0
@@ -17,4 +20,4 @@ if [ -n "${GREETD_SOCK:-}" ]; then
 	done
 fi
 
-exec /usr/bin/start-hyprland -- -c /etc/greetd/hyprland.lua
+exec /usr/bin/start-hyprland -- -c "$dir/hyprland.lua"

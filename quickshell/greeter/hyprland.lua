@@ -29,6 +29,8 @@ hl.config({
 	},
 })
 
+local shell = os.getenv("QS_GREETER_SHELL") or "/home/gabriel/.config/quickshell/greeterShell.qml"
+
 hl.on("hyprland.start", function()
-	hl.exec_cmd("/usr/bin/quickshell -p /etc/greetd/quickshell/greeterShell.qml; hyprctl dispatch 'hl.dsp.exit()'")
+	hl.exec_cmd("/usr/bin/quickshell -p \"" .. shell .. "\"; hyprctl dispatch 'hl.dsp.exit()'")
 end)

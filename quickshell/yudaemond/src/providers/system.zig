@@ -286,17 +286,6 @@ pub const System = struct {
 		try self.render(writer);
 	}
 
-	pub fn topRows(self: *System, out: *[max_top]TopOut) usize {
-		self.mutex.lockUncancelable(self.io);
-		defer self.mutex.unlock(self.io);
-
-		for (self.top[0..self.top_count], 0..) |*entry, index| {
-			out[index] = .{ .pid = entry.pid, .name = entry.comm, .name_len = entry.comm_len, .cpu = entry.cpu };
-		}
-
-		return self.top_count;
-	}
-
 	pub fn allRows(self: *System, arena: Allocator) ![]TopOut {
 		self.mutex.lockUncancelable(self.io);
 		defer self.mutex.unlock(self.io);

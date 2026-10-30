@@ -257,8 +257,8 @@ powerGovernorTitle = "Governor"
 # desktop saver
 [saver]
 saverAfterMinutes = 5  # idle before the desktop shows a saver, 0 disables
-saverName = "drift"  # none | drift | rain | embers
-saverScrim = 0.35
+saverName = "drift"  # none | drift | rain | embers | stars | pipes | mystify
+saverGround = "#202020"
 
 # lock screen
 [lock]

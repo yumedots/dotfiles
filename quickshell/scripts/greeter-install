@@ -15,15 +15,6 @@ if [ -z "$target" ]; then
 fi
 
 home=$(getent passwd "$target" | cut -d: -f6)
-session=$(sed -n 's/^Exec=//p' /usr/share/wayland-sessions/hyprland.desktop 2>/dev/null | head -1)
-
-[ -n "$session" ] || session=/usr/bin/start-hyprland
-
-layout=$(sed -n 's/.*kb_layout *= *"\([^"]*\)".*/\1/p' "$home/.config/hypr/input.lua" 2>/dev/null | head -1)
-variant=$(sed -n 's/.*kb_variant *= *"\([^"]*\)".*/\1/p' "$home/.config/hypr/input.lua" 2>/dev/null | head -1)
-
-[ -n "$layout" ] || layout=us
-
 wall=""
 
 if [ -r "$home/.config/quickshell/cache/settings.lua" ]; then
@@ -33,15 +24,14 @@ fi
 install -d -m 755 /etc/greetd
 chmod 755 /etc/greetd
 rm -rf /etc/greetd/quickshell
-install -d -m 755 /etc/greetd/quickshell
+rm -f /etc/greetd/hyprland.lua /etc/greetd/start-greeter
 
-rsync -a "$src/lock" "$src/greeter" "$src/services" "$src/ui" \
-	"$src/Root.qml" "$src/Settings.qml" "$src/qmldir" "$src/greeterShell.qml" \
-	/etc/greetd/quickshell/
+chmod o+x "$home"
 
-chown -R root:root /etc/greetd/quickshell
-find /etc/greetd/quickshell -type d -exec chmod 755 {} +
-find /etc/greetd/quickshell -type f -exec chmod 644 {} +
+if ! runuser -u greeter -- test -r "$home/.config/quickshell/greeterShell.qml"; then
+	echo "greeter cannot read the shell in $home/.config/quickshell" >&2
+	exit 1
+fi
 
 install -d -m 755 /var/lib/quickshell
 install -d -o root -g "$target" -m 775 /var/lib/quickshell/greeter
@@ -53,23 +43,6 @@ if [ -n "$wall" ] && [ -r "$wall" ]; then
 	wallpaper="/var/lib/quickshell/greeter/wallpaper"
 fi
 
-cat > /etc/greetd/quickshell/greeter/Local.js <<EOF
-.pragma library
-
-var user = "$target"
-var session = "$session"
-var wallpaper = "$wallpaper"
-var saver = "drift"
-EOF
-
-chmod 644 /etc/greetd/quickshell/greeter/Local.js
-
-sed -e "s/kb_layout = \"us\"/kb_layout = \"$layout\"/" \
-	-e "s/kb_variant = \"\"/kb_variant = \"$variant\"/" \
-	"$src/greeter/hyprland.lua" > /etc/greetd/hyprland.lua
-
-chmod 644 /etc/greetd/hyprland.lua
-install -m 755 "$src/greeter/start-greeter" /etc/greetd/start-greeter
 
 printf 'd /run/greeter 0700 greeter greeter -\n' > /etc/tmpfiles.d/greetd-greeter.conf
 systemd-tmpfiles --create /etc/tmpfiles.d/greetd-greeter.conf
@@ -113,12 +86,12 @@ FAILLOCK
 
 [ -f /etc/greetd/config.toml.bak ] || cp -a /etc/greetd/config.toml /etc/greetd/config.toml.bak
 
-cat > /etc/greetd/config.toml <<'CFG'
+cat > /etc/greetd/config.toml <<CFG
 [terminal]
 vt = 1
 
 [default_session]
-command = "/etc/greetd/start-greeter"
+command = "$home/.config/quickshell/greeter/start-greeter"
 user = "greeter"
 CFG
 
@@ -128,7 +101,6 @@ systemctl disable sddm >/dev/null 2>&1 || true
 systemctl enable greetd >/dev/null
 
 echo "greeter installed for $target"
-echo "session: $session"
 echo "wallpaper: ${wallpaper:-none}"
 echo "sddm is disabled for the next boot, greetd is enabled."
 echo "your current session is untouched; reboot to test."
