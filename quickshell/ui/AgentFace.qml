@@ -323,6 +323,27 @@ Item {
 		}
 	}
 
+	// The mark that says the agent is waiting on an answer. It sits against the
+	// face rather than the slot it was given, so a face in a wider slot wears it
+	// the same way the panel does.
+	Item {
+		width: root.size
+		height: root.size
+		anchors.centerIn: parent
+
+		Text {
+			anchors.left: parent.left
+			anchors.top: parent.top
+
+			visible: root.state === "blocked"
+
+			font.family: Config.fontFamily
+			font.pixelSize: Math.round(root.size * 0.36)
+			color: Config.red
+			text: Config.agentIconQuestion
+		}
+	}
+
 readonly property real twoPi: Math.PI * 2;
 
 function superellipseRadius(angle, exponent) {

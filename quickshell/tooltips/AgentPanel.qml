@@ -198,17 +198,6 @@ Item {
 					eyeColor: Config.surface
 				}
 
-				Text {
-					anchors.left: parent.left
-					anchors.top: parent.top
-
-					visible: root.state === "blocked"
-
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize + 4
-					color: Config.red
-					text: Config.agentIconQuestion
-				}
 			}
 
 			Column {
