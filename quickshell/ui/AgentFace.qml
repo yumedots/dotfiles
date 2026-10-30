@@ -141,18 +141,20 @@ Item {
 	// The socket squashes vertically as the eye closes, so a blink flattens the
 	// eye into a line.
 	//
-	// The fit only changes when the body or a blink does, so the pointer moving
-	// costs a few comparisons instead of a hit test.
-	readonly property var fittedSockets: {
-		// A closed eye keeps a little thickness, so it reads as a shut eye
-		// instead of a scratch.
-		const squish = Math.max(0.3, Math.min(1, root.openness * root.blink));
+	// The fit only changes when the body does, so a blink and the pointer
+	// moving both cost a few comparisons instead of a hit test.
 
-		return clipSockets(root.body, [
-			{ x: root.bodyWidth / 2 - root.eyeSpacing, y: root.bodyHeight / 2 - root.eyeLift, radiusX: root.eyeWidth, radiusY: root.eyeRadius * squish },
-			{ x: root.bodyWidth / 2 + root.eyeSpacing, y: root.bodyHeight / 2 - root.eyeLift, radiusX: root.eyeWidth, radiusY: root.eyeRadius * squish },
-		], root.eyeMargin);
-	}
+	// A closed eye keeps a little thickness, so it reads as a shut eye instead
+	// of a scratch.
+	readonly property real squish: Math.max(0.3, Math.min(1, root.openness * root.blink))
+
+	// The eye is fitted wide open and squashed afterwards. A squashed eye is
+	// smaller than the one that was fitted, so it still sits in the body, and
+	// the fit stays out of the blink.
+	readonly property var fittedSockets: clipSockets(root.body, [
+		{ x: root.bodyWidth / 2 - root.eyeSpacing, y: root.bodyHeight / 2 - root.eyeLift, radiusX: root.eyeWidth, radiusY: root.eyeRadius },
+		{ x: root.bodyWidth / 2 + root.eyeSpacing, y: root.bodyHeight / 2 - root.eyeLift, radiusX: root.eyeWidth, radiusY: root.eyeRadius },
+	], root.eyeMargin)
 
 	readonly property var sockets: {
 		const slide = clampShift(root.body, root.fittedSockets, root.eyeX * root.eyeTravel, root.eyeY * root.eyeTravel, root.eyeMargin);
@@ -167,9 +169,10 @@ Item {
 	// An eye is a rectangle with round corners, and the corner radius is half
 	// the short side, so the ends are circles.
 	readonly property var eyePaths: root.sockets.map(function (socket) {
-		const radius = Math.min(socket.radiusX, socket.radiusY);
+		const radiusY = socket.radiusY * root.squish;
+		const radius = Math.min(socket.radiusX, radiusY);
 
-		return roundedRectPoints(socket.x, socket.y, socket.radiusX, socket.radiusY, radius, 40);
+		return roundedRectPoints(socket.x, socket.y, socket.radiusX, radiusY, radius, 40);
 	})
 
 	onStateChanged: {
