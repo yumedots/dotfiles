@@ -27,12 +27,32 @@ PanelWindow {
 	property bool windows: false
 	property int winIndex: 0
 
+	// The daemon says which request a snapshot answers, so the card waits for
+	// the one it asked for. Fading in on whatever was there last showed the
+	// previous screen until the right one arrived.
+	property bool settled: false
+
+	Timer {
+		id: settleGuard
+
+		interval: 150
+
+		onTriggered: root.settled = true
+	}
+
 	readonly property var state: Yudae.launcher
-	readonly property string mode: root.windows ? "windows" : (root.state.mode || "apps")
+
+	// A card on its way out keeps the screen it was showing. The snapshot goes
+	// back to the first screen once the launcher lets go of it, and following
+	// that mid-fade flashed the wrong screen on the way out.
+	property string heldMode: ""
+	property var heldResults: []
+
+	readonly property string mode: root.windows ? "windows" : (root.shown ? (root.state.mode || "apps") : (root.heldMode || root.state.mode || "apps"))
 	readonly property string prompt: root.windows ? "" : (root.state.prompt || "")
 	readonly property bool isClipboard: root.mode === "clipboard"
 	readonly property string empty: root.windows ? Yudae.windowsEmpty : (root.state.empty || "")
-	readonly property var results: root.windows ? (Yudae.windows || []) : (root.state.results || [])
+	readonly property var results: root.windows ? (Yudae.windows || []) : (root.shown ? (root.state.results || []) : root.heldResults)
 	readonly property string clipPreviewText: root.state.clip ? String(root.state.clip.text || "") : ""
 	readonly property string clipPreviewPath: root.state.clip && root.state.clip.path ? "file://" + root.state.clip.path : ""
 
@@ -176,6 +196,12 @@ PanelWindow {
 		root.anchorKey = "";
 		root.freshAnchor = true;
 		list.currentIndex = 0;
+
+		// The window switcher reads the window list rather than the launcher
+		// snapshot, so it has nothing to wait for.
+		root.settled = root.windows;
+		settleGuard.restart();
+
 		root.shown = true;
 		root.winIndex = root.windows ? 1 : 0;
 		root.grabbed = false;
@@ -194,6 +220,8 @@ PanelWindow {
 	}
 
 	function close() {
+		root.heldMode = root.mode;
+		root.heldResults = root.results;
 		root.shown = false;
 		root.anchorId = "";
 		root.anchorKey = "";
@@ -458,8 +486,11 @@ PanelWindow {
 		if (root.windows || !root.shown || !intent)
 			return;
 
-		if (intent.query === root.query && intent.forced === root.forced && intent.group === root.group)
+		if (intent.query === root.query && intent.forced === root.forced && intent.group === root.group) {
+			root.settled = true;
+			settleGuard.stop();
 			return;
+		}
 
 		root.push();
 	}
@@ -535,7 +566,7 @@ PanelWindow {
 		height: root.windows ? windowsGrid.implicitHeight + card.inset * 2 : column.implicitHeight + card.inset * 2
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
-		opacity: root.shown ? 1 : 0
+		opacity: root.shown && root.settled ? 1 : 0
 		visible: root.configured && (root.shown || opacity > 0)
 
 		Behavior on opacity {
