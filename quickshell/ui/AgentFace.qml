@@ -226,26 +226,20 @@ Item {
 
 	// Breathing. It is a scale on the body rather than part of the outline, so
 	// the geometry is only rebuilt while the body is morphing.
-	SequentialAnimation {
-		loops: Animation.Infinite
+	//
+	// The scale steps on a timer rather than on every frame. A pair of eased
+	// halves is one cosine over the whole breath, so the face still rises and
+	// falls the same way without repainting at the refresh rate to do it.
+	property real breathePhase: 0
+
+	Timer {
+		interval: 20
+		repeat: true
 		running: !root.paused && !root.small
 
-		NumberAnimation {
-			target: root
-			property: "breathe"
-			from: 1
-			to: 0.985
-			duration: 1900
-			easing.type: Easing.InOutSine
-		}
-
-		NumberAnimation {
-			target: root
-			property: "breathe"
-			from: 0.985
-			to: 1
-			duration: 1900
-			easing.type: Easing.InOutSine
+		onTriggered: {
+			root.breathePhase = (root.breathePhase + interval / Config.agentBreatheMs) % 1;
+			root.breathe = 1 - 0.015 * (0.5 - 0.5 * Math.cos(root.breathePhase * root.twoPi));
 		}
 	}
 

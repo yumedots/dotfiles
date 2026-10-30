@@ -254,6 +254,12 @@ powerTooltipWidth = 240  # same as cpuTooltipWidth
 powerTooltipPadding = 12  # same as cpuTooltipPadding
 powerGovernorTitle = "Governor"
 
+# desktop saver
+[saver]
+saverAfterMinutes = 5  # idle before the desktop shows a saver, 0 disables
+saverName = "drift"  # none | drift | rain | embers
+saverScrim = 0.35
+
 # lock screen
 [lock]
 lockAfterMinutes = 10  # idle before the shell locks, 0 disables
@@ -522,6 +528,7 @@ networkLockIcon = "\uF023"
 agentFaceSize = 44
 agentMorphMs = 420
 agentSpinMs = 120000
+agentBreatheMs = 3800
 agentPanelWidth = 300
 agentPanelHeight = 340
 agentPanelPadding = 12

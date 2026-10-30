@@ -169,6 +169,7 @@ QtObject {
 	readonly property var mixerHoldMs: settings.mixerHoldMs !== undefined ? settings.mixerHoldMs : 2000
 	readonly property var mixerRecordDotSize: settings.mixerRecordDotSize !== undefined ? settings.mixerRecordDotSize : 5
 	readonly property var mixerHitPad: settings.mixerHitPad !== undefined ? settings.mixerHitPad : 6
+	readonly property var mixerPendingMs: settings.mixerPendingMs !== undefined ? settings.mixerPendingMs : 500
 
 	// now playing
 	readonly property var mediaTooltipWidth: settings.mediaTooltipWidth !== undefined ? settings.mediaTooltipWidth : 228
@@ -249,6 +250,11 @@ QtObject {
 	readonly property var powerTooltipWidth: settings.powerTooltipWidth !== undefined ? settings.powerTooltipWidth : 240
 	readonly property var powerTooltipPadding: settings.powerTooltipPadding !== undefined ? settings.powerTooltipPadding : 12
 	readonly property var powerGovernorTitle: settings.powerGovernorTitle !== undefined ? settings.powerGovernorTitle : "Governor"
+
+	// desktop saver
+	readonly property var saverAfterMinutes: settings.saverAfterMinutes !== undefined ? settings.saverAfterMinutes : 5
+	readonly property var saverName: settings.saverName !== undefined ? settings.saverName : "drift"
+	readonly property var saverScrim: settings.saverScrim !== undefined ? settings.saverScrim : 0.35
 
 	// lock screen
 	readonly property var lockAfterMinutes: settings.lockAfterMinutes !== undefined ? settings.lockAfterMinutes : 10
@@ -444,6 +450,10 @@ QtObject {
 	readonly property var displayValueGap: settings.displayValueGap !== undefined ? settings.displayValueGap : 6
 	readonly property var stepBarHeight: settings.stepBarHeight !== undefined ? settings.stepBarHeight : 6
 	readonly property var stepBarGap: settings.stepBarGap !== undefined ? settings.stepBarGap : 2
+	readonly property var stepBarLensPad: settings.stepBarLensPad !== undefined ? settings.stepBarLensPad : 3
+	readonly property var stepBarLensGlide: settings.stepBarLensGlide !== undefined ? settings.stepBarLensGlide : 150
+	readonly property var stepBarLensHold: settings.stepBarLensHold !== undefined ? settings.stepBarLensHold : 1000
+	readonly property var stepBarLensFade: settings.stepBarLensFade !== undefined ? settings.stepBarLensFade : 300
 	readonly property var displaySeparatorColor: settings.displaySeparatorColor !== undefined ? settings.displaySeparatorColor : "#3f3f3f"
 	readonly property var displaySeparatorHeight: settings.displaySeparatorHeight !== undefined ? settings.displaySeparatorHeight : 1
 	readonly property var displayScaleMin: settings.displayScaleMin !== undefined ? settings.displayScaleMin : 1
@@ -508,6 +518,7 @@ QtObject {
 	readonly property var agentFaceSize: settings.agentFaceSize !== undefined ? settings.agentFaceSize : 44
 	readonly property var agentMorphMs: settings.agentMorphMs !== undefined ? settings.agentMorphMs : 420
 	readonly property var agentSpinMs: settings.agentSpinMs !== undefined ? settings.agentSpinMs : 120000
+	readonly property var agentBreatheMs: settings.agentBreatheMs !== undefined ? settings.agentBreatheMs : 3800
 	readonly property var agentPanelWidth: settings.agentPanelWidth !== undefined ? settings.agentPanelWidth : 300
 	readonly property var agentPanelHeight: settings.agentPanelHeight !== undefined ? settings.agentPanelHeight : 240
 	readonly property var agentPanelPadding: settings.agentPanelPadding !== undefined ? settings.agentPanelPadding : 12
