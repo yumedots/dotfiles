@@ -11,6 +11,7 @@ BarStat {
 	readonly property var governors: Yudae.system.governors || []
 	property string governor: Yudae.system.governor || ""
 	property bool applyFailed: false
+	readonly property int flow: !root.battery ? 0 : (root.battery.state === "Charging" ? 1 : (root.battery.state === "Discharging" ? -1 : 0))
 
 	readonly property var icons: ({
 		full: Config.iconBatteryFull,
@@ -31,6 +32,24 @@ BarStat {
 	pct: root.battery ? root.battery.pct : 0
 	value: root.battery ? Math.round(root.battery.pct) + "%" : ""
 	showBar: root.battery !== null
+	iconWidth: root.iconInkHeight
+	iconComponent: root.battery === null ? null : flowIcon
+
+	Component {
+		id: flowIcon
+
+		PowerFlow {
+			width: parent.width
+			height: parent.height
+			rows: 4
+			span: 2
+			dotScale: 0.8
+			flow: root.flow
+			watts: root.battery ? root.battery.watts || 0 : 0
+			fill: root.battery ? root.battery.pct / 100 : 1
+			hotInk: parent.ink
+		}
+	}
 
 	function batteryIcon(battery) {
 		if (!battery)

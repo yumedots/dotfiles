@@ -26,7 +26,7 @@ ProcessPanel {
 			visible: root.battery !== null
 			width: parent.width
 			height: Config.powerFlowHeight
-			flow: !root.battery ? 0 : (root.battery.state === "Charging" ? 1 : (root.battery.state === "Discharging" ? -1 : 0))
+			flow: root.source ? root.source.flow : 0
 			watts: root.battery ? root.battery.watts || 0 : 0
 			fill: root.battery ? root.battery.pct / 100 : 1
 			hotInk: !Config.mono && root.battery && root.battery.color ? root.battery.color : root.accentInk
