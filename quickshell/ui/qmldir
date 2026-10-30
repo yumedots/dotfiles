@@ -16,6 +16,7 @@ SearchField 1.0 SearchField.qml
 NotificationRow 1.0 NotificationRow.qml
 CellGrid 1.0 CellGrid.qml
 DotGraph 1.0 DotGraph.qml
+PowerFlow 1.0 PowerFlow.qml
 SignalBars 1.0 SignalBars.qml
 SpeedGauge 1.0 SpeedGauge.qml
 StepBar 1.0 StepBar.qml
