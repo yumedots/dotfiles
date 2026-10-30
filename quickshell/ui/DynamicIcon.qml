@@ -47,17 +47,28 @@ Shape {
 		}
 	}
 
-	// The points of one subpath, as the list the path wants.
+	property var sourced: [null, null, null, null]
+	property var converted: [null, null, null, null]
+
+	// The points of one subpath, as the list the path wants. A subpath that is
+	// the same array as last time keeps the list that was built for it, so only
+	// the subpaths that moved are converted again.
 	function points(index) {
 		const subpath = root.subpaths.length > index ? root.subpaths[index] : null;
 
 		if (!subpath)
 			return [];
 
+		if (root.sourced[index] === subpath)
+			return root.converted[index];
+
 		const out = [];
 
 		for (let i = 0; i < subpath.length; i += 2)
 			out.push(Qt.point(subpath[i], subpath[i + 1]));
+
+		root.sourced[index] = subpath;
+		root.converted[index] = out;
 
 		return out;
 	}
