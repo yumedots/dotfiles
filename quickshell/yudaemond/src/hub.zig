@@ -26,6 +26,7 @@ pub const Hub = struct {
 	publish_mutex: std.Io.Mutex = .init,
 	dirty: std.atomic.Value(bool) = .init(false),
 	last_publish_ms: i64 = 0,
+	last_body: ?[]u8 = null,
 
 	pub fn add(self: *Hub, provider: Provider) !void {
 		try self.providers.append(self.allocator, provider);
@@ -74,17 +75,29 @@ pub const Hub = struct {
 
 	fn publishOnce(self: *Hub) void {
 		_ = self.revision.fetchAdd(1, .monotonic);
-
-		const t0 = fmt.nowMs(self.io);
-		self.last_publish_ms = t0;
+		self.last_publish_ms = fmt.nowMs(self.io);
 
 		const body = self.snapshot(self.allocator) catch return;
 		defer self.allocator.free(body);
-		const t1 = fmt.nowMs(self.io);
+
+		// A provider tick that worked out to the same state as the last one
+		// has nothing to say. The header carries a fresh revision and stamp
+		// every time, so only the providers are compared. Revisions skip the
+		// passes that are dropped.
+		const current = providerBody(body);
+
+		if (self.last_body) |previous| {
+			if (std.mem.eql(u8, providerBody(previous), current)) return;
+		}
+
+		const kept = self.allocator.dupe(u8, body) catch null;
+
+		if (kept) |copy| {
+			if (self.last_body) |previous| self.allocator.free(previous);
+			self.last_body = copy;
+		}
 
 		if (self.ipc) |server| server.broadcast(body);
-		const t2 = fmt.nowMs(self.io);
-		if (t2 - t0 > 100) std.debug.print("DBG publish snapshot={d} broadcast={d} rev={d}\n", .{ t1 - t0, t2 - t1, self.revision.load(.monotonic) });
 	}
 
 	pub fn publishGaze(self: *Hub, x: f64, y: f64) void {
@@ -97,6 +110,29 @@ pub const Hub = struct {
 		return server.gazeSubscribers() > 0;
 	}
 };
+
+/// The providers of a snapshot, without the revision and stamp that lead it.
+/// Those two move on every render, so a comparison that kept them would never
+/// find two snapshots alike.
+fn providerBody(body: []const u8) []const u8 {
+	const marker = "\"ts\":";
+	const at = std.mem.indexOf(u8, body, marker) orelse return body;
+
+	var i = at + marker.len;
+	while (i < body.len and std.ascii.isDigit(body[i])) i += 1;
+
+	return body[i..];
+}
+
+test "providerBody drops the header and keeps the providers" {
+	const a = "{\"rev\":7,\"ts\":1700000000000,\"system\":{\"cpu\":1}}";
+	const b = "{\"rev\":8,\"ts\":1700000000999,\"system\":{\"cpu\":1}}";
+	const c = "{\"rev\":9,\"ts\":1700000001000,\"system\":{\"cpu\":2}}";
+
+	try std.testing.expectEqualStrings(",\"system\":{\"cpu\":1}}", providerBody(a));
+	try std.testing.expect(std.mem.eql(u8, providerBody(a), providerBody(b)));
+	try std.testing.expect(!std.mem.eql(u8, providerBody(a), providerBody(c)));
+}
 
 const Probe = struct {
 	mutex: std.Io.Mutex = .init,
