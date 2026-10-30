@@ -14,6 +14,8 @@ const max_depth = 2;
 const extensions = [_][]const u8{ ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif" };
 
 const cache_root = ".cache/quickshell/wallpaper";
+const greeter_dir = "/var/lib/quickshell/greeter";
+const greeter_wallpaper = "/var/lib/quickshell/greeter/wallpaper";
 const thumb_bin = "/usr/bin/vipsthumbnail";
 const thumb_px = 480;
 const preview_px = 1280;
@@ -157,6 +159,7 @@ pub const Wallpaper = struct {
 		if (stat) |info| self.seen_at = info.mtime;
 		self.mutex.unlock(self.io);
 
+		self.mirror(active);
 		self.hub.publish();
 		self.prune(cache);
 		self.ensureWorker();
@@ -393,7 +396,19 @@ pub const Wallpaper = struct {
 		} else |_| {}
 		self.mutex.unlock(self.io);
 
+		self.mirror(path);
 		self.hub.publish();
+	}
+
+	fn mirror(self: *Wallpaper, path: []const u8) void {
+		if (path.len == 0) return;
+		if (!std.fs.path.isAbsolute(path)) return;
+		if (!proc.exists(self.io, greeter_dir)) return;
+
+		std.Io.Dir.copyFileAbsolute(path, greeter_wallpaper, self.io, .{
+			.permissions = @enumFromInt(0o644),
+			.replace = true,
+		}) catch {};
 	}
 
 	fn setStr(self: *Wallpaper, slot: *[]u8, text: []const u8) void {
