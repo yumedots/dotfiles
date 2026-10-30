@@ -16,7 +16,6 @@ const workspaces = @import("providers/workspaces.zig");
 const tray = @import("providers/tray.zig");
 const notifications = @import("providers/notifications.zig");
 const weather = @import("providers/weather.zig");
-const radar = @import("providers/radar.zig");
 const system = @import("providers/system.zig");
 const apps = @import("providers/apps.zig");
 const screen = @import("providers/screen.zig");
@@ -504,9 +503,6 @@ fn run(io: std.Io) !void {
 	const weather_provider = try weather.Weather.create(allocator, io, hub, client);
 	try hub.add(weather_provider.provider());
 
-	const radar_provider = try radar.Radar.create(allocator, io, hub, client, weather_provider);
-	try hub.add(radar_provider.provider());
-
 	const system_provider = try system.System.create(allocator, io, hub);
 	try hub.add(system_provider.provider());
 
@@ -630,7 +626,6 @@ fn run(io: std.Io) !void {
 	try workspaces_provider.start();
 	try notify_provider.start();
 	try weather_provider.start();
-	try radar_provider.start();
 	try apps_provider.start();
 	try screen_provider.start();
 	try settings_provider.start();
