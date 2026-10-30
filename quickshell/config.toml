@@ -252,6 +252,7 @@ powerWarnAt = 30
 powerDangerAt = 15
 powerTooltipWidth = 240  # same as cpuTooltipWidth
 powerTooltipPadding = 12  # same as cpuTooltipPadding
+powerFlowHeight = 40
 powerGovernorTitle = "Governor"
 
 # desktop saver

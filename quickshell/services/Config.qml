@@ -249,6 +249,7 @@ QtObject {
 	readonly property var powerDangerAt: settings.powerDangerAt !== undefined ? settings.powerDangerAt : 15
 	readonly property var powerTooltipWidth: settings.powerTooltipWidth !== undefined ? settings.powerTooltipWidth : 240
 	readonly property var powerTooltipPadding: settings.powerTooltipPadding !== undefined ? settings.powerTooltipPadding : 12
+	readonly property var powerFlowHeight: settings.powerFlowHeight !== undefined ? settings.powerFlowHeight : 40
 	readonly property var powerGovernorTitle: settings.powerGovernorTitle !== undefined ? settings.powerGovernorTitle : "Governor"
 
 	// desktop saver
