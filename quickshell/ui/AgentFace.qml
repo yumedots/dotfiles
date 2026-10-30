@@ -84,12 +84,12 @@ Item {
 
 	readonly property bool spinning: root.state === "working" && !root.paused
 
-	RotationAnimation on spin {
-		from: 0
-		to: 360
-		duration: Config.agentSpinMs
+	Timer {
+		interval: 20
+		repeat: true
 		running: root.spinning
-		loops: Animation.Infinite
+
+		onTriggered: root.spin = (root.spin + 360 * interval / Config.agentSpinMs) % 360
 	}
 
 	// The eyes only look around when they are told to.
