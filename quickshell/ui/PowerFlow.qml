@@ -15,9 +15,11 @@ Canvas {
 	property real phase: 0
 
 	readonly property real pitch: root.height / root.rows
-	readonly property real dot: root.pitch * 0.6
+	property real dotScale: 0.6
+
+	readonly property real dot: root.pitch * root.dotScale
 	readonly property int cols: Math.max(1, Math.floor(root.width / root.pitch))
-	readonly property int span: 7
+	property int span: 7
 
 	onPhaseChanged: root.requestPaint()
 	onFlowChanged: root.requestPaint()
@@ -49,7 +51,7 @@ Canvas {
 		const run = root.cols + root.span * 2;
 		const ahead = root.phase % run - root.span;
 		const head = root.flow < 0 ? root.cols - 1 - ahead : ahead;
-		const thick = 0.4 + 1.6 * Math.max(0, Math.min(1, root.fill));
+		const thick = (0.4 + 1.6 * Math.max(0, Math.min(1, root.fill))) * root.rows / 8;
 
 		for (let x = 0; x < root.cols; x++) {
 			const center = mid + amp * Math.sin(x * 0.32 + drift);
