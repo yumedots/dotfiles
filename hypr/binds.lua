@@ -13,11 +13,9 @@ local function switcherOpen()
     return false
 end
 
-local yudaemond = (os.getenv("HOME") or "") .. "/.config/quickshell/yudaemond/zig-out/bin/yudaemond"
-
 local function wakeLauncher(action)
     return function()
-        hl.exec_cmd(yudaemond .. " wake " .. action)
+        hl.dispatch(hl.dsp.global("quickshell:" .. action))
     end
 end
 
