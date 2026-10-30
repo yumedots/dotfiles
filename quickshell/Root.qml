@@ -443,7 +443,7 @@ ShellRoot {
 
 	PowerMenu {
 		id: powerMenuWindow
-		alwaysMapped: true
+		alwaysMapped: shellRoot.isLauncher
 	}
 
 	IdleMonitor {
