@@ -256,6 +256,39 @@ pub const Notifications = struct {
 		a.free(row.actions);
 	}
 
+	pub fn post(self: *Notifications, app: []const u8, summary: []const u8, body: []const u8, timeout: i32) void {
+		self.insert(app, summary, body, timeout);
+		self.hub.publish();
+	}
+
+	fn insert(self: *Notifications, app: []const u8, summary: []const u8, body: []const u8, timeout: i32) void {
+		const a = self.allocator;
+
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		self.next_id += 1;
+
+		self.rows.append(a, .{
+			.id = self.next_id,
+			.app = a.dupe(u8, app) catch return,
+			.summary = a.dupe(u8, summary) catch return,
+			.body = a.dupe(u8, body) catch return,
+			.image = a.alloc(u8, 0) catch return,
+			.icon = a.alloc(u8, 0) catch return,
+			.desktop = a.alloc(u8, 0) catch return,
+			.pid = 0,
+			.urgent = false,
+			.timeout = timeout,
+			.actions = a.alloc(ActionOut, 0) catch return,
+		}) catch return;
+
+		while (self.rows.items.len > self.history) self.free(self.rows.orderedRemove(0));
+
+		self.seq += 1;
+		self.last = self.next_id;
+	}
+
 	pub fn dismiss(self: *Notifications, id: u32) void {
 		self.mutex.lockUncancelable(self.io);
 
@@ -321,3 +354,24 @@ pub const Notifications = struct {
 		try writer.print("{f}", .{std.json.fmt(Out{ .seq = self.seq, .last = self.last, .list = list }, .{})});
 	}
 };
+
+test "a finished task lands in the list as a row" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	var notes: Notifications = .{ .allocator = allocator, .io = io, .hub = &hub, .scratch = std.heap.ArenaAllocator.init(allocator), .runtime = "/tmp" };
+	const self = &notes;
+
+	self.post("OpenCode", "Greeting", "Task finished", 5000);
+
+	try std.testing.expectEqual(@as(usize, 1), self.rows.items.len);
+	try std.testing.expectEqual(@as(u32, 1), self.last);
+	try std.testing.expectEqualStrings("OpenCode", self.rows.items[0].app);
+	try std.testing.expectEqualStrings("Greeting", self.rows.items[0].summary);
+	try std.testing.expectEqualStrings("Task finished", self.rows.items[0].body);
+	try std.testing.expectEqual(@as(i32, 5000), self.rows.items[0].timeout);
+}

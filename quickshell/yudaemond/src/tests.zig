@@ -14,6 +14,7 @@ test {
 	_ = @import("providers/codex.zig");
 	_ = @import("providers/cursor.zig");
 	_ = @import("providers/daemon.zig");
+	_ = @import("providers/notifications.zig");
 	_ = @import("providers/github.zig");
 	_ = @import("providers/workspaces.zig");
 	_ = @import("providers/weather.zig");

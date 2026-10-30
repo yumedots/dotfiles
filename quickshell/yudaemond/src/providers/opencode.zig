@@ -8,6 +8,7 @@ const limitmod = @import("../primitives/limits.zig");
 const fmt = @import("../primitives/fmt.zig");
 const sleep = @import("../primitives/sleep.zig");
 const exec = @import("../primitives/exec.zig");
+const notify = @import("notifications.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -88,6 +89,7 @@ pub const Opencode = struct {
 	http: *http.Client,
 	mutex: std.Io.Mutex = .init,
 	scratch: std.heap.ArenaAllocator,
+	notifications: ?*notify.Notifications = null,
 	sessions: std.StringHashMapUnmanaged(*Session) = .empty,
 	running: std.ArrayListUnmanaged([]u8) = .empty,
 	asking: std.ArrayListUnmanaged([]u8) = .empty,
@@ -118,6 +120,10 @@ pub const Opencode = struct {
 
 	pub fn provider(self: *Opencode) hubmod.Provider {
 		return .{ .key = "opencode", .ctx = self, .render = renderThunk };
+	}
+
+	pub fn attach(self: *Opencode, notifications: *notify.Notifications) void {
+		self.notifications = notifications;
 	}
 
 	fn renderThunk(ctx: *anyopaque, writer: *Writer) anyerror!void {
@@ -370,6 +376,7 @@ pub const Opencode = struct {
 		self.mutex.lockUncancelable(self.io);
 
 		const title = self.titleLocked(id);
+		const app = appName(if (self.sessions.get(id)) |session| session.provider else "");
 		const copy_id = self.allocator.dupe(u8, id) catch {
 			self.mutex.unlock(self.io);
 			return;
@@ -379,10 +386,12 @@ pub const Opencode = struct {
 			self.mutex.unlock(self.io);
 			return;
 		};
+		const note_title = self.allocator.dupe(u8, copy_title) catch null;
 
 		self.done.insert(self.allocator, 0, .{ .id = copy_id, .title = copy_title, .at = fmt.nowMs(self.io) }) catch {
 			self.allocator.free(copy_id);
 			self.allocator.free(copy_title);
+			if (note_title) |text| self.allocator.free(text);
 			self.mutex.unlock(self.io);
 			return;
 		};
@@ -394,7 +403,21 @@ pub const Opencode = struct {
 		}
 
 		self.mutex.unlock(self.io);
+
+		if (self.notifications) |notifications| {
+			if (note_title) |text| {
+				notifications.post(app, text, "Task finished", 5000);
+				self.allocator.free(text);
+			}
+		}
+
 		self.hub.publish();
+	}
+
+	fn appName(name: []const u8) []const u8 {
+		if (std.mem.startsWith(u8, name, "claude")) return "Claude";
+		if (std.mem.eql(u8, name, "openai") or std.mem.startsWith(u8, name, "codex")) return "Codex";
+		return "OpenCode";
 	}
 
 	const Patch = struct {
@@ -935,6 +958,28 @@ test "the active list clears a stale busy status" {
 	try std.testing.expectEqualStrings("idle", stale.status);
 	try std.testing.expectEqualStrings("busy", live.status);
 	try std.testing.expectEqualStrings("working", self.faceState());
+}
+
+test "a finished session posts a notification" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	var client = http.Client.init(allocator, io);
+	const self = try Opencode.create(allocator, io, &hub, &client);
+	var notes: notify.Notifications = .{ .allocator = allocator, .io = io, .hub = &hub, .scratch = std.heap.ArenaAllocator.init(allocator), .runtime = "/tmp" };
+	self.attach(&notes);
+
+	self.handleEvent("{\"type\":\"session.created\",\"data\":{\"sessionID\":\"ses_done\",\"title\":\"Greeting\"}}");
+	self.handleEvent("{\"type\":\"session.execution.succeeded\",\"data\":{\"sessionID\":\"ses_done\"}}");
+
+	try std.testing.expectEqual(@as(usize, 1), notes.rows.items.len);
+	try std.testing.expectEqualStrings("OpenCode", notes.rows.items[0].app);
+	try std.testing.expectEqualStrings("Greeting", notes.rows.items[0].summary);
+	try std.testing.expectEqualStrings("Task finished", notes.rows.items[0].body);
 }
 
 const credential_query = "SELECT COALESCE(json_extract(value, '$.key'), json_extract(value, '$.access')) AS token FROM credential WHERE active = 1 AND integration_id IN ('opencode-go', 'opencode') AND json_valid(value) AND COALESCE(json_extract(value, '$.key'), json_extract(value, '$.access')) IS NOT NULL ORDER BY CASE integration_id WHEN 'opencode-go' THEN 0 ELSE 1 END, time_updated DESC LIMIT 1;";

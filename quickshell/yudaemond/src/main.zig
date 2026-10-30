@@ -490,6 +490,7 @@ fn run(io: std.Io) !void {
 
 	const notify_provider = try notifications.Notifications.create(allocator, io, hub);
 	try hub.add(notify_provider.provider());
+	opencode_provider.attach(notify_provider);
 
 	const workspaces_provider = try workspaces.Workspaces.create(allocator, io, hub);
 	try hub.add(workspaces_provider.provider());
