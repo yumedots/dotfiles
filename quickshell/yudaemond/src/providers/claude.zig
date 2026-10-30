@@ -3,6 +3,7 @@ const http = @import("../primitives/http.zig");
 const json = @import("../primitives/json.zig");
 const proc = @import("../primitives/proc.zig");
 const limitmod = @import("../primitives/limits.zig");
+const watch = @import("../primitives/watch.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -30,6 +31,28 @@ pub const Claude = struct {
 		return self;
 	}
 
+	pub fn start(self: *Claude) !void {
+		const thread = try std.Thread.spawn(.{}, watchLoop, .{self});
+		thread.detach();
+	}
+
+	fn watchLoop(self: *Claude) void {
+		self.refreshPlan();
+		const path = self.credentialsPath() catch return;
+		defer self.allocator.free(path);
+		watch.watchFile(self.io, self.allocator, path, self, reloadThunk) catch {};
+	}
+
+	fn reloadThunk(ctx: *anyopaque) void {
+		const self: *Claude = @ptrCast(@alignCast(ctx));
+		self.refreshPlan();
+	}
+
+	fn credentialsPath(self: *Claude) ![]u8 {
+		const home = proc.home(self.io, self.allocator);
+		return std.fmt.allocPrint(self.allocator, "{s}/.claude/.credentials.json", .{home});
+	}
+
 	pub fn planOut(self: *Claude, arena: Allocator) limitmod.Plan {
 		self.mutex.lockUncancelable(self.io);
 		defer self.mutex.unlock(self.io);
@@ -38,8 +61,7 @@ pub const Claude = struct {
 	}
 
 	pub fn refreshPlan(self: *Claude) void {
-		const home = proc.home(self.io, self.allocator);
-		const path = std.fmt.allocPrint(self.allocator, "{s}/.claude/.credentials.json", .{home}) catch return;
+		const path = self.credentialsPath() catch return;
 		defer self.allocator.free(path);
 
 		const body = proc.readFile(self.io, self.allocator, path) catch {
@@ -60,16 +82,32 @@ pub const Claude = struct {
 			return;
 		}
 
+		const expires = json.integer(json.deep(creds.value, &.{ "claudeAiOauth", "expiresAt" }));
+		if (expires > 0 and expires <= std.Io.Clock.real.now(self.io).toMilliseconds()) {
+			self.setFailure(plan, "plan expired");
+			return;
+		}
+
 		const auth = http.bearer(self.allocator, token) catch return;
 		defer self.allocator.free(auth);
 
 		const extra = [_]std.http.Header{.{ .name = "anthropic-beta", .value = "oauth-2025-04-20" }};
 
-		const parsed = self.http.getJson(self.allocator, usage_url, auth, &extra) catch {
+		const reply = self.http.get(self.allocator, usage_url, auth, &extra) catch {
 			self.setFailure(plan, "plan unreachable");
 			return;
 		};
-		defer parsed.deinit();
+		defer reply.deinit(self.allocator);
+
+		if (!reply.ok()) {
+			self.setFailure(plan, "plan unavailable");
+			return;
+		}
+
+		const parsed = json.parse(arena.allocator(), reply.body) catch {
+			self.setFailure(plan, "plan unavailable");
+			return;
+		};
 
 		var next: std.ArrayListUnmanaged(Limit) = .empty;
 

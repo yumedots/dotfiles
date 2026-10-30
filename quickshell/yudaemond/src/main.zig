@@ -621,6 +621,7 @@ fn run(io: std.Io) !void {
 	try system_provider.start();
 	try opencode_provider.start();
 	try codex_provider.start();
+	try claude_provider.start();
 	const activity_provider = try activity.Activity.create(allocator, io, opencode_provider);
 	try activity_provider.start();
 	try cursor_provider.start();
