@@ -478,21 +478,21 @@ pub const Weather = struct {
 
 	fn geocode(self: *Weather, place: []const u8) ?[2]f64 {
 		const city = std.mem.trim(u8, place[0 .. (std.mem.indexOfScalar(u8, place, ',') orelse place.len)], " ");
+		const region = regionOf(place, city);
 
 		const escaped = http.encodeQuery(self.allocator, city) catch return null;
 		defer self.allocator.free(escaped);
 
-		const target = std.fmt.allocPrint(self.allocator, "https://geocoding-api.open-meteo.com/v1/search?name={s}&count=1&language=en&format=json", .{escaped}) catch return null;
+		const target = std.fmt.allocPrint(self.allocator, "https://geocoding-api.open-meteo.com/v1/search?name={s}&count=10&language=en&format=json", .{escaped}) catch return null;
 		defer self.allocator.free(target);
 
 		var arena = std.heap.ArenaAllocator.init(self.allocator);
 		defer arena.deinit();
 
 		const parsed = self.http.getJson(arena.allocator(), target, null, &.{}) catch return null;
-		const rows = json.listAt(parsed.value, "results");
-		if (rows.len == 0) return null;
+		const row = pickRegion(json.listAt(parsed.value, "results"), region) orelse return null;
 
-		return .{ json.numberAt(rows[0], "latitude"), json.numberAt(rows[0], "longitude") };
+		return .{ json.numberAt(row, "latitude"), json.numberAt(row, "longitude") };
 	}
 
 	pub fn search(self: *Weather, query: []const u8) void {
@@ -954,10 +954,35 @@ fn matchRows(arena: Allocator, items: []const Suggest, query: []const u8) Matche
 	return .{ .rows = rows.items, .ghost = rows.items[0].name[query.len..] };
 }
 
+fn pickRegion(rows: []const json.Value, region: []const u8) ?json.Value {
+	if (rows.len == 0) return null;
+	if (region.len == 0) return rows[0];
+
+	for (rows) |row| {
+		if (std.ascii.eqlIgnoreCase(json.textAt(row, "admin1"), region)) return row;
+		if (std.ascii.eqlIgnoreCase(json.textAt(row, "country"), region)) return row;
+	}
+
+	return rows[0];
+}
+
 fn regionOf(label: []const u8, name: []const u8) []const u8 {
 	if (name.len == 0 or !std.mem.startsWith(u8, label, name)) return "";
 
 	return std.mem.trimStart(u8, label[name.len..], ", \t");
+}
+
+test "geocoding picks the row in the labelled region" {
+	const body =
+		\\{"results":[{"name":"Palm Springs","admin1":"California","country":"United States","latitude":33.8,"longitude":-116.5},{"name":"Palm Springs","admin1":"Florida","country":"United States","latitude":26.6,"longitude":-80.1}]}
+	;
+	const parsed = try json.parse(std.testing.allocator, body);
+	defer parsed.deinit();
+	const rows = json.listAt(parsed.value, "results");
+
+	try std.testing.expectEqual(@as(f64, 26.6), json.numberAt(pickRegion(rows, "Florida").?, "latitude"));
+	try std.testing.expectEqual(@as(f64, 33.8), json.numberAt(pickRegion(rows, "").?, "latitude"));
+	try std.testing.expectEqual(@as(f64, 33.8), json.numberAt(pickRegion(rows, "Texas").?, "latitude"));
 }
 
 test "the region is what follows the name in the label" {
