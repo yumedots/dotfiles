@@ -230,11 +230,11 @@ QtObject {
 
 	// power menu and battery
 	readonly property var powerActions: settings.powerActions !== undefined ? settings.powerActions : [
-		{ name: "Lock", command: "\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/scripts/lock\"", glyph: "\uf023" },
-		{ name: "Suspend", command: "systemctl suspend", glyph: "\udb81\udcb2" },
-		{ name: "Log out", command: "hyprctl dispatch 'hl.dsp.exit()'", glyph: "\uea6e" },
+		{ name: "Shut down", command: "systemctl poweroff", glyph: "\uf011" },
 		{ name: "Reboot", command: "systemctl reboot", glyph: "\uead2" },
-		{ name: "Shut down", command: "systemctl poweroff", glyph: "\uf011" }
+		{ name: "Suspend", command: "systemctl suspend", glyph: "\udb81\udcb2" },
+		{ name: "Lock", command: "\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/scripts/lock\"", glyph: "\uf023" },
+		{ name: "Log out", command: "\"$HOME/.config/quickshell/yudaemond/zig-out/bin/yudaemond\" logout", glyph: "\uea6e" }
 	]
 	readonly property var powerCellSize: settings.powerCellSize !== undefined ? settings.powerCellSize : 96
 	readonly property var powerIconSize: settings.powerIconSize !== undefined ? settings.powerIconSize : 48

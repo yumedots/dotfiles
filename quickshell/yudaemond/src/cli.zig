@@ -62,6 +62,20 @@ pub fn wake(io: Io, args: []const []const u8) !void {
 	_ = try connection.readLine();
 }
 
+pub fn logout(io: Io) !void {
+	const path = try proc.socketPath(io, std.heap.smp_allocator);
+	defer std.heap.smp_allocator.free(path);
+
+	var read_buffer: [4096]u8 = undefined;
+	var connection = sock.Connection.connect(path, &read_buffer) catch {
+		std.debug.print("yudaemond is not running\n", .{});
+		std.process.exit(2);
+	};
+	defer connection.close();
+
+	try connection.writeLine("{\"cmd\":{\"system\":{\"logout\":true}}}");
+}
+
 pub fn doctor(io: Io) !void {
 	const body = try fetch(io);
 	defer std.heap.smp_allocator.free(body);

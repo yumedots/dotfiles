@@ -110,11 +110,13 @@ PanelWindow {
 		}
 
 		Keys.onPressed: function (event) {
+			const direction = Input.direction(event);
+
 			if (event.key === Qt.Key_Escape)
 				root.close();
-			else if (event.key === Qt.Key_Left)
+			else if (direction === "left" || direction === "up")
 				root.step(-1);
-			else if (event.key === Qt.Key_Right)
+			else if (direction === "right" || direction === "down")
 				root.step(1);
 			else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
 				root.execute();

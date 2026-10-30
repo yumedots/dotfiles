@@ -346,6 +346,8 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	}
 
 	if (json.field(value, "system")) |system_cmd| {
+		if (json.flag(system_cmd, "logout")) context.system.logout();
+
 		const governor = json.textAt(system_cmd, "governor");
 		if (governor.len > 0) context.system.setGovernor(governor);
 
@@ -437,13 +439,14 @@ pub fn main() !void {
 	}
 
 	if (std.mem.eql(u8, command, "wake")) return cli.wake(io, args);
+	if (std.mem.eql(u8, command, "logout")) return cli.logout(io);
 	if (std.mem.eql(u8, command, "doctor")) return cli.doctor(io);
 	if (std.mem.eql(u8, command, "bench")) return cli.bench(io, args);
 	if (std.mem.eql(u8, command, "parity")) return cli.parity(io, args);
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudaemond [run|state|wake <action>|doctor|bench [widgets]|parity|mcp]\n", .{});
+		std.debug.print("usage: yudaemond [run|state|wake <action>|doctor|bench [widgets]|parity|mcp|logout]\n", .{});
 		return;
 	}
 

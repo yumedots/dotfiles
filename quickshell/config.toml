@@ -234,11 +234,11 @@ windowsTitleSize = 11
 # power menu and battery
 [power]
 powerActions = [
-	{ name = "Lock", command = "\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/scripts/lock\"", glyph = "\uF023" },
-	{ name = "Suspend", command = "systemctl suspend", glyph = "\U000F04B2" },
-	{ name = "Log out", command = "hyprctl dispatch 'hl.dsp.exit()'", glyph = "\uEA6E" },
+	{ name = "Shut down", command = "systemctl poweroff", glyph = "\uF011" },
 	{ name = "Reboot", command = "systemctl reboot", glyph = "\uEAD2" },
-	{ name = "Shut down", command = "systemctl poweroff", glyph = "\uF011" }
+	{ name = "Suspend", command = "systemctl suspend", glyph = "\U000F04B2" },
+	{ name = "Lock", command = "\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/scripts/lock\"", glyph = "\uF023" },
+	{ name = "Log out", command = "\"$HOME/.config/quickshell/yudaemond/zig-out/bin/yudaemond\" logout", glyph = "\uEA6E" }
 ]
 powerCellSize = 96
 powerIconSize = 48

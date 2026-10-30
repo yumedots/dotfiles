@@ -16,7 +16,9 @@ PanelWindow {
 	property bool power: true
 	property var actions: []
 	property bool menuOpen: false
+	property int menuIndex: 0
 	property bool reveal: false
+	property real scrim: Config.lockScrim
 
 	signal powerRequested()
 	signal actionPicked(var action)
@@ -132,7 +134,7 @@ PanelWindow {
 
 			anchors.fill: parent
 			color: Config.surface
-			opacity: Config.lockScrim * root.veil
+			opacity: root.scrim * root.veil
 		}
 
 		ScreenSaver {
@@ -325,10 +327,12 @@ PanelWindow {
 				anchors.fill: parent
 				hoverEnabled: true
 				onClicked: {
-					if (root.actions.length > 0)
+					if (root.actions.length > 0) {
+						root.menuIndex = 0;
 						root.menuOpen = !root.menuOpen;
-					else
+					} else {
 						root.powerRequested();
+					}
 				}
 			}
 		}
@@ -362,11 +366,12 @@ PanelWindow {
 						id: actionRow
 
 						required property var modelData
+						required property int index
 
 						width: actionLabel.implicitWidth + 58
 						height: 34
 						radius: 2
-						color: actionHit.containsMouse ? Config.launcherHighlight : "transparent"
+						color: actionHit.containsMouse || (root.menuOpen && root.menuIndex === actionRow.index) ? Config.launcherHighlight : "transparent"
 
 						Text {
 							anchors.left: parent.left
@@ -409,12 +414,42 @@ PanelWindow {
 			if (root.source === null)
 				return;
 
-			if (event.key === Qt.Key_Escape) {
-				if (root.menuOpen)
+			if (root.menuOpen) {
+				if (event.key === Qt.Key_Escape) {
 					root.menuOpen = false;
-				else
-					root.source.dismiss();
+					event.accepted = true;
+					return;
+				}
 
+				if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+					const action = root.actions[root.menuIndex];
+
+					root.menuOpen = false;
+
+					if (action)
+						root.actionPicked(action);
+
+					event.accepted = true;
+					return;
+				}
+
+				const direction = Input.direction(event);
+
+				if (direction !== "") {
+					const delta = direction === "up" || direction === "left" ? -1 : 1;
+					const count = root.actions.length;
+
+					root.menuIndex = (root.menuIndex + delta + count) % count;
+					event.accepted = true;
+					return;
+				}
+
+				event.accepted = true;
+				return;
+			}
+
+			if (event.key === Qt.Key_Escape) {
+				root.source.dismiss();
 				event.accepted = true;
 				return;
 			}

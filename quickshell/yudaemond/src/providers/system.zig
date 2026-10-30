@@ -724,6 +724,29 @@ pub const System = struct {
 		if (count.* < max_top) count.* += 1;
 	}
 
+	pub fn logout(self: *System) void {
+		const exec = @import("../primitives/exec.zig");
+		const hypr = @import("../primitives/hypr.zig");
+
+		if (exec.run(self.io, self.allocator, &.{ "systemctl", "start", "greetd" })) |result| {
+			result.deinit(self.allocator);
+		} else |_| {}
+
+		if (hypr.request(self.io, self.allocator, "dispatch hl.dsp.exit()")) |out| {
+			self.allocator.free(out);
+			return;
+		} else |_| {}
+
+		const session = proc.env(self.io, self.allocator, "XDG_SESSION_ID") orelse "";
+		const user = proc.env(self.io, self.allocator, "USER") orelse "";
+
+		if (session.len > 0) {
+			if (exec.run(self.io, self.allocator, &.{ "loginctl", "terminate-session", session })) |result| result.deinit(self.allocator) else |_| {}
+		} else if (user.len > 0) {
+			if (exec.run(self.io, self.allocator, &.{ "loginctl", "terminate-user", user })) |result| result.deinit(self.allocator) else |_| {}
+		}
+	}
+
 	pub fn setGovernor(self: *System, name: []const u8) void {
 		const clean = sanitize(name);
 		if (clean.len == 0) return;

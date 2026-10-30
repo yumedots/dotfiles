@@ -15,9 +15,9 @@ ShellRoot {
 	property string saver: Local.saver
 
 	readonly property var powerActions: [
-		{ name: "Suspend", verb: "suspend", glyph: "\udb81\udcb2" },
+		{ name: "Shut down", verb: "poweroff", glyph: "\uf011" },
 		{ name: "Reboot", verb: "reboot", glyph: "\uead2" },
-		{ name: "Shut down", verb: "poweroff", glyph: "\uf011" }
+		{ name: "Suspend", verb: "suspend", glyph: "\udb81\udcb2" }
 	]
 
 	function runPower(action) {
@@ -39,6 +39,7 @@ ShellRoot {
 			source: auth
 			wallpaper: Local.wallpaper
 			saver: greeterRoot.saver
+			scrim: 0
 			account: Local.user
 			power: true
 			actions: greeterRoot.powerActions

@@ -86,6 +86,24 @@ visudo -cf "$power_tmp" >/dev/null
 install -m 440 "$power_tmp" /etc/sudoers.d/greeter-power
 rm -f "$power_tmp"
 
+rm -f /usr/local/bin/qs-logout
+rm -f /etc/sudoers.d/greeter-logout
+
+install -d -m 755 /etc/polkit-1/rules.d
+
+cat > /etc/polkit-1/rules.d/49-quickshell-greeter.rules <<POLKIT
+polkit.addRule(function (action, subject) {
+	if (action.id == "org.freedesktop.systemd1.manage-units" &&
+		subject.user == "$target" &&
+		action.lookup("unit") == "greetd.service" &&
+		action.lookup("verb") == "start") {
+		return polkit.Result.YES;
+	}
+});
+POLKIT
+
+chmod 644 /etc/polkit-1/rules.d/49-quickshell-greeter.rules
+
 [ -f /etc/security/faillock.conf.bak ] || cp -a /etc/security/faillock.conf /etc/security/faillock.conf.bak
 
 cat > /etc/security/faillock.conf <<'FAILLOCK'
