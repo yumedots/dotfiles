@@ -11,6 +11,20 @@ alive() {
 	[ -r "$pidfile" ] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null
 }
 
+live_signature() {
+	if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ -S "$runtime/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" ]; then
+		return
+	fi
+
+	for socket in "$runtime"/hypr/*/.socket2.sock; do
+		[ -S "$socket" ] || continue
+		socket="${socket%/.socket2.sock}"
+		HYPRLAND_INSTANCE_SIGNATURE="${socket##*/}"
+		export HYPRLAND_INSTANCE_SIGNATURE
+		return
+	done
+}
+
 live_display() {
 	if [ -S "$runtime/${WAYLAND_DISPLAY:-none}" ]; then
 		return
@@ -31,10 +45,17 @@ live_display() {
 
 launch() {
 	live_display
+	live_signature
 	ulimit -Sn 65536 2>/dev/null || true
 	export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic
 	setsid quickshell -p "$shell" >/dev/null 2>&1 &
-	echo $! >"$pidfile"
+	pid=$!
+	echo "$pid" >"$pidfile"
+	hyprctl dispatch 'hl.dsp.submap("lock")' >/dev/null 2>&1 || true
+	(
+		while kill -0 "$pid" 2>/dev/null; do sleep 0.4; done
+		hyprctl dispatch 'hl.dsp.submap("reset")' >/dev/null 2>&1 || true
+	) >/dev/null 2>&1 &
 }
 
 case "${1:-lock}" in
