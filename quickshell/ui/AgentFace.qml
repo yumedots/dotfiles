@@ -458,8 +458,10 @@ function socketInside(outline, cx, cy, radiusX, radiusY, samples, margin) {
 	const stride = Math.max(1, Math.floor(total / 48));
 	const count = Math.floor(total / stride);
 
+	// The margin is the room the eye keeps from the rim, so the shape that has
+	// to sit inside the body is the eye grown by it, not shrunk by it.
 	const gap = margin || 0;
-	const edge = roundedRectPoints(cx, cy, radiusX - gap, radiusY - gap, Math.min(radiusX, radiusY) - gap, samples || 24);
+	const edge = roundedRectPoints(cx, cy, radiusX + gap, radiusY + gap, Math.min(radiusX, radiusY) + gap, samples || 24);
 
 	for (let i = 0; i < edge.length; i += 2) {
 		const x = edge[i];
