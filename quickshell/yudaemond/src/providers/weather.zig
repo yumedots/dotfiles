@@ -25,6 +25,7 @@ const Day = struct {
 	feels: []u8,
 	wind: []u8,
 	humidity: []u8,
+	precip: []u8,
 };
 
 const DayOut = struct {
@@ -33,7 +34,9 @@ const DayOut = struct {
 	code: i64,
 	text: []const u8,
 	glyph: []const u8,
-	temps: []const u8,
+	high: []const u8,
+	low: []const u8,
+	precip: []const u8,
 	tempMax: []const u8,
 	tempMin: []const u8,
 	feels: []const u8,
@@ -314,6 +317,7 @@ pub const Weather = struct {
 					.feels = self.allocator.dupe(u8, json.textAt(row, "feels")) catch continue,
 					.wind = self.allocator.dupe(u8, json.textAt(row, "wind")) catch continue,
 					.humidity = self.allocator.dupe(u8, json.textAt(row, "humidity")) catch continue,
+					.precip = self.allocator.dupe(u8, json.textAt(row, "precip")) catch continue,
 				}) catch continue;
 			}
 		}
@@ -332,6 +336,7 @@ pub const Weather = struct {
 		self.allocator.free(day.feels);
 		self.allocator.free(day.wind);
 		self.allocator.free(day.humidity);
+		self.allocator.free(day.precip);
 	}
 
 	fn refreshAll(self: *Weather, focused: usize) void {
@@ -419,7 +424,7 @@ pub const Weather = struct {
 	fn forecast(self: *Weather, lat: f64, lon: f64) ?Forecast {
 		const url = std.fmt.allocPrint(self.allocator, "https://api.open-meteo.com/v1/forecast?latitude={d}&longitude={d}" ++
 			"&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,precipitation" ++
-			"&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,wind_speed_10m_max,relative_humidity_2m_mean" ++
+			"&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,wind_speed_10m_max,relative_humidity_2m_mean,precipitation_probability_max" ++
 			"&temperature_unit={s}&wind_speed_unit={s}&forecast_days={d}&timezone=auto", .{ lat, lon, self.temp_unit, self.wind_unit, self.days_wanted }) catch return null;
 		defer self.allocator.free(url);
 
@@ -449,6 +454,7 @@ pub const Weather = struct {
 			const apparent = value_at(daily, "apparent_temperature_max", i);
 			const wind_max = value_at(daily, "wind_speed_10m_max", i);
 			const humidity_mean = value_at(daily, "relative_humidity_2m_mean", i);
+			const precip_max = value_at(daily, "precipitation_probability_max", i);
 
 			days.append(self.allocator, .{
 				.date = self.allocator.dupe(u8, stamp) catch continue,
@@ -459,6 +465,7 @@ pub const Weather = struct {
 				.feels = self.tempText(apparent, temp_label) catch continue,
 				.wind = std.fmt.allocPrint(self.allocator, "{d} {s}", .{ @as(i64, @intFromFloat(@round(wind_max))), wind_label }) catch continue,
 				.humidity = std.fmt.allocPrint(self.allocator, "{d}%", .{@as(i64, @intFromFloat(@round(humidity_mean)))}) catch continue,
+				.precip = std.fmt.allocPrint(self.allocator, "{d}%", .{@as(i64, @intFromFloat(@round(precip_max)))}) catch continue,
 			}) catch continue;
 		}
 
@@ -723,7 +730,9 @@ pub const Weather = struct {
 					.code = day.code,
 					.text = info.text,
 					.glyph = info.glyph,
-					.temps = dayTemps(arena, day),
+					.high = degrees(arena, day.temp_max),
+					.low = degrees(arena, day.temp_min),
+					.precip = day.precip,
 					.tempMax = day.temp_max,
 					.tempMin = day.temp_min,
 					.feels = day.feels,
@@ -832,7 +841,9 @@ pub const Weather = struct {
 					.code = day.code,
 					.text = info.text,
 					.glyph = info.glyph,
-					.temps = dayTemps(arena, day),
+					.high = degrees(arena, day.temp_max),
+					.low = degrees(arena, day.temp_min),
+					.precip = day.precip,
 					.tempMax = day.temp_max,
 					.tempMin = day.temp_min,
 					.feels = day.feels,
@@ -910,8 +921,8 @@ fn splitTemp(text: []const u8) Split {
 	return .{ .value = trimmed[0..end], .unit = std.mem.trim(u8, trimmed[end..], " ") };
 }
 
-fn dayTemps(arena: std.mem.Allocator, day: Day) []const u8 {
-	return std.fmt.allocPrint(arena, "{s}\u{00b0} {s}\u{00b0}", .{ splitTemp(day.temp_max).value, splitTemp(day.temp_min).value }) catch "";
+fn degrees(arena: std.mem.Allocator, text: []const u8) []const u8 {
+	return std.fmt.allocPrint(arena, "{s}\u{00b0}", .{splitTemp(text).value}) catch "";
 }
 
 fn describe(codes: []const config.CodeRow, code: i64) Info {
