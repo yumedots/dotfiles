@@ -17,7 +17,9 @@ QtObject {
 	property real seen: -1
 
 	function announce() {
-		const seq = root.source.seq || 0;
+		const source = root.source;
+		const seq = source.seq || 0;
+		const list = source.list || [];
 
 		if (root.seen < 0) {
 			root.seen = seq;
@@ -29,12 +31,12 @@ QtObject {
 
 		root.seen = seq;
 
-		for (let i = 0; i < root.list.length; i++) {
-			if (root.list[i].id !== root.source.last)
+		for (let i = 0; i < list.length; i++) {
+			if (list[i].id !== source.last)
 				continue;
 
-			AppIcons.walkPid(root.list[i].senderPid);
-			root.arrived(root.list[i]);
+			AppIcons.walkPid(list[i].senderPid);
+			root.arrived(list[i]);
 			return;
 		}
 	}
