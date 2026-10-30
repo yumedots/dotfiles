@@ -9,9 +9,8 @@ Item {
 	property int count: 1
 	property int filled: 0
 	property bool glyphs: true
-	property bool animate: true
 	property var pool: []
-	property int seed: 1
+	property var marks: []
 	property color ink: Config.foreground
 	property color emptyColor: Config.launcherSearchBox
 	property color filledColor: Config.launcherHighlight
@@ -19,34 +18,43 @@ Item {
 	property real boxHeight: Config.lockBoxHeight
 	property real gap: Config.lockBoxGap
 	property real glyphSize: Config.lockGlyphSize
+	property real nudge: 0
 
 	readonly property int first: Math.max(0, root.filled - root.count)
 
 	implicitWidth: Math.max(0, root.count * root.boxWidth + (root.count - 1) * root.gap)
 	implicitHeight: root.boxHeight
 
-	function mix(value) {
-		let x = value | 0;
+	onFilledChanged: root.sync()
+	onPoolChanged: root.sync()
 
-		x = Math.imul(x ^ (x >>> 16), 2246822507);
-		x = Math.imul(x ^ (x >>> 13), 3266489909);
+	function sync() {
+		if (!root.glyphs || root.pool.length === 0) {
+			root.marks = [];
+			return;
+		}
 
-		return (x ^ (x >>> 16)) >>> 0;
-	}
+		const next = root.marks.slice(0, Math.min(root.filled, root.marks.length));
 
-	function glyphFor(slot) {
-		if (root.pool.length === 0)
-			return "";
+		while (next.length < root.filled) {
+			let pick = root.pool[Math.floor(Math.random() * root.pool.length)];
 
-		return root.pool[root.mix(root.seed * 2654435761 + slot * 7919) % root.pool.length];
-	}
+			if (root.pool.length > 1) {
+				let guard = 0;
 
-	function shuffle() {
-		root.seed = root.seed + 1;
+				while ((next.indexOf(pick) >= 0 || pick === next[next.length - 1]) && guard < 60) {
+					pick = root.pool[Math.floor(Math.random() * root.pool.length)];
+					guard += 1;
+				}
+			}
+
+			next.push(pick);
+		}
+
+		root.marks = next;
 	}
 
 	function reject() {
-		root.shuffle();
 		shake.restart();
 	}
 
@@ -58,8 +66,6 @@ Item {
 		NumberAnimation { target: root; property: "nudge"; to: -4; duration: 50; easing.type: Easing.InOutQuad }
 		NumberAnimation { target: root; property: "nudge"; to: 0; duration: 45; easing.type: Easing.OutCubic }
 	}
-
-	property real nudge: 0
 
 	Row {
 		x: root.nudge
@@ -75,39 +81,29 @@ Item {
 
 				readonly property int slot: root.first + box.index
 				readonly property bool lit: box.slot < root.filled
-				property int scramble: 0
 
 				width: root.boxWidth
 				height: root.boxHeight
-				radius: 2
 				color: box.lit ? root.filledColor : root.emptyColor
-				scale: box.lit ? 1 : 0.94
 
-				Behavior on color {
-					ColorAnimation { duration: root.animate ? 120 : 0 }
-				}
+				TextMetrics {
+					id: metrics
 
-				Behavior on scale {
-					NumberAnimation { duration: root.animate ? 170 : 0; easing.type: Easing.OutBack; easing.overshoot: 1.45 }
+					font.family: Config.fontFamily
+					font.pixelSize: root.glyphSize
+					font.weight: Font.Medium
+					text: root.marks[box.slot] || ""
 				}
 
 				Text {
-					id: glyph
-
-					anchors.fill: parent
 					visible: box.lit && root.glyphs
-					horizontalAlignment: Text.AlignHCenter
-					verticalAlignment: Text.AlignVCenter
+					x: (root.boxWidth - metrics.tightBoundingRect.width) / 2 - metrics.tightBoundingRect.x
+					y: (root.boxHeight - metrics.tightBoundingRect.height) / 2 - metrics.tightBoundingRect.y + metrics.boundingRect.y
 					font.family: Config.fontFamily
 					font.pixelSize: root.glyphSize
 					font.weight: Font.Medium
 					color: root.ink
-					opacity: box.lit ? 1 : 0
-					text: box.scramble > 0 ? root.glyphFor(box.slot + box.scramble * 131) : root.glyphFor(box.slot)
-
-					Behavior on opacity {
-						NumberAnimation { duration: root.animate ? 130 : 0 }
-					}
+					text: metrics.text
 				}
 
 				Rectangle {
@@ -115,23 +111,7 @@ Item {
 					anchors.centerIn: parent
 					width: 5
 					height: 5
-					radius: 2.5
 					color: root.ink
-				}
-
-				Timer {
-					interval: 32
-					repeat: true
-					running: box.scramble > 0
-
-					onTriggered: box.scramble = box.scramble - 1
-				}
-
-				onLitChanged: {
-					if (!box.lit || !root.animate)
-						return;
-
-					box.scramble = 3;
 				}
 			}
 		}

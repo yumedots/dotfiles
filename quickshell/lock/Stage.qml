@@ -32,6 +32,7 @@ PanelWindow {
 	property real intro: 0
 	property real cardIntro: 0
 	property real veil: 1
+	property real screenFade: 1
 
 	screen: root.modelData
 
@@ -79,6 +80,7 @@ PanelWindow {
 
 		PauseAnimation { duration: 550 }
 		NumberAnimation { target: root; property: "veil"; to: 0; duration: 320; easing.type: Easing.OutCubic }
+		NumberAnimation { target: root; property: "screenFade"; to: 0; duration: 320; easing.type: Easing.OutCubic }
 	}
 
 	Item {
@@ -86,6 +88,7 @@ PanelWindow {
 
 		anchors.fill: parent
 		focus: true
+		opacity: root.screenFade
 
 		Rectangle {
 			anchors.fill: parent
@@ -230,7 +233,6 @@ PanelWindow {
 					filled: root.source ? root.source.filled : 0
 					pool: Config.lockGlyphPool
 					glyphs: true
-					animate: true
 				}
 			}
 		}

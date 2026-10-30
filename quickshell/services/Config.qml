@@ -260,7 +260,7 @@ QtObject {
 	readonly property var lockInset: settings.lockInset !== undefined ? settings.lockInset : 96
 	readonly property var lockClockFormat: settings.lockClockFormat !== undefined ? settings.lockClockFormat : "HH:mm"
 	readonly property var lockDateFormat: settings.lockDateFormat !== undefined ? settings.lockDateFormat : "dddd d MMMM"
-	readonly property var lockDateSize: settings.lockDateSize !== undefined ? settings.lockDateSize : 13
+	readonly property var lockDateSize: settings.lockDateSize !== undefined ? settings.lockDateSize : 20
 	readonly property var lockCardPadding: settings.lockCardPadding !== undefined ? settings.lockCardPadding : 12
 	readonly property var lockIconGap: settings.lockIconGap !== undefined ? settings.lockIconGap : 12
 	readonly property var lockIconSize: settings.lockIconSize !== undefined ? settings.lockIconSize : 22
@@ -270,10 +270,10 @@ QtObject {
 	readonly property var lockPowerSize: settings.lockPowerSize !== undefined ? settings.lockPowerSize : 18
 	readonly property var lockNoteSize: settings.lockNoteSize !== undefined ? settings.lockNoteSize : 12
 	readonly property var lockBoxes: settings.lockBoxes !== undefined ? settings.lockBoxes : 10
-	readonly property var lockBoxWidth: settings.lockBoxWidth !== undefined ? settings.lockBoxWidth : 34
-	readonly property var lockBoxHeight: settings.lockBoxHeight !== undefined ? settings.lockBoxHeight : 34
+	readonly property var lockBoxWidth: settings.lockBoxWidth !== undefined ? settings.lockBoxWidth : 44
+	readonly property var lockBoxHeight: settings.lockBoxHeight !== undefined ? settings.lockBoxHeight : 44
 	readonly property var lockBoxGap: settings.lockBoxGap !== undefined ? settings.lockBoxGap : 6
-	readonly property var lockGlyphSize: settings.lockGlyphSize !== undefined ? settings.lockGlyphSize : 16
+	readonly property var lockGlyphSize: settings.lockGlyphSize !== undefined ? settings.lockGlyphSize : 19
 	readonly property var lockCooldownMs: settings.lockCooldownMs !== undefined ? settings.lockCooldownMs : 3000
 	readonly property var lockPamService: settings.lockPamService !== undefined ? settings.lockPamService : "quickshell"
 	readonly property var lockWrongText: settings.lockWrongText !== undefined ? settings.lockWrongText : "Wrong password"
