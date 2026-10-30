@@ -106,6 +106,7 @@ const BatteryOut = struct {
 	pct: f64,
 	charging: bool,
 	state: []const u8,
+	watts: f64,
 };
 
 const PanelOut = struct {
@@ -234,6 +235,7 @@ pub const System = struct {
 	battery_pct: f64 = 0,
 	battery_charging: bool = false,
 	battery_state: []u8 = &.{},
+	battery_watts: f64 = 0,
 	mem_available: i64 = 0,
 	mem_cached: i64 = 0,
 	mem_buffers: i64 = 0,
@@ -624,6 +626,7 @@ pub const System = struct {
 		self.battery_pct = pct;
 		self.battery_charging = std.mem.eql(u8, state, "Charging");
 		self.battery_state = self.allocator.dupe(u8, if (state.len > 0) state else "") catch &.{};
+		self.battery_watts = batteryWatts(body);
 		self.mutex.unlock(self.io);
 	}
 
@@ -868,6 +871,7 @@ pub const System = struct {
 				.pct = self.battery_pct,
 				.charging = self.battery_charging,
 				.state = self.battery_state,
+				.watts = self.battery_watts,
 			},
 			.processes = processes.items,
 			.byCpu = processes.items,
@@ -926,6 +930,30 @@ fn kbText(arena: Allocator, kb: i64) ![]const u8 {
 	if (kb >= 1024) return std.fmt.allocPrint(arena, "{d:.1} MB", .{value / 1024});
 
 	return std.fmt.allocPrint(arena, "{d} KB", .{kb});
+}
+
+fn ueventNumber(body: []const u8, key: []const u8) ?f64 {
+	var lines = std.mem.splitScalar(u8, body, '\n');
+	while (lines.next()) |line| {
+		if (line.len > key.len and std.mem.startsWith(u8, line, key) and line[key.len] == '=')
+			return std.fmt.parseFloat(f64, std.mem.trim(u8, line[key.len + 1 ..], " \r")) catch null;
+	}
+
+	return null;
+}
+
+fn batteryWatts(body: []const u8) f64 {
+	if (ueventNumber(body, "POWER_SUPPLY_POWER_NOW")) |uw| return @abs(uw) / 1e6;
+	const ua = ueventNumber(body, "POWER_SUPPLY_CURRENT_NOW") orelse return 0;
+	const uv = ueventNumber(body, "POWER_SUPPLY_VOLTAGE_NOW") orelse return 0;
+
+	return @abs(ua * uv) / 1e12;
+}
+
+test "battery watts read power or current times voltage" {
+	try std.testing.expectEqual(@as(f64, 12.5), batteryWatts("POWER_SUPPLY_STATUS=Discharging\nPOWER_SUPPLY_POWER_NOW=12500000\n"));
+	try std.testing.expectEqual(@as(f64, 15), batteryWatts("POWER_SUPPLY_CURRENT_NOW=1250000\nPOWER_SUPPLY_VOLTAGE_NOW=12000000\n"));
+	try std.testing.expectEqual(@as(f64, 0), batteryWatts("POWER_SUPPLY_CAPACITY=50\n"));
 }
 
 fn cpuPercent(delta: i64, seconds: f64) f64 {
