@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$(id -u)" -ne 0 ]; then
+	echo "run as root: sudo $0" >&2
+	exit 1
+fi
+
+systemctl disable greetd >/dev/null 2>&1 || true
+systemctl enable sddm >/dev/null 2>&1 || true
+
+if ! command -v sddm >/dev/null 2>&1; then
+	echo "sddm is not installed; reinstall it with: sudo pacman -S sddm" >&2
+fi
+
+if [ -f /etc/greetd/config.toml.bak ]; then
+	cp -a /etc/greetd/config.toml.bak /etc/greetd/config.toml
+fi
+
+if [ -f /etc/security/faillock.conf.bak ]; then
+	cp -a /etc/security/faillock.conf.bak /etc/security/faillock.conf
+fi
+
+rm -f /etc/sudoers.d/greeter-power
+rm -f /etc/greetd/start-greeter
+rm -f /etc/greetd/hyprland.lua
+rm -rf /var/lib/quickshell/greeter
+rm -f /etc/tmpfiles.d/greetd-greeter.conf
+rm -rf /etc/greetd/quickshell
+rmdir /run/greeter 2>/dev/null || true
+
+echo "greetd disabled, sddm enabled. reboot to return to sddm."
