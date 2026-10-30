@@ -447,7 +447,14 @@ function clipSockets(outline, sockets, margin) {
 }
 
 function socketInside(outline, cx, cy, radiusX, radiusY, samples, margin) {
-	const count = outline.length / 2;
+	const total = outline.length / 2;
+
+	// The fit only sets how big an eye may grow, so it is tested against a
+	// coarser copy of the outline. Dropping points pulls the test shape inside
+	// the real one, so the eye it allows still fits.
+	const stride = Math.max(1, Math.floor(total / 48));
+	const count = Math.floor(total / stride);
+
 	const gap = margin || 0;
 	const edge = roundedRectPoints(cx, cy, radiusX - gap, radiusY - gap, Math.min(radiusX, radiusY) - gap, samples || 24);
 
@@ -458,10 +465,10 @@ function socketInside(outline, cx, cy, radiusX, radiusY, samples, margin) {
 		let insidePoint = false;
 
 		for (let j = 0, k = count - 1; j < count; k = j++) {
-			const xi = outline[2 * j];
-			const yi = outline[2 * j + 1];
-			const xk = outline[2 * k];
-			const yk = outline[2 * k + 1];
+			const xi = outline[2 * j * stride];
+			const yi = outline[2 * j * stride + 1];
+			const xk = outline[2 * k * stride];
+			const yk = outline[2 * k * stride + 1];
 
 			if ((yi > y) !== (yk > y) && x < (xk - xi) * (y - yi) / (yk - yi) + xi)
 				insidePoint = !insidePoint;
