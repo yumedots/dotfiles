@@ -26,9 +26,9 @@ PanelWindow {
 	readonly property bool open: root.mode === "open"
 
 	readonly property real inset: Math.min(Config.lockInset, Math.round(root.width * 0.1))
-	readonly property real headTop: Math.max(root.inset, Math.round(root.height * 0.08))
+	readonly property real edge: Math.max(24, Math.round(root.height * 0.03))
+	readonly property real headTop: root.edge
 	readonly property real clockSize: Math.round(Math.min(root.width * 0.082, root.height * 0.15))
-	readonly property real promptGap: Math.round(root.height * 0.06)
 
 	property real intro: 0
 	property real cardIntro: 0
@@ -148,14 +148,17 @@ PanelWindow {
 		Column {
 			id: heading
 
-			x: root.inset
+			x: (root.width - heading.width) / 2
 			y: root.headTop + (1 - root.intro) * 16
+			width: clock.implicitWidth
 			opacity: root.intro * root.veil
 			spacing: 5
 
 			Text {
 				id: clock
 
+				width: heading.width
+				horizontalAlignment: Text.AlignHCenter
 				font.family: Config.fontFamily
 				font.pixelSize: root.clockSize
 				font.weight: Font.Medium
@@ -165,6 +168,8 @@ PanelWindow {
 			}
 
 			Text {
+				width: heading.width
+				horizontalAlignment: Text.AlignHCenter
 				font.family: Config.fontFamily
 				font.pixelSize: Config.lockDateSize
 				color: Config.foreground
@@ -174,6 +179,8 @@ PanelWindow {
 
 			Text {
 				visible: root.account !== ""
+				width: heading.width
+				horizontalAlignment: Text.AlignHCenter
 				font.family: Config.fontFamily
 				font.pixelSize: Config.lockDateSize
 				color: Config.foreground
@@ -191,8 +198,8 @@ PanelWindow {
 		HyprBorder {
 			id: card
 
-			x: root.inset
-			y: heading.y + heading.height + root.promptGap + (1 - root.cardIntro) * 14
+			x: (root.width - card.width) / 2
+			y: root.height - root.edge - card.height + (1 - root.cardIntro) * 14
 			width: row.implicitWidth + card.inset * 2
 			height: row.implicitHeight + card.inset * 2
 			padding: Config.lockCardPadding
@@ -274,8 +281,8 @@ PanelWindow {
 		Text {
 			id: note
 
-			x: root.inset
-			y: card.y + card.height + 10
+			x: (root.width - note.implicitWidth) / 2
+			y: card.y - note.height - 10
 			font.family: Config.fontFamily
 			font.pixelSize: Config.lockNoteSize
 			color: Config.red
@@ -292,7 +299,7 @@ PanelWindow {
 
 			visible: root.power
 			x: root.inset
-			y: root.height - root.inset - powerButton.height
+			y: card.y + (card.height - powerButton.height) / 2
 			width: 40
 			height: 40
 			radius: 2
@@ -336,7 +343,7 @@ PanelWindow {
 			id: powerMenu
 
 			visible: root.menuOpen
-			x: root.inset
+			x: powerButton.x
 			y: powerButton.y - height - 10
 			width: actionColumn.implicitWidth + powerMenu.inset * 2
 			height: actionColumn.implicitHeight + powerMenu.inset * 2
