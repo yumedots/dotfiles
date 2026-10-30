@@ -20,7 +20,7 @@ Shape {
 	// The subpaths, each a flat [x, y, ...] array in item coordinates.
 	property var subpaths: []
 
-	preferredRendererType: Shape.CurveRenderer
+	preferredRendererType: Shape.GeometryRenderer
 	asynchronous: false
 
 	ShapePath {
