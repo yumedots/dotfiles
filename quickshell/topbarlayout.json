@@ -21,6 +21,7 @@
 				{ "id": "volume" },
 				{ "id": "cpu" },
 				{ "id": "memory" },
+				{ "id": "power" },
 				{ "id": "display" }
 			]
 		}
