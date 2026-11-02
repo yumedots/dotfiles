@@ -7,6 +7,7 @@ const clipwatch = @import("clipwatch.zig");
 const calc = @import("../primitives/calc.zig");
 const json = @import("../primitives/json.zig");
 const exec = @import("../primitives/exec.zig");
+const http = @import("../primitives/http.zig");
 const config = @import("../primitives/config.zig");
 const environ = @import("../primitives/environ.zig");
 const proc = @import("../primitives/proc.zig");
@@ -64,6 +65,12 @@ const groups = [_]Group{
 
 const aliases = [_]struct { keep: []const u8, drop: []const []const u8 }{
 	.{ .keep = "foot", .drop = &.{ "footclient", "foot-server" } },
+};
+
+const web_searches = [_]struct { name: []const u8, url: []const u8, glyph: []const u8 }{
+	.{ .name = "Google", .url = "https://www.google.com/search?q=", .glyph = "\u{f1a0}" },
+	.{ .name = "YouTube", .url = "https://www.youtube.com/results?search_query=", .glyph = "\u{f16a}" },
+	.{ .name = "GitHub", .url = "https://github.com/search?q=", .glyph = "\u{f09b}" },
 };
 
 const ignored = [_][]const u8{ "avahi-discover", "bssh", "bvnc" };
@@ -786,12 +793,42 @@ pub const Launcher = struct {
 			return;
 		}
 
+		if (std.mem.startsWith(u8, id, "web:")) {
+			self.openUrl(id["web:".len..]);
+			return;
+		}
+
 		if (std.mem.startsWith(u8, id, "emoji:")) {
 			self.copyText(id["emoji:".len..]);
 			return;
 		}
 
 		if (std.mem.eql(u8, id, "calc")) self.copyCalc();
+	}
+
+	fn openUrl(self: *Launcher, url: []const u8) void {
+		if (url.len == 0) return;
+
+		const copy = self.allocator.dupe(u8, url) catch return;
+
+		const thread = std.Thread.spawn(.{}, openThread, .{ self, copy }) catch {
+			self.allocator.free(copy);
+			return;
+		};
+		thread.detach();
+	}
+
+	fn openThread(self: *Launcher, url: []u8) void {
+		defer self.allocator.free(url);
+
+		var child = std.process.spawn(self.io, .{
+			.argv = &.{ "xdg-open", url },
+			.stdin = .ignore,
+			.stdout = .ignore,
+			.stderr = .ignore,
+		}) catch return;
+
+		_ = child.wait(self.io) catch {};
 	}
 
 	fn copyCalc(self: *Launcher) void {
@@ -979,7 +1016,7 @@ pub const Launcher = struct {
 				self.appsView(arena, search, &rows) catch {};
 			}
 
-			return self.rank(arena, rows.items, search, false, true);
+			return self.rankOrWeb(arena, rows.items, search, false);
 		}
 
 		if (mode.len > 0) return rows.items;
@@ -988,7 +1025,30 @@ pub const Launcher = struct {
 		self.savedRows(arena, &rows) catch {};
 		self.appsView(arena, search, &rows) catch {};
 
-		return self.rank(arena, rows.items, search, true, true);
+		return self.rankOrWeb(arena, rows.items, search, true);
+	}
+
+	fn rankOrWeb(self: *Launcher, arena: Allocator, rows: []Row, search: []const u8, home: bool) ![]Row {
+		const ranked = self.rank(arena, rows, search, home, true);
+
+		if (ranked.len > 0 or search.len == 0) return ranked;
+
+		var out: std.ArrayListUnmanaged(Row) = .empty;
+		const encoded = try http.encodeQuery(arena, search);
+
+		for (web_searches) |engine| {
+			const url = try std.fmt.allocPrint(arena, "{s}{s}", .{ engine.url, encoded });
+
+			try out.append(arena, .{
+				.id = try std.fmt.allocPrint(arena, "web:{s}", .{url}),
+				.kind = "web",
+				.name = try std.fmt.allocPrint(arena, "Search {s} for {s}", .{ engine.name, search }),
+				.glyph = engine.glyph,
+				.command = url,
+			});
+		}
+
+		return out.items;
 	}
 
 	fn appendGroup(arena: Allocator, entry: Group, rows: *std.ArrayListUnmanaged(Row)) !void {
@@ -1960,6 +2020,33 @@ test "the forced mode wins and an unknown token is home" {
 	const prefix = self.effective(allocator, "", "", "%x");
 	try std.testing.expectEqualStrings("procs", prefix.mode);
 	try std.testing.expectEqualStrings("x", prefix.search);
+}
+
+test "no match offers web searches in the default browser" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	const self = try Launcher.create(allocator, io, &hub);
+
+	const rows = try self.build(allocator, "", "zz zz");
+
+	try std.testing.expectEqual(web_searches.len, rows.len);
+
+	for (rows, 0..) |row, index| {
+		try std.testing.expectEqualStrings("web", row.kind);
+		try std.testing.expect(std.mem.startsWith(u8, row.id, "web:"));
+		try std.testing.expectEqualStrings(web_searches[index].glyph, row.glyph);
+		try std.testing.expect(std.mem.startsWith(u8, row.command, web_searches[index].url));
+		try std.testing.expect(std.mem.endsWith(u8, row.command, "zz%20zz"));
+	}
+
+	const matched = try self.build(allocator, "", "clip");
+
+	for (matched) |row| try std.testing.expect(!std.mem.eql(u8, row.kind, "web"));
 }
 
 test "the snapshot echoes the intent the client asked for" {
