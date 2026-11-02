@@ -14,6 +14,7 @@ QtObject {
 	readonly property var foreground: settings.foreground !== undefined ? settings.foreground : "#ffffff"
 	readonly property var dim: settings.dim !== undefined ? settings.dim : "#3f3f3f"
 	readonly property var red: settings.red !== undefined ? settings.red : "#e05252"
+	readonly property var yellow: settings.yellow !== undefined ? settings.yellow : "#e0b24f"
 	readonly property var muted: settings.muted !== undefined ? settings.muted : "#ffffff"
 	readonly property var mono: settings.mono !== undefined ? settings.mono : true
 
@@ -522,6 +523,11 @@ QtObject {
 	readonly property var agentPanelWidth: settings.agentPanelWidth !== undefined ? settings.agentPanelWidth : 300
 	readonly property var agentPanelHeight: settings.agentPanelHeight !== undefined ? settings.agentPanelHeight : 240
 	readonly property var agentPanelPadding: settings.agentPanelPadding !== undefined ? settings.agentPanelPadding : 12
+	readonly property var agentRingSize: settings.agentRingSize !== undefined ? settings.agentRingSize : 32
+	readonly property var agentRingWidth: settings.agentRingWidth !== undefined ? settings.agentRingWidth : 3
+	readonly property var agentRingGap: settings.agentRingGap !== undefined ? settings.agentRingGap : 12
+	readonly property var agentRingWarnPercent: settings.agentRingWarnPercent !== undefined ? settings.agentRingWarnPercent : 60
+	readonly property var agentRingAlarmPercent: settings.agentRingAlarmPercent !== undefined ? settings.agentRingAlarmPercent : 90
 	readonly property var agentIdleText: settings.agentIdleText !== undefined ? settings.agentIdleText : "Idle"
 	readonly property var agentWorkingText: settings.agentWorkingText !== undefined ? settings.agentWorkingText : "Working"
 	readonly property var agentBlockedText: settings.agentBlockedText !== undefined ? settings.agentBlockedText : "a session needs attention"

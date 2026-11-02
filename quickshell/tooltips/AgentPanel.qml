@@ -366,10 +366,64 @@ Item {
 				anchors.fill: parent
 				visible: body.tab === 0
 
+				Item {
+					id: planRingStrip
+
+					anchors.top: parent.top
+					anchors.left: parent.left
+					anchors.right: parent.right
+
+					height: visible ? Config.agentRingSize : 0
+					visible: Yudae.planRings.length > 0
+
+					Row {
+						spacing: Config.agentRingGap
+
+						Repeater {
+							model: Yudae.planRings
+
+							delegate: Item {
+								id: planRing
+
+								required property var modelData
+
+								width: Config.agentRingSize
+								height: Config.agentRingSize
+
+								StepBar {
+									anchors.fill: parent
+
+									circular: true
+									ringWidth: Config.agentRingWidth
+									level: planRing.modelData.percent / 100
+									ink: planRing.modelData.percent >= Config.agentRingAlarmPercent ? Config.red : Config.yellow
+									track: Config.dim
+								}
+
+								Image {
+									visible: planRing.modelData.icon !== ""
+									width: Math.round(Config.agentRingSize * 0.5)
+									height: width
+									x: Math.round((parent.width - width) / 2)
+									y: Math.round((parent.height - height) / 2)
+
+									source: planRing.modelData.icon === ""
+										? ""
+										: "file://" + Quickshell.shellDir + "/assets/providers/" + planRing.modelData.icon + ".svg?v=4"
+									sourceSize.width: Math.round(width * root.dpr)
+									sourceSize.height: Math.round(height * root.dpr)
+									fillMode: Image.PreserveAspectFit
+								}
+							}
+						}
+					}
+				}
+
 				ListView {
 					id: workList
 
 					anchors.top: parent.top
+					anchors.topMargin: planRingStrip.visible ? planRingStrip.height + 8 : 0
 					anchors.left: parent.left
 					anchors.right: parent.right
 

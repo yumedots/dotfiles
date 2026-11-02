@@ -66,6 +66,48 @@ QtObject {
 		return out;
 	}
 
+	readonly property var planRings: {
+		const out = [];
+		const find = function (limits, title) {
+			for (let i = 0; i < limits.length; i++)
+				if (String(limits[i].title || "").toLowerCase() === title)
+					return limits[i];
+
+			return null;
+		};
+
+		for (let i = 0; i < root.plans.length; i++) {
+			const plan = root.plans[i];
+
+			if (plan.failure !== "" || !plan.limits || plan.limits.length === 0)
+				continue;
+
+			const limit = find(plan.limits, "monthly") || find(plan.limits, "weekly");
+
+			if (limit === null || limit.percent < Config.agentRingWarnPercent)
+				continue;
+
+			out.push({
+				title: plan.title,
+				icon: plan.icon,
+				percent: limit.percent,
+				resetsAt: limit.resetsAt,
+			});
+		}
+
+		out.sort(function (a, b) {
+			if (a.percent !== b.percent)
+				return b.percent - a.percent;
+
+			const left = Date.parse(a.resetsAt);
+			const right = Date.parse(b.resetsAt);
+
+			return (isFinite(left) ? left : Infinity) - (isFinite(right) ? right : Infinity);
+		});
+
+		return out;
+	}
+
 	readonly property var sessions: root.opencode.sessions || []
 	readonly property var running: root.opencode.running || []
 	readonly property var asking: root.opencode.asking || []
