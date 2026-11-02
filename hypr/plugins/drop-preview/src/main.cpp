@@ -10,6 +10,7 @@
 #include <hyprland/src/layout/LayoutManager.hpp>
 #include <hyprland/src/output/Monitor.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
+#include <hyprland/src/plugins/PluginSystem.hpp>
 #include <hyprland/src/render/Renderer.hpp>
 #include <hyprland/src/render/pass/BorderPassElement.hpp>
 #include <hyprland/src/render/pass/RectPassElement.hpp>
@@ -46,6 +47,15 @@ static void hide() {
     g_state.visible = false;
     g_state.alpha   = 0.F;
     g_state.goal.reset();
+}
+
+static CBox withSpacing(const CBox& box) {
+    const auto SPACING = g_config.spacing->value();
+    if (SPACING <= 0)
+        return box;
+
+    CBox shrunk = box.copy().expand(-sc<double>(SPACING));
+    return shrunk.w < 1 || shrunk.h < 1 ? box : shrunk;
 }
 
 static bool approxEqual(const CBox& a, const CBox& b) {
@@ -85,9 +95,10 @@ static void update() {
     const bool  WASSHOWN = g_state.visible;
 
     if (PREDICTION) {
+        const auto BOX = withSpacing(PREDICTION->box);
         if (!g_state.visible || g_state.alpha <= 0.F)
-            g_state.current = PREDICTION->box;
-        g_state.goal    = PREDICTION->box;
+            g_state.current = BOX;
+        g_state.goal    = BOX;
         g_state.visible = true;
     } else
         g_state.goal.reset();
@@ -176,6 +187,13 @@ APICALL EXPORT std::string PLUGIN_API_VERSION() {
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
 
+    if (g_pPluginSystem) {
+        for (const auto* PLUGIN : g_pPluginSystem->getAllPlugins()) {
+            if (PLUGIN && PLUGIN->m_name == "drop-preview" && PLUGIN->m_handle != handle)
+                return {"drop-preview", "Shows where a dragged tiled window will be dropped", "gabriel", "1.0"};
+        }
+    }
+
     if (std::string{__hyprland_api_get_hash()} != std::string{__hyprland_api_get_client_hash()}) {
         HyprlandAPI::addNotification(PHANDLE, "[drop-preview] Version mismatch: rebuild against the running Hyprland", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
         throw std::runtime_error("[drop-preview] Version mismatch");
@@ -192,11 +210,10 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     g_config.animSpeed  = makeShared<Config::Values::CFloatValue>("plugin:drop-preview:animation_speed", "Preview slide speed, 0 = snap instantly", 0.F);
     g_config.genericFallback =
         makeShared<Config::Values::CBoolValue>("plugin:drop-preview:generic_fallback", "On non-dwindle layouts, highlight the tiled window under the cursor", true);
+    g_config.spacing = makeShared<Config::Values::CIntValue>("plugin:drop-preview:spacing", "Inset the preview from the drop area, in logical px", 8,
+                                                             Config::Values::SIntValueOptions{.min = 0, .max = 200});
 
-    if (!HyprlandAPI::addConfigValueV2(PHANDLE, g_config.enabled)) {
-        HyprlandAPI::addNotification(PHANDLE, "[drop-preview] Already loaded, remove the duplicate load", CHyprColor{1.0, 0.6, 0.2, 1.0}, 5000);
-        throw std::runtime_error("[drop-preview] already loaded");
-    }
+    HyprlandAPI::addConfigValueV2(PHANDLE, g_config.enabled);
 
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.colFill);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.colBorder);
@@ -205,6 +222,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.blur);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.animSpeed);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.genericFallback);
+    HyprlandAPI::addConfigValueV2(PHANDLE, g_config.spacing);
 
     HyprlandAPI::reloadConfig();
 

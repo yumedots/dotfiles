@@ -39,6 +39,7 @@ make
 | `blur` | `false` | blur behind the fill |
 | `animation_speed` | `0` | `0` = snap instantly, higher = slide |
 | `generic_fallback` | `true` | highlight hovered window on non-dwindle layouts |
+| `spacing` | `8` | inset from the drop area in logical px, `0` = exact size |
 
 `rounding = -1` and `border_size = -1` track Hyprland live: changing `decoration:rounding`
 or `general:border_size` changes the preview immediately.
@@ -50,7 +51,9 @@ synthetic drags inside a nested Hyprland (`scripts/hypr-test`) and compares `pre
 with where Hyprland actually places the window; it also holds a drag open for screenshots
 and reports the resolved rounding/border values. Results go to `/tmp/dp-results.txt`.
 
-Loading twice is refused, so a manual load plus the config load cannot double-draw.
+Updating the binary: `hyprctl plugin unload <path>` then `hyprctl plugin load <path>`. A plain `hyprctl reload` will not re-add a config-loaded plugin after unloading it (Hyprland only loads config plugins at startup), and its config keys then log as unknown.
+
+Loading twice is a no-op, so a manual load plus the config load cannot double-draw.
 
 Verified: 584/584 drops exact across default, `preserve_split`, `smart_split`,
 `precise_mouse_move`, `split_bias` + ratio 1.3 + custom gaps; rounding follows `0 -> 18`;

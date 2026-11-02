@@ -14,6 +14,7 @@ struct SConfig {
     SP<Config::Values::CBoolValue>  blur;
     SP<Config::Values::CFloatValue> animSpeed;
     SP<Config::Values::CBoolValue>  genericFallback;
+    SP<Config::Values::CIntValue>   spacing;
 };
 
 extern SConfig g_config;
