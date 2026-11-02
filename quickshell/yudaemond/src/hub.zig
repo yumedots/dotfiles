@@ -24,8 +24,9 @@ pub const Hub = struct {
 	revision: std.atomic.Value(u64) = .init(0),
 	ipc: ?*ipc.Ipc = null,
 	publish_mutex: std.Io.Mutex = .init,
+	gap_mutex: std.Io.Mutex = .init,
 	dirty: std.atomic.Value(bool) = .init(false),
-	last_publish_ms: i64 = 0,
+	last_publish_ms: std.atomic.Value(i64) = .init(0),
 	last_body: ?[]u8 = null,
 
 	pub fn add(self: *Hub, provider: Provider) !void {
@@ -59,23 +60,39 @@ pub const Hub = struct {
 	pub fn publish(self: *Hub) void {
 		self.dirty.store(true, .release);
 
+		self.gap_mutex.lockUncancelable(self.io);
+		defer self.gap_mutex.unlock(self.io);
+
+		self.waitGap();
+
 		self.publish_mutex.lockUncancelable(self.io);
 		defer self.publish_mutex.unlock(self.io);
 
-		while (self.dirty.swap(false, .acq_rel)) {
-			const now = fmt.nowMs(self.io);
+		while (self.dirty.swap(false, .acq_rel)) self.publishOnce();
+	}
 
-			if (self.last_publish_ms > 0 and now - self.last_publish_ms < publish_gap_ms) {
-				sleep.ms(@intCast(publish_gap_ms - (now - self.last_publish_ms)));
-			}
+	pub fn publishNow(self: *Hub) void {
+		self.dirty.store(true, .release);
 
-			self.publishOnce();
+		self.publish_mutex.lockUncancelable(self.io);
+		defer self.publish_mutex.unlock(self.io);
+
+		_ = self.dirty.swap(false, .acq_rel);
+		self.publishOnce();
+	}
+
+	fn waitGap(self: *Hub) void {
+		const now = fmt.nowMs(self.io);
+		const last = self.last_publish_ms.load(.monotonic);
+
+		if (last > 0 and now - last < publish_gap_ms) {
+			sleep.ms(@intCast(publish_gap_ms - (now - last)));
 		}
 	}
 
 	fn publishOnce(self: *Hub) void {
 		_ = self.revision.fetchAdd(1, .monotonic);
-		self.last_publish_ms = fmt.nowMs(self.io);
+		self.last_publish_ms.store(fmt.nowMs(self.io), .monotonic);
 
 		const body = self.snapshot(self.allocator) catch return;
 		defer self.allocator.free(body);

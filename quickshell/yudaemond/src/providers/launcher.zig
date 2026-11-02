@@ -112,7 +112,7 @@ const Index = struct {
 	data: []u8,
 	pool: []const u8,
 	refs: []IndexRef,
-	ids: []u16,
+	ids: []u32,
 	entries: []IndexEntry,
 };
 
@@ -215,6 +215,7 @@ pub const Launcher = struct {
 	clip_words: i64 = 0,
 	index: ?*Index = null,
 	index_tried: bool = false,
+	index_mutex: std.Io.Mutex = .init,
 	pins: std.ArrayListUnmanaged([]u8) = .empty,
 	saved: std.ArrayListUnmanaged(Saved) = .empty,
 	clips: std.ArrayListUnmanaged(Clip) = .empty,
@@ -252,6 +253,9 @@ pub const Launcher = struct {
 
 		self.watch = try clipwatch.Watch.create(self.allocator, self.io, self, clipsChanged);
 		try self.watch.?.start();
+
+		const thread = std.Thread.spawn(.{}, preloadIndex, .{self}) catch return;
+		thread.detach();
 	}
 
 	fn clipsChanged(ctx: *anyopaque) void {
@@ -474,7 +478,7 @@ pub const Launcher = struct {
 		self.setStr(&self.group, group);
 		self.mutex.unlock(self.io);
 
-		self.hub.publish();
+		self.hub.publishNow();
 	}
 
 	pub fn togglePin(self: *Launcher, id: []const u8) void {
@@ -1201,7 +1205,10 @@ pub const Launcher = struct {
 		}
 	}
 
-	fn loadIndex(self: *Launcher) void {
+	fn ensureIndex(self: *Launcher) void {
+		self.index_mutex.lockUncancelable(self.io);
+		defer self.index_mutex.unlock(self.io);
+
 		if (self.index_tried) return;
 
 		self.index_tried = true;
@@ -1209,7 +1216,7 @@ pub const Launcher = struct {
 	}
 
 	fn buildEmoji(self: *Launcher, arena: Allocator, search: []const u8) ![]Row {
-		self.loadIndex();
+		self.ensureIndex();
 
 		const index = self.index orelse return &.{};
 
@@ -1430,6 +1437,10 @@ pub const Launcher = struct {
 	}
 };
 
+fn preloadIndex(self: *Launcher) void {
+	self.ensureIndex();
+}
+
 const Wake = struct {
 	sock: []u8,
 	pid: i64,
@@ -1519,11 +1530,11 @@ fn parseIndex(allocator: Allocator, data: []u8) !*Index {
 	const id_size = readU32(data, 20);
 	const pool_len = readU32(data, 24);
 
-	if (version != 1 or id_size != 2 or keyword_count > std.math.maxInt(u16)) return error.BadIndex;
+	if (version != 1 or (id_size != 2 and id_size != 4)) return error.BadIndex;
 
 	const pool_end = index_header + @as(usize, pool_len);
 	const keywords_end = pool_end + @as(usize, keyword_count) * 8;
-	const ids_end = keywords_end + @as(usize, id_count) * 2;
+	const ids_end = keywords_end + @as(usize, id_count) * id_size;
 	const entries_end = ids_end + @as(usize, entry_count) * index_entry;
 
 	if (entries_end > data.len) return error.BadIndex;
@@ -1531,7 +1542,7 @@ fn parseIndex(allocator: Allocator, data: []u8) !*Index {
 	const refs = try allocator.alloc(IndexRef, keyword_count);
 	errdefer allocator.free(refs);
 
-	const ids = try allocator.alloc(u16, id_count);
+	const ids = try allocator.alloc(u32, id_count);
 	errdefer allocator.free(ids);
 
 	const entries = try allocator.alloc(IndexEntry, entry_count);
@@ -1556,7 +1567,13 @@ fn parseIndex(allocator: Allocator, data: []u8) !*Index {
 	}
 
 	for (ids, 0..) |*id, at| {
-		id.* = std.mem.readInt(u16, data[keywords_end + at * 2 ..][0..2], .little);
+		const pos = keywords_end + at * @as(usize, id_size);
+
+		id.* = if (id_size == 2)
+			std.mem.readInt(u16, data[pos..][0..2], .little)
+		else
+			std.mem.readInt(u32, data[pos..][0..4], .little);
+
 		if (id.* >= keyword_count) return error.BadIndex;
 	}
 
@@ -1912,7 +1929,7 @@ test "the launcher index reads entries and keywords" {
 	try std.testing.expectEqualStrings("Smiling", index.entries[0].name);
 	try std.testing.expectEqualStrings("smiling", index.entries[0].name_lower);
 	try std.testing.expectEqualStrings("smile", index.pool[index.refs[0].off..][0..5]);
-	try std.testing.expectEqual(@as(u16, 0), index.ids[0]);
+	try std.testing.expectEqual(@as(u32, 0), index.ids[0]);
 
 	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
 	defer arena.deinit();

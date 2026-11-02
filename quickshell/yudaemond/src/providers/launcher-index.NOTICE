@@ -1,8 +1,11 @@
 launcher-index.bin.gz is generated from Unicode CLDR annotation and emoji-test
 data, and from the FontVibe kaomoji-dataset core set.
 
+The index is not tracked. tools/build-index.py downloads the pinned sources
+and rebuilds it when it is missing.
+
 emoji data: Unicode CLDR annotations, emoji-test.txt
-languages: en, de, es, pt, ja, zh, fr, it, ko, ru, nl, pl, tr, id, vi
+languages: en, de, es, pt, ja, zh, fr, it, ko, ru, nl, pl, tr, id, vi, uk, hi, th, ar
 
 UNICODE LICENSE V3
 
