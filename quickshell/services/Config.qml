@@ -168,8 +168,9 @@ QtObject {
 	readonly property var mixerOnlyPlaying: settings.mixerOnlyPlaying !== undefined ? settings.mixerOnlyPlaying : true
 	readonly property var mixerHoldMs: settings.mixerHoldMs !== undefined ? settings.mixerHoldMs : 2000
 	readonly property var mixerRecordDotSize: settings.mixerRecordDotSize !== undefined ? settings.mixerRecordDotSize : 5
-	readonly property var mixerHitPad: settings.mixerHitPad !== undefined ? settings.mixerHitPad : 6
 	readonly property var mixerPendingMs: settings.mixerPendingMs !== undefined ? settings.mixerPendingMs : 500
+	readonly property var mixerSeparator: settings.mixerSeparator !== undefined ? settings.mixerSeparator : 1
+	readonly property var mixerSeparatorColor: settings.mixerSeparatorColor !== undefined ? settings.mixerSeparatorColor : "#2b2b2b"
 
 	// now playing
 	readonly property var mediaTooltipWidth: settings.mediaTooltipWidth !== undefined ? settings.mediaTooltipWidth : 228

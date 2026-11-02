@@ -8,8 +8,6 @@ Item {
 
 	readonly property var mix: Yudae.audio
 	readonly property var nodes: root.mix.nodes || []
-	readonly property var sink: root.nodeOf(root.mix.sink)
-	readonly property var source: root.nodeOf(root.mix.source)
 	readonly property bool onScreen: root.Window.window ? root.Window.window.visible : false
 	readonly property bool hasInput: root.mix.hasInput === true
 	readonly property bool recording: root.mix.recording === true
@@ -24,20 +22,42 @@ Item {
 
 	property bool shown: false
 	property bool compact: false
-	readonly property bool showApps: root.hasApps && !root.compact
+	property bool keyboard: false
+	property bool shift: false
+	readonly property bool showApps: (root.mix.streams || []).length > 0 && !root.compact
+	readonly property bool showSource: root.hasInput && !root.compact
+	readonly property var sinks: root.compact ? (root.mix.sinks || []).slice(0, 1) : (root.mix.sinks || [])
+	readonly property var deviceRows: {
+		const list = root.sinks.map((sink) => root.nodeOf(sink.id)).filter((node) => node !== null);
+
+		if (root.showSource) {
+			const source = root.nodeOf(root.mix.source);
+
+			if (source)
+				list.push(source);
+		}
+
+		return list;
+	}
+	readonly property var appRows: root.showApps ? (root.mix.streams || []).map(root.nodeOf).filter((node) => node !== null) : []
+	readonly property var rows: root.appRows.concat(root.deviceRows)
 
 	onOnScreenChanged: Yudae.cmd("audio", { watch: { on: root.onScreen === true } })
 
-	onShownChanged: if (!root.shown) {
+	onShownChanged: {
+		if (root.shown) {
+			root.forceActiveFocus();
+
+			return;
+		}
+
 		root.keyboard = false;
 		root.shift = false;
 		root.pending = { id: -1, volume: -1 };
-		root.grabbing = -1;
 	}
 
 	readonly property real contentWidth: Config.mixerWidth
-	readonly property var devices: root.picker === "input" ? (root.mix.sources || []) : (root.mix.sinks || [])
-	readonly property bool hasApps: (root.mix.streams || []).length > 0
+	readonly property var devices: root.mix.sources || []
 	readonly property var steps: Array(Config.mixerStepCount).fill(1)
 
 	implicitWidth: root.contentWidth + Config.mixerPadding * 2
@@ -47,17 +67,12 @@ Item {
 		root.pickerIndex = 0;
 	}
 
-	readonly property var targetNodes: (root.mix.order || []).map(root.nodeOf)
-
-	property bool keyboard: false
-	property bool shift: false
-
-	readonly property var selectedNode: root.targetNodes.length > 0
-		? root.targetNodes[Calc.clamp(root.targetIndex, 0, root.targetNodes.length - 1)]
+	readonly property var selectedNode: root.rows.length > 0
+		? root.rows[Calc.clamp(root.targetIndex, 0, root.rows.length - 1)]
 		: null
 
 	function moveTarget(step) {
-		const last = root.targetNodes.length - 1;
+		const last = root.rows.length - 1;
 
 		if (last < 0)
 			return;
@@ -66,10 +81,8 @@ Item {
 	}
 
 	function focusNode(node) {
-		const nodes = root.targetNodes;
-
-		for (let i = 0; i < nodes.length; i++) {
-			if (nodes[i] && node && nodes[i].id === node.id)
+		for (let i = 0; i < root.rows.length; i++) {
+			if (root.rows[i] && node && root.rows[i].id === node.id)
 				root.targetIndex = i;
 		}
 	}
@@ -87,7 +100,6 @@ Item {
 		if (!node)
 			return;
 
-		root.keyboard = false;
 		root.focusNode(node);
 
 		const level = Calc.clamp(fraction, 0, Config.mixerMaxVolume);
@@ -109,9 +121,11 @@ Item {
 		root.drag = { id: node ? node.id : -1, from: origin.x, width: fader.width, last: -1 };
 	}
 
-	function dragFader(node, fader, position, modifiers) {
-		if (!node || !fader || root.drag.id !== node.id || !(root.drag.width > 0))
+	function dragFader(node, fader, bar, position, modifiers) {
+		if (!node || !fader || !bar || root.drag.id !== node.id || !(root.drag.width > 0))
 			return;
+
+		root.keyboard = false;
 
 		const at = fader.mapToItem(root, position, 0).x - root.drag.from;
 
@@ -127,7 +141,7 @@ Item {
 		const shift = (modifiers & Qt.ShiftModifier) !== 0;
 
 		root.shift = shift;
-		root.setFader(node, shift ? fraction : Math.round(Math.min(Math.max(fraction, 0), 1) * Config.mixerStepCount) / Config.mixerStepCount);
+		root.setFader(node, shift ? fraction : (bar.indexAt(at, 0) + 1) / bar.count);
 	}
 
 	function nudgeVolume(step) {
@@ -180,7 +194,7 @@ Item {
 		root.keyboard = false;
 	}
 
-	function makeDefault(direction, node) {
+	function makeDefault(node) {
 		if (!node)
 			return;
 
@@ -189,9 +203,18 @@ Item {
 		root.picker = "";
 	}
 
+	function activateNode(node) {
+		if (!node)
+			return;
+
+		if (node.isSink)
+			root.makeDefault(node);
+		else if (node.isDefault)
+			root.openPicker("input");
+	}
+
 	property var drag: ({ id: -1, from: 0, width: 0, last: -1 })
 	property var pending: ({ id: -1, volume: -1 })
-	property int grabbing: -1
 
 	onMixChanged: root.reconcile()
 
@@ -200,10 +223,6 @@ Item {
 
 		interval: Config.mixerPendingMs
 		onTriggered: root.pending = { id: -1, volume: -1 }
-	}
-
-	function grabs(node) {
-		return root.grabbing >= 0 && node !== null && root.grabbing === node.id;
 	}
 
 	function volumeOf(node) {
@@ -226,20 +245,26 @@ Item {
 			root.pending = { id: -1, volume: -1 };
 	}
 
-	component MixChannel: Item {
-		id: channel
+	component MixRow: Item {
+		id: row
 
 		property var node
-		property string glyph: ""
-		property bool appIcon: false
-		readonly property bool muted: !!channel.node && channel.node.muted === true
-		readonly property real volume: root.volumeOf(channel.node)
-		readonly property string percentText: Math.round(channel.volume * 100) + "%"
-		readonly property string iconSource: channel.appIcon ? root.iconFor(channel.node) : ""
 
-		readonly property bool selected: channel.node !== null && channel.node === root.selectedNode
-		readonly property real level: Calc.clamp(channel.volume / Config.mixerMaxVolume, 0, 1)
-		readonly property int step: Math.round(channel.level * Config.mixerStepCount) - 1
+		readonly property bool stream: !!row.node && row.node.isStream === true
+		readonly property bool muted: !!row.node && row.node.muted === true
+		readonly property bool current: !row.stream && !!row.node && row.node.isDefault === true
+		readonly property bool selected: !!row.node && !!root.selectedNode && row.node.id === root.selectedNode.id
+		readonly property bool faderRow: row.stream || root.compact
+		readonly property real volume: root.volumeOf(row.node)
+		readonly property string percentText: Math.round(row.volume * 100) + "%"
+		readonly property string label: row.node ? (row.node.description || row.node.name || "") : ""
+		readonly property string iconSource: row.stream ? root.iconFor(row.node) : ""
+		readonly property string glyph: row.stream ? Config.iconApp
+			: row.node && row.node.isSink ? Config.iconOutput
+			: Config.iconInput
+		readonly property real level: Calc.clamp(row.volume / Config.mixerMaxVolume, 0, 1)
+		readonly property int step: Math.round(row.level * Config.mixerStepCount) - 1
+		readonly property real hoverPad: Math.max(0, (row.height - Config.mixerFaderThickness) / 2)
 
 		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
 		implicitHeight: height
@@ -247,7 +272,7 @@ Item {
 		Highlight {
 			id: hl
 
-			active: channel.selected && root.keyboard
+			active: row.selected && root.keyboard || row.current && !root.keyboard && !root.compact
 		}
 
 		MouseArea {
@@ -255,7 +280,8 @@ Item {
 
 			onClicked: {
 				root.keyboard = false;
-				root.focusNode(channel.node);
+				root.focusNode(row.node);
+				root.activateNode(row.node);
 			}
 		}
 
@@ -278,135 +304,18 @@ Item {
 			AppIcon {
 				anchors.centerIn: parent
 				implicitSize: Config.mixerIconSize
-				visible: channel.iconSource !== ""
-				opacity: channel.muted ? 0.45 : 1
-				source: channel.iconSource
+				visible: row.iconSource !== ""
+				opacity: row.muted ? 0.45 : 1
+				source: row.iconSource
 			}
 
 			Text {
 				anchors.centerIn: parent
-				visible: channel.iconSource === ""
+				visible: row.iconSource === ""
 				font.family: Config.fontFamily
-				font.pixelSize: Config.mixerIconSize
-				color: channel.muted ? Config.muted : Config.foreground
-				text: channel.glyph
-			}
-		}
-
-		Text {
-			id: linePercent
-
-			anchors.right: parent.right
-			anchors.verticalCenter: parent.verticalCenter
-			width: sample.width
-			horizontalAlignment: Text.AlignRight
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			color: channel.muted && !hl.active ? Config.muted : hl.ink
-			text: channel.percentText
-		}
-
-		Item {
-			id: lineFader
-
-			anchors.left: iconSlot.right
-			anchors.leftMargin: Config.mixerListGap
-			anchors.right: linePercent.left
-			anchors.rightMargin: Config.mixerListGap
-			anchors.verticalCenter: parent.verticalCenter
-			height: parent.height
-
-			StepBar {
-				anchors.verticalCenter: parent.verticalCenter
-				anchors.left: parent.left
-				anchors.right: parent.right
-				height: Config.mixerFaderThickness
-				model: root.steps
-				selected: channel.step
-				level: root.shift ? channel.level : -1
-				ink: channel.muted ? Config.muted : Config.foreground
-				grabbed: root.grabs(channel.node)
-			}
-
-			MouseArea {
-				anchors.fill: parent
-				anchors.topMargin: -Config.mixerHitPad
-				anchors.bottomMargin: -Config.mixerHitPad
-				preventStealing: true
-
-				onPressed: (mouse) => {
-					root.grabbing = channel.node ? channel.node.id : -1;
-					root.beginDrag(channel.node, lineFader, mouse.x);
-					root.dragFader(channel.node, lineFader, mouse.x, mouse.modifiers);
-				}
-				onReleased: root.grabbing = -1
-				onCanceled: root.grabbing = -1
-				onPositionChanged: (mouse) => root.dragFader(channel.node, lineFader, mouse.x, mouse.modifiers)
-			}
-		}
-	}
-
-	component DeviceLine: Item {
-		id: line
-
-		property var node
-		property string glyph: ""
-		property bool recording: false
-		property var onActivate
-
-		readonly property bool muted: !!line.node && line.node.muted === true
-		readonly property real volume: root.volumeOf(line.node)
-		readonly property string percentText: Math.round(line.volume * 100) + "%"
-		readonly property bool selected: line.node !== null && line.node === root.selectedNode
-		readonly property real level: Calc.clamp(line.volume / Config.mixerMaxVolume, 0, 1)
-		readonly property int step: Math.round(line.level * Config.mixerStepCount) - 1
-
-		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
-		implicitHeight: height
-
-		Highlight {
-			id: hl
-
-			active: line.selected && root.keyboard
-		}
-
-		MouseArea {
-			anchors.left: parent.left
-			anchors.top: parent.top
-			anchors.bottom: parent.bottom
-			width: Config.mixerDeviceIconSize
-			hoverEnabled: true
-
-			onClicked: {
-				if (line.onActivate)
-					line.onActivate();
-			}
-		}
-
-		TextMetrics {
-			id: sample
-
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			text: "100%"
-		}
-
-		Item {
-			id: iconSlot
-
-			anchors.left: parent.left
-			anchors.verticalCenter: parent.verticalCenter
-			width: Config.mixerDeviceIconSize
-			height: Config.mixerDeviceIconSize
-
-			Text {
-				id: lineGlyph
-
-				anchors.centerIn: parent
-				font.family: Config.fontFamily
-				font.pixelSize: Config.mixerDeviceIconSize
-				color: line.muted ? Config.muted : Config.foreground
-				text: line.glyph
+				font.pixelSize: row.faderRow ? Config.mixerIconSize : Config.mixerDeviceIconSize
+				color: row.muted ? Config.muted : hl.ink
+				text: row.glyph
 			}
 
 			Rectangle {
@@ -416,59 +325,73 @@ Item {
 				height: Config.mixerRecordDotSize
 				radius: width / 2
 				color: Config.red
-				visible: line.recording
+				visible: !!row.node && row.node.isDefault === true && root.recording && !row.node.isSink && !row.stream
 			}
 		}
 
 		Text {
-			id: linePercent
+			id: name
+
+			anchors.left: iconSlot.right
+			anchors.leftMargin: Config.mixerListGap
+			anchors.right: parent.right
+			anchors.verticalCenter: parent.verticalCenter
+			visible: !row.faderRow
+			elide: Text.ElideRight
+			font.family: Config.fontFamily
+			font.pixelSize: Settings.fontSize
+			color: row.muted ? Config.muted : hl.ink
+			text: row.label
+		}
+
+		Text {
+			id: percent
 
 			anchors.right: parent.right
 			anchors.verticalCenter: parent.verticalCenter
 			width: sample.width
 			horizontalAlignment: Text.AlignRight
+			visible: row.faderRow
 			font.family: Config.fontFamily
 			font.pixelSize: Settings.fontSize
-			color: line.muted && !hl.active ? Config.muted : hl.ink
-			text: line.percentText
+			color: row.muted && !hl.active ? Config.muted : hl.ink
+			text: row.percentText
 		}
 
 		Item {
-			id: lineFader
+			id: fader
 
 			anchors.left: iconSlot.right
 			anchors.leftMargin: Config.mixerListGap
-			anchors.right: linePercent.left
+			anchors.right: percent.left
 			anchors.rightMargin: Config.mixerListGap
 			anchors.verticalCenter: parent.verticalCenter
 			height: parent.height
+			visible: row.faderRow
 
 			StepBar {
+				id: faderBar
+
 				anchors.verticalCenter: parent.verticalCenter
 				anchors.left: parent.left
 				anchors.right: parent.right
 				height: Config.mixerFaderThickness
 				model: root.steps
-				selected: line.step
-				level: root.shift ? line.level : -1
-				ink: line.muted ? Config.muted : Config.foreground
-				grabbed: root.grabs(line.node)
+				hitPad: row.hoverPad
+				selected: row.step
+				level: root.shift ? row.level : -1
+				ink: row.muted ? Config.muted : Config.foreground
 			}
 
 			MouseArea {
 				anchors.fill: parent
-				anchors.topMargin: -Config.mixerHitPad
-				anchors.bottomMargin: -Config.mixerHitPad
 				preventStealing: true
 
 				onPressed: (mouse) => {
-					root.grabbing = line.node ? line.node.id : -1;
-					root.beginDrag(line.node, lineFader, mouse.x);
-					root.dragFader(line.node, lineFader, mouse.x, mouse.modifiers);
+					root.beginDrag(row.node, fader, mouse.x);
+					root.dragFader(row.node, fader, faderBar, mouse.x, mouse.modifiers);
 				}
-				onReleased: root.grabbing = -1
-				onCanceled: root.grabbing = -1
-				onPositionChanged: (mouse) => root.dragFader(line.node, lineFader, mouse.x, mouse.modifiers)
+				onPositionChanged: (mouse) => root.dragFader(row.node, fader, faderBar, mouse.x, mouse.modifiers)
 			}
 		}
 	}
@@ -482,42 +405,32 @@ Item {
 		width: root.contentWidth
 		spacing: Config.mixerChannelGap
 
-		DeviceLine {
-			id: sinkLine
+		Repeater {
+			model: root.appRows
 
-			width: parent.width
-			node: root.sink
+			delegate: MixRow {
+				required property var modelData
 
-			onActivate: function () {
-				root.keyboard = false;
-				root.openPicker("output");
+				width: parent.width
+				node: modelData
 			}
-			glyph: Config.iconOutput
 		}
 
-		DeviceLine {
-			id: sourceLine
-
-			width: parent.width
-			visible: root.hasInput && !root.compact
-			node: root.source
-
-			onActivate: function () {
-				root.keyboard = false;
-				root.openPicker("input");
-			}
-			glyph: Config.iconInput
-			recording: root.recording
+		Rectangle {
+			width: body.width
+			height: Config.mixerSeparator
+			color: Config.mixerSeparatorColor
+			visible: root.deviceRows.length > 0 && root.appRows.length > 0
 		}
 
 		Repeater {
-			model: root.showApps ? (root.mix.streams || []) : []
+			model: root.deviceRows
 
-			delegate: MixChannel {
+			delegate: MixRow {
+				required property var modelData
+
 				width: parent.width
-				node: root.nodeOf(modelData)
-				glyph: Config.iconApp
-				appIcon: true
+				node: modelData
 			}
 		}
 	}
@@ -570,7 +483,7 @@ Item {
 						font.family: Config.fontFamily
 						font.pixelSize: Config.mixerIconSize
 						color: option.active || option.highlighted ? Config.foreground : Config.muted
-						text: root.picker === "input" ? Config.iconInput : Config.iconOutput
+						text: Config.iconInput
 					}
 
 					Text {

@@ -167,7 +167,8 @@ mixerShiftStep = 0.05
 mixerOnlyPlaying = true
 mixerHoldMs = 2000
 mixerRecordDotSize = 5
-mixerHitPad = 6
+mixerSeparator = 1
+mixerSeparatorColor = "#2b2b2b"
 
 # now playing
 [media]
