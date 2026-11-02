@@ -56,6 +56,7 @@ PanelWindow {
 	readonly property string empty: root.windows ? Yudae.windowsEmpty : (root.live.empty || "")
 	readonly property var results: root.windows ? (Yudae.windows || []) : (root.shown ? (root.live.results || []) : root.heldResults)
 	readonly property string clipPreviewText: root.state.clip ? String(root.state.clip.text || "") : ""
+	readonly property real clipTime: root.state.clip && root.state.clip.time ? root.state.clip.time : 0
 	readonly property string clipPreviewPath: root.state.clip && root.state.clip.path ? "file://" + root.state.clip.path : ""
 
 	readonly property int selectedIndex: root.results.length === 0 ? -1 : Calc.clamp(list.currentIndex < 0 ? 0 : list.currentIndex, 0, root.results.length - 1)
@@ -176,6 +177,24 @@ PanelWindow {
 			root.following = false;
 			return;
 		}
+	}
+
+	function copiedLabel(seconds) {
+		if (seconds <= 0)
+			return "";
+
+		const at = new Date(seconds * 1000);
+		const now = new Date();
+		const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(at.getFullYear(), at.getMonth(), at.getDate())) / 86400000);
+		const clock = Qt.formatTime(at, Config.launcherClipTimeFormat);
+
+		if (days <= 0)
+			return "Copied Today " + clock;
+
+		if (days === 1)
+			return "Copied Yesterday " + clock;
+
+		return "Copied " + Qt.formatDate(at, "MMM d") + " " + clock;
 	}
 
 	function requestClip() {
@@ -681,6 +700,7 @@ PanelWindow {
 
 						anchors.fill: parent
 						anchors.margins: Config.launcherTextGap
+						anchors.bottomMargin: Config.launcherTextGap + copiedCaption.height
 						visible: root.clipPreviewPath === ""
 						clip: true
 						contentWidth: width
@@ -725,12 +745,29 @@ PanelWindow {
 
 						anchors.fill: parent
 						anchors.margins: Config.launcherTextGap
+						anchors.bottomMargin: Config.launcherTextGap + copiedCaption.height
 						visible: root.clipPreviewPath !== ""
 						fillMode: Image.PreserveAspectFit
 						cache: true
 						asynchronous: true
 						retainWhileLoading: true
 						source: root.clipPreviewPath === "" ? "" : root.clipPreviewPath
+					}
+
+					Text {
+						id: copiedCaption
+
+						anchors.left: parent.left
+						anchors.right: parent.right
+						anchors.bottom: parent.bottom
+						anchors.bottomMargin: Config.launcherTextGap
+						horizontalAlignment: Text.AlignHCenter
+						elide: Text.ElideRight
+						height: text === "" ? 0 : implicitHeight
+						font.family: Config.fontFamily
+						font.pixelSize: Config.fontSize
+						color: Config.muted
+						text: root.copiedLabel(root.clipTime)
 					}
 				}
 				// left pane: the results list

@@ -199,6 +199,7 @@ QtObject {
 	readonly property var launcherPrompt: settings.launcherPrompt !== undefined ? settings.launcherPrompt : "\uea6d"
 	readonly property var launcherMaxRows: settings.launcherMaxRows !== undefined ? settings.launcherMaxRows : 12
 	readonly property var launcherIconPin: settings.launcherIconPin !== undefined ? settings.launcherIconPin : "\ueba0"
+	readonly property var launcherClipTimeFormat: settings.launcherClipTimeFormat !== undefined ? settings.launcherClipTimeFormat : "h:mm AP"
 	readonly property var launcherSpotlight: settings.launcherSpotlight !== undefined ? settings.launcherSpotlight : true
 	readonly property var launcherSpotlightWidth: settings.launcherSpotlightWidth !== undefined ? settings.launcherSpotlightWidth : 560
 	readonly property var launcherSpotlightInputHeight: settings.launcherSpotlightInputHeight !== undefined ? settings.launcherSpotlightInputHeight : 52
