@@ -19,6 +19,10 @@ pub fn run(io: Io, allocator: Allocator, argv: []const []const u8) !Result {
 }
 
 pub fn runEnv(io: Io, allocator: Allocator, argv: []const []const u8, environ_map: ?*const std.process.Environ.Map) !Result {
+	return runLimit(io, allocator, argv, environ_map, 4 * 1024 * 1024);
+}
+
+pub fn runLimit(io: Io, allocator: Allocator, argv: []const []const u8, environ_map: ?*const std.process.Environ.Map, limit: usize) !Result {
 	var child = try std.process.spawn(io, .{
 		.argv = argv,
 		.stdin = .ignore,
@@ -33,7 +37,10 @@ pub fn runEnv(io: Io, allocator: Allocator, argv: []const []const u8, environ_ma
 	defer multi.deinit();
 
 	while (multi.fill(64, .none)) |_| {
-		if (multi.reader(0).buffered().len > 4 * 1024 * 1024) break;
+		if (multi.reader(0).buffered().len > limit) {
+			if (child.id) |pid| _ = std.posix.kill(pid, std.posix.SIG.KILL) catch {};
+			break;
+		}
 		if (multi.reader(1).buffered().len > 64 * 1024) break;
 	} else |err| switch (err) {
 		error.EndOfStream => {},
