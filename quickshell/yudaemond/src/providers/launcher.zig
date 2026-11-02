@@ -724,6 +724,18 @@ pub const Launcher = struct {
 
 		if (self.watch) |watch| watch.markSelf();
 
+		const copy = self.allocator.dupe(u8, id) catch return;
+
+		const thread = std.Thread.spawn(.{}, copyClipThread, .{ self, copy }) catch {
+			self.allocator.free(copy);
+			return;
+		};
+		thread.detach();
+	}
+
+	fn copyClipThread(self: *Launcher, id: []u8) void {
+		defer self.allocator.free(id);
+
 		const script = std.fmt.allocPrint(self.allocator, "cliphist decode {s} | wl-copy", .{id}) catch return;
 		defer self.allocator.free(script);
 
