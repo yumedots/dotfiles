@@ -103,6 +103,8 @@ iconBatteryMid = "\U000F007F"
 iconBatteryLow = "\U000F007C"
 iconBatteryAlert = "\U000F0083"
 iconBatteryCharge = "\U000F0084"
+iconSun = "\uF522"
+iconMoon = "\uE3A4"
 
 # cpu and process list
 [cpu]
@@ -336,8 +338,6 @@ calendarDialGlyphSize = 23
 calendarDialMoonLift = 5
 calendarDialDayStart = 6
 calendarDialDayEnd = 18
-calendarIconSun = "\uF522"
-calendarIconMoon = "\uE3A4"
 calendarBirthYear = 0
 calendarLifeExpectancy = 90
 calendarOutside = "#4f4f4f"

@@ -277,16 +277,14 @@ Item {
 			width: card.width
 			height: tempBox.height
 
-			Text {
+			Icon {
 				id: heroGlyph
 
 				anchors.left: parent.left
 				anchors.bottom: parent.bottom
 				height: heroGlyphMetrics.height
-				font.family: Config.fontFamily
-				font.pixelSize: Config.weatherHeroGlyphSize
-				color: Config.foreground
-				text: root.loading ? Config.weatherLoadingIcon : (root.now.icon ? root.now.icon : Config.weatherIcon)
+				pixelSize: Config.weatherHeroGlyphSize
+				glyph: root.loading ? Config.weatherLoadingIcon : (root.now.icon ? root.now.icon : Config.weatherIcon)
 			}
 
 			Item {
@@ -704,12 +702,10 @@ Item {
 								width: parent.width
 								height: dayGlyphMetrics.height
 
-								Text {
+								Icon {
 									x: parent.width / 2 - (glyphInk.tightBoundingRect.x + glyphInk.tightBoundingRect.width / 2)
-									font.family: Config.fontFamily
-									font.pixelSize: Config.weatherDayGlyphSize
-									color: Config.foreground
-									text: dayCell.glyph
+									pixelSize: Config.weatherDayGlyphSize
+									glyph: dayCell.glyph
 								}
 							}
 

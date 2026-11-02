@@ -20,6 +20,7 @@ SignalBars 1.0 SignalBars.qml
 SpeedGauge 1.0 SpeedGauge.qml
 StepBar 1.0 StepBar.qml
 Highlight 1.0 Highlight.qml
+Icon 1.0 Icon.qml
 IconRow 1.0 IconRow.qml
 RevealIcon 1.0 RevealIcon.qml
 Figures 1.0 Figures.qml

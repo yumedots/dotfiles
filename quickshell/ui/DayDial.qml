@@ -91,7 +91,7 @@ Item {
 
 		font.family: Config.fontFamily
 		font.pixelSize: Config.calendarDialGlyphSize
-		text: Config.calendarIconSun
+		text: Config.glyph("sun")
 	}
 
 	TextMetrics {
@@ -99,30 +99,26 @@ Item {
 
 		font.family: Config.fontFamily
 		font.pixelSize: Config.calendarDialGlyphSize
-		text: Config.calendarIconMoon
+		text: Config.glyph("moon")
 	}
 
-	Text {
+	Icon {
 		id: sunMark
 
 		visible: dial.daylight
 		x: dial.onRing(dial.hours) - sunMetrics.tightBoundingRect.width / 2
 		y: dial.ringY(dial.hours) - sunMetrics.tightBoundingRect.height / 2
-		font.family: Config.fontFamily
-		font.pixelSize: Config.calendarDialGlyphSize
-		color: Config.foreground
-		text: Config.calendarIconSun
+		pixelSize: Config.calendarDialGlyphSize
+		name: "sun"
 	}
 
-	Text {
+	Icon {
 		id: moonMark
 
 		visible: !dial.daylight
 		x: dial.onRing(dial.hours) - moonMetrics.tightBoundingRect.width / 2
 		y: dial.ringY(dial.hours) - moonMetrics.tightBoundingRect.height / 2 - Config.calendarDialMoonLift
-		font.family: Config.fontFamily
-		font.pixelSize: Config.calendarDialGlyphSize
-		color: Config.foreground
-		text: Config.calendarIconMoon
+		pixelSize: Config.calendarDialGlyphSize
+		name: "moon"
 	}
 }

@@ -107,6 +107,8 @@ QtObject {
 	readonly property var iconBatteryLow: settings.iconBatteryLow !== undefined ? settings.iconBatteryLow : "\udb80\udc7c"
 	readonly property var iconBatteryAlert: settings.iconBatteryAlert !== undefined ? settings.iconBatteryAlert : "\udb80\udc83"
 	readonly property var iconBatteryCharge: settings.iconBatteryCharge !== undefined ? settings.iconBatteryCharge : "\udb80\udc84"
+	readonly property var iconSun: settings.iconSun !== undefined ? settings.iconSun : "\uf522"
+	readonly property var iconMoon: settings.iconMoon !== undefined ? settings.iconMoon : "\ue3a4"
 
 	// cpu and process list
 	readonly property var cpuBase: settings.cpuBase !== undefined ? settings.cpuBase : "#a78bfa"
@@ -330,8 +332,6 @@ QtObject {
 	readonly property var calendarDialMoonLift: settings.calendarDialMoonLift !== undefined ? settings.calendarDialMoonLift : 5
 	readonly property var calendarDialDayStart: settings.calendarDialDayStart !== undefined ? settings.calendarDialDayStart : 6
 	readonly property var calendarDialDayEnd: settings.calendarDialDayEnd !== undefined ? settings.calendarDialDayEnd : 18
-	readonly property var calendarIconSun: settings.calendarIconSun !== undefined ? settings.calendarIconSun : "\uf522"
-	readonly property var calendarIconMoon: settings.calendarIconMoon !== undefined ? settings.calendarIconMoon : "\ue3a4"
 	readonly property var calendarBirthYear: settings.calendarBirthYear !== undefined ? settings.calendarBirthYear : 0
 	readonly property var calendarLifeExpectancy: settings.calendarLifeExpectancy !== undefined ? settings.calendarLifeExpectancy : 90
 	readonly property var calendarOutside: settings.calendarOutside !== undefined ? settings.calendarOutside : "#4f4f4f"
@@ -534,4 +534,49 @@ QtObject {
 	readonly property var agentPlanTitle: settings.agentPlanTitle !== undefined ? settings.agentPlanTitle : "Subscription"
 	readonly property var agentPlanName: settings.agentPlanName !== undefined ? settings.agentPlanName : "OpenCode Go"
 	readonly property var agentPlanIcon: settings.agentPlanIcon !== undefined ? settings.agentPlanIcon : "opencode"
+
+	readonly property var icons: ({
+		app: root.iconApp,
+		batteryAlert: root.iconBatteryAlert,
+		batteryCharge: root.iconBatteryCharge,
+		batteryFull: root.iconBatteryFull,
+		batteryHigh: root.iconBatteryHigh,
+		batteryLow: root.iconBatteryLow,
+		batteryMid: root.iconBatteryMid,
+		bell: root.iconBell,
+		chevron: root.iconChevron,
+		close: root.iconClose,
+		cpu: root.iconCpu,
+		day: root.calendarIconDay,
+		display: root.iconDisplay,
+		down: root.iconDown,
+		github: root.iconGithub,
+		input: root.iconInput,
+		life: root.calendarIconLife,
+		memory: root.iconMemory,
+		month: root.calendarIconMonth,
+		moon: root.iconMoon,
+		next: root.iconNext,
+		output: root.iconOutput,
+		pause: root.iconPause,
+		play: root.iconPlay,
+		powerPlug: root.iconPowerPlug,
+		prev: root.iconPrev,
+		right: root.iconRight,
+		sun: root.iconSun,
+		up: root.iconUp,
+		volumeHigh: root.iconVolumeHigh,
+		volumeLow: root.iconVolumeLow,
+		volumeMid: root.iconVolumeMid,
+		weather: root.weatherIcon,
+		weatherAdd: root.weatherIconAdd,
+		weatherLeft: root.weatherIconLeft,
+		weatherLoading: root.weatherLoadingIcon,
+		weatherRight: root.weatherIconRight,
+		year: root.calendarIconYear
+	})
+
+	function glyph(name) {
+		return root.icons[name] || "";
+	}
 }
