@@ -46,6 +46,8 @@ Saving a file live-reloads quickshell — never restart it for a normal edit, ne
 
 Everything the shell runs lives in ~/.config/quickshell and is tracked in git. Never copy QML, scripts or config into /etc or /usr; system files (greetd, systemd drop-ins, polkit) may only point at the repo. The greeter runs the same tracked shell as the user session.
 
+A surface that is not on screen is unmapped, and nothing inside it runs: no canvas, no timers, no repaint. A bar widget gates animation on the bar's `onScreen`; a window unmaps when it slides or fades away, or when the lock hides it. Never keep a hidden surface mapped.
+
 console.log and runtime errors: /run/user/1000/quickshell/by-id/<newest>/log.qslog (grep -a).
 
 QML lint: `ln -sfn ~/.config/quickshell /tmp/qmlimport/qs` then `/usr/lib/qt6/bin/qmllint -I /tmp/qmlimport <files>` (exit 255 = syntax error; quickshell-dialect warnings are noise). lib/*.js changes: `node quickshell/lib/check.js`.
