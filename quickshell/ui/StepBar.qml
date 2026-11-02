@@ -14,21 +14,24 @@ Item {
 	property color track: Config.dim
 	property real gap: Config.stepBarGap
 	property var formatter: null
+	property real hitPad: 0
 	property var onPick
-
-	property int held: -1
-	property bool lens: false
-	property bool grabbed: false
 
 	readonly property int count: root.model.length
 	readonly property real cellSize: root.count > 0 ? ((root.vertical ? root.height : root.width) - (root.count - 1) * root.gap) / root.count : 0
 	readonly property int hovered: bar.containsMouse && root.count > 0 ? root.indexAt(bar.mouseX, bar.mouseY) : -1
+	readonly property int hoverRank: root.hovered < 0 ? -1 : root.vertical ? root.count - 1 - root.hovered : root.hovered
+	readonly property int shown: root.hoverRank >= 0 ? root.hoverRank : root.selected
 	readonly property string hoverLabel: root.entryLabel(root.hovered)
 	readonly property bool solid: root.level >= 0
 	readonly property real filled: Calc.clamp(root.level, 0, 1)
 	readonly property real thickness: root.vertical ? root.width : root.height
 	readonly property real lensSize: root.thickness + Config.stepBarLensPad * 2
-	readonly property real lensAt: root.held < 0 ? 0 : Math.min(root.held * (root.cellSize + root.gap) + root.cellSize, (root.vertical ? root.height : root.width) - root.lensSize / 2)
+	readonly property real lensAt: {
+		const slot = root.vertical ? root.count - 1 - root.shown : root.shown;
+		const edge = slot * (root.cellSize + root.gap) + (root.vertical ? 0 : root.cellSize);
+		return Calc.clamp(edge, root.lensSize / 2, (root.vertical ? root.height : root.width) - root.lensSize / 2);
+	}
 
 	implicitHeight: Config.stepBarHeight
 
@@ -58,32 +61,6 @@ Item {
 			root.onPick(root.valueOf(entry));
 	}
 
-	function mark(x, y) {
-		if (root.count <= 0)
-			return;
-
-		const index = x !== undefined ? root.indexAt(x, y) : root.cursor >= 0 ? root.cursor : root.selected;
-
-		if (index < 0)
-			return;
-
-		root.held = index;
-		root.lens = true;
-		lensIdle.restart();
-	}
-
-	onCursorChanged: root.mark()
-	onSelectedChanged: root.mark()
-
-	Timer {
-		id: lensIdle
-
-		interval: Config.stepBarLensHold
-		onTriggered: if (!root.grabbed) root.lens = false
-	}
-
-	onGrabbedChanged: if (!root.grabbed && root.lens) lensIdle.restart()
-
 	Rectangle {
 		visible: root.solid
 		anchors.fill: parent
@@ -103,16 +80,12 @@ Item {
 		id: bar
 
 		anchors.fill: parent
+		anchors.topMargin: root.vertical ? 0 : -root.hitPad
+		anchors.bottomMargin: root.vertical ? 0 : -root.hitPad
+		anchors.leftMargin: root.vertical ? -root.hitPad : 0
+		anchors.rightMargin: root.vertical ? -root.hitPad : 0
 		acceptedButtons: Qt.NoButton
 		hoverEnabled: true
-
-		onPositionChanged: (mouse) => root.mark(mouse.x, mouse.y)
-		onContainsMouseChanged: {
-			if (bar.containsMouse)
-				root.mark(bar.mouseX, bar.mouseY);
-			else
-				root.lens = false;
-		}
 	}
 
 	Grid {
@@ -143,53 +116,40 @@ Item {
 				MouseArea {
 					anchors.fill: parent
 
-					onPressedChanged: root.grabbed = pressed
-					onClicked: root.pick(segment.modelData);
+					onClicked: root.pick(segment.modelData)
 				}
 			}
 		}
 	}
 
-	Item {
+	Rectangle {
 		id: lensMark
 
-		width: root.vertical ? root.width : root.lensSize + 4
-		height: root.vertical ? root.lensSize + 4 : root.height
-		opacity: root.lens ? 1 : 0
-		scale: root.lens ? 1 : 0.7
-		x: root.vertical ? 0 : root.lensAt - width / 2
-		y: root.vertical ? root.lensAt - height / 2 : 0
+		readonly property real size: root.lensSize + 4
 
-		Rectangle {
-			anchors.fill: parent
-			color: Config.surfaceTranslucent
-		}
-
-		Rectangle {
-			anchors.centerIn: parent
-			width: root.lensSize
-			height: width
-			radius: width / 2
-			color: root.ink
-			antialiasing: true
-		}
+		width: size
+		height: size
+		radius: size / 2
+		color: root.ink
+		border.width: 2
+		border.color: Config.surface
+		antialiasing: true
+		visible: !root.solid && root.shown >= 0
+		x: root.vertical ? (root.width - size) / 2 : root.lensAt - size / 2
+		y: root.vertical ? root.lensAt - size / 2 : (root.height - size) / 2
 
 		Behavior on x {
-			enabled: root.lens
-			NumberAnimation { duration: Config.stepBarLensGlide; easing.type: Easing.OutCubic }
+			NumberAnimation {
+				duration: 120
+				easing.type: Easing.OutCubic
+			}
 		}
 
 		Behavior on y {
-			enabled: root.lens
-			NumberAnimation { duration: Config.stepBarLensGlide; easing.type: Easing.OutCubic }
-		}
-
-		Behavior on opacity {
-			NumberAnimation { duration: root.lens ? Config.stepBarLensGlide : Config.stepBarLensFade; easing.type: Easing.OutCubic }
-		}
-
-		Behavior on scale {
-			NumberAnimation { duration: root.lens ? Config.stepBarLensGlide : Config.stepBarLensFade; easing.type: Easing.OutCubic }
+			NumberAnimation {
+				duration: 120
+				easing.type: Easing.OutCubic
+			}
 		}
 	}
 }

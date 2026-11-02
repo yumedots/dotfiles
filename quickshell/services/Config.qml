@@ -452,9 +452,6 @@ QtObject {
 	readonly property var stepBarHeight: settings.stepBarHeight !== undefined ? settings.stepBarHeight : 6
 	readonly property var stepBarGap: settings.stepBarGap !== undefined ? settings.stepBarGap : 2
 	readonly property var stepBarLensPad: settings.stepBarLensPad !== undefined ? settings.stepBarLensPad : 3
-	readonly property var stepBarLensGlide: settings.stepBarLensGlide !== undefined ? settings.stepBarLensGlide : 150
-	readonly property var stepBarLensHold: settings.stepBarLensHold !== undefined ? settings.stepBarLensHold : 1000
-	readonly property var stepBarLensFade: settings.stepBarLensFade !== undefined ? settings.stepBarLensFade : 300
 	readonly property var displaySeparatorColor: settings.displaySeparatorColor !== undefined ? settings.displaySeparatorColor : "#3f3f3f"
 	readonly property var displaySeparatorHeight: settings.displaySeparatorHeight !== undefined ? settings.displaySeparatorHeight : 1
 	readonly property var displayScaleMin: settings.displayScaleMin !== undefined ? settings.displayScaleMin : 1
