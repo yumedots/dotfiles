@@ -20,11 +20,13 @@ PanelWindow {
 	readonly property real outerMargin: Config.barFloating ? Config.gapsOut : 0
 	readonly property var hyprMonitor: Hyprland.monitorFor(bar.screen)
 	readonly property bool fullscreen: bar.hyprMonitor !== null && bar.hyprMonitor.activeWorkspace !== null && bar.hyprMonitor.activeWorkspace.hasFullscreen
-	readonly property real slideTarget: -(bar.implicitHeight + bar.outerMargin)
+	readonly property bool slideMode: Config.barFullscreenSlide === true
+	readonly property real slideTarget: bar.slideMode ? -(bar.implicitHeight + bar.outerMargin) : 0
 	property real slide: bar.fullscreen ? bar.slideTarget : 0
-	readonly property bool slidAway: bar.fullscreen && bar.slide <= bar.slideTarget + 0.5
+	property real contentFade: bar.fullscreen && !bar.slideMode ? 0 : 1
+	readonly property bool slidAway: bar.fullscreen && (bar.slideMode ? bar.slide <= bar.slideTarget + 0.5 : bar.contentFade <= 0.01)
 	property bool hidden: false
-	visible: !bar.locked
+	visible: !bar.hidden && !bar.locked
 
 	onSlidAwayChanged: if (bar.slidAway)
 		bar.hidden = true
@@ -49,6 +51,14 @@ PanelWindow {
 		}
 	}
 
+	Behavior on contentFade {
+		NumberAnimation {
+			duration: Config.barFadeMs
+			easing.type: Easing.BezierSpline
+			easing.bezierCurve: [0.15, 0, 0.1, 1, 1, 1]
+		}
+	}
+
 	anchors {
 		top: !bar.atBottom
 		bottom: bar.atBottom
@@ -68,11 +78,13 @@ PanelWindow {
 	implicitWidth: bar.screen ? bar.screen.width : 0
 	implicitHeight: Math.ceil(bar.contentHeight) + 2 * border.inset
 	exclusiveZone: bar.implicitHeight
-	color: BarInk.bare ? "transparent" : Config.surfaceTranslucent
+	color: BarInk.bare || (bar.fullscreen && !bar.slideMode) ? "transparent" : Config.surfaceTranslucent
 
 	Behavior on color {
 		ColorAnimation {
 			duration: Config.barFadeMs
+			easing.type: Easing.BezierSpline
+			easing.bezierCurve: [0.15, 0, 0.1, 1, 1, 1]
 		}
 	}
 
@@ -289,6 +301,7 @@ PanelWindow {
 		id: border
 
 		visible: !bar.hidden
+		opacity: bar.contentFade
 		anchors.fill: parent
 		padding: Config.barInset
 		borderWidth: Config.barBorderWidth
@@ -299,6 +312,7 @@ PanelWindow {
 	MouseArea {
 		anchors.fill: parent
 		visible: !bar.hidden
+		opacity: bar.contentFade
 
 		onClicked: bar.closePopups(null)
 		onDoubleClicked: BarInk.toggle(bar)
@@ -308,6 +322,7 @@ PanelWindow {
 		id: leftRow
 
 		visible: !bar.hidden
+		opacity: bar.contentFade
 		anchors.left: parent.left
 		anchors.leftMargin: border.inset + Config.barPadding
 		anchors.bottom: parent.bottom
@@ -324,6 +339,7 @@ PanelWindow {
 		id: centerRow
 
 		visible: !bar.hidden
+		opacity: bar.contentFade
 		anchors.bottom: parent.bottom
 		anchors.bottomMargin: border.inset
 		spacing: Config.spacing
@@ -339,6 +355,7 @@ PanelWindow {
 		id: rightRow
 
 		visible: !bar.hidden
+		opacity: bar.contentFade
 		anchors.right: parent.right
 		anchors.rightMargin: border.inset + Config.barPadding
 		anchors.bottom: parent.bottom
