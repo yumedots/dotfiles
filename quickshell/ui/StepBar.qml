@@ -16,10 +16,11 @@ Item {
 	property var formatter: null
 	property real hitPad: 0
 	property var onPick
+	property bool follow: true
 
 	readonly property int count: root.model.length
 	readonly property real cellSize: root.count > 0 ? ((root.vertical ? root.height : root.width) - (root.count - 1) * root.gap) / root.count : 0
-	readonly property int hovered: bar.containsMouse && root.count > 0 ? root.indexAt(bar.mouseX, bar.mouseY) : -1
+	readonly property int hovered: root.follow && bar.containsMouse && root.count > 0 ? root.indexAt(bar.mouseX, bar.mouseY) : -1
 	readonly property int hoverRank: root.hovered < 0 ? -1 : root.vertical ? root.count - 1 - root.hovered : root.hovered
 	readonly property int shown: root.hoverRank >= 0 ? root.hoverRank : root.selected
 	readonly property string hoverLabel: root.entryLabel(root.hovered)
@@ -108,6 +109,13 @@ Item {
 				width: root.vertical ? root.width : root.cellSize
 				height: root.vertical ? root.cellSize : root.height
 				color: segment.rank <= root.selected ? root.ink : root.track
+
+				Behavior on color {
+					ColorAnimation {
+						duration: 120
+						easing.type: Easing.OutCubic
+					}
+				}
 
 				Highlight {
 					active: root.cursor === segment.index
