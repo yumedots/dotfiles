@@ -7,7 +7,8 @@ import "../../tooltips"
 BarStat {
 	id: root
 
-	readonly property var battery: (Yudae.system.battery && Yudae.system.battery.present) ? Yudae.system.battery : null
+	readonly property var demo: ({ present: true, pct: 72, charging: false, state: "Discharging", watts: 14.5, color: Config.powerBase })
+	readonly property var battery: (Yudae.system.battery && Yudae.system.battery.present) ? Yudae.system.battery : (Config.powerDemo ? root.demo : null)
 	readonly property var governors: Yudae.system.governors || []
 	property string governor: Yudae.system.governor || ""
 	property bool applyFailed: false
@@ -25,14 +26,15 @@ BarStat {
 
 	dim: root.applyFailed
 	dimColor: Config.muted
-	iconLift: 2
+	iconLift: root.battery === null ? 2 : 0
 	icon: root.batteryIcon(root.battery)
 	barColor: root.battery === null ? Config.foreground : (root.battery.color || Config.powerBase)
 	textColor: root.barColor
 	pct: root.battery ? root.battery.pct : 0
 	value: root.battery ? Math.round(root.battery.pct) + "%" : ""
 	showBar: root.battery !== null
-	iconWidth: root.iconInkHeight
+	iconWidth: 20
+	iconHeight: root.iconInkHeight
 	iconComponent: root.battery === null ? null : flowIcon
 
 	Component {
@@ -43,7 +45,10 @@ BarStat {
 			height: parent.height
 			rows: 4
 			span: 2
-			dotScale: 0.8
+			frequency: 1.4
+			amplitude: 0.35
+			dotScale: 0.95
+			sparse: true
 			flow: root.flow
 			watts: root.battery ? root.battery.watts || 0 : 0
 			fill: root.battery ? root.battery.pct / 100 : 1
