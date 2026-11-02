@@ -20,4 +20,4 @@ if [ -n "${GREETD_SOCK:-}" ]; then
 	done
 fi
 
-exec /usr/bin/start-hyprland -- -c "$dir/hyprland.lua"
+exec /usr/bin/start-hyprland -- -c "$dir/hyprland.lua" >/dev/null 2>&1

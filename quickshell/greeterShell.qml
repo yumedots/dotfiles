@@ -12,7 +12,6 @@ ShellRoot {
 	id: greeterRoot
 
 	readonly property bool preview: Quickshell.env("QS_GREETER_PREVIEW") === "1"
-	property string saver: Local.saver
 
 	readonly property var powerActions: [
 		{ name: "Shut down", verb: "poweroff", glyph: "\uf011" },
@@ -38,7 +37,6 @@ ShellRoot {
 		Stage {
 			source: auth
 			wallpaper: Local.wallpaper
-			saver: greeterRoot.saver
 			scrim: 0
 			account: Local.user
 			power: true
@@ -52,10 +50,6 @@ ShellRoot {
 
 	IpcHandler {
 		target: "greeter"
-
-		function screensaver(name: string) {
-			greeterRoot.saver = name;
-		}
 
 		function power() {
 			for (let i = 0; i < screens.instances.length; i++)

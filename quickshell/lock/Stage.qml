@@ -172,17 +172,6 @@ PanelWindow {
 				text: Qt.formatDateTime(stamp.date, Config.lockDateFormat)
 			}
 
-			Text {
-				visible: root.account !== ""
-				width: heading.width
-				horizontalAlignment: Text.AlignHCenter
-				font.family: Config.fontFamily
-				font.pixelSize: Config.lockDateSize
-				color: Config.foreground
-				opacity: 0.62
-				text: root.account
-			}
-
 			SystemClock {
 				id: stamp
 
@@ -274,10 +263,23 @@ PanelWindow {
 		}
 
 		Text {
+			id: account
+
+			visible: root.account !== ""
+			x: (root.width - account.implicitWidth) / 2
+			y: card.y - account.height - 14
+			font.family: Config.fontFamily
+			font.pixelSize: Config.lockDateSize
+			color: Config.foreground
+			opacity: 0.72 * root.cardIntro * root.veil
+			text: root.account
+		}
+
+		Text {
 			id: note
 
 			x: (root.width - note.implicitWidth) / 2
-			y: card.y - note.height - 10
+			y: (root.account !== "" ? account.y : card.y) - note.height - 10
 			font.family: Config.fontFamily
 			font.pixelSize: Config.lockNoteSize
 			color: Config.red
