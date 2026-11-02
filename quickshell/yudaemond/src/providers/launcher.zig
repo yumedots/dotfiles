@@ -87,11 +87,26 @@ const Clip = struct {
 	time: i64 = 0,
 };
 
-const Emoji = struct {
+const IndexRef = struct {
+	off: u32,
+	len: u32,
+};
+
+const IndexEntry = struct {
+	kind: u8,
 	text: []const u8,
 	name: []const u8,
-	keywords: []const []const u8,
-	kaomoji: bool = false,
+	name_lower: []const u8,
+	id_start: u32,
+	id_count: u16,
+};
+
+const Index = struct {
+	data: []u8,
+	pool: []const u8,
+	refs: []IndexRef,
+	ids: []u16,
+	entries: []IndexEntry,
 };
 
 const Row = struct {
@@ -109,6 +124,7 @@ const Row = struct {
 	value: f64 = 0,
 	keywords: []const []const u8 = &.{},
 	score: f64 = 0,
+	pre_scored: bool = false,
 	pin: i64 = -1,
 	count: i64 = 0,
 	last: i64 = 0,
@@ -190,8 +206,8 @@ pub const Launcher = struct {
 	clip_path: []u8 = &.{},
 	clip_id: []u8 = &.{},
 	clip_words: i64 = 0,
-	emoji: std.ArrayListUnmanaged(Emoji) = .empty,
-	emoji_loaded: bool = false,
+	index: ?*Index = null,
+	index_tried: bool = false,
 	pins: std.ArrayListUnmanaged([]u8) = .empty,
 	saved: std.ArrayListUnmanaged(Saved) = .empty,
 	clips: std.ArrayListUnmanaged(Clip) = .empty,
@@ -952,10 +968,7 @@ pub const Launcher = struct {
 			return rows.items;
 		}
 
-		if (std.mem.eql(u8, mode, "emoji")) {
-			try self.buildEmoji(arena, search, &rows);
-			return rows.items;
-		}
+		if (std.mem.eql(u8, mode, "emoji")) return self.buildEmoji(arena, search);
 
 		if (std.mem.eql(u8, mode, "wallpaper")) return rows.items;
 
@@ -1116,25 +1129,27 @@ pub const Launcher = struct {
 		}
 	}
 
-	fn loadEmoji(self: *Launcher) void {
-		if (self.emoji_loaded) return;
+	fn loadIndex(self: *Launcher) void {
+		if (self.index_tried) return;
 
-		self.emoji_loaded = true;
-
-		appendEmojiData(self.allocator, &self.emoji, @embedFile("emoji.tsv"), false) catch {};
-		appendEmojiData(self.allocator, &self.emoji, @embedFile("kaomoji.tsv"), true) catch {};
+		self.index_tried = true;
+		self.index = loadIndexFile(self.io, self.allocator) catch null;
 	}
 
-	fn buildEmoji(self: *Launcher, arena: Allocator, search: []const u8, rows: *std.ArrayListUnmanaged(Row)) !void {
-		self.loadEmoji();
+	fn buildEmoji(self: *Launcher, arena: Allocator, search: []const u8) ![]Row {
+		self.loadIndex();
+
+		const index = self.index orelse return &.{};
+
+		var rows: std.ArrayListUnmanaged(Row) = .empty;
 
 		if (search.len == 0) {
 			const half = max_results / 2;
 			var emojis: usize = 0;
 			var kaomojis: usize = 0;
 
-			for (self.emoji.items) |entry| {
-				if (entry.kaomoji) {
+			for (index.entries) |entry| {
+				if (entry.kind != 0) {
 					if (kaomojis >= half) continue;
 					kaomojis += 1;
 				} else {
@@ -1145,18 +1160,39 @@ pub const Launcher = struct {
 				try rows.append(arena, try emojiRow(arena, entry));
 			}
 
-			return;
+			return rows.items;
 		}
 
-		var all: std.ArrayListUnmanaged(Row) = .empty;
+		const needle = try lowerAlloc(arena, search);
+		const keyword_scores = try arena.alloc(f64, index.refs.len);
+		@memset(keyword_scores, 0);
 
-		for (self.emoji.items) |entry| {
-			try all.append(arena, try emojiRow(arena, entry));
+		for (index.refs, 0..) |ref, at| {
+			const off: usize = ref.off;
+			const score = fuzzyMatch(index.pool[off .. off + ref.len], needle) orelse continue;
+			keyword_scores[at] = score * 0.5;
 		}
 
-		for (self.rank(arena, all.items, search, false, false)) |row| {
+		for (index.entries) |entry| {
+			var best: ?f64 = fuzzyMatch(entry.name_lower, needle);
+
+			const id_from: usize = entry.id_start;
+			const id_to = id_from + entry.id_count;
+
+			for (index.ids[id_from..id_to]) |id| {
+				const score = keyword_scores[id];
+				if (score == 0) continue;
+				best = if (best) |value| @max(value, score) else score;
+			}
+
+			const score = best orelse continue;
+			var row = try emojiRow(arena, entry);
+			row.score = score;
+			row.pre_scored = true;
 			try rows.append(arena, row);
 		}
+
+		return self.rank(arena, rows.items, search, false, false);
 	}
 
 	fn rank(self: *Launcher, arena: Allocator, rows: []Row, search: []const u8, home: bool, allow_calc: bool) []Row {
@@ -1170,7 +1206,13 @@ pub const Launcher = struct {
 				continue;
 			}
 
-			const score = rowScore(arena, row, search) orelse continue;
+			var score: f64 = 0;
+
+			if (row.pre_scored) {
+				score = row.score;
+			} else {
+				score = rowScore(arena, row, search) orelse continue;
+			}
 
 			var next = row;
 			next.score = score;
@@ -1340,38 +1382,153 @@ fn wakeArgv(allocator: Allocator, path: []const u8) ![]const []const u8 {
 	return argv;
 }
 
-fn appendEmojiData(allocator: Allocator, list: *std.ArrayListUnmanaged(Emoji), body: []const u8, kaomoji: bool) !void {
-	var lines = std.mem.splitScalar(u8, body, '\n');
+const index_magic = "YIDX";
+const index_header = 28;
+const index_entry = 33;
 
-	while (lines.next()) |raw| {
-		const line = std.mem.trimEnd(u8, raw, "\r");
-		if (line.len == 0) continue;
+fn indexPath(io: Io, allocator: Allocator) ![]u8 {
+	const home = proc.home(io, allocator);
+	const path = try std.fmt.allocPrint(allocator, "{s}/.config/quickshell/yudaemond/assets/launcher-index.bin.gz", .{home});
 
-		var fields = std.mem.splitScalar(u8, line, '\t');
-		const text = fields.next() orelse continue;
-		const name = fields.next() orelse continue;
-		const words = fields.next() orelse "";
-		if (text.len == 0 or name.len == 0) continue;
+	if (proc.exists(io, path)) return path;
 
-		var keywords: std.ArrayListUnmanaged([]const u8) = .empty;
-		var parts = std.mem.splitScalar(u8, words, ' ');
-
-		while (parts.next()) |word| {
-			if (word.len == 0) continue;
-			try keywords.append(allocator, word);
-		}
-
-		try list.append(allocator, .{ .text = text, .name = name, .keywords = keywords.items, .kaomoji = kaomoji });
-	}
+	allocator.free(path);
+	return allocator.dupe(u8, "assets/launcher-index.bin.gz");
 }
 
-fn emojiRow(arena: Allocator, entry: Emoji) !Row {
+fn readU32(bytes: []const u8, at: usize) u32 {
+	return std.mem.readInt(u32, bytes[at..][0..4], .little);
+}
+
+fn inPool(pool: []const u8, off: u32, len: u32) bool {
+	const start: usize = off;
+	const size: usize = len;
+
+	return start <= pool.len and size <= pool.len - start;
+}
+
+fn loadIndexFile(io: Io, allocator: Allocator) !*Index {
+	const path = try indexPath(io, allocator);
+	defer allocator.free(path);
+
+	const compressed = try proc.readFile(io, allocator, path);
+	defer allocator.free(compressed);
+
+	if (compressed.len < 18) return error.BadIndex;
+
+	const size = readU32(compressed, compressed.len - 4);
+	const data = try allocator.alloc(u8, size);
+	errdefer allocator.free(data);
+
+	var input: Io.Reader = .fixed(compressed);
+	var window: [std.compress.flate.max_window_len]u8 = undefined;
+	var decompress: std.compress.flate.Decompress = .init(&input, .gzip, &window);
+	var output: Io.Writer = .fixed(data);
+	try decompress.reader.streamExact64(&output, size);
+	if (output.end != data.len) return error.BadIndex;
+
+	return parseIndex(allocator, data);
+}
+
+fn parseIndex(allocator: Allocator, data: []u8) !*Index {
+	if (data.len < index_header or !std.mem.eql(u8, data[0..4], index_magic)) return error.BadIndex;
+
+	const version = readU32(data, 4);
+	const entry_count = readU32(data, 8);
+	const keyword_count = readU32(data, 12);
+	const id_count = readU32(data, 16);
+	const id_size = readU32(data, 20);
+	const pool_len = readU32(data, 24);
+
+	if (version != 1 or id_size != 2 or keyword_count > std.math.maxInt(u16)) return error.BadIndex;
+
+	const pool_end = index_header + @as(usize, pool_len);
+	const keywords_end = pool_end + @as(usize, keyword_count) * 8;
+	const ids_end = keywords_end + @as(usize, id_count) * 2;
+	const entries_end = ids_end + @as(usize, entry_count) * index_entry;
+
+	if (entries_end > data.len) return error.BadIndex;
+
+	const refs = try allocator.alloc(IndexRef, keyword_count);
+	errdefer allocator.free(refs);
+
+	const ids = try allocator.alloc(u16, id_count);
+	errdefer allocator.free(ids);
+
+	const entries = try allocator.alloc(IndexEntry, entry_count);
+	errdefer allocator.free(entries);
+
+	const index = try allocator.create(Index);
+	errdefer allocator.destroy(index);
+
+	index.* = .{
+		.data = data,
+		.pool = data[index_header..pool_end],
+		.refs = refs,
+		.ids = ids,
+		.entries = entries,
+	};
+
+	for (refs, 0..) |*ref, at| {
+		const pos = pool_end + at * 8;
+		ref.* = .{ .off = readU32(data, pos), .len = readU32(data, pos + 4) };
+
+		if (!inPool(index.pool, ref.off, ref.len)) return error.BadIndex;
+	}
+
+	for (ids, 0..) |*id, at| {
+		id.* = std.mem.readInt(u16, data[keywords_end + at * 2 ..][0..2], .little);
+		if (id.* >= keyword_count) return error.BadIndex;
+	}
+
+	for (entries, 0..) |*entry, at| {
+		const pos = ids_end + at * index_entry;
+		const id_start = readU32(data, pos + 25);
+		const id_len = std.mem.readInt(u16, data[pos + 29 ..][0..2], .little);
+		const id_end = @as(usize, id_start) + id_len;
+
+		entry.* = .{
+			.kind = data[pos],
+			.text = "",
+			.name = "",
+			.name_lower = "",
+			.id_start = id_start,
+			.id_count = id_len,
+		};
+
+		const text_off = readU32(data, pos + 1);
+		const text_len = readU32(data, pos + 5);
+		const name_off = readU32(data, pos + 9);
+		const name_len = readU32(data, pos + 13);
+		const lower_off = readU32(data, pos + 17);
+		const lower_len = readU32(data, pos + 21);
+
+		if (!inPool(index.pool, text_off, text_len) or
+			!inPool(index.pool, name_off, name_len) or
+			!inPool(index.pool, lower_off, lower_len) or
+			id_end > ids.len) return error.BadIndex;
+
+		entry.text = index.pool[text_off..][0..text_len];
+		entry.name = index.pool[name_off..][0..name_len];
+		entry.name_lower = index.pool[lower_off..][0..lower_len];
+	}
+
+	return index;
+}
+
+fn emojiRow(arena: Allocator, entry: IndexEntry) !Row {
+	const kaomoji = entry.kind != 0;
+
 	return .{
 		.id = try std.fmt.allocPrint(arena, "emoji:{s}", .{entry.text}),
-		.kind = if (entry.kaomoji) "kaomoji" else "emoji",
-		.name = if (entry.kaomoji) try std.fmt.allocPrint(arena, "{s}  {s}", .{ entry.text, entry.name }) else entry.name,
-		.glyph = if (entry.kaomoji) glyph_emoji else entry.text,
-		.keywords = entry.keywords,
+		.kind = if (kaomoji) "kaomoji" else "emoji",
+		.name = if (kaomoji and entry.name.len > 0)
+			try std.fmt.allocPrint(arena, "{s}  {s}", .{ entry.text, entry.name })
+		else if (kaomoji)
+			entry.text
+		else
+			entry.name,
+		.glyph = if (kaomoji) glyph_emoji else entry.text,
 	};
 }
 
@@ -1489,6 +1646,10 @@ fn fuzzyScore(arena: Allocator, text: []const u8, search: []const u8) ?f64 {
 	const target = lowerAlloc(arena, text) catch return null;
 	const needle = lowerAlloc(arena, search) catch return null;
 
+	return fuzzyMatch(target, needle);
+}
+
+fn fuzzyMatch(target: []const u8, needle: []const u8) ?f64 {
 	if (needle.len == 0) return 0;
 	if (std.mem.eql(u8, target, needle)) return 1000;
 
@@ -1653,29 +1814,41 @@ test "the query prefix picks the mode and strips its mark" {
 	try std.testing.expectEqualStrings("smile", emoji.text);
 }
 
-test "emoji data keeps text, name and keywords apart" {
+test "the launcher index reads entries and keywords" {
+	const raw = [_]u8{
+		89, 73, 68, 88, 1, 0, 0, 0, 1, 0, 0, 0,
+		1, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0,
+		23, 0, 0, 0, 115, 109, 105, 108, 101, 240, 159, 153,
+		130, 83, 109, 105, 108, 105, 110, 103, 115, 109, 105, 108,
+		105, 110, 103, 0, 0, 0, 0, 5, 0, 0, 0, 0,
+		0, 0, 5, 0, 0, 0, 4, 0, 0, 0, 9, 0,
+		0, 0, 7, 0, 0, 0, 16, 0, 0, 0, 7, 0,
+		0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+	};
+	const allocator = std.testing.allocator;
+
+	const index = try parseIndex(allocator, @constCast(&raw)[0..]);
+	defer {
+		allocator.free(index.refs);
+		allocator.free(index.ids);
+		allocator.free(index.entries);
+		allocator.destroy(index);
+	}
+
+	try std.testing.expectEqual(@as(usize, 1), index.entries.len);
+	try std.testing.expectEqualStrings("🙂", index.entries[0].text);
+	try std.testing.expectEqualStrings("Smiling", index.entries[0].name);
+	try std.testing.expectEqualStrings("smiling", index.entries[0].name_lower);
+	try std.testing.expectEqualStrings("smile", index.pool[index.refs[0].off..][0..5]);
+	try std.testing.expectEqual(@as(u16, 0), index.ids[0]);
+
 	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
 	defer arena.deinit();
 
-	const allocator = arena.allocator();
-	var list: std.ArrayListUnmanaged(Emoji) = .empty;
-
-	try appendEmojiData(allocator, &list, "🙂\tSlightly Smiling Face\tface smile happy\r\n", false);
-	try appendEmojiData(allocator, &list, "(°ロ°)\tShock\tomg surprise\n", true);
-
-	try std.testing.expectEqual(@as(usize, 2), list.items.len);
-	try std.testing.expectEqualStrings("🙂", list.items[0].text);
-	try std.testing.expectEqualStrings("Slightly Smiling Face", list.items[0].name);
-	try std.testing.expectEqualStrings("happy", list.items[0].keywords[2]);
-	try std.testing.expect(!list.items[0].kaomoji);
-
-	const emoji = try emojiRow(allocator, list.items[0]);
-	try std.testing.expectEqualStrings("emoji:🙂", emoji.id);
-	try std.testing.expectEqualStrings("emoji", emoji.kind);
-
-	const kaomoji = try emojiRow(allocator, list.items[1]);
-	try std.testing.expectEqualStrings("kaomoji", kaomoji.kind);
-	try std.testing.expect(std.mem.startsWith(u8, kaomoji.name, "(°ロ°)"));
+	const row = try emojiRow(arena.allocator(), index.entries[0]);
+	try std.testing.expectEqualStrings("emoji:🙂", row.id);
+	try std.testing.expectEqualStrings("emoji", row.kind);
+	try std.testing.expectEqualStrings("Smiling", row.name);
 }
 
 test "clipboard previews know images from text" {
