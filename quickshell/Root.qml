@@ -15,6 +15,7 @@ ShellRoot {
 	id: shellRoot
 
 	property double hyprBootAt: Date.now()
+	property bool locked: false
 	readonly property string lockScript: Quickshell.shellDir + "/scripts/lock"
 
 	function launcher() {
@@ -300,6 +301,10 @@ ShellRoot {
 			shellRoot.lock();
 		}
 
+		function lockState(on: string) {
+			shellRoot.locked = on === "true";
+		}
+
 	}
 
 	property var watchedScripts: []
@@ -368,8 +373,9 @@ ShellRoot {
 		model: Quickshell.screens
 
 		Bar {
-			onWidgetActivated: Handoff.run(shellRoot.closeLauncherUnderWidget)
+			locked: shellRoot.locked
 
+			onWidgetActivated: Handoff.run(shellRoot.closeLauncherUnderWidget)
 		}
 	}
 
