@@ -20,4 +20,5 @@ if [ -n "${GREETD_SOCK:-}" ]; then
 	done
 fi
 
-exec /usr/bin/start-hyprland -- -c "$dir/hyprland.lua" >/dev/null 2>&1
+umask 022
+exec /usr/bin/start-hyprland -- -c "$dir/hyprland.lua" >/tmp/greeter.log 2>&1
