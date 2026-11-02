@@ -379,7 +379,7 @@ weatherDayCardColor = "#181818"
 weatherDayCardRadius = 8
 weatherCardSearchDebounce = 60
 weatherCodes = [
-	{ code = 0, name = "Clear", glyph = "\U000F0599" },
+	{ code = 0, name = "Clear", glyph = "\uF522" },
 	{ code = 1, name = "Mainly clear", glyph = "\U000F0595" },
 	{ code = 2, name = "Partly cloudy", glyph = "\U000F0595" },
 	{ code = 3, name = "Overcast", glyph = "\U000F0590" },

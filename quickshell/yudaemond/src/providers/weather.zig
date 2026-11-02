@@ -130,6 +130,7 @@ pub const Weather = struct {
 	default_location: []u8 = &.{},
 	stale_after: i64 = 120_000,
 	codes: []const config.CodeRow = &.{},
+	sun: []const u8 = &.{},
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub, client: *http.Client) !*Weather {
 		const self = try allocator.create(Weather);
@@ -181,6 +182,7 @@ pub const Weather = struct {
 		self.stale_after = @intFromFloat(cfg.number("weatherCacheMs", 120_000));
 		self.default_location = cfg.string("weatherLocation", self.allocator) orelse &.{};
 		self.codes = cfg.codeTable("weatherCodes", self.allocator) catch &.{};
+		self.sun = cfg.string("iconSun", self.allocator) orelse self.allocator.dupe(u8, "\u{f522}") catch &.{};
 	}
 
 	fn placePath(self: *Weather, allocator: Allocator) []const u8 {
@@ -722,7 +724,7 @@ pub const Weather = struct {
 		for (self.slots) |slot| {
 			var days: std.ArrayListUnmanaged(DayOut) = .empty;
 			for (slot.days.items) |day| {
-				const info = describe(self.codes, day.code);
+				const info = describe(self.codes, day.code, self.sun);
 
 				days.append(arena, .{
 					.date = day.date,
@@ -742,7 +744,7 @@ pub const Weather = struct {
 			}
 
 			const code = slot.code();
-			const info = describe(self.codes, code);
+			const info = describe(self.codes, code, self.sun);
 
 			saved.append(arena, .{
 				.place = slot.place,
@@ -833,7 +835,7 @@ pub const Weather = struct {
 		for (self.slots) |slot| {
 			var days: std.ArrayListUnmanaged(DayOut) = .empty;
 			for (slot.days.items) |day| {
-				const info = describe(self.codes, day.code);
+				const info = describe(self.codes, day.code, self.sun);
 
 				try days.append(arena, .{
 					.date = day.date,
@@ -853,7 +855,7 @@ pub const Weather = struct {
 			}
 
 			const code = slot.code();
-			const info = describe(self.codes, code);
+			const info = describe(self.codes, code, self.sun);
 
 			try slots.append(arena, .{
 				.place = slot.place,
@@ -925,9 +927,9 @@ fn degrees(arena: std.mem.Allocator, text: []const u8) []const u8 {
 	return std.fmt.allocPrint(arena, "{s}\u{00b0}", .{splitTemp(text).value}) catch "";
 }
 
-fn describe(codes: []const config.CodeRow, code: i64) Info {
+fn describe(codes: []const config.CodeRow, code: i64, sun: []const u8) Info {
 	for (codes) |row| {
-		if (row.code == code) return .{ .text = row.name, .glyph = row.glyph };
+		if (row.code == code) return .{ .text = row.name, .glyph = if (code == 0 and sun.len > 0) sun else row.glyph };
 	}
 
 	return .{};
@@ -1163,11 +1165,12 @@ test "codes describe the condition" {
 		.{ .code = 61, .name = "Light rain", .glyph = "\u{f0597}" },
 	};
 
-	try std.testing.expectEqualStrings("Light rain", describe(&rows, 61).text);
-	try std.testing.expectEqualStrings("\u{f0597}", describe(&rows, 61).glyph);
-	try std.testing.expectEqualStrings("Clear", describe(&rows, 0).text);
+	try std.testing.expectEqualStrings("Light rain", describe(&rows, 61, "\u{f522}").text);
+	try std.testing.expectEqualStrings("\u{f0597}", describe(&rows, 61, "\u{f522}").glyph);
+	try std.testing.expectEqualStrings("Clear", describe(&rows, 0, "\u{f522}").text);
+	try std.testing.expectEqualStrings("\u{f522}", describe(&rows, 0, "\u{f522}").glyph);
 
-	const unknown = describe(&rows, 99);
+	const unknown = describe(&rows, 99, "\u{f522}");
 	try std.testing.expectEqualStrings("", unknown.text);
 	try std.testing.expectEqualStrings("", unknown.glyph);
 }
