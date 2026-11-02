@@ -44,7 +44,27 @@ pub const Watch = struct {
 		}
 	}
 
+	fn pidPath(self: *Watch, allocator: Allocator) ![]u8 {
+		return std.fmt.allocPrint(allocator, "{s}/yudaemond-clipwatch.pid", .{proc.runtimeDir(self.io, self.allocator)});
+	}
+
+	fn reap(self: *Watch) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+		const path = self.pidPath(allocator) catch return;
+		const pid = std.fmt.parseInt(std.posix.pid_t, std.mem.trim(u8, proc.readFileOr(self.io, allocator, path), " \n"), 10) catch return;
+
+		const comm_path = std.fmt.allocPrint(allocator, "/proc/{d}/comm", .{pid}) catch return;
+		const comm = std.mem.trim(u8, proc.readFileOr(self.io, allocator, comm_path), " \n");
+
+		if (std.mem.eql(u8, comm, "wl-paste")) _ = std.posix.kill(pid, std.posix.SIG.KILL) catch {};
+	}
+
 	fn follow(self: *Watch) void {
+		self.reap();
+
 		const child = std.process.spawn(self.io, .{
 			.argv = &.{ "wl-paste", "--watch", "sh", "-c", "cliphist store && echo" },
 			.stdin = .ignore,
@@ -55,6 +75,15 @@ pub const Watch = struct {
 		defer if (child.id) |id| {
 			_ = std.posix.kill(id, std.posix.SIG.KILL) catch {};
 		};
+
+		if (child.id) |id| {
+			var arena = std.heap.ArenaAllocator.init(self.allocator);
+			defer arena.deinit();
+
+			const path = self.pidPath(arena.allocator()) catch "";
+			const text = std.fmt.allocPrint(arena.allocator(), "{d}\n", .{id}) catch "";
+			if (path.len > 0) proc.writeFileAtomic(self.io, arena.allocator(), path, text) catch {};
+		}
 
 		const fd = child.stdout.?.handle;
 		var chunk: [256]u8 = undefined;
