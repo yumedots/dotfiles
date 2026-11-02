@@ -49,6 +49,7 @@ pub const Icons = struct {
 
 	pub fn attach(self: *Icons, apps: *appsmod.Apps) void {
 		self.apps = apps;
+		apps.onChange(self, appsChanged);
 	}
 
 	pub fn start(self: *Icons) !void {
@@ -57,6 +58,18 @@ pub const Icons = struct {
 
 		const thread = try std.Thread.spawn(.{}, loop, .{self});
 		thread.detach();
+	}
+
+	fn appsChanged(ctx: *anyopaque) void {
+		const self: *Icons = @ptrCast(@alignCast(ctx));
+
+		self.resolver.scan();
+		self.warm(true);
+
+		sleep.ms(3000);
+
+		self.resolver.scan();
+		self.warm(true);
 	}
 
 	fn loop(self: *Icons) void {

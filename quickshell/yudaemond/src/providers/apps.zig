@@ -2,6 +2,9 @@ const std = @import("std");
 const hubmod = @import("../hub.zig");
 const proc = @import("../primitives/proc.zig");
 const sleep = @import("../primitives/sleep.zig");
+const inotify = @import("../primitives/watch.zig");
+
+const settle_ms = 400;
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -37,6 +40,8 @@ pub const Apps = struct {
 	mutex: std.Io.Mutex = .init,
 	scratch: std.heap.ArenaAllocator,
 	entries: std.ArrayListUnmanaged(Entry) = .empty,
+	changed_ctx: ?*anyopaque = null,
+	changed: ?*const fn (*anyopaque) void = null,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Apps {
 		const self = try allocator.create(Apps);
@@ -73,42 +78,84 @@ pub const Apps = struct {
 		thread.detach();
 	}
 
+	pub fn onChange(self: *Apps, ctx: *anyopaque, callback: *const fn (*anyopaque) void) void {
+		self.changed_ctx = ctx;
+		self.changed = callback;
+	}
+
 	fn loop(self: *Apps) void {
 		self.scan();
 
+		var watcher = inotify.Watcher.init() catch {
+			while (true) {
+				sleep.ms(60_000);
+				self.scan();
+			}
+		};
+
+		self.watchDirs(&watcher);
+
 		while (true) {
-			sleep.ms(60_000);
+			if (!watcher.wait(60_000)) continue;
+
+			watcher.drain();
+
+			while (true) {
+				sleep.ms(settle_ms);
+				if (!watcher.wait(0)) break;
+				watcher.drain();
+			}
+
 			self.scan();
+			self.watchDirs(&watcher);
+
+			if (self.changed) |callback| callback(self.changed_ctx.?);
 		}
+	}
+
+	fn watchDirs(self: *Apps, watcher: *inotify.Watcher) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const dirs = self.appDirs(arena.allocator()) catch return;
+
+		for (dirs) |dir| {
+			const z = arena.allocator().allocSentinel(u8, dir.len, 0) catch continue;
+			@memcpy(z, dir);
+			watcher.add(z) catch {};
+		}
+	}
+
+	fn appDirs(self: *Apps, allocator: Allocator) ![]const []const u8 {
+		var out: std.ArrayListUnmanaged([]const u8) = .empty;
+
+		const home = proc.home(self.io, self.allocator);
+
+		try out.append(allocator, try std.fmt.allocPrint(allocator, "{s}/.local/share/applications", .{home}));
+		try out.append(allocator, "/var/lib/flatpak/exports/share/applications");
+		try out.append(allocator, try std.fmt.allocPrint(allocator, "{s}/.local/share/flatpak/exports/share/applications", .{home}));
+
+		const data_dirs = proc.env(self.io, self.allocator, "XDG_DATA_DIRS") orelse "/usr/local/share:/usr/share";
+		var parts = std.mem.splitScalar(u8, data_dirs, ':');
+
+		while (parts.next()) |dir| {
+			if (dir.len == 0) continue;
+
+			try out.append(allocator, try std.fmt.allocPrint(allocator, "{s}/applications", .{dir}));
+		}
+
+		return out.items;
 	}
 
 	fn scan(self: *Apps) void {
 		var found: std.ArrayListUnmanaged(Entry) = .empty;
 
-		const home = proc.home(self.io, self.allocator);
-		const user = std.fmt.allocPrint(self.allocator, "{s}/.local/share/applications", .{home}) catch return;
-		defer self.allocator.free(user);
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
 
-		self.scanDir(user, &found, 0);
-		self.scanDir("/var/lib/flatpak/exports/share/applications", &found, 0);
+		const dirs = self.appDirs(arena.allocator()) catch return;
 
-		const flatpak_user = std.fmt.allocPrint(self.allocator, "{s}/.local/share/flatpak/exports/share/applications", .{home}) catch "";
-		if (flatpak_user.len > 0) {
-			defer self.allocator.free(flatpak_user);
-			self.scanDir(flatpak_user, &found, 0);
-		}
-
-		const data_dirs = proc.env(self.io, self.allocator, "XDG_DATA_DIRS") orelse "/usr/local/share:/usr/share";
-		var dirs = std.mem.splitScalar(u8, data_dirs, ':');
-
-		while (dirs.next()) |dir| {
-			if (dir.len == 0) continue;
-
-			const path = std.fmt.allocPrint(self.allocator, "{s}/applications", .{dir}) catch continue;
-			defer self.allocator.free(path);
-
-			self.scanDir(path, &found, 0);
-		}
+		for (dirs) |dir| self.scanDir(dir, &found, 0);
 
 		self.mutex.lockUncancelable(self.io);
 		for (self.entries.items) |entry| self.freeEntry(entry);
