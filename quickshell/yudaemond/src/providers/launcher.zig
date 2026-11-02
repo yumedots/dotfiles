@@ -1221,14 +1221,16 @@ pub const Launcher = struct {
 			var kaomojis: usize = 0;
 
 			for (index.entries) |entry| {
-				if (entry.kind != 0) {
-					if (kaomojis >= half) continue;
-					kaomojis += 1;
-				} else {
-					if (emojis >= half) continue;
-					emojis += 1;
-				}
+				if (entry.kind != 0) continue;
+				if (emojis >= half) break;
+				emojis += 1;
+				try rows.append(arena, try emojiRow(arena, entry));
+			}
 
+			for (index.entries) |entry| {
+				if (entry.kind == 0) continue;
+				if (kaomojis >= half) break;
+				kaomojis += 1;
 				try rows.append(arena, try emojiRow(arena, entry));
 			}
 
@@ -1313,6 +1315,11 @@ pub const Launcher = struct {
 
 					if (unpinned_a != unpinned_b) return unpinned_b;
 					if (a.pin != b.pin) return a.pin < b.pin;
+
+					const a_kaomoji = std.mem.eql(u8, a.kind, "kaomoji");
+					const b_kaomoji = std.mem.eql(u8, b.kind, "kaomoji");
+					if (a_kaomoji != b_kaomoji) return !a_kaomoji;
+
 					if (a.score != b.score) return a.score > b.score;
 					if (a.count != b.count) return a.count > b.count;
 					if (a.last != b.last) return a.last > b.last;
@@ -1589,18 +1596,11 @@ fn parseIndex(allocator: Allocator, data: []u8) !*Index {
 }
 
 fn emojiRow(arena: Allocator, entry: IndexEntry) !Row {
-	const kaomoji = entry.kind != 0;
-
 	return .{
 		.id = try std.fmt.allocPrint(arena, "emoji:{s}", .{entry.text}),
-		.kind = if (kaomoji) "kaomoji" else "emoji",
-		.name = if (kaomoji and entry.name.len > 0)
-			try std.fmt.allocPrint(arena, "{s}  {s}", .{ entry.text, entry.name })
-		else if (kaomoji)
-			entry.text
-		else
-			entry.name,
-		.glyph = if (kaomoji) glyph_emoji else entry.text,
+		.kind = if (entry.kind != 0) "kaomoji" else "emoji",
+		.name = entry.name,
+		.glyph = entry.text,
 	};
 }
 

@@ -95,9 +95,23 @@ PanelWindow {
 	readonly property bool revealed: (!root.home || (root.live.intent && root.live.intent.query !== "")) && (!root.spotlight || root.results.length > 0)
 	readonly property real fontSize: root.spotlight ? Config.launcherSpotlightFontSize : Config.launcherFontSize
 	readonly property real iconSize: root.spotlight ? Math.round(root.fontSize * 1.4) : Config.launcherIconSize
-	readonly property real rowHeight: root.spotlight ? root.iconSize + 12 : Config.launcherRowHeight
+	readonly property real rowHeight: root.spotlight
+		? (root.mode === "emoji" ? root.emojiRowHeight : root.iconSize + 12)
+		: (root.mode === "emoji" ? root.emojiRowHeight : Config.launcherRowHeight)
+	readonly property real emojiRowHeight: Math.round(root.iconSize + root.fontSize * 0.72 + 14)
 	readonly property real iconSlot: root.spotlight ? root.iconSize + 4 : Config.launcherIconSlot
-	readonly property int maxRows: root.spotlight ? Config.launcherSpotlightMaxRows : Config.launcherMaxRows
+	readonly property real kaomojiSlot: Math.min(220, Math.max(120, Math.round(card.width * 0.36)))
+	readonly property int maxRows: {
+		const base = root.spotlight ? Config.launcherSpotlightMaxRows : Config.launcherMaxRows;
+
+		if (root.mode !== "emoji" || !root.spotlight)
+			return base;
+
+		const top = Math.round(root.height * Config.launcherSpotlightTop);
+		const room = root.height - top - Config.launcherPadding * 2 - Config.launcherSpotlightInputHeight - Config.launcherGap;
+
+		return Calc.clamp(Math.floor(room / (root.emojiRowHeight + Config.launcherGap)), 1, base);
+	}
 	readonly property int rows: root.spotlight && !root.isClipboard ? Calc.clamp(root.results.length, 1, root.maxRows) : root.maxRows
 	readonly property int listHeight: root.spotlight ? root.rows * root.rowHeight + (root.rows - 1) * Config.launcherGap : Config.launcherMaxRows * root.rowHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
@@ -661,6 +675,7 @@ PanelWindow {
 
 	onModeChanged: {
 		list.currentIndex = 0;
+		list.positionViewAtBeginning();
 
 		if (!root.shown)
 			return;
@@ -973,20 +988,28 @@ PanelWindow {
 
 							readonly property bool active: row.index === list.currentIndex
 							readonly property bool pinned: row.modelData.pinned === true
+							readonly property bool wide: row.modelData.kind === "kaomoji"
 
 							Item {
 								id: rowIcon
 
 								anchors.left: parent.left
 								anchors.verticalCenter: parent.verticalCenter
-								width: root.iconSlot
+								width: row.wide ? root.kaomojiSlot : root.iconSlot
 								height: root.iconSlot
 
 							readonly property string icon: row.modelData.kind === "proc" ? AppIcons.iconOfPid(row.modelData.pid) : (row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : "")
 
 							Text {
 								visible: row.modelData.kind !== "app" && (rowIcon.icon === "" || rowIconImage.status === Image.Error)
-								anchors.centerIn: parent
+								x: row.wide ? 0 : (parent.width - width) / 2
+								y: (parent.height - height) / 2
+								width: row.wide ? parent.width : implicitWidth
+								horizontalAlignment: Text.AlignLeft
+								wrapMode: Text.NoWrap
+								elide: Text.ElideNone
+								fontSizeMode: row.wide ? Text.Fit : Text.FixedSize
+								minimumPixelSize: 8
 								font.family: Config.fontFamily
 								font.pixelSize: root.iconSize
 								color: row.active ? Config.launcherHighlightText : Config.foreground
@@ -1014,17 +1037,37 @@ PanelWindow {
 							}
 							}
 
-							Text {
+							Column {
+								id: rowText
+
 								anchors.left: rowIcon.right
 								anchors.leftMargin: Config.launcherTextGap
 								anchors.right: rowUsage.left
 								anchors.rightMargin: Config.launcherTextGap
 								anchors.verticalCenter: parent.verticalCenter
-								elide: Text.ElideRight
-								font.family: Config.fontFamily
-								font.pixelSize: root.fontSize
-								color: row.active ? Config.launcherHighlightText : Config.foreground
-								text: row.modelData.name
+
+								Text {
+									id: rowName
+
+									width: parent.width
+									elide: Text.ElideRight
+									font.family: Config.fontFamily
+									font.pixelSize: root.fontSize
+									color: row.active ? Config.launcherHighlightText : Config.foreground
+									text: row.modelData.name
+								}
+
+								Text {
+									id: rowHint
+
+									width: parent.width
+									visible: root.mode === "emoji"
+									elide: Text.ElideRight
+									font.family: Config.fontFamily
+									font.pixelSize: Math.round(root.fontSize * 0.72)
+									color: Config.muted
+									text: "click to copy to clipboard"
+								}
 							}
 
 							Text {
