@@ -366,14 +366,8 @@ Item {
 				anchors.fill: parent
 				visible: body.tab === 0
 
-				readonly property real listStep: root.rowHeight + 2
-				readonly property real listRoom: Math.max(0, tasksBox.height
-					- (planRingStrip.visible ? planRingStrip.height + 8 : 0)
-					- doneTitle.implicitHeight
-					- (workList.count > 0 ? 6 : 0)
-					- 4)
-				readonly property int listRows: Math.max(0, Math.floor(tasksBox.listRoom / 2 / tasksBox.listStep))
-				readonly property real listHeight: tasksBox.listRows * tasksBox.listStep
+				readonly property int listRows: 3
+				readonly property real listHeight: tasksBox.listRows * (root.rowHeight + 2)
 
 				Item {
 					id: planRingStrip
