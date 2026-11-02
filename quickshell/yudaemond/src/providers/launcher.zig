@@ -18,7 +18,10 @@ const Hub = hubmod.Hub;
 
 const max_results = 60;
 const usage_max = 10;
-const preview_bytes = 20000;
+const clip_limit = 5 * 1024 * 1024;
+const page_bytes = 8000;
+const first_pages = 2;
+const more_pages = 2;
 
 const glyph_command = "\u{f018c}";
 const glyph_calc = "\u{f00ec}";
@@ -119,10 +122,18 @@ const RowOut = struct {
 	pinned: bool,
 };
 
-const PreviewOut = struct {
+const PageOut = struct {
 	text: []const u8,
+	tail: []const u8,
+};
+
+const PreviewOut = struct {
+	id: []const u8,
+	pages: []const PageOut,
+	more: bool,
 	path: []const u8,
 	time: i64,
+	words: i64,
 };
 
 const IntentOut = struct {
@@ -165,9 +176,11 @@ pub const Launcher = struct {
 	forced: []u8 = &.{},
 	group: []u8 = &.{},
 	terminal: []u8 = &.{},
-	clip_text: []u8 = &.{},
+	clip_full: []u8 = &.{},
+	clip_pages: usize = first_pages,
 	clip_path: []u8 = &.{},
 	clip_id: []u8 = &.{},
+	clip_words: i64 = 0,
 	pins: std.ArrayListUnmanaged([]u8) = .empty,
 	saved: std.ArrayListUnmanaged(Saved) = .empty,
 	clips: std.ArrayListUnmanaged(Clip) = .empty,
@@ -613,8 +626,9 @@ pub const Launcher = struct {
 
 		if (id.len == 0) {
 			self.mutex.lockUncancelable(self.io);
-			self.setStr(&self.clip_text, "");
+			self.setStr(&self.clip_full, "");
 			self.setStr(&self.clip_path, "");
+			self.clip_words = 0;
 			self.mutex.unlock(self.io);
 			self.hub.publish();
 			return;
@@ -623,7 +637,7 @@ pub const Launcher = struct {
 		const script = std.fmt.allocPrint(self.allocator, "cliphist decode {s} 2>/dev/null", .{id}) catch return;
 		defer self.allocator.free(script);
 
-		const result = exec.run(self.io, self.allocator, &.{ "sh", "-c", script }) catch return;
+		const result = exec.runLimit(self.io, self.allocator, &.{ "sh", "-c", script }, null, clip_limit) catch return;
 		defer result.deinit(self.allocator);
 
 		if (imageMagic(result.out)) |extension| {
@@ -636,22 +650,39 @@ pub const Launcher = struct {
 			} else |_| {}
 
 			self.mutex.lockUncancelable(self.io);
-			self.setStr(&self.clip_text, "");
+			self.setStr(&self.clip_full, "");
 			self.setStr(&self.clip_path, path);
+			self.clip_words = 0;
 			self.mutex.unlock(self.io);
 
 			self.hub.publish();
 			return;
 		}
 
-		const text = result.out[0..@min(result.out.len, preview_bytes)];
-
 		self.mutex.lockUncancelable(self.io);
-		self.setStr(&self.clip_text, text);
+		self.setStr(&self.clip_full, result.out);
+		self.clip_pages = first_pages;
 		self.setStr(&self.clip_path, "");
+		self.clip_words = wordCount(result.out);
 		self.mutex.unlock(self.io);
 
 		self.hub.publish();
+	}
+
+	pub fn moreClip(self: *Launcher) void {
+		self.mutex.lockUncancelable(self.io);
+
+		var at: usize = 0;
+		var count: usize = 0;
+
+		while (at < self.clip_full.len and count < self.clip_pages) : (count += 1) at = pageEnd(self.clip_full, at);
+
+		const more = at < self.clip_full.len;
+		if (more) self.clip_pages += more_pages;
+
+		self.mutex.unlock(self.io);
+
+		if (more) self.hub.publish();
 	}
 
 	pub fn copyClip(self: *Launcher, id: []const u8) void {
@@ -1189,6 +1220,17 @@ pub const Launcher = struct {
 		var pins: std.ArrayListUnmanaged([]const u8) = .empty;
 		for (self.pins.items) |pin| try pins.append(arena, pin);
 
+		var pages: std.ArrayListUnmanaged(PageOut) = .empty;
+		var at: usize = 0;
+
+		while (at < self.clip_full.len and pages.items.len < self.clip_pages) {
+			const end = pageEnd(self.clip_full, at);
+			const slice = self.clip_full[at..end];
+			const body = pageText(slice);
+			try pages.append(arena, .{ .text = body, .tail = slice[body.len..] });
+			at = end;
+		}
+
 		try writer.print("{f}", .{std.json.fmt(Out{
 			.mode = displayMode(state.mode),
 			.prompt = state.prompt,
@@ -1198,7 +1240,7 @@ pub const Launcher = struct {
 			.intent = .{ .query = self.query, .forced = self.forced, .group = self.group },
 			.pins = pins.items,
 			.results = results.items,
-			.clip = .{ .text = self.clip_text, .path = self.clip_path, .time = self.clipTime() },
+			.clip = .{ .id = self.clip_id, .pages = pages.items, .more = at < self.clip_full.len, .path = self.clip_path, .time = self.clipTime(), .words = self.clip_words },
 		}, .{})});
 	}
 };
@@ -1407,6 +1449,37 @@ fn imageFormat(preview: []const u8) []const u8 {
 	return "";
 }
 
+fn pageEnd(text: []const u8, start: usize) usize {
+	const limit = @min(start + page_bytes, text.len);
+	if (limit == text.len) return limit;
+
+	const window = text[start..limit];
+	if (std.mem.lastIndexOfScalar(u8, window, '\n')) |at| return start + at + 1;
+	if (std.mem.lastIndexOfScalar(u8, window, ' ')) |at| return start + at + 1;
+
+	var end = limit;
+	while (end > start and (text[end] & 0xC0) == 0x80) end -= 1;
+
+	return if (end > start) end else limit;
+}
+
+fn pageText(page: []const u8) []const u8 {
+	var end = page.len;
+	if (end > 0 and page[end - 1] == '\n') end -= 1;
+	if (end > 0 and page[end - 1] == '\r') end -= 1;
+
+	return page[0..end];
+}
+
+fn wordCount(text: []const u8) i64 {
+	var count: i64 = 0;
+	var words = std.mem.tokenizeAny(u8, text, " \t\r\n");
+
+	while (words.next()) |_| count += 1;
+
+	return count;
+}
+
 fn sourceOf(sources: []const u8, id: []const u8) []const u8 {
 	var lines = std.mem.splitScalar(u8, sources, '\n');
 
@@ -1418,6 +1491,31 @@ fn sourceOf(sources: []const u8, id: []const u8) []const u8 {
 	}
 
 	return "";
+}
+
+test "pages end on lines, then spaces, and never inside a character" {
+	var lines: [page_bytes + 100]u8 = undefined;
+	@memset(&lines, 'a');
+	lines[100] = '\n';
+	try std.testing.expectEqual(@as(usize, 101), pageEnd(&lines, 0));
+	try std.testing.expectEqualStrings("aa", pageText("aa\r\n"));
+
+	@memset(&lines, 'a');
+	lines[page_bytes - 10] = ' ';
+	try std.testing.expectEqual(@as(usize, page_bytes - 9), pageEnd(&lines, 0));
+
+	var wide: [page_bytes + 10]u8 = undefined;
+	var index: usize = 0;
+	while (index + 3 <= wide.len) : (index += 3) @memcpy(wide[index .. index + 3], "日");
+	const end = pageEnd(wide[0..index], 0);
+	try std.testing.expect(end > 0 and end % 3 == 0);
+
+	try std.testing.expectEqual(@as(usize, 5), pageEnd("short", 0));
+}
+
+test "words are counted across any whitespace" {
+	try std.testing.expectEqual(@as(i64, 0), wordCount(" \n\t"));
+	try std.testing.expectEqual(@as(i64, 4), wordCount("one  two\nthree\tfour\n"));
 }
 
 test "clip sources and times are read by id" {

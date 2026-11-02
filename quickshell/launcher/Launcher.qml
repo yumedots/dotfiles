@@ -55,8 +55,31 @@ PanelWindow {
 	readonly property bool isClipboard: root.mode === "clipboard"
 	readonly property string empty: root.windows ? Yudae.windowsEmpty : (root.live.empty || "")
 	readonly property var results: root.windows ? (Yudae.windows || []) : (root.shown ? (root.live.results || []) : root.heldResults)
-	readonly property string clipPreviewText: root.state.clip ? String(root.state.clip.text || "") : ""
+	readonly property var clipPages: root.state.clip && root.state.clip.pages ? root.state.clip.pages : []
+	readonly property bool clipMore: root.state.clip ? root.state.clip.more === true : false
+	readonly property string clipPagesId: root.state.clip ? String(root.state.clip.id || "") : ""
+	property string shownId: ""
+	property int moreAsked: -1
+
+	ListModel {
+		id: pageModel
+	}
+
+	function syncPages() {
+		const pages = root.clipPages;
+
+		if (root.shownId !== root.clipPagesId || pageModel.count > pages.length) {
+			pageModel.clear();
+			root.shownId = root.clipPagesId;
+		}
+
+		for (let i = pageModel.count; i < pages.length; i++)
+			pageModel.append({ body: pages[i].text, tail: pages[i].tail });
+	}
+
+	onClipPagesChanged: root.syncPages()
 	readonly property real clipTime: root.state.clip && root.state.clip.time ? root.state.clip.time : 0
+	readonly property int clipWords: root.state.clip && root.state.clip.words ? root.state.clip.words : 0
 	readonly property string clipPreviewPath: root.state.clip && root.state.clip.path ? "file://" + root.state.clip.path : ""
 
 	readonly property int selectedIndex: root.results.length === 0 ? -1 : Calc.clamp(list.currentIndex < 0 ? 0 : list.currentIndex, 0, root.results.length - 1)
@@ -345,8 +368,10 @@ PanelWindow {
 		}
 
 		if (root.isClipboard && event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
-			if (previewText.selectedText !== "") {
-				Yudae.cmd("launcher", { copyText: previewText.selectedText });
+			const picked = root.pickedText();
+
+			if (picked !== "") {
+				Yudae.cmd("launcher", { copyText: picked });
 				root.grab();
 				event.accepted = true;
 				return;
@@ -469,6 +494,92 @@ PanelWindow {
 		root.grab();
 	}
 
+	property var pickFrom: null
+	property var pickTo: null
+	property point pickAt: Qt.point(0, 0)
+
+	function pickPoint(x, y) {
+		const count = pageList.count;
+
+		if (count === 0)
+			return null;
+
+		const at = pageColumn.mapFromItem(previewCatcher, x, y);
+
+		let index = 0;
+
+		for (let i = 0; i < count; i++) {
+			if (pageList.itemAt(i).y <= at.y)
+				index = i;
+		}
+
+		const page = pageList.itemAt(index);
+		const pos = at.y >= page.y + page.height ? page.length : page.positionAt(Calc.clamp(at.x - page.x, 0, page.width), Math.max(0, at.y - page.y));
+
+		return { page: index, pos: pos };
+	}
+
+	function pickApply() {
+		const a = root.pickFrom;
+		const b = root.pickTo;
+
+		if (!a || !b)
+			return;
+
+		const forward = a.page < b.page || (a.page === b.page && a.pos <= b.pos);
+		const lo = forward ? a : b;
+		const hi = forward ? b : a;
+
+		for (let i = 0; i < pageList.count; i++) {
+			const page = pageList.itemAt(i);
+
+			if (i < lo.page || i > hi.page)
+				page.deselect();
+			else
+				page.select(i === lo.page ? lo.pos : 0, i === hi.page ? hi.pos : page.length);
+		}
+	}
+
+	function pickClear() {
+		for (let i = 0; i < pageList.count; i++)
+			pageList.itemAt(i).deselect();
+
+		root.pickFrom = null;
+		root.pickTo = null;
+	}
+
+	function pickedText() {
+		let out = "";
+		let last = -1;
+
+		for (let i = 0; i < pageList.count; i++) {
+			if (pageList.itemAt(i).selectedText !== "")
+				last = i;
+		}
+
+		for (let i = 0; i < pageList.count; i++) {
+			const page = pageList.itemAt(i);
+
+			if (page.selectedText === "")
+				continue;
+
+			out += page.selectedText + (i < last ? page.tail : "");
+		}
+
+		return out;
+	}
+
+	function loadMore() {
+		if (!root.clipMore || root.moreAsked === root.clipPages.length)
+			return;
+
+		if (previewFlick.contentY + previewFlick.height * 3 < previewFlick.contentHeight)
+			return;
+
+		root.moreAsked = root.clipPages.length;
+		Yudae.cmd("launcher", { clipMore: true });
+	}
+
 	function scrollPreview(delta) {
 		if (typeof previewFlick !== "undefined" && previewFlick) {
 			previewFlick.contentY = Calc.clamp(
@@ -541,7 +652,10 @@ PanelWindow {
 		root.push();
 	}
 
-	onWantedClipChanged: root.requestClip()
+	onWantedClipChanged: {
+		root.moreAsked = -1;
+		root.requestClip();
+	}
 
 	onResultsChanged: root.followResults()
 
@@ -704,37 +818,84 @@ PanelWindow {
 						visible: root.clipPreviewPath === ""
 						clip: true
 						contentWidth: width
-						contentHeight: previewText.contentHeight
+						contentHeight: pageColumn.height
 						boundsBehavior: Flickable.StopAtBounds
 						interactive: false
 
-						TextEdit {
-							id: previewText
+						onContentYChanged: root.loadMore()
+						onContentHeightChanged: root.loadMore()
+
+						Column {
+							id: pageColumn
 
 							width: previewFlick.width
-							readOnly: true
-							selectByMouse: true
-							selectByKeyboard: false
-							activeFocusOnPress: false
-							persistentSelection: true
-							cursorVisible: false
-							wrapMode: TextEdit.Wrap
-							font.family: Config.fontFamily
-							font.pixelSize: Config.fontSize
-							color: root.clipPreviewText === "" ? Config.muted : Config.foreground
-							text: root.clipPreviewText
-							textFormat: TextEdit.PlainText
-							selectionColor: Config.launcherHighlight
-							selectedTextColor: Config.launcherHighlightText
+
+							Repeater {
+								id: pageList
+
+								model: pageModel
+
+								TextEdit {
+									required property string body
+									required property string tail
+
+									width: pageColumn.width
+									readOnly: true
+									selectByMouse: false
+									selectByKeyboard: false
+									activeFocusOnPress: false
+									persistentSelection: true
+									cursorVisible: false
+									wrapMode: TextEdit.Wrap
+									font.family: Config.fontFamily
+									font.pixelSize: Config.fontSize
+									color: Config.foreground
+									text: body
+									textFormat: TextEdit.PlainText
+									selectionColor: Config.launcherHighlight
+									selectedTextColor: Config.launcherHighlightText
+								}
+							}
 						}
 
-						MouseArea {
-							anchors.fill: parent
-							acceptedButtons: Qt.NoButton
+					}
 
-							onWheel: function (wheel) {
-								root.scrollPreview(wheel.angleDelta.y > 0 ? -root.rowHeight : root.rowHeight);
-								wheel.accepted = true;
+					MouseArea {
+						id: previewCatcher
+
+						anchors.fill: previewFlick
+						visible: previewFlick.visible
+						acceptedButtons: Qt.LeftButton
+
+						function extend(x, y) {
+							root.pickTo = root.pickPoint(x, y);
+							root.pickApply();
+						}
+
+						onPressed: function (mouse) {
+							root.pickClear();
+							root.pickFrom = root.pickPoint(mouse.x, mouse.y);
+							root.pickAt = Qt.point(mouse.x, mouse.y);
+						}
+
+						onPositionChanged: function (mouse) {
+							root.pickAt = Qt.point(mouse.x, mouse.y);
+							previewCatcher.extend(mouse.x, mouse.y);
+						}
+
+						onWheel: function (wheel) {
+							root.scrollPreview(wheel.angleDelta.y > 0 ? -root.rowHeight : root.rowHeight);
+							wheel.accepted = true;
+						}
+
+						Timer {
+							interval: 30
+							repeat: true
+							running: previewCatcher.pressed && (root.pickAt.y < 0 || root.pickAt.y > previewCatcher.height)
+
+							onTriggered: {
+								root.scrollPreview(root.pickAt.y < 0 ? -root.rowHeight : root.rowHeight);
+								previewCatcher.extend(root.pickAt.x, root.pickAt.y);
 							}
 						}
 					}
@@ -754,20 +915,30 @@ PanelWindow {
 						source: root.clipPreviewPath === "" ? "" : root.clipPreviewPath
 					}
 
-					Text {
+					Column {
 						id: copiedCaption
 
 						anchors.left: parent.left
 						anchors.right: parent.right
 						anchors.bottom: parent.bottom
 						anchors.bottomMargin: Config.launcherTextGap
-						horizontalAlignment: Text.AlignHCenter
-						elide: Text.ElideRight
-						height: text === "" ? 0 : implicitHeight
-						font.family: Config.fontFamily
-						font.pixelSize: Config.fontSize
-						color: Config.muted
-						text: root.copiedLabel(root.clipTime)
+
+						Repeater {
+							model: [root.clipWords > 0 ? root.clipWords + (root.clipWords === 1 ? " word" : " words") : "", root.copiedLabel(root.clipTime)]
+
+							Text {
+								required property string modelData
+
+								width: copiedCaption.width
+								height: modelData === "" ? 0 : implicitHeight
+								horizontalAlignment: Text.AlignHCenter
+								elide: Text.ElideRight
+								font.family: Config.fontFamily
+								font.pixelSize: Config.fontSize
+								color: Config.muted
+								text: modelData
+							}
+						}
 					}
 				}
 				// left pane: the results list
