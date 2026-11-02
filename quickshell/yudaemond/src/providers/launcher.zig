@@ -3,6 +3,7 @@ const hubmod = @import("../hub.zig");
 const appsmod = @import("apps.zig");
 const sysmod = @import("system.zig");
 const windowsmod = @import("windows.zig");
+const clipwatch = @import("clipwatch.zig");
 const calc = @import("../primitives/calc.zig");
 const json = @import("../primitives/json.zig");
 const exec = @import("../primitives/exec.zig");
@@ -78,6 +79,7 @@ const Clip = struct {
 	kind: []u8,
 	format: []u8,
 	app: []u8,
+	time: i64 = 0,
 };
 
 const Row = struct {
@@ -120,6 +122,7 @@ const RowOut = struct {
 const PreviewOut = struct {
 	text: []const u8,
 	path: []const u8,
+	time: i64,
 };
 
 const IntentOut = struct {
@@ -157,6 +160,7 @@ pub const Launcher = struct {
 	apps: ?*appsmod.Apps = null,
 	system: ?*sysmod.System = null,
 	windows: ?*windowsmod.Windows = null,
+	watch: ?*clipwatch.Watch = null,
 	query: []u8 = &.{},
 	forced: []u8 = &.{},
 	group: []u8 = &.{},
@@ -198,6 +202,14 @@ pub const Launcher = struct {
 
 	pub fn start(self: *Launcher) !void {
 		self.load();
+
+		self.watch = try clipwatch.Watch.create(self.allocator, self.io, self, clipsChanged);
+		try self.watch.?.start();
+	}
+
+	fn clipsChanged(ctx: *anyopaque) void {
+		const self: *Launcher = @ptrCast(@alignCast(ctx));
+		self.refreshClips();
 	}
 
 	fn stateDir(self: *Launcher, allocator: Allocator) ![]u8 {
@@ -360,6 +372,15 @@ pub const Launcher = struct {
 		} else "";
 		defer if (sources.len > 0) self.allocator.free(sources);
 
+		const times_path = self.statePath(self.allocator, "clip-times.txt") catch "";
+		defer if (times_path.len > 0) self.allocator.free(times_path);
+
+		const times = if (times_path.len > 0) blk: {
+			const body = proc.readFile(self.io, self.allocator, times_path) catch break :blk "";
+			break :blk body;
+		} else "";
+		defer if (times.len > 0) self.allocator.free(times);
+
 		var next: std.ArrayListUnmanaged(Clip) = .empty;
 		var lines = std.mem.splitScalar(u8, result.out, '\n');
 
@@ -380,6 +401,7 @@ pub const Launcher = struct {
 				.kind = self.allocator.dupe(u8, if (format.len > 0) "image" else "text") catch continue,
 				.format = self.allocator.dupe(u8, format) catch continue,
 				.app = self.allocator.dupe(u8, sourceOf(sources, id)) catch continue,
+				.time = std.fmt.parseInt(i64, sourceOf(times, id), 10) catch 0,
 			}) catch continue;
 		}
 
@@ -635,7 +657,9 @@ pub const Launcher = struct {
 	pub fn copyClip(self: *Launcher, id: []const u8) void {
 		if (id.len == 0) return;
 
-		const script = std.fmt.allocPrint(self.allocator, "touch '{s}/qs-clip-self'; cliphist decode {s} | wl-copy", .{ proc.runtimeDir(self.io, self.allocator), id }) catch return;
+		if (self.watch) |watch| watch.markSelf();
+
+		const script = std.fmt.allocPrint(self.allocator, "cliphist decode {s} | wl-copy", .{id}) catch return;
 		defer self.allocator.free(script);
 
 		if (exec.run(self.io, self.allocator, &.{ "sh", "-c", script })) |result| {
@@ -819,12 +843,7 @@ pub const Launcher = struct {
 	fn copyThread(self: *Launcher, text: []u8) void {
 		defer self.allocator.free(text);
 
-		const marker = std.fmt.allocPrint(self.allocator, "{s}/qs-clip-self", .{proc.runtimeDir(self.io, self.allocator)}) catch return;
-		defer self.allocator.free(marker);
-
-		if (std.Io.Dir.cwd().createFile(self.io, marker, .{ .truncate = true })) |file| {
-			file.close(self.io);
-		} else |_| {}
+		if (self.watch) |watch| watch.markSelf();
 
 		var child = std.process.spawn(self.io, .{
 			.argv = &.{ "wl-copy" },
@@ -1129,6 +1148,14 @@ pub const Launcher = struct {
 		return -1;
 	}
 
+	fn clipTime(self: *Launcher) i64 {
+		for (self.clips.items) |entry| {
+			if (std.mem.eql(u8, entry.id, self.clip_id)) return entry.time;
+		}
+
+		return 0;
+	}
+
 	fn render(self: *Launcher, writer: *Writer) !void {
 		self.mutex.lockUncancelable(self.io);
 		defer self.mutex.unlock(self.io);
@@ -1171,7 +1198,7 @@ pub const Launcher = struct {
 			.intent = .{ .query = self.query, .forced = self.forced, .group = self.group },
 			.pins = pins.items,
 			.results = results.items,
-			.clip = .{ .text = self.clip_text, .path = self.clip_path },
+			.clip = .{ .text = self.clip_text, .path = self.clip_path, .time = self.clipTime() },
 		}, .{})});
 	}
 };
@@ -1391,6 +1418,14 @@ fn sourceOf(sources: []const u8, id: []const u8) []const u8 {
 	}
 
 	return "";
+}
+
+test "clip sources and times are read by id" {
+	const body = "12 Alacritty\n13 1730000000\n";
+
+	try std.testing.expectEqualStrings("Alacritty", sourceOf(body, "12"));
+	try std.testing.expectEqualStrings("1730000000", sourceOf(body, "13"));
+	try std.testing.expectEqualStrings("", sourceOf(body, "14"));
 }
 
 test "pins toggle and keep their order" {
