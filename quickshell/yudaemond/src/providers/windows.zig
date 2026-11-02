@@ -241,6 +241,7 @@ pub const Windows = struct {
 		const desktop = self.desktopEntry(allocator, app_id) orelse return;
 
 		var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+		argv.appendSlice(allocator, &.{ "systemd-run", "--user", "--scope", "--collect", "--quiet", "--" }) catch return;
 
 		if (desktop.terminal) {
 			const terminal = self.terminalName(allocator) orelse return;
