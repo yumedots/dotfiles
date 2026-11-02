@@ -26,7 +26,8 @@ Item {
 	property bool shift: false
 	readonly property bool showApps: (root.mix.streams || []).length > 0 && !root.compact
 	readonly property bool showSource: root.hasInput && !root.compact
-	readonly property var sinks: root.compact ? (root.mix.sinks || []).slice(0, 1) : (root.mix.sinks || [])
+	readonly property var globalNode: root.nodeOf(root.mix.sink)
+	readonly property var sinks: root.compact ? [] : (root.mix.sinks || [])
 	readonly property var deviceRows: {
 		const list = root.sinks.map((sink) => root.nodeOf(sink.id)).filter((node) => node !== null);
 
@@ -249,17 +250,19 @@ Item {
 		id: row
 
 		property var node
+		property bool global: false
 
 		readonly property bool stream: !!row.node && row.node.isStream === true
 		readonly property bool muted: !!row.node && row.node.muted === true
 		readonly property bool current: !row.stream && !!row.node && row.node.isDefault === true
 		readonly property bool selected: !!row.node && !!root.selectedNode && row.node.id === root.selectedNode.id
-		readonly property bool faderRow: row.stream || root.compact
+		readonly property bool faderRow: row.stream || row.global
 		readonly property real volume: root.volumeOf(row.node)
 		readonly property string percentText: Math.round(row.volume * 100) + "%"
 		readonly property string label: row.node ? (row.node.description || row.node.name || "") : ""
 		readonly property string iconSource: row.stream ? root.iconFor(row.node) : ""
 		readonly property string glyph: row.stream ? Config.iconApp
+			: row.global ? Config.iconVolumeHigh
 			: row.node && row.node.isSink ? Config.iconOutput
 			: Config.iconInput
 		readonly property real level: Calc.clamp(row.volume / Config.mixerMaxVolume, 0, 1)
@@ -377,6 +380,7 @@ Item {
 				anchors.right: parent.right
 				height: Config.mixerFaderThickness
 				model: root.steps
+				follow: false
 				hitPad: row.hoverPad
 				selected: row.step
 				level: root.shift ? row.level : -1
@@ -404,6 +408,13 @@ Item {
 		anchors.margins: Config.mixerPadding
 		width: root.contentWidth
 		spacing: Config.mixerChannelGap
+
+		MixRow {
+			width: parent.width
+			node: root.globalNode
+			global: true
+			visible: root.globalNode !== null
+		}
 
 		Repeater {
 			model: root.appRows

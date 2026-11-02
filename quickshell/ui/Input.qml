@@ -118,9 +118,7 @@ QtObject {
 			up: () => target.nudgeVolume(step),
 			down: () => target.nudgeVolume(-step),
 			m: () => target.toggleMute(target.selectedNode),
-			accept: () => target.selectedNode && target.selectedNode.isDefault === true
-				? target.openPicker(target.selectedNode.isSink ? "output" : "input")
-				: null
+			accept: () => target.activateNode(target.selectedNode)
 		}, root.mixerArrows[event.key]);
 	}
 
@@ -163,7 +161,7 @@ QtObject {
 			escape: () => target.closePicker(),
 			up: () => target.pickerIndex = Math.max(0, target.pickerIndex - 1),
 			down: () => target.pickerIndex = Calc.clamp(target.pickerIndex + 1, 0, target.devices.length - 1),
-			accept: () => target.makeDefault(target.picker, target.devices[target.pickerIndex])
+			accept: () => target.makeDefault(target.devices[target.pickerIndex])
 		});
 	}
 
