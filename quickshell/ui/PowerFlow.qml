@@ -20,6 +20,9 @@ Canvas {
 	readonly property real dot: root.pitch * root.dotScale
 	readonly property int cols: Math.max(1, Math.floor(root.width / root.pitch))
 	property int span: 7
+	property real amplitude: 0.2
+	property real frequency: 0.32
+	property bool sparse: false
 
 	onPhaseChanged: root.requestPaint()
 	onFlowChanged: root.requestPaint()
@@ -45,18 +48,35 @@ Canvas {
 		ctx.reset();
 
 		const mid = (root.rows - 1) / 2;
-		const amp = root.rows * 0.2;
+		const amp = root.rows * root.amplitude;
 		const drift = root.phase * 0.08 * root.flow;
 		const tick = Math.floor(root.phase / 2);
 		const run = root.cols + root.span * 2;
 		const ahead = root.phase % run - root.span;
 		const head = root.flow < 0 ? root.cols - 1 - ahead : ahead;
 		const thick = (0.4 + 1.6 * Math.max(0, Math.min(1, root.fill))) * root.rows / 8;
+		let waveMean = 0;
+
+		for (let x = 0; x < root.cols; x++)
+			waveMean += Math.sin(x * root.frequency + drift);
+
+		waveMean /= Math.max(1, root.cols);
 
 		for (let x = 0; x < root.cols; x++) {
-			const center = mid + amp * Math.sin(x * 0.32 + drift);
-			const half = thick * (0.7 + 0.3 * Math.sin(x * 0.21 + 1.7));
+			const center = mid + amp * (Math.sin(x * root.frequency + drift) - waveMean);
+			const half = thick * (0.7 + 0.3 * Math.sin(x * root.frequency * 0.66 + 1.7));
 			const near = root.flow === 0 ? 1 : Math.abs(x - head) / root.span;
+
+			if (root.sparse) {
+				const row = Math.round(center);
+				const hot = near < 1 && root.noise(x, row, tick + 7) > near;
+
+				ctx.fillStyle = hot ? root.hotInk : root.ink;
+				ctx.beginPath();
+				ctx.arc((x + 0.5) * root.pitch, (row + 0.5) * root.pitch, root.dot / 2, 0, Math.PI * 2);
+				ctx.fill();
+				continue;
+			}
 
 			for (let r = 0; r < root.rows; r++) {
 				const off = Math.abs(r - center);
