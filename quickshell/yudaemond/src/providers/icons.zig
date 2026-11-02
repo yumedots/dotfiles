@@ -67,6 +67,15 @@ pub const Icons = struct {
 		}
 	}
 
+	fn holds(self: *Icons, key: []const u8, value: []const u8) bool {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		const found = self.asked.get(key) orelse return false;
+
+		return std.mem.eql(u8, found, value);
+	}
+
 	fn known(self: *Icons, key: []const u8) bool {
 		self.mutex.lockUncancelable(self.io);
 		const found = self.asked.contains(key);
@@ -109,7 +118,7 @@ pub const Icons = struct {
 	fn add(self: *Icons, pending: *std.ArrayListUnmanaged(Pending), name: []const u8, value: []const u8) void {
 		const cleaned = cleanName(name);
 		if (cleaned.len == 0) return;
-		if (self.known(cleaned)) return;
+		if (self.holds(cleaned, value)) return;
 
 		const key = self.allocator.dupe(u8, cleaned) catch return;
 		const copy = self.allocator.dupe(u8, value) catch {
