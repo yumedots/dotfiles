@@ -33,6 +33,7 @@ const glyph_wallpaper = "\u{f0e09}";
 const glyph_process = "\u{f0874}";
 const glyph_power = "\u{f011}";
 const glyph_prompt = "\u{ea6d}";
+const glyph_emoji = "\u{f118}";
 
 const Mode = struct {
 	mode: []const u8,
@@ -46,6 +47,7 @@ const modes = [_]Mode{
 	.{ .mode = "clipboard", .name = "Clipboard", .mark = "", .glyph = glyph_clip, .keywords = &.{ "copy", "paste" } },
 	.{ .mode = "wallpaper", .name = "Wallpaper", .mark = "~", .glyph = glyph_wallpaper, .keywords = &.{ "wallpaper", "background", "desktop" } },
 	.{ .mode = "procs", .name = "Processes", .mark = "%", .glyph = glyph_process, .keywords = &.{ "top", "atop", "cpu", "processes", "monitor", "kill" } },
+	.{ .mode = "emoji", .name = "Emoji & Kaomoji", .mark = ":", .glyph = glyph_emoji, .keywords = &.{ "emoji", "kaomoji", "emote", "smiley", "face", "copy" } },
 };
 
 const Group = struct {
@@ -83,6 +85,13 @@ const Clip = struct {
 	format: []u8,
 	app: []u8,
 	time: i64 = 0,
+};
+
+const Emoji = struct {
+	text: []const u8,
+	name: []const u8,
+	keywords: []const []const u8,
+	kaomoji: bool = false,
 };
 
 const Row = struct {
@@ -181,6 +190,8 @@ pub const Launcher = struct {
 	clip_path: []u8 = &.{},
 	clip_id: []u8 = &.{},
 	clip_words: i64 = 0,
+	emoji: std.ArrayListUnmanaged(Emoji) = .empty,
+	emoji_loaded: bool = false,
 	pins: std.ArrayListUnmanaged([]u8) = .empty,
 	saved: std.ArrayListUnmanaged(Saved) = .empty,
 	clips: std.ArrayListUnmanaged(Clip) = .empty,
@@ -759,6 +770,11 @@ pub const Launcher = struct {
 			return;
 		}
 
+		if (std.mem.startsWith(u8, id, "emoji:")) {
+			self.copyText(id["emoji:".len..]);
+			return;
+		}
+
 		if (std.mem.eql(u8, id, "calc")) self.copyCalc();
 	}
 
@@ -936,6 +952,11 @@ pub const Launcher = struct {
 			return rows.items;
 		}
 
+		if (std.mem.eql(u8, mode, "emoji")) {
+			try self.buildEmoji(arena, search, &rows);
+			return rows.items;
+		}
+
 		if (std.mem.eql(u8, mode, "wallpaper")) return rows.items;
 
 		if (std.mem.startsWith(u8, mode, "group:")) {
@@ -945,7 +966,7 @@ pub const Launcher = struct {
 				self.appsView(arena, search, &rows) catch {};
 			}
 
-			return self.rank(arena, rows.items, search, false);
+			return self.rank(arena, rows.items, search, false, true);
 		}
 
 		if (mode.len > 0) return rows.items;
@@ -954,7 +975,7 @@ pub const Launcher = struct {
 		self.savedRows(arena, &rows) catch {};
 		self.appsView(arena, search, &rows) catch {};
 
-		return self.rank(arena, rows.items, search, true);
+		return self.rank(arena, rows.items, search, true, true);
 	}
 
 	fn appendGroup(arena: Allocator, entry: Group, rows: *std.ArrayListUnmanaged(Row)) !void {
@@ -1095,7 +1116,50 @@ pub const Launcher = struct {
 		}
 	}
 
-	fn rank(self: *Launcher, arena: Allocator, rows: []Row, search: []const u8, home: bool) []Row {
+	fn loadEmoji(self: *Launcher) void {
+		if (self.emoji_loaded) return;
+
+		self.emoji_loaded = true;
+
+		appendEmojiData(self.allocator, &self.emoji, @embedFile("emoji.tsv"), false) catch {};
+		appendEmojiData(self.allocator, &self.emoji, @embedFile("kaomoji.tsv"), true) catch {};
+	}
+
+	fn buildEmoji(self: *Launcher, arena: Allocator, search: []const u8, rows: *std.ArrayListUnmanaged(Row)) !void {
+		self.loadEmoji();
+
+		if (search.len == 0) {
+			const half = max_results / 2;
+			var emojis: usize = 0;
+			var kaomojis: usize = 0;
+
+			for (self.emoji.items) |entry| {
+				if (entry.kaomoji) {
+					if (kaomojis >= half) continue;
+					kaomojis += 1;
+				} else {
+					if (emojis >= half) continue;
+					emojis += 1;
+				}
+
+				try rows.append(arena, try emojiRow(arena, entry));
+			}
+
+			return;
+		}
+
+		var all: std.ArrayListUnmanaged(Row) = .empty;
+
+		for (self.emoji.items) |entry| {
+			try all.append(arena, try emojiRow(arena, entry));
+		}
+
+		for (self.rank(arena, all.items, search, false, false)) |row| {
+			try rows.append(arena, row);
+		}
+	}
+
+	fn rank(self: *Launcher, arena: Allocator, rows: []Row, search: []const u8, home: bool, allow_calc: bool) []Row {
 		var kept: std.ArrayListUnmanaged(Row) = .empty;
 
 		for (rows) |row| {
@@ -1145,7 +1209,7 @@ pub const Launcher = struct {
 		}
 
 		var out = kept.items;
-		const wants_calc = search.len > 0 and
+		const wants_calc = allow_calc and search.len > 0 and
 			!std.mem.startsWith(u8, search, "%") and
 			!std.mem.startsWith(u8, search, "~");
 
@@ -1276,6 +1340,41 @@ fn wakeArgv(allocator: Allocator, path: []const u8) ![]const []const u8 {
 	return argv;
 }
 
+fn appendEmojiData(allocator: Allocator, list: *std.ArrayListUnmanaged(Emoji), body: []const u8, kaomoji: bool) !void {
+	var lines = std.mem.splitScalar(u8, body, '\n');
+
+	while (lines.next()) |raw| {
+		const line = std.mem.trimEnd(u8, raw, "\r");
+		if (line.len == 0) continue;
+
+		var fields = std.mem.splitScalar(u8, line, '\t');
+		const text = fields.next() orelse continue;
+		const name = fields.next() orelse continue;
+		const words = fields.next() orelse "";
+		if (text.len == 0 or name.len == 0) continue;
+
+		var keywords: std.ArrayListUnmanaged([]const u8) = .empty;
+		var parts = std.mem.splitScalar(u8, words, ' ');
+
+		while (parts.next()) |word| {
+			if (word.len == 0) continue;
+			try keywords.append(allocator, word);
+		}
+
+		try list.append(allocator, .{ .text = text, .name = name, .keywords = keywords.items, .kaomoji = kaomoji });
+	}
+}
+
+fn emojiRow(arena: Allocator, entry: Emoji) !Row {
+	return .{
+		.id = try std.fmt.allocPrint(arena, "emoji:{s}", .{entry.text}),
+		.kind = if (entry.kaomoji) "kaomoji" else "emoji",
+		.name = if (entry.kaomoji) try std.fmt.allocPrint(arena, "{s}  {s}", .{ entry.text, entry.name }) else entry.name,
+		.glyph = if (entry.kaomoji) glyph_emoji else entry.text,
+		.keywords = entry.keywords,
+	};
+}
+
 fn promptOf(mode: ?Mode) []const u8 {
 	const entry = mode orelse return glyph_prompt;
 	return entry.glyph;
@@ -1309,6 +1408,7 @@ fn rememberable(id: []const u8) bool {
 	return std.mem.startsWith(u8, id, "app:") or
 		std.mem.startsWith(u8, id, "saved:") or
 		std.mem.startsWith(u8, id, "cmd:") or
+		std.mem.startsWith(u8, id, "emoji:") or
 		std.mem.startsWith(u8, id, "wall:");
 }
 
@@ -1547,6 +1647,35 @@ test "the query prefix picks the mode and strips its mark" {
 	const plain = detectPrefix("firefox");
 	try std.testing.expectEqualStrings("", plain.mode);
 	try std.testing.expectEqualStrings("firefox", plain.text);
+
+	const emoji = detectPrefix(":smile");
+	try std.testing.expectEqualStrings("emoji", emoji.mode);
+	try std.testing.expectEqualStrings("smile", emoji.text);
+}
+
+test "emoji data keeps text, name and keywords apart" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	var list: std.ArrayListUnmanaged(Emoji) = .empty;
+
+	try appendEmojiData(allocator, &list, "🙂\tSlightly Smiling Face\tface smile happy\r\n", false);
+	try appendEmojiData(allocator, &list, "(°ロ°)\tShock\tomg surprise\n", true);
+
+	try std.testing.expectEqual(@as(usize, 2), list.items.len);
+	try std.testing.expectEqualStrings("🙂", list.items[0].text);
+	try std.testing.expectEqualStrings("Slightly Smiling Face", list.items[0].name);
+	try std.testing.expectEqualStrings("happy", list.items[0].keywords[2]);
+	try std.testing.expect(!list.items[0].kaomoji);
+
+	const emoji = try emojiRow(allocator, list.items[0]);
+	try std.testing.expectEqualStrings("emoji:🙂", emoji.id);
+	try std.testing.expectEqualStrings("emoji", emoji.kind);
+
+	const kaomoji = try emojiRow(allocator, list.items[1]);
+	try std.testing.expectEqualStrings("kaomoji", kaomoji.kind);
+	try std.testing.expect(std.mem.startsWith(u8, kaomoji.name, "(°ロ°)"));
 }
 
 test "clipboard previews know images from text" {
@@ -1615,6 +1744,8 @@ test "every mode id renders rows of its own kind" {
 				std.mem.eql(u8, row.kind, "clip")
 			else if (std.mem.eql(u8, mode.mode, "procs"))
 				std.mem.eql(u8, row.kind, "proc")
+			else if (std.mem.eql(u8, mode.mode, "emoji"))
+				std.mem.eql(u8, row.kind, "emoji") or std.mem.eql(u8, row.kind, "kaomoji")
 			else
 				false;
 
@@ -1623,6 +1754,7 @@ test "every mode id renders rows of its own kind" {
 
 		if (std.mem.eql(u8, mode.mode, "clipboard")) try std.testing.expectEqual(@as(usize, 1), rows.len);
 		if (std.mem.eql(u8, mode.mode, "procs")) try std.testing.expectEqual(@as(usize, 1), rows.len);
+		if (std.mem.eql(u8, mode.mode, "emoji")) try std.testing.expectEqual(@as(usize, max_results), rows.len);
 		if (std.mem.eql(u8, mode.mode, "wallpaper")) try std.testing.expectEqual(@as(usize, 0), rows.len);
 	}
 }
@@ -1711,7 +1843,7 @@ test "a pinned row sorts ahead of a better match and usage breaks the tie" {
 		.{ .id = "app:used", .kind = "app", .name = "Puma", .glyph = "", .keywords = &.{"puma"} },
 	};
 
-	const ranked = self.rank(allocator, &rows, "p", true);
+	const ranked = self.rank(allocator, &rows, "p", true, true);
 
 	try std.testing.expectEqualStrings("app:pin", ranked[0].id);
 	try std.testing.expectEqualStrings("app:used", ranked[1].id);
@@ -1720,6 +1852,7 @@ test "a pinned row sorts ahead of a better match and usage breaks the tie" {
 test "only launcher entries are remembered or pinned" {
 	try std.testing.expect(rememberable("app:firefox"));
 	try std.testing.expect(rememberable("saved:term"));
+	try std.testing.expect(rememberable("emoji:🙂"));
 	try std.testing.expect(!rememberable("proc:12"));
 	try std.testing.expect(!rememberable("clip:9"));
 	try std.testing.expect(!rememberable("mode:clipboard"));
