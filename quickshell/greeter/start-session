@@ -1,0 +1,4 @@
+#!/bin/sh
+log="${XDG_STATE_HOME:-$HOME/.local/state}/hypr-session.log"
+mkdir -p "$(dirname "$log")"
+exec /usr/bin/start-hyprland >"$log" 2>&1
