@@ -15,7 +15,7 @@ BarStat {
 	value: String(Notifications.count)
 	pct: Notifications.empty ? 0 : 100
 	barColor: Notifications.empty ? Config.dim : Config.notifyBase
-	textColor: Notifications.empty ? Config.dim : Config.foreground
+	textColor: Config.foreground
 	sweep: true
 	sweepWidth: Config.notifySweepWidth
 

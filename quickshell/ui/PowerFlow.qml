@@ -8,7 +8,7 @@ Canvas {
 	property real watts: 0
 	property real fill: 1
 	property int rows: 8
-	property color ink: Config.muted
+	property color ink: Config.dim
 	property color edgeInk: Config.dim
 	property color hotInk: Config.powerBase
 

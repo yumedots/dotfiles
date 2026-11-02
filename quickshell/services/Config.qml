@@ -14,7 +14,7 @@ QtObject {
 	readonly property var foreground: settings.foreground !== undefined ? settings.foreground : "#ffffff"
 	readonly property var dim: settings.dim !== undefined ? settings.dim : "#3f3f3f"
 	readonly property var red: settings.red !== undefined ? settings.red : "#e05252"
-	readonly property var muted: settings.muted !== undefined ? settings.muted : "#5c5c5c"
+	readonly property var muted: settings.muted !== undefined ? settings.muted : "#ffffff"
 	readonly property var mono: settings.mono !== undefined ? settings.mono : true
 
 	// things that are not a widget: font, spacing, workspace morph
@@ -114,7 +114,7 @@ QtObject {
 	readonly property var cpuBase: settings.cpuBase !== undefined ? settings.cpuBase : "#a78bfa"
 	readonly property var cpuBaseMono: settings.cpuBaseMono !== undefined ? settings.cpuBaseMono : "#ffffff"
 	readonly property var cpuPeak: settings.cpuPeak !== undefined ? settings.cpuPeak : "#e05252"
-	readonly property var cpuPeakMono: settings.cpuPeakMono !== undefined ? settings.cpuPeakMono : "#9a9a9a"
+	readonly property var cpuPeakMono: settings.cpuPeakMono !== undefined ? settings.cpuPeakMono : "#ffffff"
 	readonly property var cpuIdle: settings.cpuIdle !== undefined ? settings.cpuIdle : "#2f2f2f"
 	readonly property var cpuTopCount: settings.cpuTopCount !== undefined ? settings.cpuTopCount : 5
 	readonly property var cpuTooltipWidth: settings.cpuTooltipWidth !== undefined ? settings.cpuTooltipWidth : 240
@@ -136,15 +136,15 @@ QtObject {
 	readonly property var memoryBase: settings.memoryBase !== undefined ? settings.memoryBase : "#7bd88f"
 	readonly property var memoryBaseMono: settings.memoryBaseMono !== undefined ? settings.memoryBaseMono : "#ffffff"
 	readonly property var memoryCached: settings.memoryCached !== undefined ? settings.memoryCached : "#44774f"
-	readonly property var memoryCachedMono: settings.memoryCachedMono !== undefined ? settings.memoryCachedMono : "#cfcfcf"
+	readonly property var memoryCachedMono: settings.memoryCachedMono !== undefined ? settings.memoryCachedMono : "#ffffff"
 	readonly property var memoryBuffers: settings.memoryBuffers !== undefined ? settings.memoryBuffers : "#2f5136"
-	readonly property var memoryBuffersMono: settings.memoryBuffersMono !== undefined ? settings.memoryBuffersMono : "#9a9a9a"
+	readonly property var memoryBuffersMono: settings.memoryBuffersMono !== undefined ? settings.memoryBuffersMono : "#ffffff"
 	readonly property var memoryFree: settings.memoryFree !== undefined ? settings.memoryFree : "#3f3f3f"
 	readonly property var memorySwap: settings.memorySwap !== undefined ? settings.memorySwap : "#ffffff"
 	readonly property var memoryWarn: settings.memoryWarn !== undefined ? settings.memoryWarn : "#d8b04a"
-	readonly property var memoryWarnMono: settings.memoryWarnMono !== undefined ? settings.memoryWarnMono : "#cfcfcf"
+	readonly property var memoryWarnMono: settings.memoryWarnMono !== undefined ? settings.memoryWarnMono : "#ffffff"
 	readonly property var memoryDanger: settings.memoryDanger !== undefined ? settings.memoryDanger : "#e05252"
-	readonly property var memoryDangerMono: settings.memoryDangerMono !== undefined ? settings.memoryDangerMono : "#6f6f6f"
+	readonly property var memoryDangerMono: settings.memoryDangerMono !== undefined ? settings.memoryDangerMono : "#ffffff"
 	readonly property var memorySeparator: settings.memorySeparator !== undefined ? settings.memorySeparator : 3
 	readonly property var memorySeparatorColor: settings.memorySeparatorColor !== undefined ? settings.memorySeparatorColor : "#101010"
 	readonly property var memoryVizHeight: settings.memoryVizHeight !== undefined ? settings.memoryVizHeight : 12
@@ -336,7 +336,7 @@ QtObject {
 	readonly property var calendarDialDayEnd: settings.calendarDialDayEnd !== undefined ? settings.calendarDialDayEnd : 18
 	readonly property var calendarBirthYear: settings.calendarBirthYear !== undefined ? settings.calendarBirthYear : 0
 	readonly property var calendarLifeExpectancy: settings.calendarLifeExpectancy !== undefined ? settings.calendarLifeExpectancy : 90
-	readonly property var calendarOutside: settings.calendarOutside !== undefined ? settings.calendarOutside : "#4f4f4f"
+	readonly property var calendarOutside: settings.calendarOutside !== undefined ? settings.calendarOutside : "#ffffff"
 
 	// weather card and its code table
 	readonly property var weatherLocation: settings.weatherLocation !== undefined ? settings.weatherLocation : ""
@@ -474,7 +474,7 @@ QtObject {
 	readonly property var networkDown: settings.networkDown !== undefined ? settings.networkDown : "#7bd88f"
 	readonly property var networkDownMono: settings.networkDownMono !== undefined ? settings.networkDownMono : "#ffffff"
 	readonly property var networkUp: settings.networkUp !== undefined ? settings.networkUp : "#e06c9f"
-	readonly property var networkUpMono: settings.networkUpMono !== undefined ? settings.networkUpMono : "#9a9a9a"
+	readonly property var networkUpMono: settings.networkUpMono !== undefined ? settings.networkUpMono : "#ffffff"
 	readonly property var networkIdle: settings.networkIdle !== undefined ? settings.networkIdle : "#2f2f2f"
 	readonly property var networkHistory: settings.networkHistory !== undefined ? settings.networkHistory : 60
 	readonly property var networkGraphHeight: settings.networkGraphHeight !== undefined ? settings.networkGraphHeight : 40

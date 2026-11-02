@@ -384,7 +384,7 @@ Item {
 				hitPad: row.hoverPad
 				selected: row.step
 				level: root.shift ? row.level : -1
-				ink: row.muted ? Config.muted : Config.foreground
+				ink: row.muted ? Config.dim : Config.foreground
 			}
 
 			MouseArea {

@@ -40,7 +40,6 @@ BarStat {
 	barColor: Config.volumeBase
 	textColor: Config.volumeBase
 	dim: root.isMuted
-	dimColor: Config.muted
 	icon: root.pct >= 67 ? Config.iconVolumeHigh
 		: root.pct >= 34 ? Config.iconVolumeMid
 		: Config.iconVolumeLow

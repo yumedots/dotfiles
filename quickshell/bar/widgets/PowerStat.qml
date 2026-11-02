@@ -25,7 +25,6 @@ BarStat {
 	})
 
 	dim: root.applyFailed
-	dimColor: Config.muted
 	iconLift: root.battery === null ? 2 : 0
 	icon: root.batteryIcon(root.battery)
 	barColor: root.battery === null ? Config.foreground : (root.battery.color || Config.powerBase)

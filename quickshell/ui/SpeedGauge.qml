@@ -109,7 +109,6 @@ Item {
 			font.family: Config.fontFamily
 			font.pixelSize: Config.speedUnitSize
 			color: gauge.ink
-			opacity: 0.6
 			text: gauge.unit
 		}
 	}

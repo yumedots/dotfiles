@@ -9,7 +9,7 @@ Text {
 	property bool shown: true
 	property real hitMargin: -4
 	property int fadeMs: Config.popupFadeMs
-	property color baseColor: Config.muted
+	property color baseColor: Config.dim
 	property color hoverColor: Config.foreground
 
 	opacity: root.shown ? 1 : 0

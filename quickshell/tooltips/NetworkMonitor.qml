@@ -189,7 +189,7 @@ ProcessPanel {
 		Rectangle {
 			width: parent.width
 			height: 1
-			color: Config.muted
+			color: Config.dim
 		},
 
 		Repeater {

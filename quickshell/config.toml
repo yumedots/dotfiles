@@ -4,7 +4,7 @@ surfaceTranslucent = "#ff101010"  # "#" + ("0" + Math.round(surfaceAlpha * 255).
 foreground = "#ffffff"
 dim = "#3f3f3f"
 red = "#e05252"
-muted = "#5c5c5c"
+muted = "#ffffff"  # same as foreground
 mono = true
 
 # things that are not a widget: font, spacing, workspace morph
@@ -111,7 +111,7 @@ iconMoon = "\uE3A4"
 cpuBase = "#a78bfa"
 cpuBaseMono = "#ffffff"  # same as foreground
 cpuPeak = "#e05252"  # same as red
-cpuPeakMono = "#9a9a9a"  # same as monoMid
+cpuPeakMono = "#ffffff"  # same as foreground
 cpuIdle = "#2f2f2f"
 cpuTopCount = 5
 cpuTooltipWidth = 240
@@ -134,15 +134,15 @@ procKillKey = "q"
 memoryBase = "#7bd88f"
 memoryBaseMono = "#ffffff"  # same as foreground
 memoryCached = "#44774f"
-memoryCachedMono = "#cfcfcf"  # same as monoLight
+memoryCachedMono = "#ffffff"  # same as foreground
 memoryBuffers = "#2f5136"
-memoryBuffersMono = "#9a9a9a"  # same as monoMid
+memoryBuffersMono = "#ffffff"  # same as foreground
 memoryFree = "#3f3f3f"  # same as dim
 memorySwap = "#ffffff"  # same as foreground
 memoryWarn = "#d8b04a"
-memoryWarnMono = "#cfcfcf"  # same as monoLight
+memoryWarnMono = "#ffffff"  # same as foreground
 memoryDanger = "#e05252"  # same as red
-memoryDangerMono = "#6f6f6f"  # same as monoSoft
+memoryDangerMono = "#ffffff"  # same as foreground
 memorySeparator = 3
 memorySeparatorColor = "#101010"  # same as surface
 memoryVizHeight = 12
@@ -342,7 +342,7 @@ calendarDialDayStart = 6
 calendarDialDayEnd = 18
 calendarBirthYear = 0
 calendarLifeExpectancy = 90
-calendarOutside = "#4f4f4f"
+calendarOutside = "#ffffff"  # same as foreground
 
 # weather card and its code table
 [weather]
@@ -486,7 +486,7 @@ networkBaseMono = "#ffffff"  # same as foreground
 networkDown = "#7bd88f"
 networkDownMono = "#ffffff"  # same as foreground
 networkUp = "#e06c9f"
-networkUpMono = "#9a9a9a"  # same as monoMid
+networkUpMono = "#ffffff"  # same as foreground
 networkIdle = "#2f2f2f"
 networkHistory = 60
 networkGraphHeight = 40

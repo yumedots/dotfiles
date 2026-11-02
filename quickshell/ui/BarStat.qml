@@ -10,7 +10,7 @@ Item {
 	property string mode: Config.barStatMode
 	property bool mono: Config.barStatMono
 	property bool dim: false
-	property color dimColor: Config.dim
+	property color dimColor: Config.foreground
 	property color barColor: Config.red
 	property color textColor: root.barColor
 	property string icon: ""

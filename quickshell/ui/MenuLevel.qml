@@ -48,7 +48,7 @@ Column {
 				Rectangle {
 					visible: row.separator
 					anchors.fill: parent
-					color: Config.muted
+					color: Config.dim
 				}
 
 				Highlight {
