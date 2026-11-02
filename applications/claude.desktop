@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Claude
+GenericName=AI coding agent
+Comment=Run the Claude Code agent in a terminal
+Exec=claude
+Icon=claude
+Terminal=true
+Categories=Development;Utility;
+StartupNotify=false
