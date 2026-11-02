@@ -20,3 +20,5 @@ hl.config({
         },
     },
 })
+
+require("drop-preview")
