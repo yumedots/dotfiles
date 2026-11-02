@@ -18,6 +18,7 @@ BarText {
 	SystemClock {
 		id: clock
 		precision: SystemClock.Seconds
+		enabled: root.onScreen
 	}
 
 	popupContent: Component {

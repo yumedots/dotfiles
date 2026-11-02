@@ -11,6 +11,7 @@ Item {
 	property int pixelSize: Settings.fontSize
 	property real padding: 0
 	property var bar: null
+	readonly property bool onScreen: root.bar !== null && root.bar.visible && !root.bar.fullscreen && !root.bar.locked
 	property var onActivate
 	property bool popupKeyboard: true
 	property bool popupAlignRight: false

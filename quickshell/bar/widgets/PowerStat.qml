@@ -48,6 +48,7 @@ BarStat {
 			amplitude: 0.35
 			dotScale: 0.95
 			sparse: true
+			paused: !root.onScreen
 			flow: root.flow
 			watts: root.battery ? root.battery.watts || 0 : 0
 			fill: root.battery ? root.battery.pct / 100 : 1

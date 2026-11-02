@@ -55,6 +55,7 @@ QtObject {
 	readonly property var barStatMono: settings.barStatMono !== undefined ? settings.barStatMono : true
 	readonly property var barThickness: settings.barThickness !== undefined ? settings.barThickness : 1.5
 	readonly property var barSweepMs: settings.barSweepMs !== undefined ? settings.barSweepMs : 1400
+	readonly property var barSlideMs: settings.barSlideMs !== undefined ? settings.barSlideMs : 400
 	readonly property var sweepFade: settings.sweepFade !== undefined ? settings.sweepFade : 0.45
 	readonly property var sweepSteps: settings.sweepSteps !== undefined ? settings.sweepSteps : 5
 	readonly property var clockFormat: settings.clockFormat !== undefined ? settings.clockFormat : "ddd MMM d h:mm AP"

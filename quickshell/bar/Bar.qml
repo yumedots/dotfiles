@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import qs.ui
 import qs
 import qs.services
@@ -13,11 +14,40 @@ PanelWindow {
 
 	readonly property var layout: Yudae.bar && Yudae.bar.left ? Yudae.bar : barLayoutEmpty()
 	property var widgets: ({})
+	property bool locked: false
 
 	readonly property bool atBottom: bar.layout.position === "bottom"
 	readonly property real outerMargin: Config.barFloating ? Config.gapsOut : 0
+	readonly property var hyprMonitor: Hyprland.monitorFor(bar.screen)
+	readonly property bool fullscreen: bar.hyprMonitor !== null && bar.hyprMonitor.activeWorkspace !== null && bar.hyprMonitor.activeWorkspace.hasFullscreen
+	readonly property real slideTarget: -(bar.implicitHeight + bar.outerMargin)
+	property real slide: bar.fullscreen ? bar.slideTarget : 0
+	readonly property bool slidAway: bar.fullscreen && bar.slide <= bar.slideTarget + 0.5
+	property bool hidden: false
+	visible: !bar.locked
+
+	onSlidAwayChanged: if (bar.slidAway)
+		bar.hidden = true
+
+	onLockedChanged: if (bar.locked)
+		bar.closePopups(null)
+
+	onFullscreenChanged: {
+		if (bar.fullscreen)
+			bar.closePopups(null);
+		else
+			bar.hidden = false;
+	}
 	readonly property var centerItem: bar.widgets[bar.layout.centerAnchor]
 	readonly property var centerSlot: bar.centerItem && bar.centerItem.parent && bar.centerItem.parent.parent === centerRow ? bar.centerItem.parent : null
+
+	Behavior on slide {
+		NumberAnimation {
+			duration: Config.barSlideMs
+			easing.type: Easing.BezierSpline
+			easing.bezierCurve: [0.15, 0, 0.1, 1, 1, 1]
+		}
+	}
 
 	anchors {
 		top: !bar.atBottom
@@ -27,16 +57,17 @@ PanelWindow {
 	}
 
 	margins {
-		top: bar.atBottom ? 0 : bar.outerMargin
-		bottom: bar.atBottom ? bar.outerMargin : 0
+		top: bar.atBottom ? 0 : bar.outerMargin + bar.slide
+		bottom: bar.atBottom ? bar.outerMargin + bar.slide : 0
 		left: bar.outerMargin
 		right: bar.outerMargin
 	}
 
 	readonly property real contentHeight: Math.max(leftRow.implicitHeight, centerRow.implicitHeight, rightRow.implicitHeight)
 
+	implicitWidth: bar.screen ? bar.screen.width : 0
 	implicitHeight: Math.ceil(bar.contentHeight) + 2 * border.inset
-	exclusiveZone: implicitHeight
+	exclusiveZone: bar.implicitHeight
 	color: BarInk.bare ? "transparent" : Config.surfaceTranslucent
 
 	Behavior on color {
@@ -257,6 +288,7 @@ PanelWindow {
 	HyprBorder {
 		id: border
 
+		visible: !bar.hidden
 		anchors.fill: parent
 		padding: Config.barInset
 		borderWidth: Config.barBorderWidth
@@ -266,6 +298,7 @@ PanelWindow {
 
 	MouseArea {
 		anchors.fill: parent
+		visible: !bar.hidden
 
 		onClicked: bar.closePopups(null)
 		onDoubleClicked: BarInk.toggle(bar)
@@ -274,6 +307,7 @@ PanelWindow {
 	Row {
 		id: leftRow
 
+		visible: !bar.hidden
 		anchors.left: parent.left
 		anchors.leftMargin: border.inset + Config.barPadding
 		anchors.bottom: parent.bottom
@@ -289,6 +323,7 @@ PanelWindow {
 	Row {
 		id: centerRow
 
+		visible: !bar.hidden
 		anchors.bottom: parent.bottom
 		anchors.bottomMargin: border.inset
 		spacing: Config.spacing
@@ -303,6 +338,7 @@ PanelWindow {
 	Row {
 		id: rightRow
 
+		visible: !bar.hidden
 		anchors.right: parent.right
 		anchors.rightMargin: border.inset + Config.barPadding
 		anchors.bottom: parent.bottom
@@ -325,5 +361,7 @@ PanelWindow {
 			right: []
 		};
 	}
+
+
 
 }

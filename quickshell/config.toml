@@ -48,6 +48,7 @@ barStatMode = "icon"
 barStatMono = true
 barThickness = 1.5
 barSweepMs = 1400
+barSlideMs = 400
 sweepFade = 0.45
 sweepSteps = 5
 clockFormat = "ddd MMM d h:mm AP"

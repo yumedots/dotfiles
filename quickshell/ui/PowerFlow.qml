@@ -23,6 +23,7 @@ Canvas {
 	property real amplitude: 0.2
 	property real frequency: 0.32
 	property bool sparse: false
+	property bool paused: false
 
 	onPhaseChanged: root.requestPaint()
 	onFlowChanged: root.requestPaint()
@@ -33,7 +34,7 @@ Canvas {
 	Timer {
 		interval: 40
 		repeat: true
-		running: root.visible && root.flow !== 0
+		running: root.visible && !root.paused && root.flow !== 0
 
 		onTriggered: root.phase += interval / 1000 * (4 + Math.min(root.watts, 60) / 3)
 	}

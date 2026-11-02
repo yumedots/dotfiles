@@ -26,6 +26,7 @@ Item {
 	property bool sweep: false
 	property real sweepWidth: 0
 	property var bar: null
+	readonly property bool onScreen: root.bar !== null && root.bar.visible && !root.bar.fullscreen && !root.bar.locked
 	property var onActivate
 	property bool popupWanted: true
 	property bool popupKeyboard: true
