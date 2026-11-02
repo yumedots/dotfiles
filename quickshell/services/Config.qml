@@ -199,6 +199,13 @@ QtObject {
 	readonly property var launcherPrompt: settings.launcherPrompt !== undefined ? settings.launcherPrompt : "\uea6d"
 	readonly property var launcherMaxRows: settings.launcherMaxRows !== undefined ? settings.launcherMaxRows : 12
 	readonly property var launcherIconPin: settings.launcherIconPin !== undefined ? settings.launcherIconPin : "\ueba0"
+	readonly property var launcherSpotlight: settings.launcherSpotlight !== undefined ? settings.launcherSpotlight : true
+	readonly property var launcherSpotlightWidth: settings.launcherSpotlightWidth !== undefined ? settings.launcherSpotlightWidth : 560
+	readonly property var launcherSpotlightInputHeight: settings.launcherSpotlightInputHeight !== undefined ? settings.launcherSpotlightInputHeight : 52
+	readonly property var launcherSpotlightQuerySize: settings.launcherSpotlightQuerySize !== undefined ? settings.launcherSpotlightQuerySize : 32
+	readonly property var launcherSpotlightFontSize: settings.launcherSpotlightFontSize !== undefined ? settings.launcherSpotlightFontSize : 20
+	readonly property var launcherSpotlightMaxRows: settings.launcherSpotlightMaxRows !== undefined ? settings.launcherSpotlightMaxRows : 8
+	readonly property var launcherSpotlightTop: settings.launcherSpotlightTop !== undefined ? settings.launcherSpotlightTop : 0.25
 	readonly property var launcherIconActive: settings.launcherIconActive !== undefined ? settings.launcherIconActive : "\uf00c"
 
 	// wallpaper picker

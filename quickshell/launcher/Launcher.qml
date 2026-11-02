@@ -48,11 +48,13 @@ PanelWindow {
 	property string heldMode: ""
 	property var heldResults: []
 
-	readonly property string mode: root.windows ? "windows" : (root.shown ? (root.state.mode || "apps") : (root.heldMode || root.state.mode || "apps"))
-	readonly property string prompt: root.windows ? "" : (root.state.prompt || "")
+	property var live: ({})
+
+	readonly property string mode: root.windows ? "windows" : (root.shown ? (root.live.mode || "apps") : (root.heldMode || root.live.mode || "apps"))
+	readonly property string prompt: root.windows ? "" : (root.live.prompt || "")
 	readonly property bool isClipboard: root.mode === "clipboard"
-	readonly property string empty: root.windows ? Yudae.windowsEmpty : (root.state.empty || "")
-	readonly property var results: root.windows ? (Yudae.windows || []) : (root.shown ? (root.state.results || []) : root.heldResults)
+	readonly property string empty: root.windows ? Yudae.windowsEmpty : (root.live.empty || "")
+	readonly property var results: root.windows ? (Yudae.windows || []) : (root.shown ? (root.live.results || []) : root.heldResults)
 	readonly property string clipPreviewText: root.state.clip ? String(root.state.clip.text || "") : ""
 	readonly property string clipPreviewPath: root.state.clip && root.state.clip.path ? "file://" + root.state.clip.path : ""
 
@@ -64,7 +66,16 @@ PanelWindow {
 	readonly property int winCurrent: Calc.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
 	readonly property string winName: root.windows && root.results.length > 0 ? root.results[root.winCurrent].name : ""
 
-	readonly property int listHeight: Config.launcherMaxRows * Config.launcherRowHeight
+	readonly property bool spotlight: Config.launcherSpotlight && !root.windows
+	readonly property bool home: root.forced === "" && root.group === ""
+	readonly property bool revealed: (!root.home || (root.live.intent && root.live.intent.query !== "")) && (!root.spotlight || root.results.length > 0)
+	readonly property real fontSize: root.spotlight ? Config.launcherSpotlightFontSize : Config.launcherFontSize
+	readonly property real iconSize: root.spotlight ? Math.round(root.fontSize * 1.4) : Config.launcherIconSize
+	readonly property real rowHeight: root.spotlight ? root.iconSize + 12 : Config.launcherRowHeight
+	readonly property real iconSlot: root.spotlight ? root.iconSize + 4 : Config.launcherIconSlot
+	readonly property int maxRows: root.spotlight ? Config.launcherSpotlightMaxRows : Config.launcherMaxRows
+	readonly property int rows: root.spotlight && !root.isClipboard ? Calc.clamp(root.results.length, 1, root.maxRows) : root.maxRows
+	readonly property int listHeight: root.spotlight ? root.rows * root.rowHeight + (root.rows - 1) * Config.launcherGap : Config.launcherMaxRows * root.rowHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
 
 	anchors.top: true
@@ -134,11 +145,11 @@ PanelWindow {
 			return;
 
 		root.anchorId = root.selectedRow ? root.selectedRow.id : "";
-		root.anchorKey = root.mode + "\u0000" + (root.state.query || "");
+		root.anchorKey = root.mode + "\u0000" + (root.live.query || "");
 	}
 
 	function followResults() {
-		const key = root.mode + "\u0000" + (root.state.query || "");
+		const key = root.mode + "\u0000" + (root.live.query || "");
 
 		if (root.freshAnchor || root.mode !== "procs" || root.anchorKey !== key) {
 			root.freshAnchor = false;
@@ -192,10 +203,12 @@ PanelWindow {
 		root.group = "";
 		root.forced = mode || "";
 		root.pointer = null;
+		root.live = ({});
 		root.anchorId = "";
 		root.anchorKey = "";
 		root.freshAnchor = true;
 		list.currentIndex = 0;
+		field.typing = !root.windows && (root.spotlight || root.forced === "");
 
 		// The window switcher reads the window list rather than the launcher
 		// snapshot, so it has nothing to wait for.
@@ -322,7 +335,7 @@ PanelWindow {
 		}
 
 		if (root.isClipboard) {
-			const page = Math.max(1, previewFlick.height - Config.launcherRowHeight);
+			const page = Math.max(1, previewFlick.height - root.rowHeight);
 			let delta = 0;
 
 			if (event.key === Qt.Key_PageDown || (event.key === Qt.Key_Right && !field.typing))
@@ -354,6 +367,18 @@ PanelWindow {
 	function handleTypingKeys(event) {
 		if (Input.cancel(event))
 			return;
+
+		if (root.mode === "procs" && event.key === Qt.Key_Delete) {
+			root.killProc(root.selectedRow);
+			event.accepted = true;
+			return;
+		}
+
+		if (root.isClipboard && (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp)) {
+			root.scrollPreview((event.key === Qt.Key_PageDown ? 1 : -1) * Math.max(1, previewFlick.height - root.rowHeight));
+			event.accepted = true;
+			return;
+		}
 
 		if (Input.save(event)) {
 			root.saveQuery();
@@ -391,6 +416,7 @@ PanelWindow {
 		root.forced = "";
 		root.query = "";
 		field.clear();
+		field.typing = true;
 		list.currentIndex = 0;
 		root.push();
 	}
@@ -487,6 +513,7 @@ PanelWindow {
 			return;
 
 		if (intent.query === root.query && intent.forced === root.forced && intent.group === root.group) {
+			root.live = root.state;
 			root.settled = true;
 			settleGuard.stop();
 			return;
@@ -558,9 +585,11 @@ PanelWindow {
 	HyprBorder {
 		id: card
 
-		anchors.centerIn: parent
+		x: Math.round((root.width - card.width) / 2)
+		y: root.spotlight ? Math.round(root.height * Config.launcherSpotlightTop) : Math.round((root.height - card.height) / 2)
 
 		width: root.windows ? windowsGrid.implicitWidth + card.inset * 2
+		      : root.spotlight ? Config.launcherSpotlightWidth
 		      : root.isClipboard ? Config.launcherWidth * 2 + Config.launcherGap + card.inset * 2
 		      : Config.launcherWidth
 		height: root.windows ? windowsGrid.implicitHeight + card.inset * 2 : column.implicitHeight + card.inset * 2
@@ -595,15 +624,16 @@ PanelWindow {
 				id: field
 
 				width: parent.width
-				boxHeight: Config.launcherInputHeight
-				hintKey: Config.procHintKey
+				boxHeight: root.spotlight ? Config.launcherSpotlightInputHeight : Config.launcherInputHeight
+				hintKey: root.spotlight ? "" : Config.procHintKey
 				hintText: Config.procSearchHint
 				padding: 0
-				gap: Config.launcherTextGap
-				glyphSlot: Config.launcherIconSlot
-				glyphSize: Config.launcherIconSize
-				size: Config.launcherFontSize
-				glyph: root.prompt
+				gap: root.spotlight ? 0 : Config.launcherTextGap
+				glyphSlot: root.spotlight ? 0 : root.iconSlot
+				glyphSize: root.iconSize
+				size: root.spotlight ? Config.launcherSpotlightQuerySize : root.fontSize
+				glyph: root.spotlight ? "" : root.prompt
+				boxColor: root.spotlight ? "transparent" : Config.launcherSearchBox
 
 				onEdited: {
 					root.query = field.text;
@@ -612,8 +642,18 @@ PanelWindow {
 				onAccepted: root.activate(root.selectedRow)
 				onKeyPressed: function (event) { root.handleTypingKeys(event); }
 				onTypingChanged: {
-					if (!field.typing)
+					if (field.typing || !root.shown)
+						return;
+
+					if (!root.spotlight && !root.home) {
 						card.forceActiveFocus();
+						return;
+					}
+
+					if (root.group !== "")
+						root.leaveGroup();
+					else
+						root.close();
 				}
 			}
 
@@ -621,6 +661,7 @@ PanelWindow {
 			Item {
 				width: parent.width
 				height: root.listHeight
+				visible: root.revealed
 
 				// right pane: clipboard text preview, nothing else
 				Item {
@@ -672,7 +713,7 @@ PanelWindow {
 							acceptedButtons: Qt.NoButton
 
 							onWheel: function (wheel) {
-								root.scrollPreview(wheel.angleDelta.y > 0 ? -Config.launcherRowHeight : Config.launcherRowHeight);
+								root.scrollPreview(wheel.angleDelta.y > 0 ? -root.rowHeight : root.rowHeight);
 								wheel.accepted = true;
 							}
 						}
@@ -707,8 +748,9 @@ PanelWindow {
 
 						anchors.fill: parent
 						visible: root.results.length > 0
-						visibleRows: Config.launcherMaxRows
-						rowHeight: Config.launcherRowHeight
+						visibleRows: root.rows
+						scrollWidth: root.spotlight ? 0 : Config.scrollbarWidth
+						rowHeight: root.rowHeight
 						rowSpacing: Config.launcherGap
 						model: root.results
 
@@ -719,7 +761,7 @@ PanelWindow {
 							required property int index
 
 							width: list.width
-							height: Config.launcherRowHeight
+							height: root.rowHeight
 
 							readonly property bool active: row.index === list.currentIndex
 							readonly property bool pinned: row.modelData.pinned === true
@@ -729,8 +771,8 @@ PanelWindow {
 
 								anchors.left: parent.left
 								anchors.verticalCenter: parent.verticalCenter
-								width: Config.launcherIconSlot
-								height: Config.launcherIconSlot
+								width: root.iconSlot
+								height: root.iconSlot
 
 							readonly property string icon: row.modelData.kind === "proc" ? AppIcons.iconOfPid(row.modelData.pid) : (row.modelData.appId ? AppIcons.iconOf(row.modelData.appId) : "")
 
@@ -738,7 +780,7 @@ PanelWindow {
 								visible: row.modelData.kind !== "app" && (rowIcon.icon === "" || rowIconImage.status === Image.Error)
 								anchors.centerIn: parent
 								font.family: Config.fontFamily
-								font.pixelSize: 18
+								font.pixelSize: root.iconSize
 								color: row.active ? Config.launcherHighlightText : Config.foreground
 								text: row.modelData.glyph
 								z: 1
@@ -746,8 +788,8 @@ PanelWindow {
 
 							Rectangle {
 								anchors.centerIn: parent
-								width: Config.launcherIconSize
-								height: Config.launcherIconSize
+								width: root.iconSize
+								height: root.iconSize
 								radius: 3
 								color: Config.surface
 								visible: row.modelData.kind === "app" && (rowIcon.icon === "" || rowIconImage.status === Image.Error)
@@ -757,7 +799,7 @@ PanelWindow {
 								id: rowIconImage
 
 								anchors.centerIn: parent
-								implicitSize: Config.launcherIconSize
+								implicitSize: root.iconSize
 								visible: rowIcon.icon !== ""
 								source: rowIcon.icon
 								z: 2
@@ -772,7 +814,7 @@ PanelWindow {
 								anchors.verticalCenter: parent.verticalCenter
 								elide: Text.ElideRight
 								font.family: Config.fontFamily
-								font.pixelSize: Config.launcherFontSize
+								font.pixelSize: root.fontSize
 								color: row.active ? Config.launcherHighlightText : Config.foreground
 								text: row.modelData.name
 							}
@@ -786,7 +828,7 @@ PanelWindow {
 								width: visible ? implicitWidth : 0
 								visible: row.modelData.kind === "proc"
 								font.family: Config.fontFamily
-								font.pixelSize: Config.launcherFontSize
+								font.pixelSize: root.fontSize
 								color: row.active ? Config.launcherHighlightText : Config.muted
 								text: row.modelData.detail
 							}
@@ -799,7 +841,7 @@ PanelWindow {
 								anchors.verticalCenter: parent.verticalCenter
 								visible: row.pinned
 								font.family: Config.fontFamily
-								font.pixelSize: Config.launcherIconSize
+								font.pixelSize: root.iconSize
 								color: Config.foreground
 								text: Config.launcherIconPin
 							}
@@ -816,7 +858,7 @@ PanelWindow {
 										return;
 									}
 
-									if (prev.engaged || (at.x - prev.x) ** 2 + (at.y - prev.y) ** 2 >= Config.launcherRowHeight ** 2) {
+									if (prev.engaged || (at.x - prev.x) ** 2 + (at.y - prev.y) ** 2 >= root.rowHeight ** 2) {
 										root.pointer = { x: at.x, y: at.y, engaged: true };
 
 										if (at.x !== prev.x || at.y !== prev.y)
@@ -863,7 +905,7 @@ PanelWindow {
 							horizontalAlignment: Text.AlignHCenter
 							elide: Text.ElideRight
 							font.family: Config.fontFamily
-							font.pixelSize: Config.launcherFontSize
+							font.pixelSize: root.fontSize
 							color: Config.muted
 							text: root.empty
 						}

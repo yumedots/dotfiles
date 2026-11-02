@@ -200,6 +200,13 @@ launcherPrompt = "\uEA6D"
 launcherMaxRows = 12
 launcherIconPin = "\uEBA0"
 launcherIconActive = "\uF00C"
+launcherSpotlight = true  # false = the box with the list under the field
+launcherSpotlightWidth = 560
+launcherSpotlightInputHeight = 52
+launcherSpotlightQuerySize = 32
+launcherSpotlightFontSize = 20
+launcherSpotlightMaxRows = 8
+launcherSpotlightTop = 0.25  # fraction of the screen height
 
 # wallpaper picker
 [wallpaper]
