@@ -79,14 +79,15 @@ Item {
 
 		Rectangle {
 			anchors.fill: parent
-			color: root.themeStripColor
-			visible: root.strip > 0
+			color: root.backgroundColor
 		}
 
 		Rectangle {
 			anchors.fill: parent
-			anchors.margins: root.strip + root.themeWidth
-			color: root.backgroundColor
+			color: "transparent"
+			border.color: root.themeStripColor
+			border.width: root.strip
+			visible: root.strip > 0 && root.backgroundColor.a > 0
 		}
 
 		Repeater {

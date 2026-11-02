@@ -37,7 +37,13 @@ PanelWindow {
 
 	implicitHeight: Math.ceil(bar.contentHeight) + 2 * border.inset
 	exclusiveZone: implicitHeight
-	color: "transparent"
+	color: BarInk.bare ? "transparent" : Config.surfaceTranslucent
+
+	Behavior on color {
+		ColorAnimation {
+			duration: Config.barFadeMs
+		}
+	}
 
 	function componentFor(id) {
 		if (id === "workspaces") return workspacesComponent;
@@ -255,13 +261,7 @@ PanelWindow {
 		padding: Config.barInset
 		borderWidth: Config.barBorderWidth
 		shadowEnabled: false
-		backgroundColor: BarInk.bare ? "transparent" : Config.surfaceTranslucent
-
-		Behavior on backgroundColor {
-			ColorAnimation {
-				duration: Config.barFadeMs
-			}
-		}
+		backgroundColor: "transparent"
 	}
 
 	MouseArea {
