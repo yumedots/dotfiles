@@ -23,7 +23,7 @@ pub const Watcher = struct {
 	}
 
 	pub fn add(self: *Watcher, path: [:0]const u8) !void {
-		const mask = linux.IN.CREATE | linux.IN.MODIFY | linux.IN.MOVED_TO | linux.IN.CLOSE_WRITE | linux.IN.DELETE_SELF | linux.IN.MOVE_SELF;
+		const mask = linux.IN.CREATE | linux.IN.MODIFY | linux.IN.MOVED_TO | linux.IN.MOVED_FROM | linux.IN.DELETE | linux.IN.CLOSE_WRITE | linux.IN.DELETE_SELF | linux.IN.MOVE_SELF;
 		const result = linux.inotify_add_watch(self.fd, path, mask);
 		if (@as(isize, @bitCast(result)) < 0) return error.WatchAdd;
 	}
@@ -33,6 +33,15 @@ pub const Watcher = struct {
 	pub fn pending(self: *Watcher) bool {
 		var fds = [_]linux.pollfd{.{ .fd = self.fd, .events = linux.POLL.IN, .revents = 0 }};
 		return linux.poll(&fds, 1, 0) > 0;
+	}
+
+	pub fn wait(self: *Watcher, ms: i32) bool {
+		var fds = [_]linux.pollfd{.{ .fd = self.fd, .events = linux.POLL.IN, .revents = 0 }};
+		return linux.poll(&fds, 1, ms) > 0;
+	}
+
+	pub fn drain(self: *Watcher) void {
+		_ = linux.read(self.fd, &self.buffer, self.buffer.len);
 	}
 
 	pub fn next(self: *Watcher) ![]const u8 {

@@ -214,6 +214,7 @@ launcherSpotlightTop = 0.25  # fraction of the screen height
 wallpaperTransitionMs = 400
 wallpaperEmpty = "No wallpapers found"
 wallpaperPickerWidth = 1100
+wallpaperWatchMs = 300
 wallpaperStageWidth = 680
 wallpaperPreviewRatio = 1.78
 wallpaperPickerPadding = 16

@@ -3,6 +3,8 @@ const hubmod = @import("../hub.zig");
 const exec = @import("../primitives/exec.zig");
 const proc = @import("../primitives/proc.zig");
 const sleep = @import("../primitives/sleep.zig");
+const inotify = @import("../primitives/watch.zig");
+const config = @import("../primitives/config.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -67,6 +69,7 @@ pub const Wallpaper = struct {
 	seen_at: std.Io.Timestamp = .zero,
 	hook: ?Hook = null,
 	working: std.atomic.Value(bool) = .init(false),
+	settle_ms: i32 = 300,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*Wallpaper {
 		const self = try allocator.create(Wallpaper);
@@ -90,6 +93,11 @@ pub const Wallpaper = struct {
 	}
 
 	pub fn start(self: *Wallpaper) !void {
+		if (config.Config.load(self.io, self.allocator)) |cfg| {
+			defer cfg.deinit();
+			self.settle_ms = @intCast(@max(0, cfg.integer("wallpaperWatchMs", 300)));
+		} else |_| {}
+
 		self.reload();
 
 		const thread = try std.Thread.spawn(.{}, loop, .{self});
@@ -97,9 +105,68 @@ pub const Wallpaper = struct {
 	}
 
 	fn loop(self: *Wallpaper) void {
+		var watcher = inotify.Watcher.init() catch {
+			while (true) {
+				sleep.ms(2000);
+				self.watch();
+			}
+		};
+
+		self.watchTree(&watcher);
+
 		while (true) {
-			sleep.ms(2000);
-			self.watch();
+			if (!watcher.wait(2000)) {
+				self.watch();
+				continue;
+			}
+
+			watcher.drain();
+
+			while (true) {
+				sleep.ms(@intCast(self.settle_ms));
+				if (!watcher.wait(0)) break;
+				watcher.drain();
+			}
+
+			self.reload();
+			self.watchTree(&watcher);
+		}
+	}
+
+	fn watchTree(self: *Wallpaper, watcher: *inotify.Watcher) void {
+		self.mutex.lockUncancelable(self.io);
+		const dir = self.allocator.dupe(u8, self.dir) catch {
+			self.mutex.unlock(self.io);
+			return;
+		};
+		self.mutex.unlock(self.io);
+		defer self.allocator.free(dir);
+
+		const expanded = expand(self.allocator, proc.home(self.io, self.allocator), dir) catch return;
+		defer self.allocator.free(expanded);
+
+		self.watchDir(watcher, expanded, 0);
+	}
+
+	fn watchDir(self: *Wallpaper, watcher: *inotify.Watcher, path: []const u8, depth: usize) void {
+		const z = self.allocator.allocSentinel(u8, path.len, 0) catch return;
+		@memcpy(z, path);
+		defer self.allocator.free(z);
+
+		watcher.add(z) catch return;
+
+		var dir = std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true }) catch return;
+		defer dir.close(self.io);
+
+		var it = dir.iterate();
+
+		while (it.next(self.io) catch null) |item| {
+			if (item.kind != .directory or depth + 1 >= max_depth) continue;
+
+			const child = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ path, item.name }) catch continue;
+			defer self.allocator.free(child);
+
+			self.watchDir(watcher, child, depth + 1);
 		}
 	}
 
