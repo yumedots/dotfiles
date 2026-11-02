@@ -22,8 +22,12 @@ Item {
 	// How far the icon is lifted off the line of text.
 	property real lift: 0
 
-	// The size of the icon. It is a square, centred in the line of text.
+	// The size of the icon, centred in the line of text. A drawnWidth wider
+	// than zero keeps the height and stretches the icon.
 	property real drawnSize: 0
+
+	// The width, when the icon is not square.
+	property real drawnWidth: 0
 
 	// The metrics of the line of text the icon shares. These come from the
 	// caller, so every icon in the bar measures against the same text.
@@ -45,7 +49,7 @@ Item {
 		x: 0
 		y: root.inkCentre - root.drawnSize / 2 - root.lift
 
-		width: root.drawnSize
+		width: root.drawnWidth > 0 ? root.drawnWidth : root.drawnSize
 		height: root.drawnSize
 
 		property color ink: root.ink

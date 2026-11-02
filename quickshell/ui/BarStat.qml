@@ -19,6 +19,7 @@ Item {
 	property real iconLift: 0
 	property var iconComponent: null
 	property real iconWidth: 0
+	property real iconHeight: 0
 	property string value: ""
 	property real gap: 0
 	property bool showBar: true
@@ -178,7 +179,8 @@ Item {
 			height: content.height
 
 			component: root.iconComponent
-			drawnSize: root.iconWidth
+			drawnSize: root.iconHeight > 0 ? root.iconHeight : root.iconWidth
+			drawnWidth: root.iconHeight > 0 ? root.iconWidth : 0
 			ink: root.inkColor
 			lift: root.iconLift
 
