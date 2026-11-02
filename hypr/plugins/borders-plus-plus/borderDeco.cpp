@@ -99,10 +99,9 @@ void CBordersPlusPlus::drawPass(PHLMONITOR pMonitor, const float& a) {
     const auto ROUNDINGPOWER = PWINDOW->roundingPower();
     const auto ORIGINALROUND = rounding == 0 ? 0 : (PWINDOW->rounding() + *PBORDERSIZE) * pMonitor->m_scale;
 
-    CBox       fullBox = m_bAssignedGeometry;
-    fullBox.translate(g_pDecorationPositioner->getEdgeDefinedPoint(DECORATION_EDGE_BOTTOM | DECORATION_EDGE_LEFT | DECORATION_EDGE_RIGHT | DECORATION_EDGE_TOP, m_pWindow.lock()));
-
+    CBox fullBox = PWINDOW->getWindowMainSurfaceBox();
     fullBox.translate(PWINDOW->m_floatingOffset - pMonitor->m_position + WORKSPACEOFFSET);
+    fullBox.scale(pMonitor->m_scale).round();
 
     if (fullBox.width < 1 || fullBox.height < 1)
         return;
@@ -114,18 +113,16 @@ void CBordersPlusPlus::drawPass(PHLMONITOR pMonitor, const float& a) {
         fullThickness += THISBORDERSIZE;
     }
 
-    fullBox.expand(-fullThickness).scale(pMonitor->m_scale).round();
+    fullBox.expand(std::round(PWINDOW->getRealBorderSize() * pMonitor->m_scale));
+
+    int prevScaled = 0;
 
     for (size_t i = 0; i < BORDERS; ++i) {
-        const int PREVBORDERSIZESCALED = i == 0 ? 0 : (vars.borderSizes[i - 1]->value() == -1 ? *PBORDERSIZE : vars.borderSizes[i - 1]->value()) * pMonitor->m_scale;
-        const int THISBORDERSIZE       = vars.borderSizes[i]->value() == -1 ? *PBORDERSIZE : vars.borderSizes[i]->value();
+        const int THISBORDERSIZE = vars.borderSizes[i]->value() == -1 ? *PBORDERSIZE : vars.borderSizes[i]->value();
 
         if (i != 0) {
-            rounding += rounding == 0 ? 0 : PREVBORDERSIZESCALED;
-            fullBox.x -= PREVBORDERSIZESCALED;
-            fullBox.y -= PREVBORDERSIZESCALED;
-            fullBox.width += PREVBORDERSIZESCALED * 2;
-            fullBox.height += PREVBORDERSIZESCALED * 2;
+            rounding += rounding == 0 ? 0 : prevScaled;
+            fullBox.expand(prevScaled);
         }
 
         if (fullBox.width < 1 || fullBox.height < 1)
@@ -139,6 +136,8 @@ void CBordersPlusPlus::drawPass(PHLMONITOR pMonitor, const float& a) {
                                      .borderSize    = THISBORDERSIZE,
                                      .a             = a,
                                      .outerRound    = NATURALROUND ? sc<int>(ORIGINALROUND) : -1});
+
+        prevScaled = std::round(THISBORDERSIZE * pMonitor->m_scale);
     }
 
     m_seExtents = {{fullThickness, fullThickness}, {fullThickness, fullThickness}};
