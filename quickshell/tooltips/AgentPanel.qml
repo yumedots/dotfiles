@@ -252,7 +252,7 @@ Item {
 						font.family: Config.fontFamily
 						font.pixelSize: Settings.fontSize
 						color: root.state === "error" ? Config.red : Config.muted
-						text: Yudae.online ? root.stateText : "OpenCode offline"
+						text: Yudae.online ? root.stateText : root.stateText + " (offline)"
 					}
 				}
 
