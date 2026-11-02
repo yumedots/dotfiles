@@ -15,7 +15,8 @@ Item {
 
 	readonly property int count: list.count
 	readonly property var current: list.currentItem ? list.currentItem.modelData : null
-	readonly property real rowWidth: root.width - root.scrollWidth - root.rowSpacing
+	readonly property real gutter: root.scrollWidth > 0 ? root.scrollWidth + root.rowSpacing : 0
+	readonly property real rowWidth: root.width - root.gutter
 
 	implicitHeight: root.visibleRows * root.rowHeight + root.rowSpacing * Math.max(0, root.visibleRows - 1)
 	height: root.implicitHeight
@@ -82,7 +83,7 @@ Item {
 		readonly property real rowHeight: root.rowHeight
 
 		anchors.fill: parent
-		anchors.rightMargin: root.scrollWidth + root.rowSpacing
+		anchors.rightMargin: root.gutter
 		clip: true
 		spacing: root.rowSpacing
 		boundsBehavior: Flickable.StopAtBounds
@@ -103,6 +104,7 @@ Item {
 	}
 
 	Scrollbar {
+		visible: root.scrollWidth > 0 && list.contentHeight > list.height + 1
 		view: list
 		offset: root.rowSpacing
 	}
