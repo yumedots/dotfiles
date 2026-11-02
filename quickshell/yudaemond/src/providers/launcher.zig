@@ -1308,7 +1308,7 @@ fn rowScore(arena: Allocator, row: Row, search: []const u8) ?f64 {
 	var best: ?f64 = fuzzyScore(arena, row.name, search);
 
 	for (row.keywords) |keyword| {
-		const score = fuzzyScore(arena, keyword, search) orelse continue;
+		const score = (fuzzyScore(arena, keyword, search) orelse continue) * 0.5;
 
 		best = if (best) |value| @max(value, score) else score;
 	}
@@ -1400,6 +1400,10 @@ test "pins toggle and keep their order" {
 	try std.testing.expect(fuzzyScore(arena.allocator(), "Firefox", "fire") != null);
 	try std.testing.expect(fuzzyScore(arena.allocator(), "Firefox", "zzz") == null);
 	try std.testing.expect(fuzzyScore(arena.allocator(), "foot", "foot").? > fuzzyScore(arena.allocator(), "footclient", "foot").?);
+
+	const sober = Row{ .id = "app:sober", .kind = "app", .name = "Sober", .glyph = "" };
+	const power = Row{ .id = "power", .kind = "group", .name = "Power", .glyph = "", .keywords = &.{"sleep"} };
+	try std.testing.expect(rowScore(arena.allocator(), sober, "s").? > rowScore(arena.allocator(), power, "s").?);
 }
 
 test "the query prefix picks the mode and strips its mark" {
