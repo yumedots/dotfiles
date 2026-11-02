@@ -251,17 +251,9 @@ QtObject {
 	readonly property var powerTooltipPadding: settings.powerTooltipPadding !== undefined ? settings.powerTooltipPadding : 12
 	readonly property var powerGovernorTitle: settings.powerGovernorTitle !== undefined ? settings.powerGovernorTitle : "Governor"
 
-	// desktop saver
-	readonly property var saverAfterMinutes: settings.saverAfterMinutes !== undefined ? settings.saverAfterMinutes : 5
-	readonly property var saverName: settings.saverName !== undefined ? settings.saverName : "drift"
-	readonly property var saverGround: settings.saverGround !== undefined ? settings.saverGround : "#202020"
-
 	// lock screen
 	readonly property var lockAfterMinutes: settings.lockAfterMinutes !== undefined ? settings.lockAfterMinutes : 10
 	readonly property var lockSleepAfterMinutes: settings.lockSleepAfterMinutes !== undefined ? settings.lockSleepAfterMinutes : 30
-	readonly property var lockSaver: settings.lockSaver !== undefined ? settings.lockSaver : "drift"
-	readonly property var lockSaverOpacity: settings.lockSaverOpacity !== undefined ? settings.lockSaverOpacity : 0.5
-	readonly property var lockSaverFadeMs: settings.lockSaverFadeMs !== undefined ? settings.lockSaverFadeMs : 600
 	readonly property var lockScrim: settings.lockScrim !== undefined ? settings.lockScrim : 0.52
 	readonly property var lockInset: settings.lockInset !== undefined ? settings.lockInset : 96
 	readonly property var lockClockFormat: settings.lockClockFormat !== undefined ? settings.lockClockFormat : "HH:mm"

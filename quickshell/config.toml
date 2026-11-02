@@ -254,19 +254,10 @@ powerTooltipWidth = 240  # same as cpuTooltipWidth
 powerTooltipPadding = 12  # same as cpuTooltipPadding
 powerGovernorTitle = "Governor"
 
-# desktop saver
-[saver]
-saverAfterMinutes = 5  # idle before the desktop shows a saver, 0 disables
-saverName = "drift"  # none | drift | rain | embers | stars | pipes | mystify
-saverGround = "#202020"
-
 # lock screen
 [lock]
 lockAfterMinutes = 10  # idle before the shell locks, 0 disables
 lockSleepAfterMinutes = 30  # idle while locked before suspend, 0 disables
-lockSaver = "drift"  # none | drift | rain | embers
-lockSaverOpacity = 0.5
-lockSaverFadeMs = 600
 lockScrim = 0.52
 lockInset = 96
 lockClockFormat = "HH:mm"

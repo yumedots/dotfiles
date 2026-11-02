@@ -11,7 +11,6 @@ PanelWindow {
 	required property var modelData
 	property var source
 	property string wallpaper: ""
-	property string saver: "none"
 	property string account: ""
 	property bool power: true
 	property var actions: []
@@ -129,11 +128,6 @@ PanelWindow {
 			opacity: root.scrim * root.veil
 		}
 
-		ScreenSaver {
-			anchors.fill: parent
-			name: root.saver
-			strength: Config.lockSaverOpacity
-		}
 
 		MouseArea {
 			anchors.fill: parent

@@ -14,7 +14,6 @@ ShellRoot {
 	readonly property bool preview: Quickshell.env("QS_LOCK_PREVIEW") === "1"
 	readonly property string pidFile: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/qs-lock.pid"
 
-	property string saver: Quickshell.env("QS_LOCK_SAVER") || Config.lockSaver
 
 	function grab() {
 		for (let i = 0; i < locks.instances.length; i++)
@@ -40,7 +39,6 @@ ShellRoot {
 		Stage {
 			source: auth
 			wallpaper: Yudae.wallpaper.active || ""
-			saver: lockRoot.saver
 
 			onPowerRequested: powerMenu.open()
 		}
@@ -72,9 +70,6 @@ ShellRoot {
 	IpcHandler {
 		target: "lock"
 
-		function screensaver(name: string) {
-			lockRoot.saver = name;
-		}
 
 		function power() {
 			powerMenu.open();
