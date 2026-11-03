@@ -3,12 +3,12 @@
 #include <algorithm>
 
 #include <hyprland/src/Compositor.hpp>
-#include <hyprland/src/desktop/view/Window.hpp>
+#include <hyprland/src/desktop/view/window/Window.hpp>
+#include <hyprland/src/desktop/view/window/WindowPresentation.hpp>
 #include <hyprland/src/render/Renderer.hpp>
+#include <hyprland/src/render/pass/BorderPassElement.hpp>
 #include <hyprutils/memory/Casts.hpp>
 using namespace Hyprutils::Memory;
-using namespace Render::GL;
-#include "BorderppPassElement.hpp"
 #include "globals.hpp"
 
 static size_t borderCount() {
@@ -62,7 +62,7 @@ std::string CBordersPlusPlus::getDisplayName() {
     return "Borders++";
 }
 
-void CBordersPlusPlus::draw(PHLMONITOR pMonitor, const float& a) {
+void CBordersPlusPlus::draw(Render::CRenderContext& ctx, PHLMONITOR pMonitor, const float& a, const Render::SWindowRenderPresentation& presentation) {
     if (!validMapped(m_pWindow))
         return;
 
@@ -71,20 +71,7 @@ void CBordersPlusPlus::draw(PHLMONITOR pMonitor, const float& a) {
     if (!PWINDOW->m_ruleApplicator->decorate().valueOrDefault())
         return;
 
-    CBorderPPPassElement::SBorderPPData data;
-    data.deco = this;
-
-    g_pHyprRenderer->m_renderPass.add(makeUnique<CBorderPPPassElement>(data));
-}
-
-void CBordersPlusPlus::drawPass(PHLMONITOR pMonitor, const float& a) {
-    const auto  PWINDOW = m_pWindow.lock();
-
-    static auto PROUNDING   = CConfigValue<Config::INTEGER>("decoration:rounding");
-    static auto PBORDERSIZE = CConfigValue<Config::INTEGER>("general:border_size");
-
-    const auto  BORDERS      = borderCount();
-    const auto  NATURALROUND = vars.naturalRounding->value();
+    const auto BORDERS = borderCount();
 
     if (BORDERS < 1)
         return;
@@ -92,15 +79,15 @@ void CBordersPlusPlus::drawPass(PHLMONITOR pMonitor, const float& a) {
     if (m_bAssignedGeometry.width < m_seExtents.topLeft.x + 1 || m_bAssignedGeometry.height < m_seExtents.topLeft.y + 1)
         return;
 
-    const auto PWORKSPACE      = PWINDOW->m_workspace;
-    const auto WORKSPACEOFFSET = PWORKSPACE && !PWINDOW->m_pinned ? PWORKSPACE->m_renderOffset->value() : Vector2D();
+    static auto PBORDERSIZE = CConfigValue<Config::INTEGER>("general:border_size");
 
-    auto       rounding      = PWINDOW->rounding() == 0 ? 0 : (PWINDOW->rounding() + *PBORDERSIZE) * pMonitor->m_scale;
-    const auto ROUNDINGPOWER = PWINDOW->roundingPower();
-    const auto ORIGINALROUND = rounding == 0 ? 0 : (PWINDOW->rounding() + *PBORDERSIZE) * pMonitor->m_scale;
+    const auto  NATURALROUND  = vars.naturalRounding->value();
+    auto        rounding      = PWINDOW->presentation().rounding() == 0 ? 0 : (PWINDOW->presentation().rounding() + *PBORDERSIZE) * pMonitor->m_scale;
+    const auto  ROUNDINGPOWER = PWINDOW->presentation().roundingPower();
+    const auto  ORIGINALROUND = rounding;
 
-    CBox fullBox = PWINDOW->getWindowMainSurfaceBox();
-    fullBox.translate(PWINDOW->m_floatingOffset - pMonitor->m_position + WORKSPACEOFFSET);
+    CBox        fullBox = PWINDOW->getWindowMainSurfaceBox();
+    fullBox.translate(presentation.floatingOffset - pMonitor->m_position + presentation.workspaceOffset);
     fullBox.scale(pMonitor->m_scale).round();
 
     if (fullBox.width < 1 || fullBox.height < 1)
@@ -113,7 +100,7 @@ void CBordersPlusPlus::drawPass(PHLMONITOR pMonitor, const float& a) {
         fullThickness += THISBORDERSIZE;
     }
 
-    fullBox.expand(std::round(PWINDOW->getRealBorderSize() * pMonitor->m_scale));
+    fullBox.expand(std::round(PWINDOW->presentation().borderSize() * pMonitor->m_scale));
 
     int prevScaled = 0;
 
@@ -128,14 +115,16 @@ void CBordersPlusPlus::drawPass(PHLMONITOR pMonitor, const float& a) {
         if (fullBox.width < 1 || fullBox.height < 1)
             break;
 
-        g_pHyprOpenGL->scissor(nullptr);
+        CBorderPassElement::SBorderData data;
+        data.box           = fullBox;
+        data.grad1         = Config::CGradientValueData(CHyprColor{static_cast<uint64_t>(vars.borderColors[i]->value())});
+        data.round         = NATURALROUND ? sc<int>(ORIGINALROUND) : sc<int>(rounding);
+        data.roundingPower = ROUNDINGPOWER;
+        data.borderSize    = THISBORDERSIZE;
+        data.a             = a;
+        data.outerRound    = NATURALROUND ? sc<int>(ORIGINALROUND) : -1;
 
-        g_pHyprOpenGL->renderBorder(fullBox, CHyprColor{static_cast<uint64_t>(vars.borderColors[i]->value())},
-                                    {.round         = NATURALROUND ? sc<int>(ORIGINALROUND) : sc<int>(rounding),
-                                     .roundingPower = ROUNDINGPOWER,
-                                     .borderSize    = THISBORDERSIZE,
-                                     .a             = a,
-                                     .outerRound    = NATURALROUND ? sc<int>(ORIGINALROUND) : -1});
+        Render::IHyprRenderer::addPassElement(ctx, makeUnique<CBorderPassElement>(data));
 
         prevScaled = std::round(THISBORDERSIZE * pMonitor->m_scale);
     }

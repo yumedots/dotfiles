@@ -5,7 +5,8 @@
 #include <any>
 #include <array>
 #include <hyprland/src/Compositor.hpp>
-#include <hyprland/src/desktop/view/Window.hpp>
+#include <hyprland/src/desktop/view/window/Window.hpp>
+#include <hyprland/src/desktop/view/window/WindowPresentation.hpp>
 #include <hyprland/src/desktop/state/WindowState.hpp>
 #include <hyprland/src/config/ConfigManager.hpp>
 #include <hyprland/src/render/Renderer.hpp>
@@ -20,10 +21,10 @@ APICALL EXPORT std::string PLUGIN_API_VERSION() {
 }
 
 static void onNewWindow(PHLWINDOW window) {
-    if (std::ranges::any_of(window->m_windowDecorations, [](const auto& d) { return d->getDisplayName() == "Borders++"; }))
+    if (std::ranges::any_of(window->presentation().decorations(), [](const auto& d) { return d->getDisplayName() == "Borders++"; }))
         return;
 
-    HyprlandAPI::addWindowDecoration(PHANDLE, window, makeUnique<CBordersPlusPlus>(window));
+    HyprlandAPI::addWindowDecoration(PHANDLE, window, makeShared<CBordersPlusPlus>(window));
 }
 
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
@@ -65,15 +66,11 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     // add deco to existing windows
     for (auto& w : Desktop::windowState()->windows()) {
-        if (w->isHidden() || !w->m_isMapped)
+        if (w->isHidden() || !w->mapped())
             continue;
 
-        HyprlandAPI::addWindowDecoration(PHANDLE, w, makeUnique<CBordersPlusPlus>(w));
+        HyprlandAPI::addWindowDecoration(PHANDLE, w, makeShared<CBordersPlusPlus>(w));
     }
 
     return {"borders-plus-plus", "A plugin to add more borders to windows.", "Vaxry", "1.0"};
-}
-
-APICALL EXPORT void PLUGIN_EXIT() {
-    g_pHyprRenderer->m_renderPass.removeAllOfType("CBorderPPPassElement");
 }
