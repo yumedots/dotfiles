@@ -34,6 +34,7 @@ const versions = @import("providers/versions.zig");
 const windows = @import("providers/windows.zig");
 const media = @import("providers/media.zig");
 const calendar = @import("providers/calendar.zig");
+const vms = @import("providers/vms.zig");
 const iconsmod = @import("primitives/icons.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
@@ -75,6 +76,7 @@ pub const Context = struct {
 	windows: *windows.Windows,
 	media: *media.Media,
 	calendar: *calendar.Calendar,
+	vms: *vms.Vms,
 	socket_path: []const u8,
 };
 
@@ -394,6 +396,30 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	}
 }
 
+fn callThunk(ctx: *anyopaque, target: []const u8, method: []const u8, args: json.Value, alloc: std.mem.Allocator) anyerror![]u8 {
+	const context: *Context = @ptrCast(@alignCast(ctx));
+
+	if (std.mem.eql(u8, target, "vms")) return context.vms.call(method, args, allocator);
+	if (std.mem.eql(u8, target, "state")) return context.hub.syncSnapshot(allocator);
+	if (std.mem.eql(u8, target, "ui")) return context.hub.syncSnapshot(allocator);
+
+	var out: std.Io.Writer.Allocating = .init(alloc);
+	const writer = &out.writer;
+
+	try writer.writeAll("{");
+	try std.json.Stringify.encodeJsonString(target, .{}, writer);
+	try writer.writeAll(":{");
+	try std.json.Stringify.encodeJsonString(method, .{}, writer);
+	try writer.writeAll(":");
+	try writer.print("{f}", .{std.json.fmt(args, .{})});
+	try writer.writeAll("}}");
+
+	const parsed = try json.parse(alloc, out.written());
+	commandThunk(ctx, parsed.value);
+
+	return alloc.dupe(u8, "{}");
+}
+
 fn refreshThunk(ctx: *anyopaque) void {
 	const thread = std.Thread.spawn(.{}, refreshAll, .{ctx}) catch return;
 	thread.detach();
@@ -421,6 +447,8 @@ pub fn main() !void {
 	}
 
 	if (std.mem.eql(u8, command, "call")) return cli.call(io, args);
+	if (std.mem.eql(u8, command, "vm")) return cli.virtualMachines(io, args);
+	if (std.mem.eql(u8, command, "ui")) return cli.ui(io, args);
 	if (std.mem.eql(u8, command, "spawn-check")) return cli.spawnCheck(io, args);
 
 	if (std.mem.eql(u8, command, "logout")) return cli.logout(io);
@@ -430,7 +458,7 @@ pub fn main() !void {
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|spawn-check|logout]\n", .{});
+		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|vm|ui|spawn-check|logout]\n", .{});
 		return;
 	}
 
@@ -551,6 +579,9 @@ fn run(io: std.Io) !void {
 	const calendar_provider = try calendar.Calendar.create(allocator, io, hub);
 	try hub.add(calendar_provider.provider());
 
+	const vms_provider = try vms.Vms.create(allocator, io, hub);
+	try hub.add(vms_provider.provider());
+
 	screen_provider.attachSettings(settings_provider);
 
 	const context = try allocator.create(Context);
@@ -586,6 +617,7 @@ fn run(io: std.Io) !void {
 		.windows = windows_provider,
 		.media = media_provider,
 		.calendar = calendar_provider,
+		.vms = vms_provider,
 		.socket_path = socket_path,
 	};
 
@@ -598,9 +630,15 @@ fn run(io: std.Io) !void {
 		.dismiss = dismissThunk,
 		.refresh = refreshThunk,
 		.command = commandThunk,
+		.call = callThunk,
 	});
 
 	try hub.ipc.?.start();
+	const vsock_port = blk: {
+		const text = proc.env(io, allocator, "YUDAE_VSOCK_PORT") orelse break :blk 1024;
+		break :blk std.fmt.parseInt(u32, text, 10) catch 1024;
+	};
+	hub.ipc.?.startVsock(vsock_port) catch {};
 	daemon_provider.markListening();
 	try system_provider.start();
 	try opencode_provider.start();

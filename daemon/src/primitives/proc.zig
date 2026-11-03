@@ -89,6 +89,10 @@ pub fn home(io: Io, allocator: Allocator) []const u8 {
 	return envOr(io, allocator, "HOME", "/home");
 }
 
+pub fn repo(io: Io, allocator: Allocator) []const u8 {
+	return std.fmt.allocPrint(allocator, "{s}/dotfiles", .{home(io, allocator)}) catch "/home/gabriel/dotfiles";
+}
+
 pub fn runtimeDir(io: Io, allocator: Allocator) []const u8 {
 	return env(io, allocator, "XDG_RUNTIME_DIR") orelse "/tmp";
 }

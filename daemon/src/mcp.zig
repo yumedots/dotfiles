@@ -3,6 +3,7 @@ const json = @import("primitives/json.zig");
 const proc = @import("primitives/proc.zig");
 const sock = @import("primitives/sock.zig");
 const exec = @import("primitives/exec.zig");
+const environ = @import("primitives/environ.zig");
 
 const gpa = std.heap.smp_allocator;
 const Io = std.Io;
@@ -23,6 +24,29 @@ const tools = [_]Tool{
 	.{ .name = "hypr_run", .description = "Run a command inside the test instance.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"args\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"args\"]}" },
 	.{ .name = "hypr_stop", .description = "Stop the test instance and remove its worktree.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
 	.{ .name = "qs_log", .description = "Tail the newest quickshell log.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"integer\"}}}" },
+	.{ .name = "vm_create", .description = "Boot a VM from the golden layer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"from\":{\"type\":\"string\"},\"cores\":{\"type\":\"integer\"},\"mem\":{\"type\":\"integer\"},\"gl\":{\"type\":\"boolean\"},\"agent\":{\"type\":\"string\"}}}" },
+	.{ .name = "vm_start", .description = "Boot an existing VM.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_list", .description = "List VMs, tiers and resource use.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "vm_state", .description = "The guest daemon snapshot.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_exec", .description = "Run a command in the guest daemon.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"cmd\":{\"type\":\"string\"},\"argv\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_screenshot", .description = "Write a PNG screenshot and return its path.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_key", .description = "Send key codes at compositor level.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"keys\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"name\",\"keys\"]}" },
+	.{ .name = "vm_type", .description = "Type text at compositor level.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"}},\"required\":[\"name\",\"text\"]}" },
+	.{ .name = "vm_click", .description = "Move and click the pointer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"button\":{\"type\":\"string\"}},\"required\":[\"name\",\"x\",\"y\"]}" },
+	.{ .name = "vm_move", .description = "Move the pointer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"}},\"required\":[\"name\",\"x\",\"y\"]}" },
+	.{ .name = "vm_wait", .description = "Wait for a guest predicate, no sleep loops.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"until\":{\"type\":\"string\"},\"timeout\":{\"type\":\"integer\"}},\"required\":[\"name\",\"until\"]}" },
+	.{ .name = "vm_sleep", .description = "Stop the VM and inflate the balloon.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_park", .description = "Stop the VM and reclaim its cgroup memory.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_wake", .description = "Deflate the balloon and continue the VM.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_destroy", .description = "Quit QEMU and delete the run overlay.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_snapshot", .description = "Snapshot the run overlay.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"tag\":{\"type\":\"string\"}},\"required\":[\"name\",\"tag\"]}" },
+	.{ .name = "vm_restore", .description = "Restore the run overlay snapshot.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"tag\":{\"type\":\"string\"}},\"required\":[\"name\",\"tag\"]}" },
+	.{ .name = "vm_fork", .description = "Clone a VM disk into a new VM.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"from\":{\"type\":\"string\"}},\"required\":[\"name\",\"from\"]}" },
+	.{ .name = "vm_view", .description = "Open the VM window and hand input to the human.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_push", .description = "Copy a host file into the guest.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"name\",\"path\"]}" },
+	.{ .name = "vm_pull", .description = "Copy a guest file to the host.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"name\",\"path\"]}" },
+	.{ .name = "vm_ui_tree", .description = "Guest state plus the Hyprland client tree.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_run_scenario", .description = "Run a deterministic VM scenario.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"scenario\":{\"type\":\"string\"}},\"required\":[\"scenario\"]}" },
 };
 
 pub fn run(io: Io, args: []const []const u8) !void {
@@ -127,7 +151,73 @@ fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.
 
 	if (std.mem.eql(u8, name, "qs_log")) return logTail(io, allocator, arguments);
 
+	if (std.mem.eql(u8, name, "vm_view")) {
+		const body = try callDaemon(io, allocator, "vms", "view", arguments);
+		spawnViewer(io, allocator, json.textAt(arguments, "name"));
+		return body;
+	}
+
+	if (std.mem.startsWith(u8, name, "vm_")) return callDaemon(io, allocator, "vms", name["vm_".len..], arguments);
+
 	return error.UnknownTool;
+}
+
+fn spawnViewer(io: Io, allocator: std.mem.Allocator, name: []const u8) void {
+	if (name.len == 0) return;
+
+	const repo = proc.repo(io, allocator);
+	const qml = std.fmt.allocPrint(allocator, "{s}/shell/vmView.qml", .{repo}) catch return;
+	const command = std.fmt.allocPrint(allocator, "exec quickshell -p '{s}'", .{qml}) catch return;
+
+	var map = std.process.Environ.Map.init(allocator);
+	if (environ.current(io, allocator) catch null) |source| map.putPosixBlock(source.block.view()) catch {};
+	map.put("YUDAE_VM", name) catch return;
+
+	_ = exec.spawn(io, .{
+		.argv = &.{ "setsid", "sh", "-c", command },
+		.stdin = .ignore,
+		.stdout = .ignore,
+		.stderr = .ignore,
+		.environ_map = &map,
+	}) catch return;
+}
+
+fn callDaemon(io: Io, allocator: std.mem.Allocator, target: []const u8, method: []const u8, arguments: json.Value) ![]const u8 {
+	const path = try proc.socketPath(io, allocator);
+
+	var out: std.Io.Writer.Allocating = .init(allocator);
+	const writer = &out.writer;
+
+	try writer.writeAll("{\"call\":{\"target\":");
+	try std.json.Stringify.encodeJsonString(target, .{}, writer);
+	try writer.writeAll(",\"method\":");
+	try std.json.Stringify.encodeJsonString(method, .{}, writer);
+	try writer.writeAll(",\"args\":");
+	try writer.print("{f}", .{std.json.fmt(arguments, .{})});
+	try writer.writeAll("}}");
+
+	var buffer: [1048576]u8 = undefined;
+	var connection = sock.Connection.connect(path, &buffer) catch return error.DaemonDown;
+	defer connection.close();
+
+	try connection.writeLine(out.written());
+
+	var attempts: usize = 0;
+	while (attempts < 20) : (attempts += 1) {
+		const line = try connection.readLine() orelse return error.NoReply;
+		const parsed = try json.parse(allocator, line);
+
+		if (json.field(parsed.value, "ok") == null) continue;
+		if (!json.flag(parsed.value, "ok")) return error.CallFailed;
+
+		const result = json.field(parsed.value, "result") orelse return allocator.dupe(u8, "{}");
+
+		var body: std.Io.Writer.Allocating = .init(allocator);
+		try body.writer.print("{f}", .{std.json.fmt(result, .{})});
+		return body.written();
+	}
+
+	return error.NoReply;
 }
 
 fn fetch(io: Io, allocator: std.mem.Allocator) ![]const u8 {
@@ -157,7 +247,7 @@ fn hypr(io: Io, allocator: std.mem.Allocator, argv: []const []const u8) ![]const
 	const root = std.mem.trimEnd(u8, try proc.readFile(io, allocator, "/proc/self/exe"), "\x00\n");
 	_ = root;
 
-	const script = try std.fmt.allocPrint(allocator, "{s}/.config/scripts/hypr-test", .{proc.home(io, allocator)});
+	const script = try std.fmt.allocPrint(allocator, "{s}/scripts/hypr-test", .{proc.repo(io, allocator)});
 
 	var full: std.ArrayList([]const u8) = .empty;
 	try full.append(allocator, script);

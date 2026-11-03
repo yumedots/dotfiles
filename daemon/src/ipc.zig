@@ -1,6 +1,7 @@
 const std = @import("std");
 const sock = @import("primitives/sock.zig");
 const json = @import("primitives/json.zig");
+const exec = @import("primitives/exec.zig");
 
 pub const Io = std.Io;
 pub const Allocator = std.mem.Allocator;
@@ -12,6 +13,7 @@ pub const Hooks = struct {
 	dismiss: ?*const fn (ctx: *anyopaque, id: []const u8) void = null,
 	refresh: ?*const fn (ctx: *anyopaque) void = null,
 	command: ?*const fn (ctx: *anyopaque, value: json.Value) void = null,
+	call: ?*const fn (ctx: *anyopaque, target: []const u8, method: []const u8, args: json.Value, allocator: Allocator) anyerror![]u8 = null,
 };
 
 pub const Client = struct {
@@ -20,6 +22,7 @@ pub const Client = struct {
 	write_mutex: std.Io.Mutex = .init,
 	alive: bool = true,
 	gaze: bool = false,
+	push: bool = true,
 	rev: u64 = 0,
 };
 
@@ -27,6 +30,7 @@ pub const Ipc = struct {
 	allocator: Allocator,
 	io: Io,
 	server: sock.Server,
+	vsock: ?sock.VsockServer = null,
 	hooks: Hooks,
 	mutex: std.Io.Mutex = .init,
 	clients: std.ArrayList(*Client) = .empty,
@@ -49,6 +53,47 @@ pub const Ipc = struct {
 		thread.detach();
 	}
 
+	pub fn startVsock(self: *Ipc, port: u32) !void {
+		self.vsock = try sock.VsockServer.init(port);
+
+		const thread = try std.Thread.spawn(.{}, vsockLoop, .{self});
+		thread.detach();
+	}
+
+	fn vsockLoop(self: *Ipc) void {
+		while (true) {
+			const fd = self.vsock.?.accept() catch continue;
+
+			const connection = self.allocator.create(sock.Connection) catch {
+				_ = std.os.linux.close(fd);
+				continue;
+			};
+
+			const buffer = self.allocator.alloc(u8, 4 * 1024 * 1024) catch {
+				_ = std.os.linux.close(fd);
+				continue;
+			};
+			connection.* = .{ .fd = fd, .buffer = buffer };
+
+			const client = self.allocator.create(Client) catch {
+				_ = std.os.linux.close(fd);
+				continue;
+			};
+			client.* = .{ .fd = fd, .connection = connection, .push = false };
+
+			self.mutex.lockUncancelable(self.io);
+			self.clients.append(self.allocator, client) catch {
+				self.mutex.unlock(self.io);
+				_ = std.os.linux.close(fd);
+				continue;
+			};
+			self.mutex.unlock(self.io);
+
+			const thread = std.Thread.spawn(.{}, readLoop, .{ self, client }) catch continue;
+			thread.detach();
+		}
+	}
+
 	fn acceptLoop(self: *Ipc) void {
 		while (true) {
 			const fd = self.server.accept() catch continue;
@@ -68,7 +113,7 @@ pub const Ipc = struct {
 				_ = std.os.linux.close(fd);
 				continue;
 			};
-			client.* = .{ .fd = fd, .connection = connection };
+			client.* = .{ .fd = fd, .connection = connection, .push = false };
 
 			self.mutex.lockUncancelable(self.io);
 			self.clients.append(self.allocator, client) catch {
@@ -134,6 +179,55 @@ pub const Ipc = struct {
 			if (self.hooks.command) |hook| hook(self.hooks.ctx, value);
 		}
 
+		if (json.field(root, "exec")) |request| {
+			const list = json.listAt(request, "argv");
+			const argv = arena.allocator().alloc([]const u8, list.len) catch return;
+
+			for (list, 0..) |item, index| argv[index] = json.text(item);
+
+			const result = exec.runLimit(self.io, self.allocator, argv, null, 4 * 1024 * 1024) catch |err| {
+				var out: std.Io.Writer.Allocating = .init(arena.allocator());
+				out.writer.print("{{\"ok\":false,\"error\":\"{s}\"}}", .{@errorName(err)}) catch {};
+				sendLine(self.io, client, out.written());
+				return;
+			};
+			defer result.deinit(self.allocator);
+
+			var out: std.Io.Writer.Allocating = .init(arena.allocator());
+			const writer = &out.writer;
+			writer.print("{{\"ok\":true,\"code\":{d},\"out\":", .{result.code}) catch return;
+			json.encodeText(writer, result.out) catch return;
+			writer.writeAll(",\"err\":") catch return;
+			json.encodeText(writer, result.err) catch return;
+			writer.writeAll("}") catch return;
+
+			sendLine(self.io, client, out.written());
+			return;
+		}
+
+		if (json.field(root, "call")) |request| {
+			const hook = self.hooks.call orelse return;
+			const target = json.textAt(request, "target");
+			const method = json.textAt(request, "method");
+			const args = json.field(request, "args") orelse json.Value{ .null = {} };
+
+			const result = hook(self.hooks.ctx, target, method, args, arena.allocator()) catch |err| {
+				var out: std.Io.Writer.Allocating = .init(arena.allocator());
+				out.writer.print("{{\"ok\":false,\"error\":\"{s}\"}}", .{@errorName(err)}) catch {};
+				sendLine(self.io, client, out.written());
+				return;
+			};
+
+			var out: std.Io.Writer.Allocating = .init(arena.allocator());
+			const writer = &out.writer;
+			writer.writeAll("{\"ok\":true,\"result\":") catch return;
+			writer.writeAll(if (result.len > 0) result else "null") catch return;
+			writer.writeAll("}") catch return;
+
+			sendLine(self.io, client, out.written());
+			return;
+		}
+
 		if (json.flag(root, "sync")) {
 			const hook = self.hooks.sync orelse self.hooks.snapshot;
 			const body = hook(self.hooks.ctx, self.allocator) catch return;
@@ -186,6 +280,7 @@ pub const Ipc = struct {
 		for (self.clients.items) |client| {
 			if (count == targets.len) break;
 			if (!client.alive) continue;
+			if (!client.push) continue;
 			if (gaze_only and !client.gaze) continue;
 
 			targets[count] = client;

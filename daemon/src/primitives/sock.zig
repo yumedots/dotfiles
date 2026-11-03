@@ -93,6 +93,52 @@ fn tune(fd: i32) void {
 	_ = linux.setsockopt(fd, linux.SOL.SOCKET, linux.SO.SNDBUF, std.mem.asBytes(&size), @sizeOf(i32));
 }
 
+pub const VMADDR_CID_ANY: u32 = 0xffffffff;
+pub const VMADDR_CID_HOST: u32 = 2;
+
+pub const VsockServer = struct {
+	fd: i32,
+
+	pub fn init(port: u32) !VsockServer {
+		const result = linux.socket(linux.AF.VSOCK, linux.SOCK.STREAM | linux.SOCK.CLOEXEC, 0);
+		if (failed(result)) return error.SocketFailed;
+
+		const fd: i32 = @intCast(result);
+		var address: linux.sockaddr.vm = .{ .port = port, .cid = VMADDR_CID_ANY, .flags = 0 };
+
+		if (failed(linux.bind(fd, @ptrCast(&address), @sizeOf(linux.sockaddr.vm)))) return error.BindFailed;
+		if (failed(linux.listen(fd, 128))) return error.ListenFailed;
+
+		return .{ .fd = fd };
+	}
+
+	pub fn accept(self: VsockServer) !i32 {
+		const result = linux.accept4(self.fd, null, null, linux.SOCK.CLOEXEC);
+		if (failed(result)) return error.AcceptFailed;
+
+		const fd: i32 = @intCast(result);
+		tune(fd);
+
+		return fd;
+	}
+
+	pub fn close(self: VsockServer) void {
+		_ = linux.close(self.fd);
+	}
+};
+
+pub fn connectVsock(cid: u32, port: u32, buffer: []u8) !Connection {
+	const result = linux.socket(linux.AF.VSOCK, linux.SOCK.STREAM | linux.SOCK.CLOEXEC, 0);
+	if (failed(result)) return error.SocketFailed;
+
+	const fd: i32 = @intCast(result);
+	var address: linux.sockaddr.vm = .{ .port = port, .cid = cid, .flags = 0 };
+
+	if (failed(linux.connect(fd, @ptrCast(&address), @sizeOf(linux.sockaddr.vm)))) return error.ConnectFailed;
+
+	return .{ .fd = fd, .buffer = buffer };
+}
+
 pub const Connection = struct {
 	fd: i32,
 	buffer: []u8,

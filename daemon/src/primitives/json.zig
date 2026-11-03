@@ -84,6 +84,19 @@ pub fn listAt(value: Value, key: []const u8) []const Value {
 	return list(field(value, key));
 }
 
+pub fn encodeText(writer: *std.Io.Writer, bytes: []const u8) !void {
+	if (std.unicode.utf8ValidateSlice(bytes)) return std.json.Stringify.encodeJsonString(bytes, .{}, writer);
+
+	var clean: std.ArrayList(u8) = .empty;
+	defer clean.deinit(std.heap.smp_allocator);
+
+	for (bytes) |byte| {
+		try clean.append(std.heap.smp_allocator, if (byte < 0x80) byte else '?');
+	}
+
+	return std.json.Stringify.encodeJsonString(clean.items, .{}, writer);
+}
+
 pub fn write(writer: *std.Io.Writer, value: anytype) !void {
 	try writer.print("{f}", .{std.json.fmt(value, .{})});
 }

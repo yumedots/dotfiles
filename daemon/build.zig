@@ -2,7 +2,8 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
 	const target = b.standardTargetOptions(.{});
-	const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .safe });
+	const debug = b.option(bool, "debug", "debug build with symbols") orelse false;
+	const optimize = if (debug) std.builtin.OptimizeMode.Debug else b.standardOptimizeOption(.{ .preferred_optimize_mode = .safe });
 	const use_llvm = b.option(bool, "llvm", "use LLVM (false is much faster to build but much slower to run)") orelse true;
 
 	const root = b.root.toString(b.allocator) catch @panic("OOM");

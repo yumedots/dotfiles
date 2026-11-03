@@ -40,6 +40,10 @@ test {
 	_ = @import("providers/supervisor.zig");
 	_ = @import("providers/versions.zig");
 	_ = @import("providers/windows.zig");
+	_ = @import("providers/vms.zig");
+	_ = @import("providers/vms/qmp.zig");
+	_ = @import("providers/vms/input.zig");
+	_ = @import("providers/vms/budget.zig");
 	_ = @import("primitives/hypr.zig");
 	_ = @import("primitives/config.zig");
 	_ = @import("cli.zig");
