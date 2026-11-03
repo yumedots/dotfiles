@@ -350,7 +350,7 @@ PanelWindow {
 			return;
 		}
 
-		if (root.mode === "procs" && event.text === Config.procKillKey) {
+		if ((root.mode === "procs" || root.mode === "vms") && event.text === Config.procKillKey) {
 			root.killProc(root.selectedRow);
 			event.accepted = true;
 			return;
@@ -426,7 +426,7 @@ PanelWindow {
 		if (Input.cancel(event))
 			return;
 
-		if (root.mode === "procs" && event.key === Qt.Key_Delete) {
+		if ((root.mode === "procs" || root.mode === "vms") && event.key === Qt.Key_Delete) {
 			root.killProc(root.selectedRow);
 			event.accepted = true;
 			return;
@@ -605,10 +605,10 @@ PanelWindow {
 	}
 
 	function killProc(entry) {
-		if (!entry || entry.kind !== "proc")
-			return;
-
-		Yudae.cmd("launcher", { kill: entry.pid });
+		if (entry && entry.kind === "proc")
+			Yudae.cmd("launcher", { kill: entry.pid });
+		else if (entry && entry.kind === "vm")
+			Yudae.cmd("launcher", { killVm: entry.id });
 	}
 
 	function activate(entry) {

@@ -198,6 +198,9 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 		const kill = json.integer(json.field(l_cmd, "kill"));
 		if (kill > 0) context.launcher.killProcess(@intCast(kill));
 
+		const kill_vm = json.textAt(l_cmd, "killVm");
+		if (kill_vm.len > 0) context.launcher.killVm(kill_vm);
+
 		if (json.flag(l_cmd, "clips")) context.launcher.refreshClips();
 
 		if (json.flag(l_cmd, "clipMore")) context.launcher.moreClip();

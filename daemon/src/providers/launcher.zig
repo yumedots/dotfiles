@@ -33,6 +33,7 @@ const glyph_file = "\u{f0213}";
 const glyph_apps = "\u{f0c9}";
 const glyph_wallpaper = "\u{f0e09}";
 const glyph_process = "\u{f0874}";
+const glyph_vm = "\u{f0379}";
 const glyph_power = "\u{f011}";
 const glyph_prompt = "\u{ea6d}";
 const glyph_emoji = "\u{f118}";
@@ -49,6 +50,7 @@ const modes = [_]Mode{
 	.{ .mode = "clipboard", .name = "Clipboard", .mark = "", .glyph = glyph_clip, .keywords = &.{ "copy", "paste" } },
 	.{ .mode = "wallpaper", .name = "Wallpaper", .mark = "~", .glyph = glyph_wallpaper, .keywords = &.{ "wallpaper", "background", "desktop" } },
 	.{ .mode = "procs", .name = "Processes", .mark = "%", .glyph = glyph_process, .keywords = &.{ "top", "atop", "cpu", "processes", "monitor", "kill" } },
+	.{ .mode = "vms", .name = "Virtual machines", .mark = "", .glyph = glyph_vm, .keywords = &.{ "vm", "virtual", "machine", "qemu", "guest", "kill" } },
 	.{ .mode = "emoji", .name = "Emoji & Kaomoji", .mark = ":", .glyph = glyph_emoji, .keywords = &.{ "emoji", "kaomoji", "emote", "smiley", "face", "copy" } },
 };
 
@@ -827,14 +829,29 @@ pub const Launcher = struct {
 		}
 
 		if (std.mem.startsWith(u8, id, "vm:")) {
-			self.openVm(id["vm:".len..]);
+			self.yudaeVm("view", id["vm:".len..]);
 			return;
 		}
 
 		if (std.mem.eql(u8, id, "calc")) self.copyCalc();
 	}
 
-	fn openVm(self: *Launcher, name: []const u8) void {
+	pub fn killVm(self: *Launcher, id: []const u8) void {
+		if (!std.mem.startsWith(u8, id, "vm:")) return;
+		const name = id["vm:".len..];
+		const source = self.vms orelse return;
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		for (source.info(arena.allocator()) catch return) |vm| {
+			if (!std.mem.eql(u8, vm.name, name)) continue;
+			self.yudaeVm(if (vm.tier == .off) "destroy" else "stop", name);
+			return;
+		}
+	}
+
+	fn yudaeVm(self: *Launcher, verb: []const u8, name: []const u8) void {
 		if (name.len == 0) return;
 
 		const repo = proc.repo(self.io, self.allocator);
@@ -842,7 +859,7 @@ pub const Launcher = struct {
 		defer self.allocator.free(script);
 
 		_ = exec.spawn(self.io, .{
-			.argv = &.{ "setsid", script, "vm", "view", name },
+			.argv = &.{ "setsid", script, "vm", verb, name },
 			.stdin = .ignore,
 			.stdout = .ignore,
 			.stderr = .ignore,
@@ -1048,6 +1065,11 @@ pub const Launcher = struct {
 			return rows.items;
 		}
 
+		if (std.mem.eql(u8, mode, "vms")) {
+			try self.vmRows(arena, search, &rows);
+			return rows.items;
+		}
+
 		if (std.mem.eql(u8, mode, "emoji")) return self.buildEmoji(arena, search);
 
 		if (std.mem.eql(u8, mode, "wallpaper")) return rows.items;
@@ -1066,7 +1088,6 @@ pub const Launcher = struct {
 
 		self.modeRows(arena, mode, search, &rows) catch {};
 		self.savedRows(arena, &rows) catch {};
-		self.vmRows(arena, search, &rows) catch {};
 		self.appsView(arena, search, &rows) catch {};
 
 		return self.rankOrWeb(arena, rows.items, search, true);
@@ -1142,13 +1163,13 @@ pub const Launcher = struct {
 		const list = source.info(arena) catch return;
 
 		for (list) |vm| {
-			if (search.len > 0 and std.mem.indexOf(u8, vm.name, search) == null and std.mem.indexOf(u8, "vm virtual machine", search) == null) continue;
+			if (search.len > 0 and std.mem.indexOf(u8, vm.name, search) == null) continue;
 
 			try rows.append(arena, .{
 				.id = try std.fmt.allocPrint(arena, "vm:{s}", .{vm.name}),
 				.kind = "vm",
-				.name = try std.fmt.allocPrint(arena, "VM {s}", .{vm.name}),
-				.glyph = "▣",
+				.name = vm.name,
+				.glyph = glyph_vm,
 				.detail = try std.fmt.allocPrint(arena, "{s} · {d} MB · {d} cores", .{ vm.tier.text(), vm.mem_mb, vm.cores }),
 			});
 		}
@@ -1691,6 +1712,7 @@ fn groupOf(id: []const u8) ?Group {
 
 fn emptyOf(mode: []const u8) []const u8 {
 	if (std.mem.eql(u8, mode, "clipboard")) return "Nothing copied yet";
+	if (std.mem.eql(u8, mode, "vms")) return "No virtual machines";
 
 	return "Nothing matches";
 }
