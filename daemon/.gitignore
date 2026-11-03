@@ -3,3 +3,4 @@ zig-out
 bench/build.jsonl
 cache
 assets/launcher-index.bin.gz
+bench/widgets/

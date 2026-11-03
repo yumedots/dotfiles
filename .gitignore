@@ -3,9 +3,9 @@ QtProject.conf
 baloofileinformationrc
 dconf
 dolphinrc
-micro/backups
+config/micro/backups
 gh
-micro/buffers
+config/micro/buffers
 mozilla/firefox
 psd
 session
@@ -14,10 +14,10 @@ manicode
 go
 net.imput.helium
 mimeapps.list
-quickshell/cache
+shell/cache
 hypr/plugins/agent-cursor/agent-cursor.bin
-zsh/.zcompdump-*
-zsh/.zsh_history
+config/zsh/.zcompdump-*
+config/zsh/.zsh_history
 chromium
 librewolf
 .DS_Store
@@ -31,7 +31,7 @@ cachyos-hello.json
 cachyos
 systemd
 spotify
-/gtk-3.0/bookmarks
+/config/gtk-3.0/bookmarks
 btop
 t3code-v2
 
@@ -55,7 +55,6 @@ qBittorrent/
 
 # Wine 
 /menus/
-/quickshell/yudaemond/bench/
 hypr/plugins/borders-plus-plus/borders-plus-plus.so
 
 .xmake/
