@@ -45,3 +45,5 @@ xmake orchestrates, it does not replace the real builders.
 | `xmake doctor` | what is missing and why |
 
 `zig build` stays underneath: the build budgets are measured on it and `scripts/yubuild` reports them.
+
+`scripts/xmake` is linked to `~/.local/bin/xmake`. Inside the repo it dispatches `link`, `lint`, `bench`, `hypr`, `vm` and `doctor` to `scripts/tasks.sh`; every other xmake command goes to the system xmake.

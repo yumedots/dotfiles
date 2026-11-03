@@ -49,7 +49,7 @@ systemd/ scripts/ vm/ docs/ agents/skills/
 xmake.lua          the single entry point: build link lint test bench hypr vm doctor
 ```
 
-Until the repo restructure lands, `shell/` is `quickshell/` and `daemon/` is `quickshell/yudaemond/`. `plans.md` is the source of truth for the target shape and the order of work.
+`xmake` is `scripts/xmake`, linked into `~/.local/bin`. It runs the repo tasks through `scripts/tasks.sh` and passes everything else to the system xmake. `plans.md` is the source of truth for the shape and the order of work.
 
 # Skills
 
