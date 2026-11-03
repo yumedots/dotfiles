@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-root="$(cd "$(dirname "$0")/.." && pwd)/quickshell/yudaemond"
+root="$(cd "$(dirname "$0")/.." && pwd)/daemon"
 cache="$root/.zig-cache"
 cap="${YUDA_BUILD_CACHE_MB:-300}"
 log="$root/bench/build.jsonl"

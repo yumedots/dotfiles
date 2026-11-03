@@ -43,7 +43,7 @@ pub const Config = struct {
 	}
 
 	fn path(self: *Config, allocator: Allocator) []const u8 {
-		return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/config.toml", .{proc.home(self.io, allocator)}) catch "/nonexistent";
+		return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/config.toml", .{proc.home(self.io, allocator)}) catch "/nonexistent";
 	}
 
 	fn watchLoop(self: *Config) void {

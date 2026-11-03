@@ -1,3 +1,5 @@
+-- xmake tasks: link lint bench hypr vm doctor (see scripts/tasks.sh)
+
 target("checks")
     set_kind("phony")
     add_tests("daemon")
@@ -6,7 +8,7 @@ target("checks")
         local name = opt.name:match("/(.+)$")
 
         if name == "daemon" then
-            return os.execv("sh", {"-c", "cd quickshell/yudaemond && zig build test"}, {try = true}) == 0
+            return os.execv("sh", {"-c", "cd daemon && zig build test"}, {try = true}) == 0
         end
 
         if name == "idle-spawn" then

@@ -70,7 +70,7 @@ pub const Settings = struct {
 	}
 
 	fn path(self: *Settings, allocator: Allocator) []const u8 {
-		return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/cache/display.lua", .{proc.home(self.io, allocator)}) catch "/nonexistent";
+		return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/cache/display.lua", .{proc.home(self.io, allocator)}) catch "/nonexistent";
 	}
 
 	fn watchLoop(self: *Settings) void {

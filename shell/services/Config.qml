@@ -247,8 +247,8 @@ QtObject {
 		{ name: "Shut down", command: "systemctl poweroff", glyph: "\uf011" },
 		{ name: "Reboot", command: "systemctl reboot", glyph: "\uead2" },
 		{ name: "Suspend", command: "systemctl suspend", glyph: "\udb81\udcb2" },
-		{ name: "Lock", command: "\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/scripts/lock\"", glyph: "\uf023" },
-		{ name: "Log out", command: "\"$HOME/.config/quickshell/yudaemond/zig-out/bin/yudaemond\" logout", glyph: "\uea6e" }
+		{ name: "Lock", command: "\"$HOME/dotfiles/shell/scripts/lock\"", glyph: "\uf023" },
+		{ name: "Log out", command: "\"$HOME/dotfiles/daemon/zig-out/bin/yudaemond\" logout", glyph: "\uea6e" }
 	]
 	readonly property var powerCellSize: settings.powerCellSize !== undefined ? settings.powerCellSize : 96
 	readonly property var powerIconSize: settings.powerIconSize !== undefined ? settings.powerIconSize : 48

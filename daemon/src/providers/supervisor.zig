@@ -129,7 +129,7 @@ fn terminate(pid: i32) void {
 }
 
 test "the launcher is the quickshell with the shell file in its cmdline" {
-	const cmdline = "/usr/bin/quickshell\x00-p\x00/home/me/.config/quickshell/launcherShell.qml\x00";
+	const cmdline = "/usr/bin/quickshell\x00-p\x00/home/me/dotfiles/shell/launcherShell.qml\x00";
 	try std.testing.expect(std.mem.indexOf(u8, cmdline, "launcherShell.qml") != null);
 	try std.testing.expect(std.mem.indexOf(u8, "quickshell\x00", "launcherShell.qml") == null);
 }

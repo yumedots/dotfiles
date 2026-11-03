@@ -123,7 +123,7 @@ pub const Windows = struct {
 	}
 
 	fn versionsFile(self: *Windows, allocator: Allocator) []const u8 {
-		const path = std.fmt.allocPrint(allocator, "{s}/.config/quickshell/cache/versions.json", .{proc.home(self.io, self.allocator)}) catch return "";
+		const path = std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/cache/versions.json", .{proc.home(self.io, self.allocator)}) catch return "";
 		return proc.readFile(self.io, allocator, path) catch "";
 	}
 

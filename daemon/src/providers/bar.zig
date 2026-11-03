@@ -94,7 +94,7 @@ pub const Bar = struct {
 };
 
 fn pathOf(io: Io, allocator: Allocator) ![]u8 {
-	return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/topbarlayout.json", .{proc.home(io, allocator)});
+	return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/topbarlayout.json", .{proc.home(io, allocator)});
 }
 
 fn normalize(allocator: Allocator, body: []const u8) ![]u8 {

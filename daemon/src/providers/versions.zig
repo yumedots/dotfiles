@@ -48,7 +48,7 @@ pub const Versions = struct {
 	}
 
 	fn path(self: *Versions, allocator: Allocator) ![]u8 {
-		return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/cache/versions.json", .{proc.home(self.io, self.allocator)});
+		return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/cache/versions.json", .{proc.home(self.io, self.allocator)});
 	}
 
 	fn watch(self: *Versions) void {

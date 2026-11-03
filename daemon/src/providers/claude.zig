@@ -248,7 +248,7 @@ pub const Claude = struct {
 
 	fn cachePath(self: *Claude) ![]u8 {
 		const home = proc.home(self.io, self.allocator);
-		return std.fmt.allocPrint(self.allocator, "{s}/.config/quickshell/cache/claude-plan.json", .{home});
+		return std.fmt.allocPrint(self.allocator, "{s}/dotfiles/shell/cache/claude-plan.json", .{home});
 	}
 
 	fn loadCache(self: *Claude) void {

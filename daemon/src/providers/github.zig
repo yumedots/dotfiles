@@ -115,7 +115,7 @@ pub const Github = struct {
 	}
 
 	fn cachePath(self: *Github, allocator: Allocator) []const u8 {
-		return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/cache/github/contrib.json", .{proc.home(self.io, allocator)}) catch "/nonexistent";
+		return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/cache/github/contrib.json", .{proc.home(self.io, allocator)}) catch "/nonexistent";
 	}
 
 	fn loadCache(self: *Github) void {

@@ -14,8 +14,8 @@ const Io = std.Io;
 const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
-const state_file = ".config/quickshell/cache/bar-ink.json";
-const verdict_file = ".config/quickshell/yudaemond/cache/wallpaper-ink.json";
+const state_file = "dotfiles/shell/cache/bar-ink.json";
+const verdict_file = "dotfiles/daemon/cache/wallpaper-ink.json";
 const daemon_bin = "/usr/bin/awww-daemon";
 const ink_prefix = "awww-ink-";
 const black_ink = "#000000";
@@ -1033,7 +1033,7 @@ pub const Ink = struct {
 		var arena = std.heap.ArenaAllocator.init(self.allocator);
 		defer arena.deinit();
 
-		const dir = std.fmt.allocPrint(arena.allocator(), "{s}/.config/quickshell/yudaemond/cache", .{proc.home(self.io, self.allocator)}) catch return;
+		const dir = std.fmt.allocPrint(arena.allocator(), "{s}/dotfiles/daemon/cache", .{proc.home(self.io, self.allocator)}) catch return;
 
 		std.Io.Dir.cwd().createDirPath(self.io, dir) catch {};
 	}

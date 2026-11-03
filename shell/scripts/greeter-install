@@ -17,8 +17,8 @@ fi
 home=$(getent passwd "$target" | cut -d: -f6)
 wall=""
 
-if [ -r "$home/.config/quickshell/cache/settings.lua" ]; then
-	wall=$(sed -n 's/^[[:space:]]*wallpaper[[:space:]]*=[[:space:]]*"\(.*\)",\{0,1\}[[:space:]]*$/\1/p' "$home/.config/quickshell/cache/settings.lua" | head -1)
+if [ -r "$home/dotfiles/shell/cache/settings.lua" ]; then
+	wall=$(sed -n 's/^[[:space:]]*wallpaper[[:space:]]*=[[:space:]]*"\(.*\)",\{0,1\}[[:space:]]*$/\1/p' "$home/dotfiles/shell/cache/settings.lua" | head -1)
 fi
 
 install -d -m 755 /etc/greetd
@@ -28,8 +28,8 @@ rm -f /etc/greetd/hyprland.lua /etc/greetd/start-greeter
 
 chmod o+x "$home"
 
-if ! runuser -u greeter -- test -r "$home/.config/quickshell/greeterShell.qml"; then
-	echo "greeter cannot read the shell in $home/.config/quickshell" >&2
+if ! runuser -u greeter -- test -r "$home/dotfiles/shell/greeterShell.qml"; then
+	echo "greeter cannot read the shell in $home/dotfiles/shell" >&2
 	exit 1
 fi
 
@@ -91,7 +91,7 @@ cat > /etc/greetd/config.toml <<CFG
 vt = 1
 
 [default_session]
-command = "$home/.config/quickshell/greeter/start-greeter"
+command = "$home/dotfiles/shell/greeter/start-greeter"
 user = "greeter"
 CFG
 

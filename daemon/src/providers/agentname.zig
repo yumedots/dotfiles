@@ -65,5 +65,5 @@ fn pathOf(allocator: Allocator, io: Io) ![]u8 {
 	const file = cfg.string("agentNameFile", allocator) orelse try allocator.dupe(u8, "cache/agent-name");
 	defer allocator.free(file);
 
-	return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/{s}", .{ proc.home(io, allocator), file });
+	return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/{s}", .{ proc.home(io, allocator), file });
 }

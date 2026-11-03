@@ -1,6 +1,7 @@
 local programs = require("programs")
 local actions = require("actions")
 local versions = require("versions")
+local repo = require("repo")
 local mainMod = "SUPER"
 
 hl.config({ binds = { scroll_event_delay = 0 } })
@@ -187,7 +188,7 @@ hl.bind(mainMod .. " + S", actions.scratchpadSwap)
 hl.bind(mainMod .. " + O", hl.dsp.global("quickshell:notifications"))
 hl.bind(mainMod .. " + F", hl.dsp.global("quickshell:power"))
 hl.bind(mainMod .. " + F4", wakeLauncher("powerMenu"))
-hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/scripts/lock"))
+hl.bind(mainMod .. " + L", hl.dsp.exec_cmd(repo .. "/shell/scripts/lock"))
 
 hl.define_submap("lock", "reset", function()
 	hl.bind("F35", hl.dsp.submap("reset"))

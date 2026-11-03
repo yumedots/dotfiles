@@ -183,12 +183,12 @@ kill_instance() {
 		[ -n "${AWWW_PID:-}" ] && kill "$AWWW_PID" 2>/dev/null || true
 		[ -n "$hp" ] && kill "$hp" 2>/dev/null || true
 		if [ -n "${WORKTREE:-}" ]; then
-			pkill -f "$WORKTREE/quickshell/shell.qml" 2>/dev/null || true
+			pkill -f "$WORKTREE/shell/shell.qml" 2>/dev/null || true
 		fi
 		sleep 1
 		[ -n "$hp" ] && kill -9 "$hp" 2>/dev/null || true
 		if [ -n "${WORKTREE:-}" ]; then
-			pkill -9 -f "$WORKTREE/quickshell/shell.qml" 2>/dev/null || true
+			pkill -9 -f "$WORKTREE/shell/shell.qml" 2>/dev/null || true
 		fi
 	) || true
 }
@@ -196,7 +196,7 @@ kill_instance() {
 abort_start() {
 	local hp="${1:-}" wt="$2" msg="$3"
 	if [ -n "$wt" ]; then
-		pkill -f "$wt/quickshell/shell.qml" 2>/dev/null || true
+		pkill -f "$wt/shell/shell.qml" 2>/dev/null || true
 	fi
 	[ -n "$hp" ] && kill "$hp" 2>/dev/null || true
 	teardown_wt "$wt"
@@ -232,11 +232,11 @@ cmd_start() {
 	git -C "$REPO" ls-files -z >"$dir/files"
 	git -C "$REPO" ls-files -z --others --exclude-standard >>"$dir/files"
 	rsync -a --ignore-missing-args --from0 --files-from="$dir/files" "$REPO/" "$wt/" || fail "rsync into worktree failed"
-	if [ -d "$REPO/quickshell/cache" ]; then
-		mkdir -p "$wt/quickshell"
-		rsync -a "$REPO/quickshell/cache" "$wt/quickshell/" || fail "rsync cache into worktree failed"
+	if [ -d "$REPO/shell/cache" ]; then
+		mkdir -p "$wt/shell"
+		rsync -a "$REPO/shell/cache" "$wt/shell/" || fail "rsync cache into worktree failed"
 	fi
-	pkill -f "$wt/quickshell/shell.qml" 2>/dev/null || true
+	pkill -f "$wt/shell/shell.qml" 2>/dev/null || true
 	local lid=${id//[^a-zA-Z0-9]/_}
 	local rule="name=\"hyprtest-hide-$id\", match={class=\"aquamarine\"}, float=true, move=\"9999 0\", no_focus=true, no_anim=true"
 	if [ "${HYPR_TEST_VISIBLE:-}" = 1 ]; then
@@ -245,7 +245,7 @@ cmd_start() {
 	if ! hyprctl eval "_G.HYPRTEST_RULE_$lid = hl.window_rule({$rule})" >/dev/null 2>&1; then
 		echo "hypr-test: warning: no live session to hide the nested window in; it will show up" >&2
 	fi
-	setsid env -u HYPRLAND_INSTANCE_SIGNATURE XDG_CONFIG_HOME="$wt" Hyprland </dev/null >>"$dir/hyprland.log" 2>&1 9>&- &
+	setsid env -u HYPRLAND_INSTANCE_SIGNATURE XDG_CONFIG_HOME="$wt" DOTFILES_REPO="$wt" Hyprland </dev/null >>"$dir/hyprland.log" 2>&1 9>&- &
 	local hp=$!
 	local sig="" sock="" line="" i
 	for i in $(seq 1 40); do
@@ -262,10 +262,10 @@ cmd_start() {
 		tail -n 40 "$dir/hyprland.log" >&2
 		abort_start "$hp" "$wt" "nested Hyprland did not start"
 	fi
-	setsid env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" XDG_CONFIG_HOME="$wt" quickshell -n -p "$wt/quickshell/shell.qml" </dev/null >>"$dir/quickshell.log" 2>&1 9>&- &
+	setsid env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" XDG_CONFIG_HOME="$wt" quickshell -n -p "$wt/shell/shell.qml" </dev/null >>"$dir/quickshell.log" 2>&1 9>&- &
 	local qid="" qpid="" out=""
 	for i in $(seq 1 40); do
-		line=$(qs list --all -j 2>/dev/null | qs_instance "$wt/quickshell/shell.qml" || true)
+		line=$(qs list --all -j 2>/dev/null | qs_instance "$wt/shell/shell.qml" || true)
 		if [ -n "$line" ]; then
 			qid=${line%% *}
 			qpid=${line##* }
@@ -292,7 +292,7 @@ cmd_start() {
 		env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" awww query >/dev/null 2>&1 && break
 		sleep 0.5
 	done
-	local wall=${HYPR_TEST_WALL:-$(sed -n 's/^[[:space:]]*wallpaper[[:space:]]*=[[:space:]]*"\(.*\)",\?[[:space:]]*$/\1/p' "$REPO/quickshell/cache/settings.lua" 2>/dev/null | head -1)}
+	local wall=${HYPR_TEST_WALL:-$(sed -n 's/^[[:space:]]*wallpaper[[:space:]]*=[[:space:]]*"\(.*\)",\?[[:space:]]*$/\1/p' "$REPO/shell/cache/settings.lua" 2>/dev/null | head -1)}
 	if [ -n "$wall" ]; then
 		for i in $(seq 1 20); do
 			env HYPRLAND_INSTANCE_SIGNATURE="$sig" WAYLAND_DISPLAY="$sock" awww img "$wall" >/dev/null 2>&1
@@ -325,7 +325,7 @@ cmd_shot() {
 cmd_run() {
 	load
 	[ $# -ge 1 ] || usage
-	env HYPRLAND_INSTANCE_SIGNATURE="$SIG" WAYLAND_DISPLAY="$SOCK" XDG_CONFIG_HOME="$WORKTREE" "$@"
+	env HYPRLAND_INSTANCE_SIGNATURE="$SIG" WAYLAND_DISPLAY="$SOCK" XDG_CONFIG_HOME="$WORKTREE" DOTFILES_REPO="$WORKTREE" "$@"
 }
 
 cmd_stop() {

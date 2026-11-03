@@ -1,11 +1,11 @@
 [Unit]
 Description=yudaemond shell backend
-Documentation=file:%h/.config/quickshell/yudaemond
+Documentation=file:%h/dotfiles/daemon
 After=default.target
 
 [Service]
 Type=simple
-ExecStart=%h/.config/quickshell/yudaemond/zig-out/bin/yudaemond run
+ExecStart=%h/dotfiles/daemon/zig-out/bin/yudaemond run
 Restart=always
 RestartSec=1
 MemoryMax=512M

@@ -182,7 +182,7 @@ const Build = struct {
 };
 
 fn lastBuild(io: Io, allocator: std.mem.Allocator) Build {
-	const path = std.fmt.allocPrint(allocator, "{s}/.config/quickshell/yudaemond/bench/build.jsonl", .{proc.home(io, allocator)}) catch return .{};
+	const path = std.fmt.allocPrint(allocator, "{s}/dotfiles/daemon/bench/build.jsonl", .{proc.home(io, allocator)}) catch return .{};
 	const body = proc.readFile(io, allocator, path) catch return .{};
 
 	var out: Build = .{};

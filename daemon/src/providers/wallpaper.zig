@@ -511,7 +511,7 @@ pub const Wallpaper = struct {
 };
 
 fn settingsPath(io: Io, allocator: Allocator) ![]u8 {
-	return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/cache/settings.lua", .{proc.home(io, allocator)});
+	return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/cache/settings.lua", .{proc.home(io, allocator)});
 }
 
 fn value(body: []const u8, key: []const u8) ?[]const u8 {

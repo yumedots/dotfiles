@@ -186,11 +186,11 @@ pub const Weather = struct {
 	}
 
 	fn placePath(self: *Weather, allocator: Allocator) []const u8 {
-		return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/cache/weather/place", .{proc.home(self.io, allocator)}) catch "/nonexistent";
+		return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/cache/weather/place", .{proc.home(self.io, allocator)}) catch "/nonexistent";
 	}
 
 	fn cachePath(self: *Weather, allocator: Allocator) []const u8 {
-		return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/cache/weather/current.json", .{proc.home(self.io, allocator)}) catch "/nonexistent";
+		return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/cache/weather/current.json", .{proc.home(self.io, allocator)}) catch "/nonexistent";
 	}
 
 	fn loop(self: *Weather) void {

@@ -34,7 +34,7 @@ pub const Config = struct {
 
 	pub fn load(io: Io, allocator: Allocator) !Config {
 		const home = proc.home(io, allocator);
-		const path = try std.fmt.allocPrint(allocator, "{s}/.config/quickshell/config.toml", .{home});
+		const path = try std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/config.toml", .{home});
 		defer allocator.free(path);
 
 		return loadPath(io, allocator, path);

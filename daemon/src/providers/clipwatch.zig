@@ -103,7 +103,7 @@ pub const Watch = struct {
 	}
 
 	fn statePath(self: *Watch, allocator: Allocator, name: []const u8) ![]u8 {
-		return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/cache/launcher/{s}", .{ proc.home(self.io, self.allocator), name });
+		return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/cache/launcher/{s}", .{ proc.home(self.io, self.allocator), name });
 	}
 
 	fn record(self: *Watch, replay: bool) void {

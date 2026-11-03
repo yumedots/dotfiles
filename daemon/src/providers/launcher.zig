@@ -264,11 +264,11 @@ pub const Launcher = struct {
 	}
 
 	fn stateDir(self: *Launcher, allocator: Allocator) ![]u8 {
-		return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/cache/launcher", .{proc.home(self.io, self.allocator)});
+		return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/cache/launcher", .{proc.home(self.io, self.allocator)});
 	}
 
 	fn statePath(self: *Launcher, allocator: Allocator, name: []const u8) ![]u8 {
-		return std.fmt.allocPrint(allocator, "{s}/.config/quickshell/cache/launcher/{s}", .{ proc.home(self.io, self.allocator), name });
+		return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/cache/launcher/{s}", .{ proc.home(self.io, self.allocator), name });
 	}
 
 	fn load(self: *Launcher) void {
@@ -1478,7 +1478,7 @@ const index_entry = 33;
 
 fn indexPath(io: Io, allocator: Allocator) ![]u8 {
 	const home = proc.home(io, allocator);
-	const path = try std.fmt.allocPrint(allocator, "{s}/.config/quickshell/yudaemond/assets/launcher-index.bin.gz", .{home});
+	const path = try std.fmt.allocPrint(allocator, "{s}/dotfiles/daemon/assets/launcher-index.bin.gz", .{home});
 
 	if (proc.exists(io, path)) return path;
 

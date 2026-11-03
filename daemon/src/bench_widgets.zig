@@ -189,7 +189,7 @@ const Bench = struct {
 	}
 
 	fn launcherConfig(self: *Bench) ![]const u8 {
-		return std.fmt.allocPrint(self.allocator, "{s}/quickshell/launcherShell.qml", .{self.inst.worktree});
+		return std.fmt.allocPrint(self.allocator, "{s}/shell/launcherShell.qml", .{self.inst.worktree});
 	}
 
 	fn grab(self: *Bench) ![]const u8 {
@@ -324,7 +324,7 @@ const Bench = struct {
 	fn findLauncher(self: *Bench) ?i32 {
 		const io = self.io;
 		const allocator = self.allocator;
-		const needle = std.fmt.allocPrint(allocator, "{s}/quickshell/launcherShell.qml", .{self.inst.worktree}) catch return null;
+		const needle = std.fmt.allocPrint(allocator, "{s}/shell/launcherShell.qml", .{self.inst.worktree}) catch return null;
 
 		var dir = std.Io.Dir.cwd().openDir(io, "/proc", .{ .iterate = true }) catch return null;
 		defer dir.close(io);
@@ -693,7 +693,7 @@ pub fn run(io: Io, args: []const []const u8) !void {
 	};
 
 	const body = try std.fmt.allocPrint(allocator, "{f}\n", .{std.json.fmt(payload, .{ .whitespace = .indent_2 })});
-	const dir = try std.fmt.allocPrint(allocator, "{s}/.config/quickshell/yudaemond/bench/widgets", .{proc.home(io, allocator)});
+	const dir = try std.fmt.allocPrint(allocator, "{s}/dotfiles/daemon/bench/widgets", .{proc.home(io, allocator)});
 	std.Io.Dir.cwd().createDirPath(io, dir) catch {};
 	const path = try std.fmt.allocPrint(allocator, "{s}/{s}.json", .{ dir, stamp });
 	proc.writeFileAtomic(io, allocator, path, body) catch {};

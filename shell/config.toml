@@ -251,8 +251,8 @@ powerActions = [
 	{ name = "Shut down", command = "systemctl poweroff", glyph = "\uF011" },
 	{ name = "Reboot", command = "systemctl reboot", glyph = "\uEAD2" },
 	{ name = "Suspend", command = "systemctl suspend", glyph = "\U000F04B2" },
-	{ name = "Lock", command = "\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/scripts/lock\"", glyph = "\uF023" },
-	{ name = "Log out", command = "\"$HOME/.config/quickshell/yudaemond/zig-out/bin/yudaemond\" logout", glyph = "\uEA6E" }
+	{ name = "Lock", command = "\"$HOME/dotfiles/shell/scripts/lock\"", glyph = "\uF023" },
+	{ name = "Log out", command = "\"$HOME/dotfiles/daemon/zig-out/bin/yudaemond\" logout", glyph = "\uEA6E" }
 ]
 powerCellSize = 96
 powerIconSize = 48
