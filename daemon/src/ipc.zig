@@ -113,7 +113,7 @@ pub const Ipc = struct {
 				_ = std.os.linux.close(fd);
 				continue;
 			};
-			client.* = .{ .fd = fd, .connection = connection, .push = false };
+			client.* = .{ .fd = fd, .connection = connection };
 
 			self.mutex.lockUncancelable(self.io);
 			self.clients.append(self.allocator, client) catch {
@@ -388,4 +388,31 @@ test "a fresh connection is answered after the commands it sent" {
 
 	const line = (try connection.readLine()) orelse return error.NoReply;
 	try std.testing.expectEqualStrings("{\"rev\":1,\"bumped\":7}", line);
+}
+
+test "a socket client receives the broadcasts" {
+	const io = std.testing.io;
+	const allocator = std.heap.smp_allocator;
+
+	const path = try std.fmt.allocPrint(allocator, "/tmp/yudae-push-{d}.sock", .{std.os.linux.getpid()});
+	defer allocator.free(path);
+
+	const server = try Ipc.init(allocator, io, path, .{
+		.ctx = @ptrFromInt(1),
+		.snapshot = probeSnapshot,
+		.command = probeCommand,
+	});
+	try server.start();
+
+	var buffer: [4096]u8 = undefined;
+	var connection = try sock.Connection.connect(path, &buffer);
+	defer connection.close();
+
+	try connection.writeLine(sock.sync);
+	_ = (try connection.readLine()) orelse return error.NoReply;
+
+	server.broadcast("{\"pushed\":true}");
+
+	const line = (try connection.readLine()) orelse return error.NoPush;
+	try std.testing.expectEqualStrings("{\"pushed\":true}", line);
 }
