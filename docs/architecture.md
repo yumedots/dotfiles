@@ -39,11 +39,11 @@ xmake orchestrates, it does not replace the real builders.
 | `xmake link` | symlink `config/*` and `hypr/` into `~/.config` |
 | `xmake lint` | qmllint on `shell/`, `node shell/lib/check.js` |
 | `xmake test` | daemon parsers/protocol tests, qml fixtures, idle-spawn test |
-| `xmake bench` | `yudaemond bench`, compared with `bench/baseline.json` |
+| `xmake bench` | headless daemon cold build, size, start, idle RSS and spawns, then `yudaemond bench` against `bench/baseline.json` |
 | `xmake hypr` | nested hypr-test (start, shot, run, stop) |
 | `xmake vm ...` | VM lifecycle and scenarios |
 | `xmake doctor` | what is missing and why |
 
-`zig build` stays underneath: the build budgets are measured on it and `scripts/yubuild` reports them.
+`zig build` stays underneath: the build budgets are measured on it and `scripts/yubuild` reports them. `zig build -Dheadless=true` builds `yudaemond-headless`, the minimal control-plane daemon that carries the performance gates.
 
 `scripts/xmake` is linked to `~/.local/bin/xmake`. Inside the repo it dispatches `link`, `lint`, `bench`, `hypr`, `vm` and `doctor` to `scripts/tasks.sh`; every other xmake command goes to the system xmake.
