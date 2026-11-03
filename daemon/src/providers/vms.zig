@@ -153,7 +153,7 @@ pub const Vms = struct {
 				std.mem.eql(u8, method, "screenshot") or std.mem.eql(u8, method, "key") or
 				std.mem.eql(u8, method, "type") or std.mem.eql(u8, method, "click") or
 				std.mem.eql(u8, method, "move") or std.mem.eql(u8, method, "wait") or
-				std.mem.eql(u8, method, "wake") or std.mem.eql(u8, method, "start");
+				std.mem.eql(u8, method, "wake");
 
 			if (wakeable) self.wakeForCall(name);
 		}
@@ -162,6 +162,7 @@ pub const Vms = struct {
 		if (std.mem.eql(u8, method, "start")) return self.startVm(args, allocator);
 		if (std.mem.eql(u8, method, "list")) return self.listJson(allocator);
 		if (std.mem.eql(u8, method, "destroy")) return self.destroyVm(args, allocator);
+		if (std.mem.eql(u8, method, "stop")) return self.stopVm(args, allocator);
 		if (std.mem.eql(u8, method, "sleep")) return self.sleepVm(args, allocator);
 		if (std.mem.eql(u8, method, "park")) return self.parkVm(args, allocator);
 		if (std.mem.eql(u8, method, "wake")) return self.wakeVm(args, allocator);
@@ -195,6 +196,11 @@ pub const Vms = struct {
 		};
 
 		const previous = vm.tier;
+		if (previous == .off) {
+			self.mutex.unlock(self.io);
+			return;
+		}
+
 		vm.tier = .hot;
 		vm.used_ms = fmt.nowMs(self.io);
 		const client = vm.qmp;
@@ -573,6 +579,31 @@ pub const Vms = struct {
 		if (packages_mem) |value| self.allocator.free(value);
 	}
 
+	fn haltVm(self: *Vms, vm: *Vm) void {
+		if (vm.qmp) |client| {
+			_ = client.execute(null, "quit", null) catch {};
+			client.close();
+			vm.qmp = null;
+		}
+
+		if (vm.pid > 0) kill(vm.pid);
+		if (vm.vfs_pid > 0) kill(vm.vfs_pid);
+
+		if (vm.qemu_child) |*child| {
+			_ = child.wait(self.io) catch {};
+			vm.qemu_child = null;
+		}
+
+		if (vm.vfs_child) |*child| {
+			_ = child.wait(self.io) catch {};
+			vm.vfs_child = null;
+		}
+
+		vm.pid = 0;
+		vm.vfs_pid = 0;
+		vm.tier = .off;
+	}
+
 	fn cleanupVm(self: *Vms, vm: *Vm) void {
 		if (vm.qmp) |client| {
 			_ = client.execute(null, "quit", null) catch {};
@@ -627,6 +658,25 @@ pub const Vms = struct {
 		self.hub.publish();
 
 		return std.fmt.allocPrint(allocator, "{{\"destroyed\":\"{s}\"}}", .{vm.name});
+	}
+
+	fn stopVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
+		self.op.lockUncancelable(self.io);
+		defer self.op.unlock(self.io);
+
+		const name = json.textAt(args, "name");
+
+		self.mutex.lockUncancelable(self.io);
+		const vm = self.findLocked(name) orelse {
+			self.mutex.unlock(self.io);
+			return error.NotFound;
+		};
+		self.mutex.unlock(self.io);
+
+		self.haltVm(vm);
+		self.hub.publish();
+
+		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"tier\":\"off\"}}", .{vm.name});
 	}
 
 	fn sleepVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
@@ -687,7 +737,10 @@ pub const Vms = struct {
 			self.mutex.unlock(self.io);
 			return error.NotFound;
 		};
+		const off = vm.tier == .off;
 		self.mutex.unlock(self.io);
+
+		if (off) return self.startVm(args, allocator);
 
 		if (vm.qmp) |client| {
 			_ = client.execute(null, "balloon", "{\"value\":0}") catch {};
@@ -1185,6 +1238,8 @@ pub const Vms = struct {
 		if (tag.len == 0) return error.MissingArgs;
 
 		const disk = self.diskOf(name) orelse return error.NotFound;
+		if (self.tierOf(name) != .off) return error.MustStop;
+
 		const result = try exec.run(self.io, allocator, &.{ "qemu-img", "snapshot", "-c", tag, disk });
 		defer result.deinit(allocator);
 
@@ -1198,6 +1253,8 @@ pub const Vms = struct {
 		if (tag.len == 0) return error.MissingArgs;
 
 		const disk = self.diskOf(name) orelse return error.NotFound;
+		if (self.tierOf(name) != .off) return error.MustStop;
+
 		const result = try exec.run(self.io, allocator, &.{ "qemu-img", "snapshot", "-a", tag, disk });
 		defer result.deinit(allocator);
 
@@ -1206,19 +1263,62 @@ pub const Vms = struct {
 	}
 
 	fn forkVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
+		self.op.lockUncancelable(self.io);
+		defer self.op.unlock(self.io);
+
 		const name = json.textAt(args, "name");
 		const from = json.textAt(args, "from");
-		const disk = self.diskOf(from) orelse return error.NotFound;
+		if (!validName(name)) return error.BadName;
+
+		self.mutex.lockUncancelable(self.io);
+		const source = self.findLocked(from) orelse {
+			self.mutex.unlock(self.io);
+			return error.NotFound;
+		};
+		if (self.findLocked(name) != null) {
+			self.mutex.unlock(self.io);
+			return error.NameTaken;
+		}
+
+		const cores = source.cores;
+		const mem = source.mem_mb;
+		const gl = source.gl;
+		const source_disk = try self.allocator.dupe(u8, source.disk);
+		const cid = self.nextCidLocked();
+		self.mutex.unlock(self.io);
 
 		const dir = try std.fs.path.join(self.allocator, &.{ proc.repo(self.io, self.allocator), "vm", "runs", name });
 		try std.Io.Dir.cwd().createDirPath(self.io, dir);
-
 		const target = try std.fs.path.join(self.allocator, &.{ dir, "disk.qcow2" });
-		const result = try exec.run(self.io, allocator, &.{ "qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-b", disk, target, "32G" });
+
+		const result = try exec.run(self.io, allocator, &.{ "qemu-img", "convert", "-O", "qcow2", "-U", source_disk, target });
 		defer result.deinit(allocator);
 
 		if (result.code != 0) return error.ForkFailed;
-		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"from\":\"{s}\"}}", .{ name, from });
+
+		const vm = try self.allocator.create(Vm);
+		vm.* = .{
+			.name = try self.allocator.dupe(u8, name),
+			.dir = dir,
+			.disk = target,
+			.agent = try self.allocator.dupe(u8, "agent"),
+			.controller = try self.allocator.dupe(u8, "agent"),
+			.cid = cid,
+			.cores = cores,
+			.mem_mb = mem,
+			.gl = gl,
+			.tier = .off,
+			.created_ms = fmt.nowMs(self.io),
+			.used_ms = fmt.nowMs(self.io),
+		};
+
+		self.mutex.lockUncancelable(self.io);
+		try self.list.append(self.allocator, vm);
+		self.mutex.unlock(self.io);
+
+		self.hub.publish();
+
+		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"from\":\"{s}\",\"cid\":{d}}}", .{ name, from, cid });
 	}
 
 	fn listJson(self: *Vms, allocator: Allocator) ![]u8 {
@@ -1311,6 +1411,14 @@ pub const Vms = struct {
 
 		const vm = self.findLocked(name) orelse return null;
 		return vm.cid;
+	}
+
+	fn tierOf(self: *Vms, name: []const u8) tiers.Tier {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		const vm = self.findLocked(name) orelse return .off;
+		return vm.tier;
 	}
 
 	fn diskOf(self: *Vms, name: []const u8) ?[]const u8 {

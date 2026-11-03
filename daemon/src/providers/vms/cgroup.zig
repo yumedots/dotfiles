@@ -16,9 +16,12 @@ pub const Cgroup = struct {
 		const uid = std.os.linux.getuid();
 		const path = try std.fmt.allocPrint(allocator, "/sys/fs/cgroup/user.slice/user-{d}.slice/user@{d}.service/yudae-vm-{s}", .{ uid, uid, name });
 
-		std.Io.Dir.createDirAbsolute(io, path, .default_dir) catch |err| {
-			std.debug.print("cgroup dir {s}: {s}\n", .{ path, @errorName(err) });
-			return err;
+		std.Io.Dir.createDirAbsolute(io, path, .default_dir) catch |err| switch (err) {
+			error.PathAlreadyExists => {},
+			else => {
+				std.debug.print("cgroup dir {s}: {s}\n", .{ path, @errorName(err) });
+				return err;
+			},
 		};
 
 		const memory = try std.fmt.allocPrint(allocator, "{d}", .{@as(u64, mem_mb) * 1024 * 1024});
