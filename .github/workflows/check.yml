@@ -1,0 +1,13 @@
+name: check
+on:
+  push:
+  pull_request:
+jobs:
+  daemon:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pacman -Syu --noconfirm zig nodejs python3 libsystemd pkgconf
+      - run: cd daemon && zig build test
+      - run: node shell/ui/AgentFace.check.js

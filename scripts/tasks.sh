@@ -100,7 +100,7 @@ task_vm() {
 task_doctor() {
 	local missing=0 check
 
-	for check in zig xmake node make qemu-system-x86_64 virtiofsd qemu-img; do
+	for check in zig xmake node make qemu-system-x86_64 qemu-img; do
 		if command -v "$check" >/dev/null 2>&1; then
 			echo "ok   $check $(command -v "$check")"
 		else
@@ -109,7 +109,7 @@ task_doctor() {
 		fi
 	done
 
-	for path in /dev/kvm /dev/vhost-vsock /dev/dri/renderD128; do
+	for path in /usr/lib/virtiofsd /dev/kvm /dev/vhost-vsock /dev/dri/renderD128; do
 		if [ -e "$path" ]; then
 			echo "ok   $path"
 		else

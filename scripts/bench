@@ -14,6 +14,11 @@ for index, arg in enumerate(args):
     if arg == "--seconds" and index + 1 < len(args):
         seconds = args[index + 1]
 
+build = subprocess.run([os.path.join(root, "scripts", "yubuild")], capture_output=True, text=True)
+if build.returncode != 0:
+    sys.stderr.write(build.stderr or build.stdout)
+    sys.exit(build.returncode)
+
 run = subprocess.run([binary, "bench", "--json", "--seconds", seconds], capture_output=True, text=True)
 if run.returncode != 0:
     sys.stderr.write(run.stderr)

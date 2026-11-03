@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-root=$(cd "$(dirname "$0")/.." && pwd)
+self=$(readlink -f "$0")
+root=$(cd "$(dirname "$self")/.." && pwd)
 
 for bin in "$root/daemon/zig-out/bin/yudaemond" "$root/quickshell/yudaemond/zig-out/bin/yudaemond"; do
 	[ -x "$bin" ] && exec "$bin" "$@"

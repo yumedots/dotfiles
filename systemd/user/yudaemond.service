@@ -8,6 +8,9 @@ Type=simple
 ExecStart=%h/dotfiles/daemon/zig-out/bin/yudaemond run
 Restart=always
 RestartSec=1
+Environment=MALLOC_ARENA_MAX=2
+Environment=MALLOC_TRIM_THRESHOLD_=65536
+Environment=QSG_RENDER_LOOP=threaded
 MemoryMax=512M
 LimitNOFILE=65536
 Nice=5
