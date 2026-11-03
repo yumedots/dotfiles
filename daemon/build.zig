@@ -15,6 +15,22 @@ pub fn build(b: *std.Build) void {
 	});
 	index_step.has_side_effects = true;
 
+	if (b.option(bool, "headless", "build only the headless daemon") orelse false) {
+		const small_headless = b.addExecutable(.{
+			.name = "yudaemond-headless",
+			.use_llvm = use_llvm,
+			.root_module = b.createModule(.{
+				.root_source_file = b.path("src/headless.zig"),
+				.target = target,
+				.optimize = optimize,
+				.strip = optimize != .debug,
+			}),
+		});
+		small_headless.root_module.link_libc = true;
+		b.installArtifact(small_headless);
+		return;
+	}
+
 	const exe = b.addExecutable(.{
 		.name = "yudaemond",
 		.use_llvm = use_llvm,
