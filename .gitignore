@@ -57,3 +57,5 @@ qBittorrent/
 /menus/
 /quickshell/yudaemond/bench/
 hypr/plugins/borders-plus-plus/borders-plus-plus.so
+
+.xmake/
