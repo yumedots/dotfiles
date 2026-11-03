@@ -458,23 +458,14 @@ test "cli module compiles" {
 }
 
 fn focusVmWindow(io: Io, allocator: Allocator, name: []const u8) void {
-	const body = hypr.request(io, allocator, "j/clients") catch return;
-	defer allocator.free(body);
+	const command = std.fmt.allocPrint(allocator,
+		"dispatch function() for _, w in ipairs(hl.get_windows()) do " ++
+			"if w.class == \"qemu\" and w.title and w.title:find(\"yudae-{s}\", 1, true) then " ++
+			"hl.dispatch(hl.dsp.focus({{window=w}})); " ++
+			"if w.fullscreen == 0 then hl.dispatch(hl.dsp.window.fullscreen()) end; return end end end",
+		.{name}) catch return;
 
-	const parsed = json.parse(allocator, body) catch return;
-	const clients = if (parsed.value == .array) parsed.value.array.items else return;
-
-	const needle = std.fmt.allocPrint(allocator, "(yudae-{s})", .{name}) catch return;
-
-	for (clients) |client| {
-		if (std.mem.indexOf(u8, json.textAt(client, "title"), needle) == null) continue;
-
-		const workspace = json.field(client, "workspace") orelse return;
-		const id = json.integer(json.field(workspace, "id"));
-
-		const command = std.fmt.allocPrint(allocator, "dispatch hl.dsp.focus({{workspace={d}}})", .{id}) catch return;
-		const reply = hypr.request(io, allocator, command) catch return;
-		allocator.free(reply);
-		return;
-	}
+	const reply = hypr.request(io, allocator, command) catch return;
+	allocator.free(reply);
 }
+

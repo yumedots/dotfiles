@@ -192,6 +192,16 @@ hl.bind(mainMod .. " + W", function()
     hl.dispatch(hl.dsp.window.close())
 end, { repeating = true })
 hl.bind("F11", hl.dsp.window.fullscreen())
+hl.bind("SUPER + ALT + ESCAPE", function()
+    for _, win in ipairs(hl.get_windows()) do
+        if win.class ~= "qemu" and win.mapped then
+            hl.dispatch(hl.dsp.focus({ window = win }))
+            return
+        end
+    end
+
+    hl.dispatch(hl.dsp.focus({ workspace = 1 }))
+end)
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd(programs.session))
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(programs.browser))
 hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd(programs.fileManager))
