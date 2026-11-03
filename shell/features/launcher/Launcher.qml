@@ -92,7 +92,7 @@ PanelWindow {
 
 	readonly property bool spotlight: Config.launcherSpotlight && !root.windows
 	readonly property bool home: root.forced === "" && root.group === ""
-	readonly property bool revealed: (!root.home || (root.live.intent && root.live.intent.query !== "")) && (!root.spotlight || root.results.length > 0)
+	readonly property bool revealed: root.results.length > 0 || (!root.spotlight && (!root.home || !!(root.live.intent && root.live.intent.query !== "")))
 	readonly property real fontSize: root.spotlight ? Config.launcherSpotlightFontSize : Config.launcherFontSize
 	readonly property real iconSize: root.spotlight ? Math.round(root.fontSize * 1.4) : Config.launcherIconSize
 	readonly property real rowHeight: root.spotlight
@@ -275,6 +275,10 @@ PanelWindow {
 		root.winIndex = root.windows ? 1 : 0;
 		root.grabbed = false;
 		root.push();
+
+		if (root.syncLive())
+			settleGuard.stop();
+
 		root.grab();
 		root.anchor();
 	}
@@ -650,20 +654,27 @@ PanelWindow {
 
 	onQueryChanged: root.push()
 
-	onStateChanged: {
+	function syncLive() {
 		const intent = root.state.intent;
 
 		if (root.windows || !root.shown || !intent)
+			return false;
+
+		if (intent.query !== root.query || intent.forced !== root.forced || intent.group !== root.group)
+			return false;
+
+		root.live = root.state;
+		root.settled = true;
+		settleGuard.stop();
+		return true;
+	}
+
+	onStateChanged: {
+		if (root.windows || !root.shown)
 			return;
 
-		if (intent.query === root.query && intent.forced === root.forced && intent.group === root.group) {
-			root.live = root.state;
-			root.settled = true;
-			settleGuard.stop();
-			return;
-		}
-
-		root.push();
+		if (!root.syncLive())
+			root.push();
 	}
 
 	onWantedClipChanged: {
@@ -675,7 +686,7 @@ PanelWindow {
 
 	onModeChanged: {
 		list.currentIndex = 0;
-		list.positionViewAtBeginning();
+		list.reset();
 
 		if (!root.shown)
 			return;
