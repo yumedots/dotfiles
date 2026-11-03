@@ -1,0 +1,349 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/vm
+RUNS=${DOTFILES_VM_RUNS:-$ROOT/vm/runs}
+
+CLOUD_NAME=Arch-Linux-x86_64-cloudimg-20261101.620452.qcow2
+CLOUD_SHA=794eb4889b39e1f0ed7d5ae998b2a1ed2137db8cf8c3476cf2962c7437ecb003
+CLOUD=$CACHE/$CLOUD_NAME
+PACKAGES=$CACHE/packages.qcow2
+GOLDEN=$CACHE/golden.qcow2
+SEED=$CACHE/seed.img
+LOG=$CACHE/provision.log
+QEMU=$(command -v qemu-system-x86_64)
+QEMU_IMG=$(command -v qemu-img)
+
+mirrors=(
+	https://geo.mirror.pkgbuild.com
+	https://mirror.rackspace.com/archlinux
+	https://mirrors.kernel.org/archlinux
+	https://archlinux.mirror.wearetriple.com
+	https://mirror.funami.tech/archlinux
+)
+
+usage() {
+	echo "usage: vm/images fetch|packages|golden|ensure|overlay <name>|snapshot <name> <tag>|restore <name> <tag>|list" >&2
+	exit 2
+}
+
+speed_pick() {
+	local best="" best_speed=0 mirror speed url
+	for mirror in "${mirrors[@]}"; do
+		url="$mirror/images/latest/$CLOUD_NAME"
+		speed=$(curl -fsSL --max-time 15 -r 0-2097151 -o /dev/null -w '%{speed_download}' "$url" 2>/dev/null || echo 0)
+		echo "probe $mirror ${speed%.*}B/s" >&2
+		if [ "${speed%.*}" -gt "$best_speed" ]; then
+			best_speed=${speed%.*}
+			best=$url
+		fi
+	done
+	[ -n "$best" ] || best="https://geo.mirror.pkgbuild.com/images/latest/$CLOUD_NAME"
+	echo "$best"
+}
+
+cmd_fetch() {
+	mkdir -p "$CACHE"
+	if [ -f "$CLOUD" ] && [ "$(sha256sum "$CLOUD" | cut -d' ' -f1)" = "$CLOUD_SHA" ]; then
+		echo "cloud image cached $CLOUD"
+		return
+	fi
+	local url
+	url=$(speed_pick)
+	echo "download $url"
+	curl -fL --retry 3 --progress-bar -o "$CLOUD.part" "$url"
+	echo "$CLOUD_SHA  $CLOUD.part" | sha256sum -c -
+	mv "$CLOUD.part" "$CLOUD"
+}
+
+provision_script() {
+	cat <<'SCRIPT'
+#!/bin/bash
+set -u
+exec > >(tee /dev/console) 2>&1
+echo "dotfiles: provision start"
+mkdir -p /mnt/hostpkg
+mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L,ro hostpkg /mnt/hostpkg
+mkdir -p /var/cache/pacman/pkg
+for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
+	[ -e "$pkg" ] || continue
+	ln -sf "$pkg" "/var/cache/pacman/pkg/$(basename "$pkg")"
+done
+rm -f /var/cache/pacman/pkg/limine-* /var/cache/pacman/pkg/plymouth-*
+pacman -Syu --noconfirm 2>&1 | tee /tmp/pacman-syu.log
+if grep -q 'failed to commit transaction' /tmp/pacman-syu.log; then
+	grep 'signature from' /tmp/pacman-syu.log | sed 's/^error: //; s/:.*//' | while read -r name; do
+		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
+	done
+	pacman -Syu --noconfirm
+fi
+: > /tmp/install.txt
+while IFS= read -r name; do
+	[ -n "$name" ] || continue
+	case "$name" in
+		cachyos-*|linux-cachyos*|*nvidia*|openstarbound-bin|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl) continue ;;
+	esac
+	pacman -Si "$name" >/dev/null 2>&1 && echo "$name" >> /tmp/install.txt
+done < /opt/packages.txt
+pacman -S --needed --noconfirm $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman-packages.log
+if grep -q 'failed to commit transaction' /tmp/pacman-packages.log; then
+	grep 'signature from' /tmp/pacman-packages.log | sed 's/^error: //; s/:.*//' | while read -r name; do
+		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
+	done
+	pacman -S --needed --noconfirm $(cat /tmp/install.txt)
+fi
+touch /var/lib/dotfiles-provisioned
+echo "dotfiles: provision done"
+poweroff
+SCRIPT
+}
+
+cmd_packages() {
+	cmd_fetch
+	mkdir -p "$CACHE"
+	rm -f "$PACKAGES"
+	"$QEMU_IMG" create -f qcow2 -F qcow2 -b "$CLOUD" "$PACKAGES" 32G
+
+	mkdir -p "$CACHE/seed"
+	provision_script > "$CACHE/seed/provision.sh"
+	pacman -Qqen > "$CACHE/seed/packages.txt"
+	cat > "$CACHE/seed/meta-data" <<EOF
+instance-id: dotfiles-packages
+local-hostname: yudae-guest
+EOF
+	{
+		echo "#cloud-config"
+		echo "hostname: yudae-guest"
+		echo "users:"
+		echo "  - default"
+		echo "  - name: gabriel"
+		echo "    uid: 1000"
+		echo "    groups: wheel,video,render,input"
+		echo "    shell: /bin/bash"
+		echo "    sudo: ALL=(ALL) NOPASSWD:ALL"
+		echo "    lock_passwd: true"
+		echo "ssh_pwauth: false"
+		echo "write_files:"
+		echo "  - path: /opt/packages.txt"
+		echo "    permissions: '0644'"
+		echo "    content: |"
+		sed 's/^/      /' "$CACHE/seed/packages.txt"
+		echo "  - path: /opt/provision.sh"
+		echo "    permissions: '0755'"
+		echo "    content: |"
+		sed 's/^/      /' "$CACHE/seed/provision.sh"
+		echo "runcmd:"
+		echo "  - [ bash, /opt/provision.sh ]"
+	} > "$CACHE/seed/user-data"
+
+	rm -f "$SEED"
+	truncate -s 16M "$SEED"
+	mkfs.vfat -n cidata "$SEED" >/dev/null
+	mcopy -i "$SEED" "$CACHE/seed/user-data" ::user-data
+	mcopy -i "$SEED" "$CACHE/seed/meta-data" ::meta-data
+
+	echo "provision $PACKAGES (log $LOG)"
+	: > "$LOG"
+	"$QEMU" \
+		-name dotfiles-packages \
+		-machine q35,accel=kvm \
+		-cpu host \
+		-smp "$(nproc)" \
+		-m 8G \
+		-drive "file=$PACKAGES,if=virtio,format=qcow2" \
+		-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
+		-virtfs "local,path=/var/cache/pacman/pkg,mount_tag=hostpkg,security_model=none,readonly=on" \
+		-device virtio-rng-pci \
+		-netdev user,id=net0 \
+		-device virtio-net-pci,netdev=net0 \
+		-display none \
+		-serial "file:$LOG" \
+		-no-reboot
+
+	if ! "$QEMU_IMG" info "$PACKAGES" | grep -q '^file format: qcow2'; then
+		echo "provision failed, see $LOG" >&2
+		exit 1
+	fi
+	echo "packages layer ready $PACKAGES"
+}
+
+golden_user_data() {
+	cat <<'CLOUD'
+#cloud-config
+hostname: yudae-guest
+users:
+  - default
+  - name: gabriel
+    uid: 1000
+    groups: wheel,video,render,input
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+ssh_pwauth: false
+write_files:
+  - path: /etc/systemd/system/yudae-desktop.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Hyprland desktop
+      After=yudaemond.service systemd-user-sessions.service
+      RequiresMountsFor=/home/gabriel/dotfiles
+      Conflicts=getty@tty1.service
+
+      [Service]
+      User=gabriel
+      PAMName=login
+      TTYPath=/dev/tty1
+      StandardInput=tty
+      StandardOutput=journal+console
+      Environment=HOME=/home/gabriel
+      Environment=XDG_RUNTIME_DIR=/run/user/1000
+      Environment=XDG_CONFIG_HOME=/home/gabriel/.config
+      Environment=XDG_SESSION_TYPE=wayland
+      Environment=XDG_CURRENT_DESKTOP=Hyprland
+      Environment=XDG_SESSION_DESKTOP=Hyprland
+      ExecStart=/usr/bin/start-hyprland
+      Restart=no
+
+      [Install]
+      WantedBy=graphical.target
+  - path: /etc/systemd/system/yudaemond.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=yudaemond guest
+      After=local-fs.target user-runtime-dir@1000.service
+      Requires=user-runtime-dir@1000.service
+      RequiresMountsFor=/home/gabriel/dotfiles
+
+      [Service]
+      User=gabriel
+      Group=gabriel
+      Environment=HOME=/home/gabriel
+      Environment=XDG_RUNTIME_DIR=/run/user/1000
+      ExecStartPre=+/bin/sh -c "echo yudaemond-start > /dev/ttyS0"
+      ExecStart=/home/gabriel/dotfiles/daemon/zig-out/bin/yudaemond run
+      StandardOutput=journal+console
+      StandardError=journal+console
+      Restart=on-failure
+      RestartSec=2
+
+      [Install]
+      WantedBy=multi-user.target
+runcmd:
+  - mkdir -p /home/gabriel/dotfiles /run/user/1000
+  - chown gabriel:gabriel /run/user/1000
+  - grep -q 'dotfiles /home/gabriel/dotfiles virtiofs' /etc/fstab || echo 'dotfiles /home/gabriel/dotfiles virtiofs ro,nofail,defaults 0 0' >> /etc/fstab
+  - mkdir -p /home/gabriel/.config
+  - ln -sfn /home/gabriel/dotfiles/hypr /home/gabriel/.config/hypr
+  - systemctl daemon-reload
+  - systemctl enable yudaemond yudae-desktop
+  - systemctl set-default graphical.target
+  - touch /var/lib/dotfiles-golden
+  - echo dotfiles-golden-ok > /dev/ttyS0
+  - poweroff
+CLOUD
+}
+
+cmd_golden() {
+	[ -f "$PACKAGES" ] || cmd_packages
+	mkdir -p "$CACHE"
+	rm -f "$GOLDEN"
+	"$QEMU_IMG" create -f qcow2 -F qcow2 -b "$PACKAGES" "$GOLDEN" 32G
+
+	mkdir -p "$CACHE/golden"
+	golden_user_data > "$CACHE/golden/user-data"
+	cat > "$CACHE/golden/meta-data" <<EOF
+instance-id: dotfiles-golden
+local-hostname: yudae-guest
+EOF
+	rm -f "$CACHE/golden.seed"
+	truncate -s 16M "$CACHE/golden.seed"
+	mkfs.vfat -n cidata "$CACHE/golden.seed" >/dev/null
+	mcopy -i "$CACHE/golden.seed" "$CACHE/golden/user-data" ::user-data
+	mcopy -i "$CACHE/golden.seed" "$CACHE/golden/meta-data" ::meta-data
+
+	local vfs=$CACHE/virtiofsd.sock
+	rm -f "$vfs"
+	/usr/lib/virtiofsd --socket-path="$vfs" --shared-dir="$ROOT" --readonly --cache=never &
+	local vfs_pid=$!
+	trap 'kill "$vfs_pid" 2>/dev/null || true' EXIT
+	for _ in $(seq 1 50); do [ -S "$vfs" ] && break; sleep 0.1; done
+
+	: > "$CACHE/golden.log"
+	"$QEMU" \
+		-name dotfiles-golden \
+		-machine q35,accel=kvm \
+		-cpu host \
+		-smp "$(nproc)" \
+		-m 8G \
+		-drive "file=$GOLDEN,if=virtio,format=qcow2" \
+		-drive "file=$CACHE/golden.seed,if=virtio,format=raw,readonly=on" \
+		-object "memory-backend-memfd,id=mem,size=8G,share=on" \
+		-numa "node,memdev=mem" \
+		-device virtio-rng-pci \
+		-netdev user,id=net0 \
+		-device virtio-net-pci,netdev=net0 \
+		-display none \
+		-serial "file:$CACHE/golden.log" \
+		-no-reboot
+
+	kill "$vfs_pid" 2>/dev/null || true
+	trap - EXIT
+
+	if ! grep -q "dotfiles-golden-ok" "$CACHE/golden.log"; then
+		rm -f "$GOLDEN"
+		echo "golden boot failed, see $CACHE/golden.log" >&2
+		exit 1
+	fi
+
+	echo "golden layer ready $GOLDEN"
+}
+
+cmd_ensure() {
+	[ -f "$GOLDEN" ] && return
+	cmd_golden
+}
+
+cmd_overlay() {
+	[ $# -ge 1 ] || usage
+	local name=$1
+	cmd_ensure
+	mkdir -p "$RUNS/$name"
+	rm -f "$RUNS/$name/disk.qcow2"
+	"$QEMU_IMG" create -f qcow2 -F qcow2 -b "$GOLDEN" "$RUNS/$name/disk.qcow2" 32G
+	echo "$RUNS/$name/disk.qcow2"
+}
+
+cmd_snapshot() {
+	[ $# -ge 2 ] || usage
+	"$QEMU_IMG" snapshot -c "$2" "$RUNS/$1/disk.qcow2"
+	"$QEMU_IMG" snapshot -l "$RUNS/$1/disk.qcow2"
+}
+
+cmd_restore() {
+	[ $# -ge 2 ] || usage
+	"$QEMU_IMG" snapshot -a "$2" "$RUNS/$1/disk.qcow2"
+	echo "restored $2"
+}
+
+cmd_list() {
+	"$QEMU_IMG" info "$GOLDEN" 2>/dev/null | sed -n 's/^backing file: /golden backing /p' || true
+	find "$RUNS" -maxdepth 2 -name disk.qcow2 -printf '%h\n' 2>/dev/null | xargs -r -n1 basename
+}
+
+command=${1:-}
+shift || true
+
+case "$command" in
+	fetch) cmd_fetch ;;
+	packages) cmd_packages ;;
+	golden) cmd_golden ;;
+	ensure) cmd_ensure ;;
+	overlay) cmd_overlay "$@" ;;
+	snapshot) cmd_snapshot "$@" ;;
+	restore) cmd_restore "$@" ;;
+	list) cmd_list ;;
+	*) usage ;;
+esac

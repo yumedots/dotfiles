@@ -1,5 +1,29 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "vm: the vm/ scripts are not in place yet" >&2
-exit 2
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+RUNS=${DOTFILES_VM_RUNS:-$ROOT/vm/runs}
+
+usage() {
+	echo "usage: xmake vm fetch|packages|golden|ensure|bench|qemu|create|list|start|stop|exec|screenshot|key|type|click|move|wait|sleep|wake|destroy|snapshot|restore|fork|view|scenario" >&2
+	exit 2
+}
+
+command=${1:-}
+[ -n "$command" ] || usage
+shift || true
+
+case "$command" in
+	fetch|packages|golden|ensure|images|overlay|snapshot|restore)
+		exec "$ROOT/vm/images" "$command" "$@"
+		;;
+	bench)
+		exec "$ROOT/vm/bench.sh" "$@"
+		;;
+	qemu)
+		exec "$ROOT/vm/qemu.sh" "${1:-print}" "${@:2}"
+		;;
+	*)
+		exec "$ROOT/scripts/yudae" vm "$command" "$@"
+		;;
+esac
