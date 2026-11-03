@@ -837,7 +837,7 @@ pub const Launcher = struct {
 	fn openThread(self: *Launcher, url: []u8) void {
 		defer self.allocator.free(url);
 
-		var child = std.process.spawn(self.io, .{
+		var child = exec.spawn(self.io, .{
 			.argv = &.{ "xdg-open", url },
 			.stdin = .ignore,
 			.stdout = .ignore,
@@ -886,7 +886,7 @@ pub const Launcher = struct {
 	fn runThread(self: *Launcher, command: []u8) void {
 		defer self.allocator.free(command);
 
-		var child = std.process.spawn(self.io, .{
+		var child = exec.spawn(self.io, .{
 			.argv = &.{ "sh", "-c", command },
 			.stdin = .ignore,
 			.stdout = .ignore,
@@ -961,7 +961,7 @@ pub const Launcher = struct {
 
 		if (self.watch) |watch| watch.markSelf();
 
-		var child = std.process.spawn(self.io, .{
+		var child = exec.spawn(self.io, .{
 			.argv = &.{"wl-copy"},
 			.stdin = .pipe,
 			.stdout = .ignore,

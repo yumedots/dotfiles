@@ -253,7 +253,7 @@ pub const Windows = struct {
 			argv.appendSlice(allocator, &.{ "sh", "-c", desktop.exec }) catch return;
 		}
 
-		var child = std.process.spawn(self.io, .{
+		var child = exec.spawn(self.io, .{
 			.argv = argv.items,
 			.stdin = .ignore,
 			.stdout = .ignore,

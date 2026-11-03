@@ -229,7 +229,7 @@ pub const Audio = struct {
 	}
 
 	fn follow(self: *Audio) void {
-		const child = std.process.spawn(self.io, .{
+		const child = exec.spawn(self.io, .{
 			.argv = &.{ "stdbuf", "-oL", "pactl", "subscribe" },
 			.stdin = .ignore,
 			.stdout = .pipe,

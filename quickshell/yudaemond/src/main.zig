@@ -420,6 +420,9 @@ pub fn main() !void {
 		return cli.state(io, args);
 	}
 
+	if (std.mem.eql(u8, command, "call")) return cli.call(io, args);
+	if (std.mem.eql(u8, command, "spawn-check")) return cli.spawnCheck(io, args);
+
 	if (std.mem.eql(u8, command, "logout")) return cli.logout(io);
 	if (std.mem.eql(u8, command, "doctor")) return cli.doctor(io);
 	if (std.mem.eql(u8, command, "bench")) return cli.bench(io, args);
@@ -427,7 +430,7 @@ pub fn main() !void {
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudaemond [run|state|doctor|bench [widgets]|parity|mcp|logout]\n", .{});
+		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|spawn-check|logout]\n", .{});
 		return;
 	}
 

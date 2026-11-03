@@ -2,6 +2,7 @@ const std = @import("std");
 const hubmod = @import("../hub.zig");
 const proc = @import("../primitives/proc.zig");
 const fmt = @import("../primitives/fmt.zig");
+const exec = @import("../primitives/exec.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -12,6 +13,7 @@ const Out = struct {
 	bootMs: i64,
 	listenMs: i64,
 	threads: i64,
+	spawns: u64,
 };
 
 /// The thread count only moves while the providers are still coming up, so it
@@ -86,6 +88,7 @@ pub const Daemon = struct {
 			.bootMs = self.started,
 			.listenMs = self.listening - self.started,
 			.threads = self.last_threads,
+			.spawns = exec.spawned.load(.monotonic),
 		};
 
 		try writer.print("{f}", .{std.json.fmt(out, .{})});

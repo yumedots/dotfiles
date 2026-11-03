@@ -3,6 +3,13 @@ const std = @import("std");
 pub const Io = std.Io;
 pub const Allocator = std.mem.Allocator;
 
+pub var spawned: std.atomic.Value(u64) = .init(0);
+
+pub fn spawn(io: Io, options: std.process.SpawnOptions) std.process.SpawnError!std.process.Child {
+	_ = spawned.fetchAdd(1, .monotonic);
+	return std.process.spawn(io, options);
+}
+
 pub const Result = struct {
 	code: u8,
 	out: []u8,

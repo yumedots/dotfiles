@@ -1100,7 +1100,7 @@ pub const Ink = struct {
 	}
 
 	fn runDaemon(self: *Ink) void {
-		var child = std.process.spawn(self.io, .{
+		var child = exec.spawn(self.io, .{
 			.argv = &.{daemon_bin},
 			.stdin = .ignore,
 			.stdout = .ignore,

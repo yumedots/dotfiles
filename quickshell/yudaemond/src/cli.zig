@@ -6,6 +6,7 @@ const benchmod = @import("bench.zig");
 const bench_widgets = @import("bench_widgets.zig");
 const paritymod = @import("parity.zig");
 const mcpmod = @import("mcp.zig");
+const sleep = @import("primitives/sleep.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -120,6 +121,116 @@ pub fn parity(io: Io, args: []const []const u8) !void {
 
 pub fn mcp(io: Io, args: []const []const u8) !void {
 	return mcpmod.run(io, args);
+}
+
+pub fn call(io: Io, args: []const []const u8) !void {
+	var quiet = false;
+	var index: usize = 2;
+
+	while (index < args.len and args[index].len > 0 and args[index][0] == '-') {
+		if (std.mem.eql(u8, args[index], "-q")) quiet = true;
+		index += 1;
+	}
+
+	if (index + 1 >= args.len) {
+		std.debug.print("usage: yudae call [-q] <target> <method> [args...]\n", .{});
+		std.process.exit(2);
+	}
+
+	const target = args[index];
+	const method = args[index + 1];
+	const rest = args[index + 2 ..];
+
+	var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+	defer arena.deinit();
+	const allocator = arena.allocator();
+
+	var out: std.Io.Writer.Allocating = .init(allocator);
+	const writer = &out.writer;
+
+	try writer.writeAll("{\"cmd\":{");
+	try std.json.Stringify.encodeJsonString(target, .{}, writer);
+	try writer.writeAll(":{");
+	try std.json.Stringify.encodeJsonString(method, .{}, writer);
+	try writer.writeAll(":");
+
+	if (rest.len == 0) {
+		try writer.writeAll("true");
+	} else if (rest.len == 1) {
+		try writeArg(allocator, writer, rest[0]);
+	} else {
+		try writer.writeAll("[");
+
+		for (rest, 0..) |arg, position| {
+			if (position > 0) try writer.writeAll(",");
+			try writeArg(allocator, writer, arg);
+		}
+
+		try writer.writeAll("]");
+	}
+
+	try writer.writeAll("}}}");
+
+	const path = try proc.socketPath(io, allocator);
+
+	var read_buffer: [1048576]u8 = undefined;
+	var connection = sock.Connection.connect(path, &read_buffer) catch {
+		if (quiet) return;
+		std.debug.print("yudaemond is not running\n", .{});
+		std.process.exit(2);
+	};
+	defer connection.close();
+
+	try connection.writeLine(out.written());
+	try connection.writeLine(sock.sync);
+	_ = connection.readLine() catch {};
+}
+
+fn writeArg(allocator: Allocator, writer: *std.Io.Writer, arg: []const u8) !void {
+	if (json.parse(allocator, arg)) |_| {
+		try writer.writeAll(arg);
+	} else |_| {
+		try std.json.Stringify.encodeJsonString(arg, .{}, writer);
+	}
+}
+
+pub fn spawnCheck(io: Io, args: []const []const u8) !void {
+	var seconds: u64 = 5;
+	var index: usize = 2;
+
+	while (index < args.len) : (index += 1) {
+		if (std.mem.eql(u8, args[index], "--seconds") and index + 1 < args.len) {
+			index += 1;
+			seconds = std.fmt.parseInt(u64, args[index], 10) catch 5;
+		}
+	}
+
+	const before = try spawns(io);
+	sleep.ms(seconds * 1000);
+	const after = try spawns(io);
+
+	if (before != after) {
+		std.debug.print("idle spawns {d} -> {d} over {d}s\n", .{ before, after, seconds });
+		std.process.exit(1);
+	}
+
+	var buffer: [8192]u8 = undefined;
+	var writer = std.Io.File.stdout().writer(io, &buffer);
+	try writer.interface.print("idle spawns {d} -> {d} over {d}s\n", .{ before, after, seconds });
+	try writer.interface.flush();
+}
+
+fn spawns(io: Io) !u64 {
+	const body = try fetch(io);
+	defer std.heap.smp_allocator.free(body);
+
+	var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+	defer arena.deinit();
+
+	const parsed = json.parse(arena.allocator(), body) catch return error.StateUnreadable;
+	const value = json.integer(json.deep(parsed.value, &.{ "daemon", "spawns" }));
+
+	return @intCast(@max(value, 0));
 }
 
 pub fn print(io: Io, comptime message: []const u8) void {
