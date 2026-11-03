@@ -132,8 +132,6 @@ PanelWindow {
 	exclusiveZone: -1
 	color: "transparent"
 
-	margins.left: 0
-
 	Region {
 		id: emptyRegion
 
