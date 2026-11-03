@@ -40,9 +40,11 @@ xmake vm create <name> [--cores N] [--mem MB] [--gl] [--from NAME]
 xmake vm list | state | exec <name> <cmd> | screenshot <name> [path]
 xmake vm key <name> <qcode...> | type <name> <text> | click <name> <x> <y> | move <name> <x> <y>
 xmake vm wait <name> --until guest|<text>|exec:<cmd> [--timeout MS]
-xmake vm sleep | park | wake | destroy | snapshot <name> <tag> | restore <name> <tag> | fork <new> <from>
+xmake vm sleep | park | wake | stop | destroy | snapshot <name> <tag> | restore <name> <tag> | fork <new> <from>
 xmake vm view <name> | run_scenario <name> | bench <name>
 ```
+
+Snapshots are offline: `vm stop` exits QEMU and keeps the overlay, then `vm snapshot`/`vm restore` work, then `vm start` boots it again.
 
 The same verbs are MCP tools. `vm view` marks the human as controller; agent key/type/click/move then fails with `HumanControl` until the viewer closes or ten idle minutes pass. The viewer is a 2 fps screenshot mirror with input forwarding, not the D-Bus dmabuf path yet.
 
