@@ -1,0 +1,6 @@
+{
+  "name": "notify",
+  "daemon": "notifications",
+  "widget": "NotifyStat",
+  "panel": "NotificationList"
+}

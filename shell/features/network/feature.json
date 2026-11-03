@@ -1,0 +1,6 @@
+{
+  "name": "network",
+  "daemon": "network",
+  "widget": "NetworkStat",
+  "panel": "NetworkMonitor"
+}

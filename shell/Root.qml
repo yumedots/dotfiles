@@ -7,9 +7,9 @@ import qs
 import qs.ui
 import qs.services
 import "bar"
-import "launcher"
-import "lock"
-import "wallpaper"
+import "features/launcher"
+import "features/lock"
+import "features/wallpaper"
 
 ShellRoot {
 	id: shellRoot

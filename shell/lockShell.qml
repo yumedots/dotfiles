@@ -5,8 +5,8 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs
 import qs.services
-import "lock"
-import "launcher"
+import "features/lock"
+import "features/launcher"
 
 ShellRoot {
 	id: lockRoot

@@ -1,0 +1,6 @@
+{
+  "name": "media",
+  "daemon": "media",
+  "widget": "MediaStat",
+  "panel": "MediaControl"
+}

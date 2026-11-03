@@ -1,0 +1,5 @@
+{
+  "name": "workspaces",
+  "daemon": "workspaces",
+  "widget": "Workspaces"
+}

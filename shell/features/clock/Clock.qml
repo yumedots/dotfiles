@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import qs.ui
 import qs
-import "../../tooltips"
 
 BarText {
 	id: root

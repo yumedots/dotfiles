@@ -4,7 +4,21 @@ import Quickshell.Hyprland
 import qs.ui
 import qs
 import qs.services
-import "widgets"
+import "../features/agent"
+import "../features/clock"
+import "../features/github"
+import "../features/cpu"
+import "../features/display"
+import "../features/media"
+import "../features/memory"
+import "../features/network"
+import "../features/notify"
+import "../features/power"
+import "../features/spacer"
+import "../features/tray"
+import "../features/volume"
+import "../features/weather"
+import "../features/workspaces"
 
 PanelWindow {
 	id: bar

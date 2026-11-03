@@ -1,0 +1,6 @@
+{
+  "name": "cpu",
+  "daemon": "system",
+  "widget": "CpuStat",
+  "panel": "CpuMonitor"
+}

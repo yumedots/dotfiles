@@ -1,0 +1,6 @@
+{
+  "name": "weather",
+  "daemon": "weather",
+  "widget": "WeatherStat",
+  "panel": "WeatherCard"
+}

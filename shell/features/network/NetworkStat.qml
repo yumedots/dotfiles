@@ -2,7 +2,6 @@ import QtQuick
 import qs
 import qs.ui
 import qs.services
-import "../../tooltips"
 
 BarStat {
 	id: root

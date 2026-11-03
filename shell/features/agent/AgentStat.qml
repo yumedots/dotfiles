@@ -2,7 +2,6 @@ import QtQuick
 import qs
 import qs.services
 import qs.ui
-import "../../tooltips"
 
 // The agent face, rendered as a topbar widget.
 //

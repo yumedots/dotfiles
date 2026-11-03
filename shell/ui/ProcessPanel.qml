@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import qs
 import qs.services
+import "../features/vms"
 
 Item {
 	id: panel

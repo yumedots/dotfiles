@@ -1,0 +1,6 @@
+{
+  "name": "github",
+  "daemon": "github",
+  "widget": "ContribStat",
+  "panel": "GithubGrid"
+}

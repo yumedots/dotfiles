@@ -4,7 +4,7 @@ import Quickshell
 import Quickshell.Io
 import qs
 import qs.services
-import "lock"
+import "features/lock"
 import "greeter"
 import "greeter/Local.js" as Local
 
