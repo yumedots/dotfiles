@@ -217,13 +217,11 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 		const result = roundTrip(io, view_allocator, message, false) catch std.process.exit(1);
 
 		const repo = proc.repo(io, view_allocator);
-		const qml = try std.fmt.allocPrint(view_allocator, "{s}/shell/vmView.qml", .{repo});
-		const command = try std.fmt.allocPrint(view_allocator, "exec quickshell -p '{s}'", .{qml});
+		const command = try std.fmt.allocPrint(view_allocator, "'{0s}/scripts/yudae' vm start '{1s}' >/dev/null; spicy -f --title='{1s}' --uri='spice+unix://{0s}/vm/runs/{1s}/spice.sock'; exec '{0s}/scripts/yudae' vm release '{1s}'", .{ repo, rest[0] });
 
 		const source = environ.current(io, view_allocator) catch null;
 		var map = std.process.Environ.Map.init(view_allocator);
 		if (source) |env| map.putPosixBlock(env.block.view()) catch {};
-		map.put("YUDAE_VM", rest[0]) catch {};
 
 		_ = exec.spawn(io, .{
 			.argv = &.{ "setsid", "sh", "-c", command },

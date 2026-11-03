@@ -180,7 +180,7 @@ pub const Vms = struct {
 				std.mem.eql(u8, method, "screenshot") or std.mem.eql(u8, method, "key") or
 				std.mem.eql(u8, method, "type") or std.mem.eql(u8, method, "click") or
 				std.mem.eql(u8, method, "move") or std.mem.eql(u8, method, "wait") or
-				std.mem.eql(u8, method, "wake");
+				std.mem.eql(u8, method, "wake") or std.mem.eql(u8, method, "view");
 
 			if (wakeable) self.wakeForCall(name);
 		}

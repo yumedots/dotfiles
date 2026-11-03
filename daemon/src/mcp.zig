@@ -3,7 +3,6 @@ const json = @import("primitives/json.zig");
 const proc = @import("primitives/proc.zig");
 const sock = @import("primitives/sock.zig");
 const exec = @import("primitives/exec.zig");
-const environ = @import("primitives/environ.zig");
 
 const gpa = std.heap.smp_allocator;
 const Io = std.Io;
@@ -153,9 +152,8 @@ fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.
 	if (std.mem.eql(u8, name, "qs_log")) return logTail(io, allocator, arguments);
 
 	if (std.mem.eql(u8, name, "vm_view")) {
-		const body = try callDaemon(io, allocator, "vms", "view", arguments);
 		spawnViewer(io, allocator, json.textAt(arguments, "name"));
-		return body;
+		return std.fmt.allocPrint(allocator, "{{\"viewing\":\"{s}\"}}", .{json.textAt(arguments, "name")});
 	}
 
 	if (std.mem.startsWith(u8, name, "vm_")) return callDaemon(io, allocator, "vms", name["vm_".len..], arguments);
@@ -166,20 +164,13 @@ fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.
 fn spawnViewer(io: Io, allocator: std.mem.Allocator, name: []const u8) void {
 	if (name.len == 0) return;
 
-	const repo = proc.repo(io, allocator);
-	const qml = std.fmt.allocPrint(allocator, "{s}/shell/vmView.qml", .{repo}) catch return;
-	const command = std.fmt.allocPrint(allocator, "exec quickshell -p '{s}'", .{qml}) catch return;
-
-	var map = std.process.Environ.Map.init(allocator);
-	if (environ.current(io, allocator) catch null) |source| map.putPosixBlock(source.block.view()) catch {};
-	map.put("YUDAE_VM", name) catch return;
+	const script = std.fmt.allocPrint(allocator, "{s}/scripts/yudae", .{proc.repo(io, allocator)}) catch return;
 
 	_ = exec.spawn(io, .{
-		.argv = &.{ "setsid", "sh", "-c", command },
+		.argv = &.{ "setsid", script, "vm", "view", name },
 		.stdin = .ignore,
 		.stdout = .ignore,
 		.stderr = .ignore,
-		.environ_map = &map,
 	}) catch return;
 }
 

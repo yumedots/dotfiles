@@ -11,7 +11,6 @@ pub const Config = struct {
 	mem_mb: u32,
 	cid: u32,
 	gl: bool,
-	view: bool = false,
 };
 
 pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
@@ -20,6 +19,7 @@ pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	const qmp = try std.fs.path.join(allocator, &.{ config.dir, "qmp.sock" });
 	const serial = try std.fs.path.join(allocator, &.{ config.dir, "serial.log" });
 	const vfs = try std.fs.path.join(allocator, &.{ config.dir, "virtiofsd.sock" });
+	const spice = try std.fs.path.join(allocator, &.{ config.dir, "spice.sock" });
 
 	try list.append(allocator, "qemu-system-x86_64");
 	try addPair(allocator, &list, "-name", try std.fmt.allocPrint(allocator, "yudae-{s}", .{config.name}));
@@ -50,7 +50,8 @@ pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	try addPair(allocator, &list, "-qmp", try std.fmt.allocPrint(allocator, "unix:{s},server=on,wait=off", .{qmp}));
 	try addPair(allocator, &list, "-serial", try std.fmt.allocPrint(allocator, "file:{s}", .{serial}));
 	try addPair(allocator, &list, "-monitor", "none");
-	try addPair(allocator, &list, "-display", if (config.view) "dbus,gl=on" else "egl-headless");
+	try addPair(allocator, &list, "-display", "egl-headless");
+	try addPair(allocator, &list, "-spice", try std.fmt.allocPrint(allocator, "unix=on,addr={s},disable-ticketing=on", .{spice}));
 	try list.append(allocator, "-no-reboot");
 
 	return list.toOwnedSlice(allocator);
