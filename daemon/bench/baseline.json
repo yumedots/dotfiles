@@ -5,5 +5,14 @@
   "quickshellCpuPct": 28.4,
   "launcherRssKb": 444104,
   "agentSpawnsPerSecond": 1,
-  "daemon": null
+  "daemon": {
+    "at": "2026-11-02",
+    "note": "first yudaemond baseline",
+    "buildMs": 146,
+    "binaryBytes": 2547648,
+    "listenMs": 4,
+    "idleRssKb": 36560,
+    "idleCpu": 1.67,
+    "spawns": 2
+  }
 }

@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+import json
+import os
+import subprocess
+import sys
+
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+binary = os.path.join(root, "daemon", "zig-out", "bin", "yudaemond")
+baseline_path = os.path.join(root, "daemon", "bench", "baseline.json")
+
+seconds = "5"
+args = sys.argv[1:]
+for index, arg in enumerate(args):
+    if arg == "--seconds" and index + 1 < len(args):
+        seconds = args[index + 1]
+
+run = subprocess.run([binary, "bench", "--json", "--seconds", seconds], capture_output=True, text=True)
+if run.returncode != 0:
+    sys.stderr.write(run.stderr)
+    sys.exit(run.returncode)
+
+report = json.loads(run.stdout)
+
+with open(baseline_path) as handle:
+    baseline = json.load(handle)
+
+previous = baseline.get("daemon") or {}
+
+gates = [
+    ("incremental build", report.get("buildMs", 0), 2000, "ms"),
+    ("binary", report.get("binaryBytes", 0), 3 * 1024 * 1024, "B"),
+    ("start", report.get("listenMs", 0), 10, "ms"),
+    ("idle rss", report.get("idleRssKb", 0), 8 * 1024, "kB"),
+]
+
+failed = False
+for name, value, budget, unit in gates:
+    delta = ""
+    key = {
+        "incremental build": "buildMs",
+        "binary": "binaryBytes",
+        "start": "listenMs",
+        "idle rss": "idleRssKb",
+    }[name]
+    if key in previous:
+        diff = value - previous[key]
+        delta = "  %+d vs baseline" % diff
+    state = "ok  " if value <= budget else "FAIL"
+    if value > budget:
+        failed = True
+    print("%s %-18s %10d %s  budget %d%s" % (state, name, value, unit, budget, delta))
+
+spawn = subprocess.run([binary, "spawn-check", "--seconds", "5"], capture_output=True, text=True)
+if spawn.returncode != 0:
+    failed = True
+    print("FAIL idle spawns", spawn.stderr.strip() or spawn.stdout.strip())
+else:
+    print("ok   idle spawns      %s" % spawn.stdout.strip())
+
+if failed:
+    print("bench over budget")
+    sys.exit(1)
+
+print("bench within budget")
