@@ -214,11 +214,11 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 		defer view_arena.deinit();
 		const view_allocator = view_arena.allocator();
 
-		const start = try std.fmt.allocPrint(view_allocator, "{{\"call\":{{\"target\":\"vms\",\"method\":\"start\",\"args\":{{\"name\":\"{s}\"}}}}}}", .{rest[0]});
-		_ = roundTrip(io, view_allocator, start, true) catch {};
-
 		const message = try std.fmt.allocPrint(view_allocator, "{{\"call\":{{\"target\":\"vms\",\"method\":\"view\",\"args\":{{\"name\":\"{s}\"}}}}}}", .{rest[0]});
 		const result = roundTrip(io, view_allocator, message, false) catch std.process.exit(1);
+
+		const start = try std.fmt.allocPrint(view_allocator, "{{\"call\":{{\"target\":\"vms\",\"method\":\"start\",\"args\":{{\"name\":\"{s}\"}}}}}}", .{rest[0]});
+		_ = roundTrip(io, view_allocator, start, true) catch {};
 
 		focusVmWindow(io, view_allocator, rest[0]);
 
@@ -268,6 +268,8 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 			try writeField(allocator, writer, &wrote, "timeout", rest[index]);
 		} else if (std.mem.eql(u8, arg, "--gl")) {
 			try writeRawField(writer, &wrote, "gl", "true");
+		} else if (std.mem.eql(u8, arg, "--headless")) {
+			try writeRawField(writer, &wrote, "view", "false");
 		} else if (std.mem.eql(u8, arg, "--human")) {
 			try writeRawField(writer, &wrote, "human", "true");
 		} else if (name.len == 0) {
@@ -285,6 +287,8 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 		try writeField(allocator, writer, &wrote, "text", try std.mem.join(allocator, " ", positional.items));
 	} else if (std.mem.eql(u8, method, "key")) {
 		try writeArrayField(allocator, writer, &wrote, "keys", positional.items);
+	} else if (std.mem.eql(u8, method, "ui")) {
+		if (positional.items.len >= 1) try writeField(allocator, writer, &wrote, "action", positional.items[0]);
 	} else if (std.mem.eql(u8, method, "click") or std.mem.eql(u8, method, "move")) {
 		if (positional.items.len >= 1) try writeRawField(writer, &wrote, "x", positional.items[0]);
 		if (positional.items.len >= 2) try writeRawField(writer, &wrote, "y", positional.items[1]);

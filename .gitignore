@@ -60,3 +60,5 @@ hypr/plugins/borders-plus-plus/borders-plus-plus.so
 .xmake/
 /vm/runs/
 /daemon/.zig-cache-headless/
+vm/hostbin
+vm/hostwall

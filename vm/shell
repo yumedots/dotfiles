@@ -5,6 +5,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/1000}
 export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
 export HYPRLAND_INSTANCE_SIGNATURE=${HYPRLAND_INSTANCE_SIGNATURE:-$(ls "$XDG_RUNTIME_DIR/hypr" | head -1)}
+export QSG_RHI_BACKEND=${QSG_RHI_BACKEND:-opengl}
 
 case "${1:-}" in
 	restart)

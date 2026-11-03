@@ -30,6 +30,7 @@ const Vm = struct {
 	cores: u32,
 	mem_mb: u32,
 	gl: bool,
+	view: bool = true,
 	tier: tiers.Tier = .off,
 	pid: i32 = 0,
 	vfs_pid: i32 = 0,
@@ -207,6 +208,7 @@ pub const Vms = struct {
 		if (std.mem.eql(u8, method, "restore")) return self.restoreVm(args, allocator);
 		if (std.mem.eql(u8, method, "fork")) return self.forkVm(args, allocator);
 		if (std.mem.eql(u8, method, "view")) return self.viewVm(args, allocator);
+		if (std.mem.eql(u8, method, "ui")) return self.uiVm(args, allocator);
 		if (std.mem.eql(u8, method, "release")) return self.releaseVm(args, allocator);
 		if (std.mem.eql(u8, method, "push")) return self.pushVm(args, allocator);
 		if (std.mem.eql(u8, method, "pull")) return self.pullVm(args, allocator);
@@ -374,6 +376,7 @@ pub const Vms = struct {
 			.cores = cores,
 			.mem_mb = mem,
 			.gl = gl,
+			.view = if (json.field(args, "view")) |_| json.flag(args, "view") else true,
 			.tier = .off,
 			.created_ms = fmt.nowMs(self.io),
 			.used_ms = fmt.nowMs(self.io),
@@ -418,7 +421,31 @@ pub const Vms = struct {
 		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"pid\":{d}}}", .{ vm.name, vm.cid, vm.pid });
 	}
 
+	fn syncDesktop(self: *Vms) void {
+		const repo = proc.repo(self.io, self.allocator);
+		const script = std.fmt.allocPrint(self.allocator, "{s}/vm/desktop-sync", .{repo}) catch return;
+		defer self.allocator.free(script);
+
+		if (exec.run(self.io, self.allocator, &.{ "bash", script })) |result| {
+			result.deinit(self.allocator);
+		} else |_| {}
+	}
+
+	fn applyDesktop(self: *Vms, vm: *Vm) void {
+		const repo = proc.repo(self.io, self.allocator);
+		const script = std.fmt.allocPrint(self.allocator, "{s}/vm/desktop", .{repo}) catch return;
+		defer self.allocator.free(script);
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		if (self.guestExec(vm.cid, &.{ "bash", script }, arena.allocator())) |result| {
+			_ = result;
+		} else |_| {}
+	}
+
 	fn bootVm(self: *Vms, vm: *Vm) !void {
+		self.syncDesktop();
 		try std.Io.Dir.cwd().createDirPath(self.io, vm.dir);
 
 		const repo = proc.repo(self.io, self.allocator);
@@ -451,6 +478,7 @@ pub const Vms = struct {
 			.mem_mb = vm.mem_mb,
 			.cid = vm.cid,
 			.gl = vm.gl,
+			.view = vm.view,
 		});
 
 		const qmp_path = try std.fs.path.join(self.allocator, &.{ vm.dir, "qmp.sock" });
@@ -542,6 +570,7 @@ pub const Vms = struct {
 				.cores = @intCast(@max(json.integer(json.field(parsed.value, "cores")), 1)),
 				.mem_mb = @intCast(@max(json.integer(json.field(parsed.value, "memMb")), 512)),
 				.gl = json.flag(parsed.value, "gl"),
+				.view = if (json.field(parsed.value, "view")) |_| json.flag(parsed.value, "view") else true,
 				.tier = if (alive) .hot else .off,
 				.pid = if (alive) pid else 0,
 				.created_ms = fmt.nowMs(self.io),
@@ -592,12 +621,13 @@ pub const Vms = struct {
 			result.deinit(self.allocator);
 		} else |_| {}
 
-		const body = std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"cores\":{d},\"memMb\":{d},\"gl\":{s},\"pid\":{d},\"agent\":\"{s}\",\"base\":\"{s}\",\"dirty\":{s},\"packages\":\"{s}\"}}", .{
+		const body = std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"cores\":{d},\"memMb\":{d},\"gl\":{s},\"view\":{s},\"pid\":{d},\"agent\":\"{s}\",\"base\":\"{s}\",\"dirty\":{s},\"packages\":\"{s}\"}}", .{
 			vm.name,
 			vm.cid,
 			vm.cores,
 			vm.mem_mb,
 			if (vm.gl) "true" else "false",
+			if (vm.view) "true" else "false",
 			vm.pid,
 			vm.agent,
 			base_mem orelse "",
@@ -1143,13 +1173,50 @@ pub const Vms = struct {
 			self.mutex.unlock(self.io);
 			return error.NotFound;
 		};
+		const restart = vm.tier != .off and !vm.view;
+
 		vm.controller = try self.allocator.dupe(u8, "human");
+		vm.view = true;
 		vm.used_ms = fmt.nowMs(self.io);
 		self.mutex.unlock(self.io);
 
+		if (restart) {
+			self.op.lockUncancelable(self.io);
+			self.cleanupVm(vm);
+			self.op.unlock(self.io);
+		}
+
 		self.hub.publish();
 
+		self.syncDesktop();
+		self.applyDesktop(vm);
+
 		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"controller\":\"human\"}}", .{vm.name});
+	}
+
+	fn uiVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
+		const name = json.textAt(args, "name");
+		const action = json.textAt(args, "action");
+		const cid = self.cidOf(name) orelse return error.NotFound;
+
+		const glyph = if (std.mem.eql(u8, action, "clipboard"))
+			"clipboard"
+		else if (std.mem.eql(u8, action, "windows"))
+			"windows"
+		else
+			"launcher";
+
+		const command = try std.fmt.allocPrint(allocator,
+			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
+			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | head -1)); " ++
+			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
+			"hyprctl dispatch 'hl.dsp.global(\"quickshell:{s}\")'",
+			.{glyph});
+
+		const result = try self.guestExec(cid, &.{ "sh", "-lc", command }, allocator);
+		if (result.code != 0) return error.UiFailed;
+
+		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"action\":\"{s}\"}}", .{ name, action });
 	}
 
 	fn releaseVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
@@ -1363,6 +1430,7 @@ pub const Vms = struct {
 			.cores = cores,
 			.mem_mb = mem,
 			.gl = gl,
+			.view = if (json.field(args, "view")) |_| json.flag(args, "view") else true,
 			.tier = .off,
 			.created_ms = fmt.nowMs(self.io),
 			.used_ms = fmt.nowMs(self.io),

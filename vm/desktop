@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+BIN=$ROOT/vm/hostbin
+WALL=$ROOT/vm/hostwall
+
+systemd-detect-virt -q --vm || exit 0
+[ -d "$BIN" ] || exit 0
+
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/1000}
+export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
+
+mkdir -p "$HOME/.local/bin" "$HOME/Documents/Wallpaper"
+
+for name in awww awww-daemon; do
+	[ -x "$BIN/$name" ] && cp -f "$BIN/$name" "$HOME/.local/bin/$name"
+done
+
+chmod +x "$HOME/.local/bin/awww" "$HOME/.local/bin/awww-daemon" 2>/dev/null || true
+
+pgrep -x awww-daemon >/dev/null || (setsid "$HOME/.local/bin/awww-daemon" >/tmp/awww.log 2>&1 &)
+
+for _ in $(seq 1 60); do
+	"$HOME/.local/bin/awww" query >/dev/null 2>&1 && break
+	sleep 0.1
+done
+
+shopt -s nullglob
+for file in "$WALL"/*; do
+	cp -f "$file" "$HOME/Documents/Wallpaper/$(basename "$file")"
+	"$HOME/.local/bin/awww" img --transition-type none "$HOME/Documents/Wallpaper/$(basename "$file")" >/dev/null 2>&1 || true
+done

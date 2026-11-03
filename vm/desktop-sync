@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+BIN=$ROOT/vm/hostbin
+WALL=$ROOT/vm/hostwall
+
+mkdir -p "$BIN" "$WALL"
+
+for name in awww awww-daemon; do
+	[ -x "/usr/bin/$name" ] && cp -f "/usr/bin/$name" "$BIN/$name"
+done
+
+settings=$ROOT/shell/cache/settings.lua
+wallpaper=$(sed -n 's/^[[:space:]]*wallpaper[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' "$settings" 2>/dev/null | head -1)
+
+if [ -n "$wallpaper" ] && [ -f "$wallpaper" ]; then
+	cp -f "$wallpaper" "$WALL/$(basename "$wallpaper")"
+fi

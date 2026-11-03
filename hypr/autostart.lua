@@ -22,5 +22,7 @@ hl.on("hyprland.start", function ()
 end)
 
 if prefs.wallpaper then
+  hl.exec_cmd("sh -lc '~/dotfiles/vm/desktop'")
+
   hl.exec_cmd("awww query 2>/dev/null | grep -qF '" .. prefs.wallpaper .. "' || { until awww query >/dev/null 2>&1; do sleep 0.05; done; awww img --transition-type none '" .. prefs.wallpaper .. "'; }")
 end
