@@ -17,7 +17,7 @@ The dotfiles repo is mounted read-only over virtiofs at `/home/gabriel/dotfiles`
 
 ## GPU
 
-virgl (`virtio-gpu-gl-pci`, OpenGL) is the default because the desktop is OpenGL. Venus (Vulkan) is not used. Every VM starts with `-display gtk,gl=on,grab-on-hover=off,full-screen=on`, so its window is the viewer: the guest renders on the host GPU, the window goes full screen, the mouse and keyboard go straight to the guest, and Alt+F4 closes it. `-nodefaults` plus `-vga none` keeps the PS/2 mouse from taking over and forcing relative input. A virgl VM cannot be saved or migrated, so GL VMs have no RAM-to-file save.
+virgl (`virtio-gpu-gl-pci`, OpenGL) is the default because the desktop is OpenGL. Venus (Vulkan) is not used. The guest renderer is `virgl (NVIDIA GeForce RTX 3070)`; check it with `QSG_INFO=1` in the guest. A viewed VM runs `-display gtk,gl=on,grab-on-hover=off,full-screen=on`, so its window is the viewer: full screen, mouse and keyboard straight to the guest, `Ctrl+Alt+G` releases the pointer. `-nodefaults` plus `-vga none` keeps the PS/2 mouse from taking over and forcing relative input. `vm create --headless` skips the window and uses a 1280x720 `egl-headless` display; `vm view` restarts it with a window. A virgl VM cannot be saved or migrated, so GL VMs have no RAM-to-file save.
 
 QMP `screendump` cannot read a virgl scanout, so GL screenshots run `grim` inside the guest and return the PNG over vsock. Non-GL VMs use QMP screendump.
 
@@ -47,11 +47,13 @@ yudae vm view <name> | release <name> | scenario <name>
 scripts/vm-test start | restart | shot [path] | run <cmd> | stop | destroy
 ```
 
+Wallpaper and its daemon come from the host: `vm/desktop-sync` copies the active wallpaper from `shell/cache/settings.lua` and the `awww` fork's binaries into `vm/hostbin` and `vm/hostwall` (gitignored); the guest's `vm/desktop` installs `awww`, starts `awww-daemon` and sets the same image. Wallpaper changes apply on the next `vm view`.
+
 `scripts/vm-test` is the UI loop: it keeps a VM named `ui` (override with `VM_TEST_NAME`), waits for the guest shell, restarts quickshell after a host edit and returns full-resolution PNG screenshots from the guest. `vm_test` runs on the host; `vm/shell restart|wait` runs inside the guest.
 
 Snapshots are offline: `yudae vm stop` exits QEMU and keeps the overlay, then `vm snapshot`/`vm restore` work, then `vm start` boots it again.
 
-The same verbs are MCP tools. `vm view` marks the human as controller; agent key/type/click/move then fails with `HumanControl` until the viewer closes or ten idle minutes pass. The viewer is the VM's own QEMU window. Mouse and keyboard go straight to the guest. `vm view` starts the VM if needed, focuses its window and marks the human as controller; agent input then fails with `HumanControl` until `vm release`.
+The same verbs are MCP tools. `vm view` marks the human as controller; agent key/type/click/move then fails with `HumanControl` until the viewer closes or ten idle minutes pass. The viewer is the VM's own QEMU window. Mouse and keyboard go straight to the guest. `vm view` marks the human as controller, gives a headless VM a window, starts it if needed, focuses it and marks the human as controller; agent input then fails with `HumanControl` until `vm release`. Guest windows run the same Hyprland config as the host, so host shortcuts are forwarded: `ALT+SPACE`, `SUPER+1..0`, `SUPER+RETURN`, `SUPER+W`, `SUPER+B`, `SUPER+TAB` and `SUPER+SPACE` go to the guest while a QEMU window is focused (Hyprland cannot inhibit Wayland shortcuts).
 
 Every run writes `vm/runs/<name>/vm.json` with the git base, dirty flag and host package-list hash, plus the serial log and screenshots, so a failure can be replayed on the same state.
 
