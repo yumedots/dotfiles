@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+NAME=${VM_TEST_NAME:-ui}
+YUD=$ROOT/scripts/yudae
+
+guest() {
+	"$YUD" vm exec "$NAME" "$*"
+}
+
+usage() {
+	echo "usage: vm-test start|restart|shot [path]|run <cmd>|stop|destroy|list" >&2
+	exit 2
+}
+
+case "${1:-}" in
+	start)
+		if ! "$YUD" vm state "$NAME" >/dev/null 2>&1; then
+			"$YUD" vm create "$NAME" --cores 4 --mem 4096
+		fi
+		"$YUD" vm start "$NAME" >/dev/null
+		"$YUD" vm wait "$NAME" --until "exec:pgrep -x Hyprland" --timeout 120000 >/dev/null
+		guest "$ROOT/vm/shell wait" || true
+		echo "vm $NAME is up"
+		;;
+	restart)
+		guest "$ROOT/vm/shell restart"
+		guest "$ROOT/vm/shell wait"
+		echo "shell restarted in $NAME"
+		;;
+	shot)
+		out=${2:-/tmp/vm-$NAME.png}
+		"$YUD" vm screenshot "$NAME" "$out" >/dev/null
+		echo "$out"
+		;;
+	run)
+		shift
+		guest "$*"
+		;;
+	stop)
+		"$YUD" vm stop "$NAME" >/dev/null
+		echo "vm $NAME stopped"
+		;;
+	destroy)
+		"$YUD" vm destroy "$NAME" >/dev/null
+		echo "vm $NAME destroyed"
+		;;
+	list)
+		"$YUD" vm list
+		;;
+	*)
+		usage
+		;;
+esac

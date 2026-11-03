@@ -1,6 +1,8 @@
 # hypr-test
 
-Verify every Hyprland, quickshell and dotfile change with `scripts/hypr-test`. It runs a private nested Hyprland + quickshell on a worktree copy of the repo, so the real session is never touched. A change is not verified until it has been seen through it.
+Verify UI and dotfile changes in a VM first: `scripts/vm-test start`, `restart`, `shot`. The guest boots the same quickshell from the read-only repo mount, so a host edit is live after `vm-test restart`, and the screenshot comes from the guest at full resolution. `scripts/hypr-test` stays for a fast nested loop while editing; it is not the proof.
+
+`scripts/hypr-test` runs a private nested Hyprland + quickshell on a worktree copy of the repo, so the real session is never touched.
 
 ## Rules
 

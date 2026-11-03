@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/1000}
+export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
+export HYPRLAND_INSTANCE_SIGNATURE=${HYPRLAND_INSTANCE_SIGNATURE:-$(ls "$XDG_RUNTIME_DIR/hypr" | head -1)}
+
+case "${1:-}" in
+	restart)
+		pkill -x quickshell 2>/dev/null || true
+		sleep 0.4
+		setsid quickshell -p "$ROOT/shell/shell.qml" >>/tmp/quickshell.log 2>&1 &
+		;;
+	wait)
+		for _ in $(seq 1 80); do
+			hyprctl layers 2>/dev/null | grep -q quickshell && exit 0
+			sleep 0.25
+		done
+		echo "quickshell did not map" >&2
+		exit 1
+		;;
+	*)
+		echo "usage: vm/shell restart|wait" >&2
+		exit 2
+		;;
+esac

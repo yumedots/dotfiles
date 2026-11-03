@@ -56,7 +56,7 @@ xmake.lua          the single entry point: build link lint test bench hypr vm do
 Read the one that matches the task before editing:
 
 - `agents/skills/quickshell.md` - QML, live reload, surfaces, lint, logs.
-- `agents/skills/hypr-test.md` - nested Hyprland verification. Every UI or dotfile change goes through it.
+- `agents/skills/hypr-test.md` - VM UI verification (`scripts/vm-test`) is the proof; nested hypr-test is the fast edit loop.
 - `agents/skills/daemon.md` - yudaemond rules, adding a provider, performance gates, lifecycle.
 - `agents/skills/vm.md` - the QEMU VM lifecycle and scenarios.
 

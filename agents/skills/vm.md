@@ -17,7 +17,7 @@ The dotfiles repo is mounted read-only over virtiofs at `/home/gabriel/dotfiles`
 
 ## GPU
 
-virgl (`virtio-gpu-gl-pci`, OpenGL) is the default because the desktop is OpenGL. Venus (Vulkan) is not used. Every VM uses `-display egl-headless` plus a SPICE unix socket. `-vga none` keeps the guest from picking the emulated VGA instead of virtio-gpu. A virgl VM cannot be saved or migrated, so GL VMs have no RAM-to-file save.
+virgl (`virtio-gpu-gl-pci`, OpenGL) is the default because the desktop is OpenGL. Venus (Vulkan) is not used. Every VM starts with `-display gtk,gl=on,grab-on-hover=off,full-screen=on`, so its window is the viewer: the guest renders on the host GPU, the window goes full screen, the mouse and keyboard go straight to the guest, and Alt+F4 closes it. `-nodefaults` plus `-vga none` keeps the PS/2 mouse from taking over and forcing relative input. A virgl VM cannot be saved or migrated, so GL VMs have no RAM-to-file save.
 
 QMP `screendump` cannot read a virgl scanout, so GL screenshots run `grim` inside the guest and return the PNG over vsock. Non-GL VMs use QMP screendump.
 
@@ -44,11 +44,14 @@ yudae vm key <name> <qcode...> | type <name> <text> | click <name> <x> <y> | mov
 yudae vm wait <name> --until guest|<text>|exec:<cmd> [--timeout MS]
 yudae vm sleep | park | wake | stop | destroy | snapshot <name> <tag> | restore <name> <tag> | fork <new> <from>
 yudae vm view <name> | release <name> | scenario <name>
+scripts/vm-test start | restart | shot [path] | run <cmd> | stop | destroy
 ```
+
+`scripts/vm-test` is the UI loop: it keeps a VM named `ui` (override with `VM_TEST_NAME`), waits for the guest shell, restarts quickshell after a host edit and returns full-resolution PNG screenshots from the guest. `vm_test` runs on the host; `vm/shell restart|wait` runs inside the guest.
 
 Snapshots are offline: `yudae vm stop` exits QEMU and keeps the overlay, then `vm snapshot`/`vm restore` work, then `vm start` boots it again.
 
-The same verbs are MCP tools. `vm view` marks the human as controller; agent key/type/click/move then fails with `HumanControl` until the viewer closes or ten idle minutes pass. The viewer is `spicy` on the VM's SPICE socket (`vm/runs/<name>/spice.sock`): full resolution, native mouse and keyboard, Ctrl+Alt releases the grab. virgl renders on the host GPU through `egl-headless` and SPICE ships the frames; SPICE GL dmabuf scanout stays black on NVIDIA, so it is not used. Closing the window hands control back to the agent.
+The same verbs are MCP tools. `vm view` marks the human as controller; agent key/type/click/move then fails with `HumanControl` until the viewer closes or ten idle minutes pass. The viewer is the VM's own QEMU window. Mouse and keyboard go straight to the guest. `vm view` starts the VM if needed, focuses its window and marks the human as controller; agent input then fails with `HumanControl` until `vm release`.
 
 Every run writes `vm/runs/<name>/vm.json` with the git base, dirty flag and host package-list hash, plus the serial log and screenshots, so a failure can be replayed on the same state.
 
