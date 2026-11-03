@@ -3,7 +3,8 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
 	const target = b.standardTargetOptions(.{});
 	const debug = b.option(bool, "debug", "debug build with symbols") orelse false;
-	const optimize = if (debug) std.builtin.OptimizeMode.Debug else b.standardOptimizeOption(.{ .preferred_optimize_mode = .safe });
+	const small = b.option(bool, "small", "optimize for size") orelse false;
+	const optimize = if (debug) std.builtin.OptimizeMode.Debug else if (small) std.builtin.OptimizeMode.ReleaseSmall else b.standardOptimizeOption(.{ .preferred_optimize_mode = .safe });
 	const use_llvm = b.option(bool, "llvm", "use LLVM (false is much faster to build but much slower to run)") orelse true;
 
 	const root = b.root.toString(b.allocator) catch @panic("OOM");
