@@ -4,8 +4,13 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 BIN=$ROOT/vm/hostbin
 WALL=$ROOT/vm/hostwall
+STATE=$ROOT/vm/hoststate
 
-mkdir -p "$BIN" "$WALL"
+mkdir -p "$BIN" "$WALL" "$STATE"
+
+timezone=$(cat /etc/timezone 2>/dev/null || true)
+[ -n "$timezone" ] || timezone=$(readlink -f /etc/localtime | sed 's|.*/zoneinfo/||')
+printf '%s\n' "$timezone" > "$STATE/timezone"
 
 for name in awww awww-daemon; do
 	[ -x "/usr/bin/$name" ] && cp -f "/usr/bin/$name" "$BIN/$name"

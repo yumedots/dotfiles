@@ -11,6 +11,12 @@ systemd-detect-virt -q --vm || exit 0
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/1000}
 export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
 
+timezone=$(cat "$ROOT/vm/hoststate/timezone" 2>/dev/null || true)
+if [ -n "$timezone" ] && [ "$(cat /etc/timezone 2>/dev/null)" != "$timezone" ]; then
+	sudo timedatectl set-timezone "$timezone" >/dev/null 2>&1 || true
+	sudo timedatectl set-ntp true >/dev/null 2>&1 || true
+fi
+
 mkdir -p "$HOME/.local/bin" "$HOME/Documents/Wallpaper"
 
 for name in awww awww-daemon; do
