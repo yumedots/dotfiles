@@ -232,6 +232,12 @@ cmd_start() {
 	git -C "$REPO" ls-files -z >"$dir/files"
 	git -C "$REPO" ls-files -z --others --exclude-standard >>"$dir/files"
 	rsync -a --ignore-missing-args --from0 --files-from="$dir/files" "$REPO/" "$wt/" || fail "rsync into worktree failed"
+	for plugin in "$REPO"/hypr/plugins/*/*.so "$REPO"/hypr/plugins/*/*.bin; do
+		[ -e "$plugin" ] || continue
+		local dst="$wt/${plugin#"$REPO/"}"
+		mkdir -p "$(dirname "$dst")"
+		rsync -a "$plugin" "$dst" || fail "rsync plugin into worktree failed"
+	done
 	if [ -d "$REPO/shell/cache" ]; then
 		mkdir -p "$wt/shell"
 		rsync -a "$REPO/shell/cache" "$wt/shell/" || fail "rsync cache into worktree failed"
