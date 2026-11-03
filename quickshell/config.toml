@@ -158,20 +158,19 @@ memoryTopCount = 5
 # volume mixer
 [mixer]
 mixerWidth = 246
-mixerChannelGap = 6
+mixerChannelGap = 8
 mixerFaderThickness = 4
 mixerPadding = 12
 mixerIconSize = 22
 mixerDeviceIconSize = 26
-mixerListRowHeight = 20
 mixerListGap = 8
+mixerRowRadius = 4
 mixerMaxVolume = 1
 mixerStepCount = 10
 mixerStep = 0.1  # 1 / mixerStepCount
 mixerShiftStep = 0.05
 mixerOnlyPlaying = true
 mixerHoldMs = 2000
-mixerRecordDotSize = 5
 mixerSeparator = 1
 mixerSeparatorColor = "#2b2b2b"
 

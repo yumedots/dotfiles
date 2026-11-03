@@ -159,20 +159,19 @@ QtObject {
 
 	// volume mixer
 	readonly property var mixerWidth: settings.mixerWidth !== undefined ? settings.mixerWidth : 246
-	readonly property var mixerChannelGap: settings.mixerChannelGap !== undefined ? settings.mixerChannelGap : 6
+	readonly property var mixerChannelGap: settings.mixerChannelGap !== undefined ? settings.mixerChannelGap : 8
 	readonly property var mixerFaderThickness: settings.mixerFaderThickness !== undefined ? settings.mixerFaderThickness : 4
 	readonly property var mixerPadding: settings.mixerPadding !== undefined ? settings.mixerPadding : 12
 	readonly property var mixerIconSize: settings.mixerIconSize !== undefined ? settings.mixerIconSize : 22
 	readonly property var mixerDeviceIconSize: settings.mixerDeviceIconSize !== undefined ? settings.mixerDeviceIconSize : 26
-	readonly property var mixerListRowHeight: settings.mixerListRowHeight !== undefined ? settings.mixerListRowHeight : 20
 	readonly property var mixerListGap: settings.mixerListGap !== undefined ? settings.mixerListGap : 8
+	readonly property var mixerRowRadius: settings.mixerRowRadius !== undefined ? settings.mixerRowRadius : 4
 	readonly property var mixerMaxVolume: settings.mixerMaxVolume !== undefined ? settings.mixerMaxVolume : 1
 	readonly property var mixerStepCount: settings.mixerStepCount !== undefined ? settings.mixerStepCount : 10
 	readonly property var mixerStep: settings.mixerStep !== undefined ? settings.mixerStep : 0.1
 	readonly property var mixerShiftStep: settings.mixerShiftStep !== undefined ? settings.mixerShiftStep : 0.05
 	readonly property var mixerOnlyPlaying: settings.mixerOnlyPlaying !== undefined ? settings.mixerOnlyPlaying : true
 	readonly property var mixerHoldMs: settings.mixerHoldMs !== undefined ? settings.mixerHoldMs : 2000
-	readonly property var mixerRecordDotSize: settings.mixerRecordDotSize !== undefined ? settings.mixerRecordDotSize : 5
 	readonly property var mixerPendingMs: settings.mixerPendingMs !== undefined ? settings.mixerPendingMs : 500
 	readonly property var mixerSeparator: settings.mixerSeparator !== undefined ? settings.mixerSeparator : 1
 	readonly property var mixerSeparatorColor: settings.mixerSeparatorColor !== undefined ? settings.mixerSeparatorColor : "#2b2b2b"

@@ -156,15 +156,6 @@ QtObject {
 		});
 	}
 
-	function picker(event, target) {
-		return root.act(event, {
-			escape: () => target.closePicker(),
-			up: () => target.pickerIndex = Math.max(0, target.pickerIndex - 1),
-			down: () => target.pickerIndex = Calc.clamp(target.pickerIndex + 1, 0, target.devices.length - 1),
-			accept: () => target.makeDefault(target.devices[target.pickerIndex])
-		});
-	}
-
 	function switcher(event, target) {
 		return root.act(event, {
 			escape: () => target.close(),

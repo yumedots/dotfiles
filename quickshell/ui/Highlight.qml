@@ -6,6 +6,7 @@ Rectangle {
 
 	property bool active: true
 	property bool fillParent: true
+	property real radius: 0
 
 	readonly property color ink: root.active ? Config.launcherHighlightText : Config.foreground
 

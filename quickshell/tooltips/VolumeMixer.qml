@@ -9,12 +9,8 @@ Item {
 	readonly property var mix: Yudae.audio
 	readonly property var nodes: root.mix.nodes || []
 	readonly property bool onScreen: root.Window.window ? root.Window.window.visible : false
-	readonly property bool hasInput: root.mix.hasInput === true
-	readonly property bool recording: root.mix.recording === true
 
-	property string picker: ""
 	property int targetIndex: 0
-	property int pickerIndex: 0
 
 	signal closeRequested()
 
@@ -25,23 +21,14 @@ Item {
 	property bool keyboard: false
 	property bool shift: false
 	readonly property bool showApps: (root.mix.streams || []).length > 0 && !root.compact
-	readonly property bool showSource: root.hasInput && !root.compact
 	readonly property var globalNode: root.nodeOf(root.mix.sink)
 	readonly property var sinks: root.compact ? [] : (root.mix.sinks || [])
-	readonly property var deviceRows: {
-		const list = root.sinks.map((sink) => root.nodeOf(sink.id)).filter((node) => node !== null);
-
-		if (root.showSource) {
-			const source = root.nodeOf(root.mix.source);
-
-			if (source)
-				list.push(source);
-		}
-
-		return list;
-	}
+	readonly property var deviceRows: root.sinks.map((sink) => root.nodeOf(sink.id)).filter((node) => node !== null)
 	readonly property var appRows: root.showApps ? (root.mix.streams || []).map(root.nodeOf).filter((node) => node !== null) : []
-	readonly property var rows: root.appRows.concat(root.deviceRows)
+	readonly property int globalOffset: root.globalNode !== null ? 1 : 0
+	readonly property var rows: root.globalNode !== null
+		? [root.globalNode].concat(root.appRows).concat(root.deviceRows)
+		: root.appRows.concat(root.deviceRows)
 
 	onOnScreenChanged: Yudae.cmd("audio", { watch: { on: root.onScreen === true } })
 
@@ -58,15 +45,10 @@ Item {
 	}
 
 	readonly property real contentWidth: Config.mixerWidth
-	readonly property var devices: root.mix.sources || []
 	readonly property var steps: Array(Config.mixerStepCount).fill(1)
 
 	implicitWidth: root.contentWidth + Config.mixerPadding * 2
 	implicitHeight: body.implicitHeight + Config.mixerPadding * 2
-
-	onPickerChanged: {
-		root.pickerIndex = 0;
-	}
 
 	readonly property var selectedNode: root.rows.length > 0
 		? root.rows[Calc.clamp(root.targetIndex, 0, root.rows.length - 1)]
@@ -83,8 +65,11 @@ Item {
 
 	function focusNode(node) {
 		for (let i = 0; i < root.rows.length; i++) {
-			if (root.rows[i] && node && root.rows[i].id === node.id)
+			if (node !== null && root.rows[i] === node) {
 				root.targetIndex = i;
+
+				return;
+			}
 		}
 	}
 
@@ -161,10 +146,7 @@ Item {
 		if (Input.direction(event) !== "")
 			root.keyboard = true;
 
-		if (root.picker === "")
-			Input.mixer(event, root);
-		else
-			Input.picker(event, root);
+		Input.mixer(event, root);
 	}
 
 	Keys.onReleased: function (event) {
@@ -186,32 +168,18 @@ Item {
 		return AppIcons.iconOf(node.appId, node.appIds);
 	}
 
-	function openPicker(direction) {
-		root.picker = root.picker === direction ? "" : direction;
-	}
-
-	function closePicker() {
-		root.picker = "";
-		root.keyboard = false;
-	}
-
 	function makeDefault(node) {
 		if (!node)
 			return;
 
 		Yudae.cmd("audio", { default: { id: node.id } });
-
-		root.picker = "";
 	}
 
 	function activateNode(node) {
-		if (!node)
+		if (!node || !node.isSink)
 			return;
 
-		if (node.isSink)
-			root.makeDefault(node);
-		else if (node.isDefault)
-			root.openPicker("input");
+		root.makeDefault(node);
 	}
 
 	property var drag: ({ id: -1, from: 0, width: 0, last: -1 })
@@ -250,32 +218,37 @@ Item {
 		id: row
 
 		property var node
+		property int rowIndex: -1
 		property bool global: false
+		property bool small: false
 
 		readonly property bool stream: !!row.node && row.node.isStream === true
 		readonly property bool muted: !!row.node && row.node.muted === true
 		readonly property bool current: !row.stream && !!row.node && row.node.isDefault === true
-		readonly property bool selected: !!row.node && !!root.selectedNode && row.node.id === root.selectedNode.id
+		readonly property bool selected: row.rowIndex === root.targetIndex
 		readonly property bool faderRow: row.stream || row.global
 		readonly property real volume: root.volumeOf(row.node)
+		readonly property real smallGlyph: Settings.fontSize + 2
+		readonly property real smallBadge: row.smallGlyph + 4
+		readonly property real smallRow: row.smallBadge + 4
 		readonly property string percentText: Math.round(row.volume * 100) + "%"
 		readonly property string label: row.node ? (row.node.description || row.node.name || "") : ""
 		readonly property string iconSource: row.stream ? root.iconFor(row.node) : ""
 		readonly property string glyph: row.stream ? Config.iconApp
 			: row.global ? Config.iconVolumeHigh
-			: row.node && row.node.isSink ? Config.iconOutput
-			: Config.iconInput
+			: Config.iconOutput
 		readonly property real level: Calc.clamp(row.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(row.level * Config.mixerStepCount) - 1
 		readonly property real hoverPad: Math.max(0, (row.height - Config.mixerFaderThickness) / 2)
 
-		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
+		height: row.small ? row.smallRow : Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
 		implicitHeight: height
 
 		Highlight {
 			id: hl
 
-			active: row.selected && root.keyboard || row.current && !root.keyboard && !root.compact
+			radius: Config.mixerRowRadius
+			active: row.selected && root.keyboard
 		}
 
 		MouseArea {
@@ -283,7 +256,7 @@ Item {
 
 			onClicked: {
 				root.keyboard = false;
-				root.focusNode(row.node);
+				root.targetIndex = row.rowIndex;
 				root.activateNode(row.node);
 			}
 		}
@@ -302,7 +275,16 @@ Item {
 			anchors.left: parent.left
 			anchors.verticalCenter: parent.verticalCenter
 			width: Config.mixerDeviceIconSize
-			height: Config.mixerDeviceIconSize
+			height: Math.min(Config.mixerDeviceIconSize, row.height)
+
+			Rectangle {
+				anchors.centerIn: parent
+				width: row.smallBadge
+				height: row.smallBadge
+				radius: width / 2
+				color: Config.foreground
+				visible: row.small && row.current
+			}
 
 			AppIcon {
 				anchors.centerIn: parent
@@ -316,19 +298,9 @@ Item {
 				anchors.centerIn: parent
 				visible: row.iconSource === ""
 				font.family: Config.fontFamily
-				font.pixelSize: row.faderRow ? Config.mixerIconSize : Config.mixerDeviceIconSize
-				color: row.muted ? Config.muted : hl.ink
+				font.pixelSize: row.small ? row.smallGlyph : Config.mixerIconSize
+				color: row.small && row.current ? Config.surface : row.muted ? Config.muted : Config.foreground
 				text: row.glyph
-			}
-
-			Rectangle {
-				anchors.right: parent.right
-				anchors.top: parent.top
-				width: Config.mixerRecordDotSize
-				height: Config.mixerRecordDotSize
-				radius: width / 2
-				color: Config.red
-				visible: !!row.node && row.node.isDefault === true && root.recording && !row.node.isSink && !row.stream
 			}
 		}
 
@@ -412,6 +384,7 @@ Item {
 		MixRow {
 			width: parent.width
 			node: root.globalNode
+			rowIndex: 0
 			global: true
 			visible: root.globalNode !== null
 		}
@@ -421,9 +394,11 @@ Item {
 
 			delegate: MixRow {
 				required property var modelData
+				required property int index
 
 				width: parent.width
 				node: modelData
+				rowIndex: root.globalOffset + index
 			}
 		}
 
@@ -439,76 +414,12 @@ Item {
 
 			delegate: MixRow {
 				required property var modelData
+				required property int index
 
 				width: parent.width
 				node: modelData
-			}
-		}
-	}
-
-	Item {
-		id: sheet
-
-		anchors.fill: parent
-		visible: root.picker !== ""
-		z: 10
-
-		Rectangle {
-			anchors.fill: parent
-			color: Config.surface
-		}
-
-		Column {
-			id: options
-
-			anchors.left: parent.left
-			anchors.right: parent.right
-			anchors.verticalCenter: parent.verticalCenter
-			anchors.margins: Config.mixerPadding
-			spacing: Config.mixerListGap
-
-			Repeater {
-				model: root.devices
-
-				delegate: Item {
-					id: option
-
-					required property var modelData
-					required property int index
-
-					readonly property bool active: option.modelData.default === true
-					readonly property bool highlighted: option.index === root.pickerIndex
-
-					width: options.width
-					height: Config.mixerListRowHeight
-
-					Highlight {
-						active: option.highlighted
-					}
-
-					Text {
-						id: optionGlyph
-
-						anchors.left: parent.left
-						anchors.verticalCenter: parent.verticalCenter
-						font.family: Config.fontFamily
-						font.pixelSize: Config.mixerIconSize
-						color: option.active || option.highlighted ? Config.foreground : Config.muted
-						text: Config.iconInput
-					}
-
-					Text {
-						anchors.left: optionGlyph.right
-						anchors.leftMargin: Config.mixerListGap
-						anchors.right: parent.right
-						anchors.verticalCenter: parent.verticalCenter
-						elide: Text.ElideRight
-						font.family: Config.fontFamily
-						font.pixelSize: Settings.fontSize
-						color: option.active || option.highlighted ? Config.launcherHighlightText : Config.muted
-						text: option.modelData.name || ""
-					}
-				}
+				rowIndex: root.globalOffset + root.appRows.length + index
+				small: true
 			}
 		}
 	}
