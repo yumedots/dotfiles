@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -eu
+
+echo "vm: the vm/ scripts are not in place yet" >&2
+exit 2
