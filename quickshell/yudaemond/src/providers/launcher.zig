@@ -751,7 +751,7 @@ pub const Launcher = struct {
 	pub fn killProcess(self: *Launcher, pid: i32) void {
 		if (pid <= 0) return;
 
-		var signal: u32 = @intFromEnum(std.posix.SIG.KILL);
+		var signal: u32 = @backingInt(std.posix.SIG.KILL);
 
 		if (config.Config.load(self.io, self.allocator)) |cfg| {
 			defer cfg.deinit();
@@ -763,7 +763,7 @@ pub const Launcher = struct {
 			}
 		} else |_| {}
 
-		_ = std.posix.kill(pid, @enumFromInt(signal)) catch {};
+		_ = std.posix.kill(pid, @fromBackingInt(@intCast(signal))) catch {};
 	}
 
 	pub fn power(self: *Launcher, index: usize) void {
@@ -962,7 +962,7 @@ pub const Launcher = struct {
 		if (self.watch) |watch| watch.markSelf();
 
 		var child = std.process.spawn(self.io, .{
-			.argv = &.{ "wl-copy" },
+			.argv = &.{"wl-copy"},
 			.stdin = .pipe,
 			.stdout = .ignore,
 			.stderr = .ignore,
@@ -2162,3 +2162,4 @@ test "the launcher spawn passes the path as a shell parameter" {
 	try std.testing.expectEqualStrings("sh", argv[0]);
 	try std.testing.expectEqualStrings("/home/a b/launcherShell.qml", argv[4]);
 }
+
