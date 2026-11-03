@@ -267,21 +267,7 @@ pub const Windows = struct {
 		const path = std.fmt.allocPrint(allocator, "{s}/.config/hypr/programs.lua", .{proc.home(self.io, self.allocator)}) catch return null;
 		const body = proc.readFile(self.io, allocator, path) catch return null;
 
-		var name: ?[]const u8 = null;
-		var lines = std.mem.splitScalar(u8, body, '\n');
-
-		while (lines.next()) |raw| {
-			const line = std.mem.trim(u8, raw, " \t\r");
-			if (!std.mem.startsWith(u8, line, "terminal")) continue;
-
-			const at = std.mem.indexOfScalar(u8, line, '=') orelse continue;
-
-			const value = std.mem.trim(u8, line[at + 1 ..], " \t\r\"'");
-
-			if (value.len > 0) name = value;
-		}
-
-		return name;
+		return programValue(body, "terminal");
 	}
 
 	fn desktopEntry(self: *Windows, allocator: Allocator, id: []const u8) ?Desktop {
@@ -429,6 +415,32 @@ fn shellQuote(allocator: Allocator, text: []const u8) ![]const u8 {
 	try out.append(allocator, '\'');
 
 	return out.toOwnedSlice(allocator);
+}
+
+fn programValue(body: []const u8, key: []const u8) ?[]const u8 {
+	var name: ?[]const u8 = null;
+	var lines = std.mem.splitScalar(u8, body, '\n');
+
+	while (lines.next()) |raw| {
+		const line = std.mem.trim(u8, raw, " \t\r");
+		if (!std.mem.startsWith(u8, line, key)) continue;
+
+		const at = std.mem.indexOfScalar(u8, line, '=') orelse continue;
+		var value = std.mem.trimStart(u8, line[at + 1 ..], " \t");
+
+		if (value.len > 0 and (value[0] == '"' or value[0] == '\'')) {
+			const quote = value[0];
+			value = value[1..];
+			value = value[0 .. std.mem.indexOfScalar(u8, value, quote) orelse value.len];
+		} else {
+			const stop = std.mem.indexOfScalar(u8, value, ',') orelse value.len;
+			value = std.mem.trimEnd(u8, value[0..stop], " \t");
+		}
+
+		if (value.len > 0) name = value;
+	}
+
+	return name;
 }
 
 fn execLine(allocator: Allocator, raw: []const u8) ![]const u8 {
@@ -684,6 +696,20 @@ test "the exec line loses its field codes" {
 
 	const line = try execLine(arena.allocator(), "/usr/bin/app %U --flag %f");
 	try std.testing.expectEqualStrings("/usr/bin/app --flag", line);
+}
+
+test "the terminal command keeps the arguments after its name" {
+	const body =
+		\\return {
+		\\    terminal       = "alacritty msg -s $XDG_RUNTIME_DIR/alacritty.sock create-window",
+		\\    -- terminal    = "footclient",
+		\\}
+	;
+
+	try std.testing.expectEqualStrings(
+		"alacritty msg -s $XDG_RUNTIME_DIR/alacritty.sock create-window",
+		programValue(body, "terminal").?,
+	);
 }
 
 test "the change check notices a retitled window" {
