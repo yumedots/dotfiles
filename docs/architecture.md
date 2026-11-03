@@ -41,7 +41,7 @@ xmake orchestrates, it does not replace the real builders.
 | `xmake test` | daemon parsers/protocol tests, qml fixtures, idle-spawn test |
 | `xmake bench` | headless daemon cold build, size, start, idle RSS and spawns, then `yudaemond bench` against `bench/baseline.json` |
 | `xmake hypr` | nested hypr-test (start, shot, run, stop) |
-| `xmake vm ...` | VM lifecycle and scenarios |
+| `xmake vm ...` | VM images and bench; running VMs are `yudae vm` |
 | `xmake doctor` | what is missing and why |
 
 `zig build` stays underneath: the build budgets are measured on it and `scripts/yubuild` reports them. `zig build -Dheadless=true` builds `yudaemond-headless`, the minimal control-plane daemon that carries the performance gates.
