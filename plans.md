@@ -171,8 +171,8 @@ Quickshell as an MCP surface is done at the daemon: `yudae ui tree` and `yudae c
 
 ### Host prerequisites
 
-- Needed: `qemu-desktop` (QEMU 11.1.2), `qemu-ui-dbus`, `qemu-ui-egl-headless`, `qemu-ui-opengl`, `virtiofsd`.
-- The CachyOS package databases are stale, so the install returns 404s. A refresh without a full upgrade is a partial upgrade, which Arch does not support. A full `-Syu` is 106 packages including `linux-cachyos` and the NVIDIA module (7.3.0-4 to 7.3.1-1), so it needs a reboot before the new modules load.
+- Installed: `qemu-desktop` 11.1.3, `qemu-ui-dbus`, `qemu-ui-egl-headless`, `qemu-ui-opengl`, `virtiofsd` 1.14.
+- The databases were stale; the full `-Syu` ran and the running kernel and NVIDIA module already match the installed packages.
 
 ## 4. Single IPC entry
 
@@ -209,7 +209,9 @@ Settled:
 - Vanilla QEMU. A new Linux fork only if vanilla blocks us.
 - VMs are GPU accelerated.
 - VM control lives in yudaemond (Zig). Go is not used.
+- Full system upgrade done; QEMU 11.1.3 and virtiofsd 1.14 installed, kernel 7.3.1 and the NVIDIA module already match the installed packages.
+- Repo root is `~/dotfiles`; `~/.config` holds only the symlinks `xmake link` makes.
+- greetd starts the repo path, not `~/.config/quickshell`.
 
 Open:
-- Full system upgrade so QEMU can be installed (section 3, prerequisites).
-- Repo root name and place (`~/dotfiles`).
+- None.
