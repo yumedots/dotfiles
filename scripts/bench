@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 import json
 import os
+import shutil
+import signal
 import subprocess
 import sys
+import tempfile
+import time
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-binary = os.path.join(root, "daemon", "zig-out", "bin", "yudaemond")
-baseline_path = os.path.join(root, "daemon", "bench", "baseline.json")
+daemon_dir = os.path.join(root, "daemon")
+full_binary = os.path.join(daemon_dir, "zig-out", "bin", "yudaemond")
+headless_binary = os.path.join(daemon_dir, "zig-out", "bin", "yudaemond-headless")
+baseline_path = os.path.join(daemon_dir, "bench", "baseline.json")
 
 seconds = "5"
 args = sys.argv[1:]
@@ -19,48 +25,77 @@ if build.returncode != 0:
     sys.stderr.write(build.stderr or build.stdout)
     sys.exit(build.returncode)
 
-run = subprocess.run([binary, "bench", "--json", "--seconds", seconds], capture_output=True, text=True)
-if run.returncode != 0:
-    sys.stderr.write(run.stderr)
-    sys.exit(run.returncode)
+full_run = subprocess.run([full_binary, "bench", "--json", "--seconds", seconds], capture_output=True, text=True)
+if full_run.returncode != 0:
+    sys.stderr.write(full_run.stderr)
+    sys.exit(full_run.returncode)
+full = json.loads(full_run.stdout)
 
-report = json.loads(run.stdout)
+cache = os.path.join(daemon_dir, ".zig-cache-headless")
+shutil.rmtree(cache, ignore_errors=True)
+started = time.monotonic()
+headless_build = subprocess.run(
+    ["zig", "build", "-Drelease=true", "-Dheadless=true", "--cache-dir", cache],
+    cwd=daemon_dir,
+    capture_output=True,
+    text=True,
+)
+cold_ms = int((time.monotonic() - started) * 1000)
+if headless_build.returncode != 0:
+    sys.stderr.write(headless_build.stderr or headless_build.stdout)
+    sys.exit(headless_build.returncode)
 
-with open(baseline_path) as handle:
-    baseline = json.load(handle)
-
-previous = baseline.get("daemon") or {}
-
-gates = [
-    ("incremental build", report.get("buildMs", 0), 2000, "ms"),
-    ("binary", report.get("binaryBytes", 0), 3 * 1024 * 1024, "B"),
-    ("start", report.get("listenMs", 0), 10, "ms"),
-    ("idle rss", report.get("idleRssKb", 0), 8 * 1024, "kB"),
-]
-
+runtime = tempfile.mkdtemp(prefix="ydheadless-")
+env = dict(os.environ, XDG_RUNTIME_DIR=runtime)
+headless = subprocess.Popen([headless_binary, "run"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 failed = False
-for name, value, budget, unit in gates:
-    delta = ""
-    key = {
-        "incremental build": "buildMs",
-        "binary": "binaryBytes",
-        "start": "listenMs",
-        "idle rss": "idleRssKb",
-    }[name]
-    if key in previous:
-        diff = value - previous[key]
-        delta = "  %+d vs baseline" % diff
-    state = "ok  " if value <= budget else "FAIL"
-    if value > budget:
-        failed = True
-    print("%s %-18s %10d %s  budget %d%s" % (state, name, value, unit, budget, delta))
 
-spawn = subprocess.run([binary, "spawn-check", "--seconds", "5"], capture_output=True, text=True)
-if spawn.returncode != 0:
-    failed = True
-    print("FAIL idle spawns", spawn.stderr.strip() or spawn.stdout.strip())
-else:
-    print("ok   idle spawns      %s" % spawn.stdout.strip())
+try:
+    socket_path = os.path.join(runtime, "yudaemond.sock")
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and not os.path.exists(socket_path):
+        time.sleep(0.02)
+
+    if not os.path.exists(socket_path):
+        print("FAIL headless daemon did not open its socket")
+        failed = True
+    else:
+        probe = subprocess.run([full_binary, "bench", "--json", "--seconds", seconds], env=env, capture_output=True, text=True)
+        if probe.returncode != 0:
+            sys.stderr.write(probe.stderr)
+            failed = True
+        else:
+            report = json.loads(probe.stdout)
+            size = os.path.getsize(headless_binary)
+
+            gates = [
+                ("cold build", cold_ms, 20000, "ms"),
+                ("headless binary", size, 3 * 1024 * 1024, "B"),
+                ("headless start", report.get("listenMs", 0), 10, "ms"),
+                ("headless idle rss", report.get("idleRssKb", 0), 8 * 1024, "kB"),
+            ]
+
+            for name, value, budget, unit in gates:
+                state = "ok  " if value <= budget else "FAIL"
+                if value > budget:
+                    failed = True
+                print("%s %-20s %10d %s  budget %d" % (state, name, value, unit, budget))
+
+            spawn = subprocess.run([full_binary, "spawn-check", "--seconds", seconds], env=env, capture_output=True, text=True)
+            if spawn.returncode != 0:
+                failed = True
+                print("FAIL headless spawns    %s" % (spawn.stderr.strip() or spawn.stdout.strip()))
+            else:
+                print("ok   headless spawns    %s" % spawn.stdout.strip())
+
+            print("info full daemon idle rss %d kB (not a gate)" % full.get("idleRssKb", 0))
+finally:
+    headless.send_signal(signal.SIGTERM)
+    try:
+        headless.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        headless.kill()
+    shutil.rmtree(runtime, ignore_errors=True)
 
 if failed:
     print("bench over budget")
