@@ -67,7 +67,7 @@ QtObject {
 	readonly property var popupCloseDelay: settings.popupCloseDelay !== undefined ? settings.popupCloseDelay : 60
 	readonly property var popupFadeMs: settings.popupFadeMs !== undefined ? settings.popupFadeMs : 140
 	readonly property var popupSlideMs: settings.popupSlideMs !== undefined ? settings.popupSlideMs : 400
-	readonly property var barFadeMs: settings.barFadeMs !== undefined ? settings.barFadeMs : 300
+	readonly property var barFadeMs: settings.barFadeMs !== undefined ? settings.barFadeMs : 200
 	readonly property var popupPos: settings.popupPos !== undefined ? settings.popupPos : "top-center"
 	readonly property var popupX: settings.popupX !== undefined ? settings.popupX : -1
 	readonly property var popupY: settings.popupY !== undefined ? settings.popupY : -1
