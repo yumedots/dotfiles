@@ -693,14 +693,6 @@ fn deviceList(arena: Allocator, nodes: []const Node, sink: bool, active: i64) ![
 		});
 	}
 
-	for (list.items, 0..) |entry, index| {
-		if (!entry.default) continue;
-
-		if (index > 0) try list.insert(arena, 0, list.orderedRemove(index));
-
-		break;
-	}
-
 	return list.items;
 }
 
@@ -1000,10 +992,11 @@ test "devices come back with the active one first" {
 	const sinks = try deviceList(allocator, nodes.items, true, 3);
 
 	try std.testing.expectEqual(@as(usize, 3), sinks.len);
-	try std.testing.expectEqual(@as(i64, 3), sinks[0].id);
-	try std.testing.expect(sinks[0].default);
-	try std.testing.expectEqual(@as(i64, 1), sinks[1].id);
-	try std.testing.expectEqual(@as(i64, 2), sinks[2].id);
+	try std.testing.expectEqual(@as(i64, 1), sinks[0].id);
+	try std.testing.expect(!sinks[0].default);
+	try std.testing.expectEqual(@as(i64, 2), sinks[1].id);
+	try std.testing.expectEqual(@as(i64, 3), sinks[2].id);
+	try std.testing.expect(sinks[2].default);
 
 	const sources = try deviceList(allocator, nodes.items, false, 4);
 
