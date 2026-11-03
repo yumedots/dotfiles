@@ -19,11 +19,11 @@ pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	const qmp = try std.fs.path.join(allocator, &.{ config.dir, "qmp.sock" });
 	const serial = try std.fs.path.join(allocator, &.{ config.dir, "serial.log" });
 	const vfs = try std.fs.path.join(allocator, &.{ config.dir, "virtiofsd.sock" });
-	const spice = try std.fs.path.join(allocator, &.{ config.dir, "spice.sock" });
 
 	try list.append(allocator, "qemu-system-x86_64");
 	try addPair(allocator, &list, "-name", try std.fmt.allocPrint(allocator, "yudae-{s}", .{config.name}));
 	try addPair(allocator, &list, "-machine", "q35,accel=kvm");
+	try list.append(allocator, "-nodefaults");
 	try addPair(allocator, &list, "-cpu", "host");
 	try addPair(allocator, &list, "-smp", try std.fmt.allocPrint(allocator, "{d}", .{config.cores}));
 	try addPair(allocator, &list, "-m", try std.fmt.allocPrint(allocator, "{d}M", .{config.mem_mb}));
@@ -50,8 +50,7 @@ pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	try addPair(allocator, &list, "-qmp", try std.fmt.allocPrint(allocator, "unix:{s},server=on,wait=off", .{qmp}));
 	try addPair(allocator, &list, "-serial", try std.fmt.allocPrint(allocator, "file:{s}", .{serial}));
 	try addPair(allocator, &list, "-monitor", "none");
-	try addPair(allocator, &list, "-display", "egl-headless");
-	try addPair(allocator, &list, "-spice", try std.fmt.allocPrint(allocator, "unix=on,addr={s},disable-ticketing=on", .{spice}));
+	try addPair(allocator, &list, "-display", "gtk,gl=on,grab-on-hover=off,full-screen=on,show-cursor=on");
 	try list.append(allocator, "-no-reboot");
 
 	return list.toOwnedSlice(allocator);

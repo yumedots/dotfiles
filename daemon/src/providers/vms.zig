@@ -24,6 +24,8 @@ const Vm = struct {
 	disk: []u8,
 	agent: []u8,
 	controller: []u8,
+	screen_w: u32 = 0,
+	screen_h: u32 = 0,
 	cid: u32,
 	cores: u32,
 	mem_mb: u32,
@@ -451,11 +453,14 @@ pub const Vms = struct {
 			.gl = vm.gl,
 		});
 
+		const qmp_path = try std.fs.path.join(self.allocator, &.{ vm.dir, "qmp.sock" });
+		std.Io.Dir.cwd().deleteFile(self.io, qmp_path) catch {};
+
 		const child = exec.spawn(self.io, .{
 			.argv = argv,
 			.stdin = .ignore,
 			.stdout = .ignore,
-			.stderr = .ignore,
+			.stderr = .inherit,
 		}) catch return error.QemuSpawnFailed;
 		vm.pid = child.id orelse 0;
 		vm.qemu_child = child;
@@ -826,7 +831,7 @@ pub const Vms = struct {
 			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
 			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | head -1)); " ++
 			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
-			"grim -s 0.5 /tmp/yudae-shot.png >/dev/null 2>&1; base64 -w0 /tmp/yudae-shot.png";
+			"grim -s $(python3 -c 'import json,subprocess;print(json.loads(subprocess.check_output([\"hyprctl\",\"monitors\",\"-j\"]))[0][\"scale\"])') /tmp/yudae-shot.png >/dev/null 2>&1; base64 -w0 /tmp/yudae-shot.png";
 
 		var attempts: usize = 0;
 		var text: []const u8 = "";
@@ -859,6 +864,29 @@ pub const Vms = struct {
 		try proc.writeFile(self.io, path, bytes);
 	}
 
+	fn screenOf(self: *Vms, name: []const u8) [2]u32 {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		const vm = self.findLocked(name) orelse return .{ 0, 0 };
+		return .{ vm.screen_w, vm.screen_h };
+	}
+
+	fn rememberScreen(self: *Vms, name: []const u8, path: []const u8, allocator: Allocator) void {
+		const bytes = proc.readFile(self.io, allocator, path) catch return;
+		if (bytes.len < 24 or !std.mem.eql(u8, bytes[1..4], "PNG")) return;
+
+		const width = std.mem.readInt(u32, bytes[16..20], .big);
+		const height = std.mem.readInt(u32, bytes[20..24], .big);
+
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		const vm = self.findLocked(name) orelse return;
+		vm.screen_w = width;
+		vm.screen_h = height;
+	}
+
 	fn screenshotVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
 		const name = json.textAt(args, "name");
 
@@ -876,6 +904,7 @@ pub const Vms = struct {
 
 		if (vm.gl) {
 			if (self.guestScreenshot(vm, path, allocator)) |_| {
+				self.rememberScreen(name, path, allocator);
 				return std.fmt.allocPrint(allocator, "{{\"path\":\"{s}\"}}", .{path});
 			} else |_| {}
 		}
@@ -1202,7 +1231,7 @@ pub const Vms = struct {
 		const y = json.numberAt(args, "y");
 		const button = if (std.mem.eql(u8, json.textAt(args, "button"), "right")) "right" else "left";
 
-		try pointer(self.io, client, allocator, x, y);
+		try pointer(self.io, client, allocator, x, y, self.screenOf(name));
 		try buttonEvent(client, allocator, button, true);
 		sleep.ms(40);
 		try buttonEvent(client, allocator, button, false);
@@ -1215,7 +1244,7 @@ pub const Vms = struct {
 		if (self.humanHolds(name) and !humanRequest(args)) return error.HumanControl;
 		const client = self.qmpOf(name) orelse return error.NotRunning;
 
-		try pointer(self.io, client, allocator, json.numberAt(args, "x"), json.numberAt(args, "y"));
+		try pointer(self.io, client, allocator, json.numberAt(args, "x"), json.numberAt(args, "y"), self.screenOf(name));
 
 		return allocator.dupe(u8, "{\"ok\":true}");
 	}
@@ -1527,10 +1556,12 @@ fn kill(pid: i32) void {
 	std.posix.kill(pid, std.posix.SIG.TERM) catch return;
 }
 
-fn pointer(io: Io, client: *qmp.Qmp, allocator: Allocator, x: f64, y: f64) !void {
+fn pointer(io: Io, client: *qmp.Qmp, allocator: Allocator, x: f64, y: f64, screen: [2]u32) !void {
 	_ = io;
-	const px: i64 = @intFromFloat(@max(0, @min(32767, x / 2560.0 * 32767.0)));
-	const py: i64 = @intFromFloat(@max(0, @min(32767, y / 1440.0 * 32767.0)));
+	const width: f64 = @floatFromInt(if (screen[0] > 0) screen[0] else 2560);
+	const height: f64 = @floatFromInt(if (screen[1] > 0) screen[1] else 1440);
+	const px: i64 = @intFromFloat(@max(0, @min(32767, x / width * 32767.0)));
+	const py: i64 = @intFromFloat(@max(0, @min(32767, y / height * 32767.0)));
 
 	var body: std.Io.Writer.Allocating = .init(allocator);
 	const writer = &body.writer;

@@ -9,6 +9,7 @@ const mcpmod = @import("mcp.zig");
 const sleep = @import("primitives/sleep.zig");
 const environ = @import("primitives/environ.zig");
 const exec = @import("primitives/exec.zig");
+const hypr = @import("primitives/hypr.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -213,23 +214,13 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 		defer view_arena.deinit();
 		const view_allocator = view_arena.allocator();
 
+		const start = try std.fmt.allocPrint(view_allocator, "{{\"call\":{{\"target\":\"vms\",\"method\":\"start\",\"args\":{{\"name\":\"{s}\"}}}}}}", .{rest[0]});
+		_ = roundTrip(io, view_allocator, start, true) catch {};
+
 		const message = try std.fmt.allocPrint(view_allocator, "{{\"call\":{{\"target\":\"vms\",\"method\":\"view\",\"args\":{{\"name\":\"{s}\"}}}}}}", .{rest[0]});
 		const result = roundTrip(io, view_allocator, message, false) catch std.process.exit(1);
 
-		const repo = proc.repo(io, view_allocator);
-		const command = try std.fmt.allocPrint(view_allocator, "'{0s}/scripts/yudae' vm start '{1s}' >/dev/null; spicy -f --title='{1s}' --uri='spice+unix://{0s}/vm/runs/{1s}/spice.sock'; exec '{0s}/scripts/yudae' vm release '{1s}'", .{ repo, rest[0] });
-
-		const source = environ.current(io, view_allocator) catch null;
-		var map = std.process.Environ.Map.init(view_allocator);
-		if (source) |env| map.putPosixBlock(env.block.view()) catch {};
-
-		_ = exec.spawn(io, .{
-			.argv = &.{ "setsid", "sh", "-c", command },
-			.stdin = .ignore,
-			.stdout = .ignore,
-			.stderr = .ignore,
-			.environ_map = &map,
-		}) catch {};
+		focusVmWindow(io, view_allocator, rest[0]);
 
 		printResult(io, result);
 		return;
@@ -460,4 +451,26 @@ pub fn print(io: Io, comptime message: []const u8) void {
 
 test "cli module compiles" {
 	try std.testing.expect(true);
+}
+
+fn focusVmWindow(io: Io, allocator: Allocator, name: []const u8) void {
+	const body = hypr.request(io, allocator, "j/clients") catch return;
+	defer allocator.free(body);
+
+	const parsed = json.parse(allocator, body) catch return;
+	const clients = if (parsed.value == .array) parsed.value.array.items else return;
+
+	const needle = std.fmt.allocPrint(allocator, "(yudae-{s})", .{name}) catch return;
+
+	for (clients) |client| {
+		if (std.mem.indexOf(u8, json.textAt(client, "title"), needle) == null) continue;
+
+		const workspace = json.field(client, "workspace") orelse return;
+		const id = json.integer(json.field(workspace, "id"));
+
+		const command = std.fmt.allocPrint(allocator, "dispatch hl.dsp.focus({{workspace={d}}})", .{id}) catch return;
+		const reply = hypr.request(io, allocator, command) catch return;
+		allocator.free(reply);
+		return;
+	}
 }
