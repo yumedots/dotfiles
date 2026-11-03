@@ -55,7 +55,7 @@ pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	try addPair(allocator, &list, "-serial", try std.fmt.allocPrint(allocator, "file:{s}", .{serial}));
 	try addPair(allocator, &list, "-monitor", "none");
 	if (config.view) {
-		try addPair(allocator, &list, "-display", "gtk,gl=on,grab-on-hover=off,full-screen=on,show-cursor=on");
+		try addPair(allocator, &list, "-display", "gtk,gl=on,grab-on-hover=on,full-screen=on,show-cursor=on");
 	} else {
 		try addPair(allocator, &list, "-display", "egl-headless");
 	}
