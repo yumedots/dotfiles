@@ -3,7 +3,7 @@
 Hyprland plugin: while you drag a tiled window with the mouse, a dark box with a gray
 border shows where it will land.
 
-Built for Hyprland **0.56.2** (`efb5099`). Plugins are ABI-locked: run `make` after every
+Built for Hyprland **0.57.0** (`0aa6745`). Plugins are ABI-locked: run `make` after every
 Hyprland update.
 
 ## Behaviour

@@ -10,7 +10,8 @@
 #include <hyprland/src/desktop/state/ViewState.hpp>
 #include <hyprland/src/desktop/state/ViewHitTester.hpp>
 #include <hyprland/src/desktop/view/Group.hpp>
-#include <hyprland/src/desktop/view/Window.hpp>
+#include <hyprland/src/desktop/view/window/Window.hpp>
+#include <hyprland/src/desktop/view/window/WindowGroupMembership.hpp>
 #include <hyprland/src/helpers/MiscFunctions.hpp>
 #include <hyprland/src/helpers/math/Direction.hpp>
 #include <hyprland/src/layout/LayoutManager.hpp>
@@ -118,7 +119,7 @@ static std::optional<CBox> predictDwindle(CDwindleAlgorithm* dwindle, SP<ITarget
 
     SP<SDwindleNodeData> openingOn;
 
-    if ((PWORKSPACE == ACTIVE_MON->m_activeWorkspace || (PWORKSPACE->m_isSpecialWorkspace && PMONITOR->m_activeSpecialWorkspace)) && !*PUSEACTIVE) {
+    if ((PWORKSPACE == ACTIVE_MON->m_activeWorkspace || (PWORKSPACE->type() == Workspace::eWorkspaceType::SPECIAL && PMONITOR->m_activeSpecialWorkspace)) && !*PUSEACTIVE) {
         const auto HIT = Desktop::viewState()->hitTest().windowAt(mouse, Desktop::View::RESERVED_EXTENTS | Desktop::View::INPUT_EXTENTS | Desktop::View::SKIP_FULLSCREEN_PRIORITY,
                                                                     dragged);
         openingOn      = dwindle->getNodeFromWindow(HIT);
@@ -214,7 +215,7 @@ static std::optional<CBox> predictGeneric(SP<CSpace> space, PHLWINDOW dragged, c
     const auto HIT =
         Desktop::viewState()->hitTest().windowAt(mouse, Desktop::View::RESERVED_EXTENTS | Desktop::View::INPUT_EXTENTS | Desktop::View::SKIP_FULLSCREEN_PRIORITY, dragged);
 
-    if (HIT && !HIT->m_isFloating && HIT->m_workspace == space->workspace())
+    if (HIT && !HIT->isFloating() && HIT->m_workspace == space->workspace())
         return windowGoalBox(HIT);
 
     if (space->algorithm()->tiledTargets() == 0)
@@ -247,8 +248,11 @@ std::optional<SDropPrediction> predictDrop(bool genericFallback) {
     if (*PDRAGINTOGROUP == 1) {
         const auto UNDER =
             Desktop::viewState()->hitTest().windowAt(MOUSE, Desktop::View::RESERVED_EXTENTS | Desktop::View::INPUT_EXTENTS | Desktop::View::ALLOW_FLOATING, DRAGGED);
-        if (UNDER && UNDER->m_group && DRAGGED->canBeGroupedInto(UNDER->m_group))
-            return SDropPrediction{.box = windowGoalBox(UNDER), .dragged = DRAGGED};
+        if (UNDER) {
+            const auto& UNDERGROUP = UNDER->grouping().group();
+            if (UNDERGROUP && DRAGGED->grouping().canBeGroupedInto(UNDERGROUP))
+                return SDropPrediction{.box = windowGoalBox(UNDER), .dragged = DRAGGED};
+        }
     }
 
     std::optional<CBox> box;

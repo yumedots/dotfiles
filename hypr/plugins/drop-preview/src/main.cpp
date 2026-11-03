@@ -5,12 +5,13 @@
 #include "Prediction.hpp"
 
 #include <hyprland/src/Compositor.hpp>
-#include <hyprland/src/desktop/view/Window.hpp>
+#include <hyprland/src/desktop/view/window/Window.hpp>
 #include <hyprland/src/event/EventBus.hpp>
 #include <hyprland/src/layout/LayoutManager.hpp>
 #include <hyprland/src/output/Monitor.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/plugins/PluginSystem.hpp>
+#include <hyprland/src/render/Context.hpp>
 #include <hyprland/src/render/Renderer.hpp>
 #include <hyprland/src/render/pass/BorderPassElement.hpp>
 #include <hyprland/src/render/pass/RectPassElement.hpp>
@@ -135,11 +136,11 @@ static CBox toDevicePixels(const CBox& logical, double scale) {
     return CBox{X0, Y0, std::max(1.0, X1 - X0), std::max(1.0, Y1 - Y0)};
 }
 
-static void draw() {
+static void draw(Render::CRenderContext& ctx) {
     if (!g_state.visible || g_state.alpha <= 0.F)
         return;
 
-    const auto PMONITOR = g_pHyprRenderer->m_renderData.pMonitor.lock();
+    const auto PMONITOR = ctx.m_data.pMonitor.lock();
     if (!PMONITOR)
         return;
 
@@ -157,7 +158,7 @@ static void draw() {
     fill.a *= g_state.alpha;
 
     if (fill.a > 0.F) {
-        g_pHyprRenderer->m_renderPass.add(makeUnique<CRectPassElement>(CRectPassElement::SRectData{
+        Render::IHyprRenderer::addPassElement(ctx, makeUnique<CRectPassElement>(CRectPassElement::SRectData{
             .box           = box,
             .color         = fill,
             .round         = sc<int>(ROUND),
@@ -176,7 +177,7 @@ static void draw() {
         data.roundingPower = ROUNDPOWR;
         data.borderSize    = BORDER;
         data.a             = g_state.alpha;
-        g_pHyprRenderer->m_renderPass.add(makeUnique<CBorderPassElement>(data));
+        Render::IHyprRenderer::addPassElement(ctx, makeUnique<CBorderPassElement>(data));
     }
 }
 
@@ -227,9 +228,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     HyprlandAPI::reloadConfig();
 
     g_state.listeners.emplace_back(Event::bus()->m_events.render.pre.listen([](PHLMONITOR) { update(); }));
-    g_state.listeners.emplace_back(Event::bus()->m_events.render.stage.listen([](eRenderStage stage) {
-        if (stage == RENDER_POST_WINDOWS)
-            draw();
+    g_state.listeners.emplace_back(Event::bus()->m_events.render.stage.listen([](Event::SRenderStageEvent e) {
+        if (e.stage == RENDER_POST_WINDOWS && e.context)
+            draw(e.context->get());
     }));
     g_state.listeners.emplace_back(Event::bus()->m_events.input.mouse.button.listen([](IPointer::SButtonEvent e, Event::SCallbackInfo&) { trackPointerButton(e); }));
 

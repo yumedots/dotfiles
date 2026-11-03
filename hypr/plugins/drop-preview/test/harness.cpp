@@ -6,7 +6,7 @@
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/desktop/state/WindowState.hpp>
 #include <hyprland/src/event/EventBus.hpp>
-#include <hyprland/src/desktop/view/Window.hpp>
+#include <hyprland/src/desktop/view/window/Window.hpp>
 #include <hyprland/src/layout/LayoutManager.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/pointer/PointerController.hpp>
@@ -30,7 +30,7 @@ static void pressButton(bool pressed) {
 
 static PHLWINDOW windowByClass(const std::string& cls) {
     for (const auto& w : Desktop::windowState()->windows()) {
-        if (w->m_class == cls && w->m_isMapped)
+        if (w->metadata().appID() == cls && w->mapped())
             return w;
     }
     return nullptr;
@@ -65,7 +65,7 @@ static int luaRun(lua_State* L) {
     const auto ACT = WINDOW->geometricBox(Desktop::View::IGeometric::GEOMETRIC_GOAL);
 
     std::string out = PRED ? std::format("pred={:.0f},{:.0f},{:.0f},{:.0f}", PRED->box.x, PRED->box.y, PRED->box.w, PRED->box.h) : std::string{"pred=none"};
-    out += std::format(" actual={:.0f},{:.0f},{:.0f},{:.0f} floating={}", ACT.x, ACT.y, ACT.w, ACT.h, WINDOW->m_isFloating);
+    out += std::format(" actual={:.0f},{:.0f},{:.0f},{:.0f} floating={}", ACT.x, ACT.y, ACT.w, ACT.h, WINDOW->isFloating());
     report(std::format("{} ({:.0f},{:.0f}) {}", CLS, END.x, END.y, out));
     lua_pushstring(L, out.c_str());
     return 1;
