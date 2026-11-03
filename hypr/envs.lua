@@ -8,8 +8,11 @@ hl.env("PATH", table.concat({
   os.getenv("PATH") or "/usr/bin",
 }, ":"))
 
-hl.env("LIBVA_DRIVER_NAME", "nvidia")
-hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
-hl.env("GBM_BACKEND", "nvidia-drm")
+if io.open("/dev/nvidia0") then
+  hl.env("LIBVA_DRIVER_NAME", "nvidia")
+  hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
+  hl.env("GBM_BACKEND", "nvidia-drm")
+end
+
 hl.env("QT_QPA_PLATFORMTHEME", "kde")
 hl.env("BROWSER", "helium-browser")

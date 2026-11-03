@@ -20,6 +20,7 @@ Item {
 	property string psField: "pcpu"
 	property var rowColor: (row) => row.color || Config.foreground
 	property bool showProcessList: true
+	property bool showVms: true
 	property alias viz: vizColumn.data
 
 	property string filter: ""
@@ -149,6 +150,11 @@ Item {
 				width: parent.width
 				spacing: 6
 			}
+		}
+
+		VmSection {
+			width: column.width
+			visible: panel.showVms
 		}
 
 		Rectangle {

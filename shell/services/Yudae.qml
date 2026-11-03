@@ -302,6 +302,11 @@ QtObject {
 
 	readonly property var audio: root.snapshot.audio || ({})
 	readonly property var audioNodes: root.audio.nodes || []
+	readonly property var vms: root.snapshot.vms || ({ budget: {}, list: [] })
+
+	function vmsCommand(method, args) {
+		root.send({ call: { target: "vms", method: method, args: args || ({}) } });
+	}
 
 	readonly property var appsEntries: (root.snapshot.apps && root.snapshot.apps.entries) || ({})
 	readonly property var systemState: root.snapshot.system || ({})
@@ -353,6 +358,9 @@ QtObject {
 			root.cursor = { valid: true, x: message.x, y: message.y };
 			return;
 		}
+
+		if (message.ok !== undefined)
+			return;
 
 		root.snapshot = message;
 	}

@@ -40,6 +40,7 @@ ProcessPanel {
 	totalInk: root.downInk
 	showTotal: false
 	showProcessList: false
+	showVms: false
 	keyAction: function(event) {
 		if (root.wifiTarget !== "") {
 			if (Input.cancel(event)) {
