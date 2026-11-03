@@ -581,6 +581,7 @@ fn run(io: std.Io) !void {
 
 	const vms_provider = try vms.Vms.create(allocator, io, hub);
 	try hub.add(vms_provider.provider());
+	launcher_provider.attachVms(vms_provider);
 
 	screen_provider.attachSettings(settings_provider);
 

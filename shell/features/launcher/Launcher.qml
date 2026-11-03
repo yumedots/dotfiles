@@ -1077,7 +1077,7 @@ PanelWindow {
 								anchors.rightMargin: Config.launcherPadding
 								anchors.verticalCenter: parent.verticalCenter
 								width: visible ? implicitWidth : 0
-								visible: row.modelData.kind === "proc"
+								visible: row.modelData.kind === "proc" || row.modelData.kind === "vm"
 								font.family: Config.fontFamily
 								font.pixelSize: root.fontSize
 								color: row.active ? Config.launcherHighlightText : Config.muted

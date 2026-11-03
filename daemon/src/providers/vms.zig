@@ -69,6 +69,33 @@ pub const Vms = struct {
 		return self;
 	}
 
+	pub const Info = struct {
+		name: []const u8,
+		tier: tiers.Tier,
+		mem_mb: u32,
+		cores: u32,
+		gl: bool,
+	};
+
+	pub fn info(self: *Vms, allocator: Allocator) ![]Info {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		var out: std.ArrayList(Info) = .empty;
+
+		for (self.list.items) |vm| {
+			try out.append(allocator, .{
+				.name = try allocator.dupe(u8, vm.name),
+				.tier = vm.tier,
+				.mem_mb = vm.mem_mb,
+				.cores = vm.cores,
+				.gl = vm.gl,
+			});
+		}
+
+		return out.toOwnedSlice(allocator);
+	}
+
 	pub fn provider(self: *Vms) hubmod.Provider {
 		return .{ .key = "vms", .ctx = self, .render = renderThunk };
 	}

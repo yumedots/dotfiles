@@ -3,6 +3,7 @@ const hubmod = @import("../hub.zig");
 const appsmod = @import("apps.zig");
 const sysmod = @import("system.zig");
 const windowsmod = @import("windows.zig");
+const vmsmod = @import("vms.zig");
 const clipwatch = @import("clipwatch.zig");
 const calc = @import("../primitives/calc.zig");
 const json = @import("../primitives/json.zig");
@@ -136,6 +137,7 @@ const Row = struct {
 	count: i64 = 0,
 	last: i64 = 0,
 	power: i64 = 0,
+	detail: []const u8 = "",
 };
 
 const RowOut = struct {
@@ -203,6 +205,7 @@ pub const Launcher = struct {
 	apps: ?*appsmod.Apps = null,
 	system: ?*sysmod.System = null,
 	windows: ?*windowsmod.Windows = null,
+	vms: ?*vmsmod.Vms = null,
 	watch: ?*clipwatch.Watch = null,
 	query: []u8 = &.{},
 	forced: []u8 = &.{},
@@ -237,6 +240,10 @@ pub const Launcher = struct {
 		self.apps = apps;
 		self.system = system;
 		self.windows = windows;
+	}
+
+	pub fn attachVms(self: *Launcher, vms: *vmsmod.Vms) void {
+		self.vms = vms;
 	}
 
 	pub fn provider(self: *Launcher) hubmod.Provider {
@@ -819,7 +826,27 @@ pub const Launcher = struct {
 			return;
 		}
 
+		if (std.mem.startsWith(u8, id, "vm:")) {
+			self.openVm(id["vm:".len..]);
+			return;
+		}
+
 		if (std.mem.eql(u8, id, "calc")) self.copyCalc();
+	}
+
+	fn openVm(self: *Launcher, name: []const u8) void {
+		if (name.len == 0) return;
+
+		const repo = proc.repo(self.io, self.allocator);
+		const script = std.fmt.allocPrint(self.allocator, "{s}/scripts/yudae", .{repo}) catch return;
+		defer self.allocator.free(script);
+
+		_ = exec.spawn(self.io, .{
+			.argv = &.{ "setsid", script, "vm", "view", name },
+			.stdin = .ignore,
+			.stdout = .ignore,
+			.stderr = .ignore,
+		}) catch return;
 	}
 
 	fn openUrl(self: *Launcher, url: []const u8) void {
@@ -1039,6 +1066,7 @@ pub const Launcher = struct {
 
 		self.modeRows(arena, mode, search, &rows) catch {};
 		self.savedRows(arena, &rows) catch {};
+		self.vmRows(arena, search, &rows) catch {};
 		self.appsView(arena, search, &rows) catch {};
 
 		return self.rankOrWeb(arena, rows.items, search, true);
@@ -1106,6 +1134,23 @@ pub const Launcher = struct {
 			if (std.mem.eql(u8, entry.id, "apps")) continue;
 
 			try appendGroup(arena, entry, rows);
+		}
+	}
+
+	fn vmRows(self: *Launcher, arena: Allocator, search: []const u8, rows: *std.ArrayListUnmanaged(Row)) !void {
+		const source = self.vms orelse return;
+		const list = source.info(arena) catch return;
+
+		for (list) |vm| {
+			if (search.len > 0 and std.mem.indexOf(u8, vm.name, search) == null and std.mem.indexOf(u8, "vm virtual machine", search) == null) continue;
+
+			try rows.append(arena, .{
+				.id = try std.fmt.allocPrint(arena, "vm:{s}", .{vm.name}),
+				.kind = "vm",
+				.name = try std.fmt.allocPrint(arena, "VM {s}", .{vm.name}),
+				.glyph = "▣",
+				.detail = try std.fmt.allocPrint(arena, "{s} · {d} MB · {d} cores", .{ vm.tier.text(), vm.mem_mb, vm.cores }),
+			});
 		}
 	}
 
@@ -1404,7 +1449,7 @@ pub const Launcher = struct {
 				.clipId = row.clip_id,
 				.image = row.image,
 				.pid = row.pid,
-				.detail = detailOf(arena, row) catch "",
+				.detail = if (row.detail.len > 0) row.detail else detailOf(arena, row) catch "",
 				.pinned = self.pinIndex(row.id) >= 0,
 			});
 		}
