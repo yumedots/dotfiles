@@ -55,6 +55,10 @@ hl.config({
     render = {
         new_render_scheduling = true,
     },
+
+    quirks = {
+        skip_non_kms_dmabuf_formats = false,
+    },
 })
 
 hl.curve("quick", { type = "bezier", points = { {0.15, 0}, {0.1, 1} } })
