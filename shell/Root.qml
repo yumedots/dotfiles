@@ -394,7 +394,7 @@ ShellRoot {
 	}
 
 	IdleMonitor {
-		enabled: Config.lockAfterMinutes > 0 && Hyprland.toplevels.values.length === 0
+		enabled: Config.lockAfterMinutes > 0
 		timeout: Math.max(1, Config.lockAfterMinutes * 60)
 
 		onIsIdleChanged: if (isIdle)
