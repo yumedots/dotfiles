@@ -38,11 +38,16 @@ for _ in $(seq 1 60); do
 	sleep 0.1
 done
 
-shopt -s nullglob
-for file in "$WALL"/*; do
-	cp -f "$file" "$HOME/Documents/Wallpaper/$(basename "$file")"
-	"$HOME/.local/bin/awww" img --transition-type none "$HOME/Documents/Wallpaper/$(basename "$file")" >/dev/null 2>&1 || true
-done
+settings=$ROOT/shell/cache/settings.lua
+wall=$(sed -n 's/^[[:space:]]*wallpaper[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' "$settings" 2>/dev/null | head -1)
+wall_dir=$(dirname "$wall")
+
+if [ -n "$wall" ] && [ -d "$wall_dir" ]; then
+	sudo mkdir -p "$wall_dir"
+	grep -q "wallpaper $wall_dir virtiofs" /etc/fstab || echo "wallpaper $wall_dir virtiofs ro,nofail,defaults 0 0" | sudo tee -a /etc/fstab >/dev/null
+	mountpoint -q "$wall_dir" || sudo mount -t virtiofs wallpaper "$wall_dir" 2>/dev/null || true
+	"$HOME/.local/bin/awww" img --transition-type none "$wall" >/dev/null 2>&1 || true
+fi
 
 if [ -d "$HOME/.local/lib/yudae/qml/Yudae/Native" ] && pgrep -x quickshell >/dev/null; then
 	"$ROOT/vm/shell" restart >/dev/null 2>&1 || true

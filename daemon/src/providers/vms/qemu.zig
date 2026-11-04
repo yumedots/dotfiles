@@ -7,6 +7,7 @@ pub const Config = struct {
 	dir: []const u8,
 	disk: []const u8,
 	dotfiles: []const u8,
+	wallpaper_dir: []const u8 = "",
 	cores: u32,
 	mem_mb: u32,
 	cid: u32,
@@ -20,6 +21,7 @@ pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	const display_qmp = try std.fs.path.join(allocator, &.{ config.dir, "display.qmp" });
 	const serial = try std.fs.path.join(allocator, &.{ config.dir, "serial.log" });
 	const vfs = try std.fs.path.join(allocator, &.{ config.dir, "virtiofsd.sock" });
+	const wall = try std.fs.path.join(allocator, &.{ config.dir, "wallpaper.sock" });
 
 	const binary = blk: {
 		if (std.c.getenv("YUDAE_QEMU")) |value| break :blk std.mem.span(value);
@@ -48,6 +50,11 @@ pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	try addPair(allocator, &list, "-device", try std.fmt.allocPrint(allocator, "vhost-vsock-pci,guest-cid={d}", .{config.cid}));
 	try addPair(allocator, &list, "-chardev", try std.fmt.allocPrint(allocator, "socket,id=vfs0,path={s}", .{vfs}));
 	try addPair(allocator, &list, "-device", "vhost-user-fs-pci,chardev=vfs0,tag=dotfiles");
+
+	if (config.wallpaper_dir.len > 0) {
+		try addPair(allocator, &list, "-chardev", try std.fmt.allocPrint(allocator, "socket,id=wall0,path={s}", .{wall}));
+		try addPair(allocator, &list, "-device", "vhost-user-fs-pci,chardev=wall0,tag=wallpaper");
+	}
 	try addPair(allocator, &list, "-vga", "none");
 	try addPair(allocator, &list, "-device", "virtio-rng-pci");
 	try addPair(allocator, &list, "-device", "virtio-tablet-pci");

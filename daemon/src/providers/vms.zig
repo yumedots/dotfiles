@@ -39,10 +39,12 @@ const Vm = struct {
 	tier: tiers.Tier = .off,
 	pid: i32 = 0,
 	vfs_pid: i32 = 0,
+	wall_pid: i32 = 0,
 	pump_pid: i32 = 0,
 	qmp: ?*qmp.Qmp = null,
 	qemu_child: ?std.process.Child = null,
 	vfs_child: ?std.process.Child = null,
+	wall_child: ?std.process.Child = null,
 	pump_child: ?std.process.Child = null,
 	cgroup: ?cgroup.Cgroup = null,
 	created_ms: i64,
@@ -449,6 +451,23 @@ pub const Vms = struct {
 		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"pid\":{d}}}", .{ vm.name, vm.cid, vm.pid });
 	}
 
+	fn wallpaperDir(self: *Vms, repo: []const u8) []const u8 {
+		const path = std.fs.path.join(self.allocator, &.{ repo, "shell", "cache", "settings.lua" }) catch return "";
+		defer self.allocator.free(path);
+
+		const body = proc.readFile(self.io, self.allocator, path) catch return "";
+		defer self.allocator.free(body);
+
+		const marker = "wallpaper = \"";
+		const start = std.mem.indexOf(u8, body, marker) orelse return "";
+		const rest = body[start + marker.len ..];
+		const end = std.mem.indexOfScalar(u8, rest, '"') orelse return "";
+		const file = rest[0..end];
+		if (file.len == 0) return "";
+		const slash = std.mem.lastIndexOfScalar(u8, file, '/') orelse return "";
+		return self.allocator.dupe(u8, file[0..slash]) catch "";
+	}
+
 	fn syncDesktop(self: *Vms) void {
 		const repo = proc.repo(self.io, self.allocator);
 		const script = std.fmt.allocPrint(self.allocator, "{s}/vm/desktop-sync", .{repo}) catch return;
@@ -497,11 +516,44 @@ pub const Vms = struct {
 
 		if (!try waitFile(self.io, vfs_socket, 5000)) return error.VirtiofsSocket;
 
+		const wall_dir = self.wallpaperDir(repo);
+		defer if (wall_dir.len > 0) self.allocator.free(wall_dir);
+
+		var share_wall = wall_dir.len > 0;
+		if (share_wall) {
+			const wall_socket = try std.fs.path.join(self.allocator, &.{ vm.dir, "wallpaper.sock" });
+			std.Io.Dir.cwd().deleteFile(self.io, wall_socket) catch {};
+			const wall_args = [_][]const u8{
+				"/usr/lib/virtiofsd",
+				try std.fmt.allocPrint(self.allocator, "--socket-path={s}", .{wall_socket}),
+				try std.fmt.allocPrint(self.allocator, "--shared-dir={s}", .{wall_dir}),
+				"--readonly",
+				"--cache=never",
+			};
+			const wall = exec.spawn(self.io, .{
+				.argv = &wall_args,
+				.stdin = .ignore,
+				.stdout = .ignore,
+				.stderr = .ignore,
+			}) catch null;
+			if (wall) |child| {
+				vm.wall_pid = child.id orelse 0;
+				vm.wall_child = child;
+				if (!try waitFile(self.io, wall_socket, 5000)) {
+					self.stopWall(vm);
+					share_wall = false;
+				}
+			} else {
+				share_wall = false;
+			}
+		}
+
 		const argv = try qemu.args(self.allocator, .{
 			.name = vm.name,
 			.dir = vm.dir,
 			.disk = vm.disk,
 			.dotfiles = repo,
+			.wallpaper_dir = if (share_wall) wall_dir else "",
 			.cores = vm.cores,
 			.mem_mb = vm.mem_mb,
 			.cid = vm.cid,
@@ -528,6 +580,7 @@ pub const Vms = struct {
 		if (group) |value| {
 			value.attach(self.io, vm.pid);
 			value.attach(self.io, vm.vfs_pid);
+			if (vm.wall_pid > 0) value.attach(self.io, vm.wall_pid);
 			vm.cgroup = value;
 		}
 
@@ -686,6 +739,7 @@ pub const Vms = struct {
 
 		if (vm.pid > 0) kill(vm.pid);
 		if (vm.vfs_pid > 0) kill(vm.vfs_pid);
+		self.stopWall(vm);
 		self.stopPump(vm);
 
 		if (vm.qemu_child) |*child| {
@@ -700,6 +754,7 @@ pub const Vms = struct {
 
 		vm.pid = 0;
 		vm.vfs_pid = 0;
+		vm.wall_pid = 0;
 		vm.tier = .off;
 	}
 
@@ -729,6 +784,15 @@ pub const Vms = struct {
 			sleep.ms(2000);
 		}
 		self.setGuestMode(cid, 1536, 864, "1");
+	}
+
+	fn stopWall(self: *Vms, vm: *Vm) void {
+		if (vm.wall_pid > 0) kill(vm.wall_pid);
+		if (vm.wall_child) |*child| {
+			_ = child.wait(self.io) catch {};
+			vm.wall_child = null;
+		}
+		vm.wall_pid = 0;
 	}
 
 	fn startPump(self: *Vms, vm: *Vm) void {
@@ -763,6 +827,7 @@ pub const Vms = struct {
 
 		if (vm.pid > 0) kill(vm.pid);
 		if (vm.vfs_pid > 0) kill(vm.vfs_pid);
+		self.stopWall(vm);
 		self.stopPump(vm);
 
 		if (vm.qemu_child) |*child| {
@@ -780,6 +845,7 @@ pub const Vms = struct {
 		vm.cgroup = null;
 		vm.pid = 0;
 		vm.vfs_pid = 0;
+		vm.wall_pid = 0;
 		vm.tier = .off;
 	}
 
