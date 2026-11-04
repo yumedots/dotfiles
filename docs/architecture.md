@@ -10,11 +10,13 @@ dotfiles/
   hypr/              hyprland conf + cursor plugin (C++); the one non-config symlinked, hyprland reads ~/.config/hypr
   shell/             quickshell, run with `quickshell -p`, never symlinked
     features/<name>/ one folder per feature: Card.qml Widget.qml Service.qml feature.json
-    ui/              primitives used twice or more
+    ui/              primitives used twice or more; AppWindow is the xdg_toplevel primitive
+    native/          Yudae.Native C++ QML module (VmDisplay) + yudae-pump
     lib/ greeter/ lock/ launcher/
   daemon/            yudaemond (Zig); src/providers/<name>.zig pairs with features/<name>
   systemd/ scripts/
   vm/                images, overlays, qemu command builder, scenarios
+  ~/qemu-linux/      QEMU 11.1.3 fork (yumedots/qemu-linux, branch yudae) with the dbus display fixes
   docs/              reference: how the system is shaped
   agents/skills/     task guides: how to do X
   xmake.lua + one xmake.lua per dir
@@ -35,7 +37,7 @@ xmake orchestrates, it does not replace the real builders.
 
 | task | does |
 | --- | --- |
-| `xmake build` | daemon (wraps `zig build`), cursor plugin (native C++ target) |
+| `xmake build` | daemon (wraps `zig build`), cursor plugin, `Yudae.Native` QML module, `yudae-pump` (native C++ targets) |
 | `xmake link` | symlink `config/*` and `hypr/` into `~/.config` |
 | `xmake lint` | qmllint on `shell/`, `node shell/lib/check.js` |
 | `xmake test` | daemon parsers/protocol tests, qml fixtures, idle-spawn test |
@@ -46,4 +48,4 @@ xmake orchestrates, it does not replace the real builders.
 
 `zig build` stays underneath: the build budgets are measured on it and `scripts/yubuild` reports them. `zig build -Dheadless=true` builds `yudaemond-headless`, the minimal control-plane daemon that carries the performance gates.
 
-`scripts/xmake` is linked to `~/.local/bin/xmake`. Inside the repo it dispatches `link`, `lint`, `bench`, `hypr`, `vm` and `doctor` to `scripts/tasks.sh`; every other xmake command goes to the system xmake.
+`scripts/xmake` is linked to `~/.local/bin/xmake`. Inside the repo it dispatches `link`, `lint`, `bench`, `hypr`, `vm` and `doctor` to `scripts/tasks.sh`; every other xmake command goes to the system xmake. `shell/native` builds the Quickshell app window and the VM display; the daemon prefers `~/qemu-linux/install/bin/qemu-system-x86_64` and `YUDAE_QEMU` overrides it.

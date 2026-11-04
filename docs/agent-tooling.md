@@ -34,4 +34,4 @@ Structured state first, pixels last:
 3. `vm_screenshot` - visuals only.
 4. `vm_wait` - QMP events, Hyprland events and the guest socket. No sleep loops, no screenshot spam.
 
-A human can watch and take over with `vm view <name>` (its QEMU window) or from the launcher's Virtual machines mode. While a human holds input, agent input fails with "human has control".
+A human can watch and take over with `vm view <name>` (the Quickshell `vms` app on that VM, 2560x1440 at scale 1.6667) or from the launcher's Virtual machines mode. While a human holds input, agent input fails with "human has control". Closing the window or `vm release <name>` returns the guest to 1536x864 at scale 1 for agents.

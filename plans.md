@@ -95,7 +95,7 @@ Arch-Linux-x86_64-cloudimg.qcow2   official, pinned by sha256, cloud-init for us
 - Every VM gets `virtio-gpu-gl` (virgl) on the host GPU. Host here is an RTX 3070 on the NVIDIA driver, `/dev/dri/renderD128` is present.
 - **Why OpenGL and not Venus:** our whole desktop is OpenGL. Hyprland composites with GLES/GL and Qt Quick in quickshell uses OpenGL. Venus (Vulkan) adds Vulkan apps and GL 4.6 through Zink, and Collabora notes both virgl and Venus pay host/guest sync costs. Reports on a CachyOS host show virgl and Venus both slower than llvmpipe in some setups, with the host GPU stuck at idle clocks. Venus also needs a new NVIDIA proprietary driver (570.86 or later per the Mesa docs). Choose Venus per VM only for a Vulkan workload. Measure before trusting either.
 - **Headless:** `-display egl-headless` renders on the host GPU without a window. Screenshots come from QMP `screendump`.
-- **Human view:** `-display dbus,gl=on`. On Linux this hands the frame over as a dmabuf, zero copy.
+- **Human view:** `-display dbus,p2p=yes,gl=on`. QEMU hands the scanout over as a dmabuf (`ScanoutDMABUF2`), zero copy, and the Quickshell `vms` app draws it in `Yudae.Native.VmDisplay`. The patched QEMU in `~/qemu-linux` caches the export and keeps the guest presenting. With no viewer the daemon runs `yudae-pump` at 1536x864 scale 1; `vm view` stops it, sets 2560x1440 scale 1.6667 and opens the app, with no VM restart.
 - **Many VMs, one GPU:** each VM gets its own host GL context, so virgl behaves like several OpenGL apps on the host. The governor caps the number of GL VMs and shows it. Collabora notes virgl struggles with many concurrent GL apps, so the cap comes from a measured bench, not a guess.
 - DRM native context does not exist for NVIDIA. Not an option here.
 - **Cost:** a virgl device cannot be saved. UTM and Proxmox both report that save and snapshot fail with virgl, and QEMU blocks migration for it. GL VMs therefore have no RAM-to-file save.
@@ -153,9 +153,10 @@ Quickshell as an MCP surface is done at the daemon: `yudae ui tree` and `yudae c
 
 ### Humans
 
-- `vm view <name>` opens a window on the same VM (dbus dmabuf), read-only or interactive. A human and an agent can watch the same screen.
+- `vm view <name>` opens the Quickshell `vms` app on the same VM (dbus dmabuf), read-only or interactive. The app inhibits host shortcuts while focused; F11 is fullscreen and hides the sidebar. A human and an agent can watch the same screen.
 - A control flag: while a human holds input, agent input fails with "human has control".
 - `vm tail` follows the console, the guest journal and the agent call log. Every call is recorded and replayable.
+- Each VM records `harness`, `session`, `agentSinceMs` and `lastCallMs` from the MCP `clientInfo` and the agent environment; the app sidebar shows them.
 
 ### Isolation and records
 
@@ -210,6 +211,8 @@ Settled:
 - VMs are GPU accelerated.
 - VM control lives in yudaemond (Zig). Go is not used.
 - Full system upgrade done; QEMU 11.1.3 and virtiofsd 1.14 installed, kernel 7.3.1 and the NVIDIA module already match the installed packages.
+- QEMU display fixes live in the fork `yumedots/qemu-linux`, branch `yudae`, built at `~/qemu-linux/install`. The daemon prefers that binary and `YUDAE_QEMU` overrides it.
+- The perf gates stay on `yudaemond-headless`. The full desktop daemon measures 41.6MB idle RSS and about 80s cold build, over the 8MB/20s gates; the proposed full-daemon budget is 48MB and 90s, recorded in `docs/perf.md` rather than hidden.
 - Repo root is `~/dotfiles`; `~/.config` holds only the symlinks `xmake link` makes.
 - greetd starts the repo path, not `~/.config/quickshell`.
 
