@@ -10,7 +10,12 @@ Item {
 	visible: false
 
 	readonly property var resolved: Yudae.icons.map || ({})
+	readonly property var glyphs: ({ "com.yudae.vms": "\uf108" })
 	property var asked: ({})
+
+	function glyphOf(appId) {
+		return root.glyphs[appId] || "";
+	}
 
 	function iconOf(appId, extra) {
 		const names = [appId].concat(extra || []);

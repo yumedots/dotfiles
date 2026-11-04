@@ -57,6 +57,15 @@ Item {
 					visible: iconCell.icon !== ""
 					source: iconCell.icon
 				}
+
+				Text {
+					anchors.centerIn: parent
+
+					font.family: Config.fontFamily
+					font.pixelSize: Math.round(Config.windowsIconSize * 0.62)
+					color: Config.foreground
+					text: iconCell.icon === "" ? AppIcons.glyphOf(modelData.appId) : ""
+				}
 			}
 		}
 
