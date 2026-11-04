@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+VM=${1:-demo}
+OUT=$ROOT/vm/runs/$VM/compare
+Y=$ROOT/scripts/yudae
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/1000}
+export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
+export HYPRLAND_INSTANCE_SIGNATURE=${HYPRLAND_INSTANCE_SIGNATURE:-$(ls "$XDG_RUNTIME_DIR"/hypr | head -1)}
+
+mkdir -p "$OUT"
+
+hypr() {
+	hyprctl dispatch "$1" >/dev/null
+}
+
+host_ws() {
+	hypr "hl.dsp.focus({workspace=$1})"
+}
+
+host_ui() {
+	hypr "hl.dsp.global(\"quickshell:$1\")"
+}
+
+guest() {
+	"$Y" vm exec "$VM" "$1" >/dev/null 2>&1
+}
+
+guest_ui() {
+	guest "sh $ROOT/vm/guest-ui $1"
+}
+
+guest_key() {
+	guest "sh $ROOT/vm/guest-key $1"
+}
+
+guest_type() {
+	guest "sh $ROOT/vm/guest-type $1"
+}
+
+guest_term() {
+	guest "sh $ROOT/vm/guest-term"
+}
+
+guest_close_term() {
+	guest "sh $ROOT/vm/guest-close-term"
+}
+
+guest_full() {
+	guest "sh $ROOT/vm/guest-full"
+}
+
+host_term() {
+	setsid alacritty --class compare-term -e sh -c 'clear; sleep 999' >/dev/null 2>&1 &
+}
+
+host_close_term() {
+	pkill -f '[a]lacritty --class compare-term' 2>/dev/null || true
+}
+
+host_full() {
+	hypr 'function() for _,w in ipairs(hl.get_windows()) do if w.class == "compare-term" then hl.dispatch(hl.dsp.focus({window=w})); if (w.fullscreen or 0) == 0 then hl.dispatch(hl.dsp.window.fullscreen()) end return end end end'
+}
+
+viewer_full() {
+	hypr 'function() for _,w in ipairs(hl.get_windows()) do if w.class == "com.yudae.vms" then hl.dispatch(hl.dsp.focus({window=w})); if (w.fullscreen or 0) == 0 then hl.dispatch(hl.dsp.window.fullscreen()) end return end end end'
+	sleep 1
+}
+
+viewer_unfull() {
+	hypr 'function() for _,w in ipairs(hl.get_windows()) do if w.class == "com.yudae.vms" then if (w.fullscreen or 0) ~= 0 then hl.dispatch(hl.dsp.window.fullscreen()) end return end end end'
+}
+
+capture() {
+	grim "$OUT/$1.png"
+}
+
+mask() {
+	magick "$1" -fill black -draw "rectangle 0,0 240,70 rectangle 900,0 1700,70 rectangle 1800,0 2559,70" "$2"
+}
+
+cleanup() {
+	host_close_term
+	guest_close_term
+	guest_key Escape 2>/dev/null || true
+	viewer_unfull
+	host_ws 1
+}
+
+trap cleanup EXIT
+
+pkill -f '[a]pp-vms.qml' 2>/dev/null || true
+sleep 1
+"$Y" app open vms --vm "$VM" >/dev/null
+sleep 3
+viewer_full
+
+host_ws 9
+sleep 1
+capture host-idle
+viewer_full
+sleep 1
+capture guest-idle
+
+host_ws 9
+host_ui bareBar
+sleep 1
+capture host-bar
+host_ui bareBar
+viewer_full
+guest_ui bareBar
+sleep 1
+capture guest-bar
+guest_ui bareBar
+
+host_ws 9
+host_ui launcher
+sleep 1
+capture host-launcher
+wtype -k Escape
+sleep 1
+viewer_full
+guest_ui launcher
+sleep 1
+capture guest-launcher
+guest_key Escape
+sleep 1
+
+host_ws 9
+host_ui launcher
+sleep 1
+wtype fire
+sleep 1
+capture host-launcher-fire
+wtype -k Escape
+sleep 1
+viewer_full
+guest_ui launcher
+sleep 1
+guest_type fire
+sleep 1
+capture guest-launcher-fire
+guest_key Escape
+sleep 1
+
+host_ws 9
+host_ui calendar
+sleep 1
+capture host-calendar
+wtype -k Escape
+sleep 1
+viewer_full
+guest_ui calendar
+sleep 1
+capture guest-calendar
+guest_key Escape
+sleep 1
+
+host_ws 9
+host_ui powerMenu
+sleep 1
+capture host-power
+wtype -k Escape
+sleep 1
+viewer_full
+guest_ui powerMenu
+sleep 1
+capture guest-power
+guest_key Escape
+sleep 1
+
+host_ws 9
+host_term
+sleep 2
+capture host-tiled
+host_close_term
+sleep 1
+viewer_full
+guest_term
+sleep 2
+capture guest-tiled
+guest_close_term
+sleep 1
+
+host_ws 9
+host_term
+sleep 1
+host_full
+sleep 1
+capture host-fullscreen
+host_close_term
+sleep 1
+viewer_full
+guest_term
+sleep 1
+guest_full
+sleep 1
+capture guest-fullscreen
+guest_close_term
+sleep 1
+
+: >"$OUT/results.txt"
+for scene in idle bar launcher launcher-fire calendar power tiled fullscreen; do
+	h=$OUT/host-$scene.png
+	g=$OUT/guest-$scene.png
+	hd=$(identify -format '%wx%h' "$h")
+	gd=$(identify -format '%wx%h' "$g")
+	if [ "$hd" != "2560x1440" ] || [ "$gd" != "2560x1440" ]; then
+		printf '%s host=%s guest=%s FAIL\n' "$scene" "$hd" "$gd" | tee -a "$OUT/results.txt"
+		continue
+	fi
+	mask "$h" "$OUT/host-$scene-mask.png"
+	mask "$g" "$OUT/guest-$scene-mask.png"
+	rmse=$(magick compare -metric RMSE "$OUT/host-$scene-mask.png" "$OUT/guest-$scene-mask.png" null: 2>&1 || true)
+	rmse=${rmse%% *}
+	magick "$h" "$g" +append "$OUT/$scene.png"
+	printf '%s %s %s\n' "$scene" "$hd" "$rmse" | tee -a "$OUT/results.txt"
+done
+
+cat "$OUT/results.txt"

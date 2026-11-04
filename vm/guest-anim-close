@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-1
+export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1)
+
+pkill -f '[a]lacritty --class bench-anim' 2>/dev/null || true

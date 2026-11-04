@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-1
+export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1)
+
+hyprctl dispatch 'function() for _,w in ipairs(hl.get_windows()) do if w.class == "compare-term" then hl.dispatch(hl.dsp.focus({window=w})); if (w.fullscreen or 0) == 0 then hl.dispatch(hl.dsp.window.fullscreen()) end return end end end' >/dev/null
