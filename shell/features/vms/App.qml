@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import qs
 import qs.services
@@ -10,8 +11,8 @@ AppWindow {
 
 	readonly property var vms: Yudae.vms.list || []
 	readonly property string root: Quickshell.env("YUDAE_VM_ROOT") || "/home/gabriel/dotfiles/vm/runs"
-	property string fallback: Quickshell.env("YUDAE_VM") || ""
-	readonly property string selected: (Yudae.vms.selected || "").length > 0 ? Yudae.vms.selected : (win.fallback.length > 0 ? win.fallback : (win.vms.length > 0 ? win.vms[0].name : ""))
+	property string live: Quickshell.env("YUDAE_VM") || ""
+	readonly property string selected: win.live.length > 0 ? win.live : (Yudae.vms.selected || "")
 	readonly property var current: {
 		for (let i = 0; i < win.vms.length; i++)
 			if (win.vms[i].name === win.selected) return win.vms[i];
@@ -19,18 +20,20 @@ AppWindow {
 	}
 
 	appTitle: "Virtual machines"
-	width: 1600
-	height: 1000
+	implicitWidth: 1400
+	implicitHeight: 820
 
 	function act(method, args) {
 		Yudae.vmsCommand(method, args);
 	}
 
-	onAppClosed: if (win.selected.length > 0) Yudae.vmsCommand("release", { name: win.selected })
+	onAppClosed: if (win.live.length > 0)
+		Quickshell.execDetached([Quickshell.shellDir + "/../scripts/yudae", "vm", "release", win.live])
 
 	function pick(name) {
-		win.fallback = name;
+		win.live = name;
 		Yudae.vmsCommand("select", { name: name });
+		Yudae.vmsCommand("view", { name: name });
 	}
 
 	Row {
@@ -82,7 +85,7 @@ AppWindow {
 								font.pixelSize: Settings.fontSize
 								font.weight: win.selected === modelData.name ? Font.Bold : Font.Normal
 								color: win.selected === modelData.name ? Config.foreground : Config.muted
-								text: modelData.name + "  " + modelData.tier + "  " + modelData.controller
+								text: modelData.name + "  " + modelData.tier + "  " + (win.live === modelData.name ? "human" : modelData.controller)
 							}
 
 							Text {
@@ -114,14 +117,11 @@ AppWindow {
 									font.pixelSize: Settings.fontSize - 1
 									color: Config.foreground
 									text: "take control"
-									visible: modelData.controller !== "human"
+									visible: win.live !== modelData.name && modelData.controller !== "human"
 
 									MouseArea {
 										anchors.fill: parent
-										onClicked: {
-											win.pick(modelData.name);
-											win.act("view", { name: modelData.name });
-										}
+										onClicked: win.pick(modelData.name)
 									}
 								}
 
@@ -130,11 +130,14 @@ AppWindow {
 									font.pixelSize: Settings.fontSize - 1
 									color: Config.foreground
 									text: "release"
-									visible: modelData.controller === "human"
+									visible: win.live === modelData.name || modelData.controller === "human"
 
 									MouseArea {
 										anchors.fill: parent
-										onClicked: win.act("release", { name: modelData.name })
+										onClicked: {
+											win.act("release", { name: modelData.name });
+											if (win.live === modelData.name) win.live = "";
+										}
 									}
 								}
 
@@ -190,9 +193,136 @@ AppWindow {
 				color: "black"
 			}
 
-			VmDisplay {
+			Flow {
+				id: gallery
+
 				anchors.fill: parent
-				qmp: win.selected.length > 0 ? win.root + "/" + win.selected + "/display.qmp" : ""
+				anchors.margins: 24
+				spacing: 16
+				visible: win.live.length === 0
+
+				Repeater {
+					model: win.vms
+
+					Item {
+						required property var modelData
+
+						width: (gallery.width - gallery.spacing) / 2
+						height: width * 0.62
+
+						Rectangle {
+							anchors.fill: parent
+
+							color: "#101010"
+							border.width: 1
+							border.color: "#2f2f2f"
+							clip: true
+
+							Image {
+								id: thumb
+
+								anchors.fill: parent
+
+								source: win.root + "/" + modelData.name + "/thumb.jpg?v=" + (modelData.thumbAt || 0)
+								fillMode: Image.PreserveAspectCrop
+								asynchronous: true
+								cache: false
+								visible: false
+							}
+
+							MultiEffect {
+								anchors.fill: parent
+
+								source: thumb
+								saturation: -1.0
+								brightness: -0.12
+								visible: modelData.thumb === true && thumb.status === Image.Ready
+							}
+
+							Rectangle {
+								anchors.fill: parent
+								color: "#30000000"
+								visible: modelData.thumb === true && thumb.status === Image.Ready
+							}
+
+							Text {
+								anchors.centerIn: parent
+
+								font.family: Config.fontFamily
+								font.pixelSize: Settings.fontSize
+								color: Config.muted
+								text: "no view yet"
+								visible: modelData.thumb !== true || thumb.status !== Image.Ready
+							}
+
+							Rectangle {
+								anchors.left: parent.left
+								anchors.right: parent.right
+								anchors.bottom: parent.bottom
+
+								height: 56
+								color: "#b3000000"
+
+								Column {
+									anchors.fill: parent
+									anchors.margins: 10
+									spacing: 2
+
+									Text {
+										width: parent.width
+										elide: Text.ElideRight
+
+										font.family: Config.fontFamily
+										font.pixelSize: Settings.fontSize
+										color: Config.foreground
+										text: modelData.name + "  " + modelData.tier + "  " + (win.live === modelData.name ? "human" : modelData.controller)
+									}
+
+									Text {
+										width: parent.width
+										elide: Text.ElideRight
+
+										font.family: Config.fontFamily
+										font.pixelSize: Settings.fontSize - 1
+										color: Config.muted
+										text: (modelData.harness || "agent") + "  " + (modelData.sessionTitle || modelData.session || "no session")
+									}
+								}
+							}
+						}
+
+						MouseArea {
+							anchors.fill: parent
+							onClicked: win.pick(modelData.name)
+						}
+					}
+				}
+			}
+
+			Text {
+				anchors.centerIn: parent
+
+				font.family: Config.fontFamily
+				font.pixelSize: Settings.fontSize
+				color: Config.muted
+				text: "no virtual machines"
+				visible: win.live.length === 0 && win.vms.length === 0
+			}
+
+			Loader {
+				anchors.fill: parent
+				active: win.live.length > 0
+				sourceComponent: displayComponent
+			}
+
+			Component {
+				id: displayComponent
+
+				VmDisplay {
+					anchors.fill: parent
+					qmp: win.root + "/" + win.live + "/display.qmp"
+					onErrorChanged: if (error.length > 0) console.warn("VmDisplay:", error)
+				}
 			}
 		}
 	}

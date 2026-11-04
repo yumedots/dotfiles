@@ -30,6 +30,8 @@ const Vm = struct {
 	session_title: []u8 = &.{},
 	agent_since_ms: i64 = 0,
 	last_call_ms: i64 = 0,
+	thumb: bool = false,
+	thumb_ms: i64 = 0,
 	screen_w: u32 = 0,
 	screen_h: u32 = 0,
 	cid: u32,
@@ -79,7 +81,7 @@ fn writeVm(writer: *Writer, vm: *const Vm, now: i64) !void {
 	try std.json.Stringify.encodeJsonString(vm.session, .{}, writer);
 	try writer.writeAll(",\"sessionTitle\":");
 	try std.json.Stringify.encodeJsonString(vm.session_title, .{}, writer);
-	try writer.print(",\"agentSinceMs\":{d},\"lastCallMs\":{d},\"lastUsed\":{d},\"upMs\":{d}}}", .{ vm.agent_since_ms, vm.last_call_ms, vm.used_ms, now - vm.created_ms });
+	try writer.print(",\"agentSinceMs\":{d},\"lastCallMs\":{d},\"thumb\":{s},\"thumbAt\":{d},\"lastUsed\":{d},\"upMs\":{d}}}", .{ vm.agent_since_ms, vm.last_call_ms, if (vm.thumb) "true" else "false", vm.thumb_ms, vm.used_ms, now - vm.created_ms });
 }
 
 pub const Vms = struct {
@@ -602,8 +604,16 @@ pub const Vms = struct {
 
 		self.startPump(vm);
 
-		const agent = std.Thread.spawn(.{}, agentBoot, .{ self, vm.cid }) catch null;
-		if (agent) |thread| thread.detach();
+		const boot_name = self.allocator.dupe(u8, vm.name) catch null;
+		const agent = if (boot_name) |name|
+			std.Thread.spawn(.{}, agentBoot, .{ self, vm.cid, name }) catch null
+		else
+			null;
+		if (agent) |thread| {
+			thread.detach();
+		} else if (boot_name) |name| {
+			self.allocator.free(name);
+		}
 	}
 
 	fn recover(self: *Vms) void {
@@ -664,6 +674,12 @@ pub const Vms = struct {
 				.created_ms = fmt.nowMs(self.io),
 				.used_ms = fmt.nowMs(self.io),
 			};
+
+			const thumb_path = std.fs.path.join(self.allocator, &.{ vm.dir, "thumb.jpg" }) catch "";
+			if (thumb_path.len > 0 and proc.exists(self.io, thumb_path)) {
+				vm.thumb = true;
+				vm.thumb_ms = 1;
+			}
 
 			if (alive) {
 				const socket = std.fs.path.join(self.allocator, &.{ vm.dir, "qmp.sock" }) catch "";
@@ -765,6 +781,7 @@ pub const Vms = struct {
 		const allocator = arena.allocator();
 
 		const command = std.fmt.allocPrint(allocator,
+			"sudo -n timedatectl set-ntp false >/dev/null 2>&1; " ++
 			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
 			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | head -1)); " ++
 			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
@@ -774,7 +791,9 @@ pub const Vms = struct {
 		_ = self.guestExec(cid, &.{ "sh", "-lc", command }, allocator) catch return;
 	}
 
-	fn agentBoot(self: *Vms, cid: u32) void {
+	fn agentBoot(self: *Vms, cid: u32, name: []const u8) void {
+		defer self.allocator.free(name);
+
 		var attempt: usize = 0;
 		while (attempt < 45) : (attempt += 1) {
 			var arena = std.heap.ArenaAllocator.init(self.allocator);
@@ -784,7 +803,12 @@ pub const Vms = struct {
 			} else |_| {}
 			sleep.ms(2000);
 		}
-		self.setGuestMode(cid, 1536, 864, "1");
+		var human = false;
+		self.mutex.lockUncancelable(self.io);
+		if (self.findLocked(name)) |vm| human = std.mem.eql(u8, vm.controller, "human");
+		self.mutex.unlock(self.io);
+
+		if (human) self.setGuestMode(cid, 2560, 1440, "1.6667") else self.setGuestMode(cid, 1536, 864, "1");
 	}
 
 	fn stopWall(self: *Vms, vm: *Vm) void {
@@ -891,6 +915,7 @@ pub const Vms = struct {
 		};
 		self.mutex.unlock(self.io);
 
+		self.captureThumb(vm);
 		self.haltVm(vm);
 		self.hub.publish();
 
@@ -1071,6 +1096,54 @@ pub const Vms = struct {
 		const vm = self.findLocked(name) orelse return;
 		vm.screen_w = width;
 		vm.screen_h = height;
+	}
+
+	fn guestThumb(self: *Vms, vm: *Vm, path: []const u8, allocator: Allocator) !void {
+		const command =
+			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
+			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | head -1)); " ++
+			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
+			"grim -s 0.25 -t jpeg -q 80 /tmp/yudae-thumb.jpg >/dev/null 2>&1; base64 -w0 /tmp/yudae-thumb.jpg";
+
+		var text: []const u8 = "";
+		var attempts: usize = 0;
+		while (attempts < 20) : (attempts += 1) {
+			const result = self.guestExec(vm.cid, &.{ "sh", "-lc", command }, allocator) catch null;
+			if (result) |value| {
+				if (value.code == 0) {
+					const trimmed = std.mem.trim(u8, value.out, " \r\n");
+					if (trimmed.len > 0) {
+						text = trimmed;
+						break;
+					}
+				}
+			}
+			sleep.ms(250);
+		}
+		if (text.len == 0) return error.ScreenshotFailed;
+
+		const decoder = std.base64.standard.Decoder;
+		const size = try decoder.calcSizeForSlice(text);
+		const bytes = try allocator.alloc(u8, size);
+		defer allocator.free(bytes);
+		try decoder.decode(bytes, text);
+		try proc.writeFile(self.io, path, bytes);
+	}
+
+	fn captureThumb(self: *Vms, vm: *Vm) void {
+		if (vm.tier == .off or vm.cid == 0) return;
+
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+		const allocator = arena.allocator();
+		const dst = std.fmt.allocPrint(allocator, "{s}/thumb.jpg", .{vm.dir}) catch return;
+
+		self.guestThumb(vm, dst, allocator) catch return;
+
+		self.mutex.lockUncancelable(self.io);
+		vm.thumb = true;
+		vm.thumb_ms = fmt.nowMs(self.io);
+		self.mutex.unlock(self.io);
 	}
 
 	fn screenshotVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
@@ -1408,7 +1481,10 @@ pub const Vms = struct {
 		self.allocator.free(self.selected);
 		self.selected = try self.allocator.dupe(u8, vm.name);
 		const cid = vm.cid;
+		const off = vm.tier == .off;
 		self.mutex.unlock(self.io);
+
+		if (off) _ = try self.startVm(args, allocator);
 
 		self.stopPump(vm);
 		self.setGuestMode(cid, 2560, 1440, "1.6667");
@@ -1456,8 +1532,11 @@ pub const Vms = struct {
 		};
 		vm.controller = try self.allocator.dupe(u8, "agent");
 		const cid = vm.cid;
+		self.allocator.free(self.selected);
+		self.selected = try self.allocator.dupe(u8, "");
 		self.mutex.unlock(self.io);
 
+		self.captureThumb(vm);
 		self.setGuestMode(cid, 1536, 864, "1");
 		self.startPump(vm);
 		self.hub.publish();

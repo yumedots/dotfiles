@@ -429,9 +429,9 @@ pub fn app(io: Io, args: []const []const u8) !void {
 	const class = try std.fmt.allocPrint(allocator, "com.yudae.{s}", .{name});
 
 	if (vm.len > 0) {
-		const select = try std.fmt.allocPrint(allocator,
-			"{{\"call\":{{\"target\":\"vms\",\"method\":\"select\",\"args\":{{\"name\":\"{s}\"}}}}}}", .{vm});
-		_ = roundTrip(io, allocator, select, true) catch {};
+		const view = try std.fmt.allocPrint(allocator,
+			"{{\"call\":{{\"target\":\"vms\",\"method\":\"view\",\"args\":{{\"name\":\"{s}\"}}}}}}", .{vm});
+		_ = roundTrip(io, allocator, view, true) catch {};
 	}
 
 	const listing = exec.run(io, allocator, &.{ "hyprctl", "clients", "-j" }) catch null;
