@@ -15,7 +15,7 @@ dotfiles/
     lib/ greeter/ lock/ launcher/
   daemon/            yudaemond (Zig); src/providers/<name>.zig pairs with features/<name>
   systemd/ scripts/
-  vm/                images, overlays, qemu command builder, scenarios
+  vm/                images, overlays, qemu command builder, scenarios, compare/bench scripts
   ~/qemu-linux/      QEMU 11.1.3 fork (yumedots/qemu-linux, branch yudae) with the dbus display fixes
   docs/              reference: how the system is shaped
   agents/skills/     task guides: how to do X

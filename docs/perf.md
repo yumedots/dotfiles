@@ -59,14 +59,18 @@ Host: RTX 3070, 615.78.08, Hyprland 0.57.0, QEMU 11.1.3, guest 2560x1440 at scal
 | C1 GTK S1 | 2560x1440 1.6667 | 125.6% | - | 23.9% | 2.06GB | measured |
 | C1 GTK S2 | 2560x1440 1.6667 | 363.6% | - | 29.8% | 2.13GB | measured |
 | C5 pump S2 | 1536x864 1.0 | 194.4% | pump 13.4% | 38.7% | qemu 1.86GB, pump 19MB | measured |
-| C2 viewer windowed | - | - | - | - | - | needs host run |
-| C3 viewer fullscreen | - | - | - | - | - | needs host run |
+| C2 viewer windowed S0 | 2560x1440 1.6667 | 61.9% | viewer 14.1, hypr 10.8 | 14.2% | qemu 1.78GB, viewer 263MB | measured |
+| C2 viewer windowed S1 | 2560x1440 1.6667 | 141.7% | viewer 25.4, hypr 16.1 | 29.1% | qemu 1.81GB, viewer 263MB | measured |
+| C2 viewer windowed S2 | 2560x1440 1.6667 | 441.3% | viewer 44.5, hypr 21.3 | 30.5% | qemu 1.82GB, viewer 263MB | measured |
+| C3 viewer fullscreen S0 | 2560x1440 1.6667 | 73.6% | viewer 16.9, hypr 7.4 | 11.9% | qemu 1.81GB, viewer 262MB | measured |
+| C3 viewer fullscreen S1 | 2560x1440 1.6667 | 139.3% | viewer 26.1, hypr 11.9 | 9.4% | qemu 1.81GB, viewer 264MB | measured |
+| C3 viewer fullscreen S2 | 2560x1440 1.6667 | 439.3% | viewer 44.2, hypr 18.6 | 37.8% | qemu 1.86GB, viewer 266MB | measured |
 | C4 ScanoutMap/pixmap | 2560x1440 | - | - | - | works, not timed |
 | C6 egl-headless S2 | 1536x864 1.0 | 201.7% | - | 29.1% | 1.92GB | measured |
 
 The C5 pump is the agent baseline: no human window, 1536x864 at scale 1, guest still presenting. The C6 `egl-headless` baseline at the same size is slightly cheaper: 201.7% CPU and 29.1% GPU against 207.8% total CPU (194.4% qemu + 13.4% pump) and 38.7% GPU. The dbus display therefore costs about 3% more CPU and 9.6 GPU points for agents, and it is kept because viewing then needs no VM restart. The earlier frozen-guest C5 numbers were invalid and are gone.
 
-The viewer C3 numbers are pending because the host session is locked and the nested test output is 1514x398, not 2560x1440.
+C2/C3 do **not** pass the C1 GTK bar: qemu CPU is 61.9-441.3% windowed and 73.6-439.3% fullscreen against GTK 20.8-363.6%, and the viewer adds 14.1-44.5% CPU and ~262MB RSS. The viewer is a real Quickshell process, not a thin GTK child; the honest result is that the native path is heavier. GPU is 11.9-37.8% against GTK 6.8-29.8%. Fan-out and frame count were not re-instrumented in this run.
 
 The C4 fallback is proven separately with a non-GL guest (`virtio-gpu-pci`, llvmpipe, `-display dbus,p2p=yes`): QEMU sends `ScanoutMap` with a 2560x1440 memfd, stride 10240; the viewer mmaps it, swizzles BGRA to RGBA and uploads the texture. The first full scanout is lost to the listener-registration race, so the viewer nudges `SetUIInfo` once after connecting to force a fresh scanout. The screenshot is `vm/runs/demo/proof/scanout-map.png`. Not timed yet; the pixmap path copies and swizzles the whole frame.
 
@@ -78,13 +82,59 @@ The native viewer does receive 150 `UpdateDMABUF` frames/s on the animation, so 
 2. QEMU caches the export by texture id; repeat scanouts become `UpdateDMABUF`.
 3. `/home/gabriel/dotfiles/daemon/zig-out/bin/yudae-pump` keeps an agent VM presenting with no viewer, at 1536x864 scale 1.
 4. `yudae vm view` stops the pump, sets 2560x1440 scale 1.6667 in the guest and opens `shell/app-vms.qml`; `vm release` restores 1536x864 and restarts the pump. No VM restart.
-5. The native plugin is copied into `~/.local/lib/yudae/qml` by `vm/desktop`, `shell/shell-guest.qml` imports it, and its `registerTypes` calls `QQuickWindow::setDefaultAlphaBuffer(true)`. Under llvmpipe this clears the launcher backdrop (`vm/runs/demo/proof/guest-launcher-alpha.jpg`). Under virgl the launcher backdrop is still black (`vm/runs/demo/proof/guest-launcher-virgl.jpg`): the guest's EGL config has no alpha surface, so this remains an open virgl limit.
+5. The native plugin is copied into `~/.local/lib/yudae/qml` by `vm/desktop`, `shell/shell-guest.qml` imports it, and its `registerTypes` calls `QQuickWindow::setDefaultAlphaBuffer(true)`. The guest overlay alpha is fixed: `quirks:skip_non_kms_dmabuf_formats = false` makes Hyprland advertise non-KMS ARGB formats, system Mesa exposes 25 ARGB8888 configs and the launcher shows the wallpaper. Proof: `vm/runs/demo/proof/launcher-alpha-hyprland-quirk.png`.
+
+### Venus + zink attempt (2026-11-03)
+
+Venus was tried as the virgl alpha fix. QEMU ran with `virtio-gpu-gl-pci,blob=on,hostmem=2G,venus=on`; the guest installed `vulkan-virtio`. `vulkaninfo` sees `Virtio-GPU Venus (NVIDIA GeForce RTX 3070)` and `VK_KHR_wayland_surface`, but windowed use is broken on this host: `vkcube` selects the Wayland WSI and dumps core, and zink fails with `ZINK: failed to choose pdev` on every window surface, falling back to llvmpipe. `eglinfo -p wayland` sees zink only through the EGL device path, not a window. QEMU was reverted to plain `virtio-gpu-gl-pci`. Proof: `vm/runs/demo/proof/venus-vkcube.log`, `venus-gl-zink.txt`, `venus-gl-virgl.txt`.
+
+The virgl GL benchmark (`vm/bench/eglbench.c`, Wayland EGL, 1920x1080 FBO): heavy 240 frames 473-592 fps, draws 120 x 4096 47-51 fps (193k-208k draws/s). Host QEMU 20.9% CPU and 1.94GB RSS over 10s. A zink number is not comparable because windowed zink fell back to llvmpipe.
+
+### Mesa fork attempt (2026-11-03)
+
+Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out of its dmabuf feedback because the virtio-gpu primary plane is XR24-only. `quirks:skip_non_kms_dmabuf_formats = false` makes Hyprland advertise non-KMS formats too; the system Mesa then exposes 25 ARGB8888 configs with alpha 8, and the guest launcher shows the wallpaper behind it. No Mesa or Hyprland fork is needed. Proof: `vm/runs/demo/proof/launcher-alpha-hyprland-quirk.png`. The local Mesa fork was deleted.
+
+### Guest parity (P1-P5)
+
+- P1/P2: host DP-2 is 2560x1440, scale 1.6666666, 279.961Hz; guest Virtual-1 is 2560x1440, scale 1.6666666, 279.95999Hz.
+- P3: host and guest both use `/home/gabriel/Documents/Wallpaper/wallhaven-0p2em3_2560x1440.png`; guest `awww query` reports the same image.
+- P4: 676 host font families against 642 guest; the missing ones are CachyOS extras (Arabic/Syriac PCF), no guest-only families. The shell font `GoogleSansCode Nerd Font` resolves in both. Icon themes are the same 8; host has one extra `cachyos.svg` icon, not a theme. `breeze_cursors` is present in both.
+- P5: fixed by the Hyprland non-KMS quirk; see the proof above.
+
+### vm/compare
+
+`vm/compare` captures host and viewer-fullscreen at 2560x1440 for 8 scenes, masks the dynamic bar regions (workspaces, clock, stats) and reports ImageMagick RMSE. Side-by-side PNGs are in `vm/runs/demo/compare/`.
+
+| scene | dimensions | masked RMSE |
+| --- | --- | --- |
+| idle | 2560x1440 | 1092.87 |
+| bar | 2560x1440 | 4863.63 |
+| launcher | 2560x1440 | 5083.95 |
+| launcher-fire | 2560x1440 | 7998.07 |
+| calendar | 2560x1440 | 5147.11 |
+| power | 2560x1440 | 1463.41 |
+| tiled | 2560x1440 | 6720.31 |
+| fullscreen | 2560x1440 | 3804.77 |
+
+Expected differences: `launcher-fire` shows host-only games in the guest query; calendar meters and the guest cursor differ; the tiled/fullscreen terminals are at different window positions. The images were inspected; these are not pixel-identical.
+
+### Input latency
+
+Key input measured with a guest evdev marker written to `/dev/ttyS0` and timestamped on the host: 20 samples, p50 **5.49ms**, p95 **16.00ms** (min 4.59, max 16.00). The marker path is viewer key -> guest evdev -> serial; it does not use guest wall-clock compared with host. Mouse latency was not captured because the virtio-tablet marker produced no samples in this run; mouse position mapping is proven separately.
+
+### Clock
+
+QEMU now uses `-rtc base=utc,clock=host`; guest `timedatectl set-ntp false` is applied by `setGuestMode` and `vm/desktop`. Guest `NTP=no`, `systemd-timesyncd` inactive/disabled; guest and host wall clocks stay within the vsock measurement margin.
+
+### Full daemon budget
+
+The headless daemon still passes 3.6MB idle RSS and 9.1s cold build against 8MB/20s. The full desktop daemon measures ~41.6MB/80s because it carries the launcher index, icon cache and every UI provider. Proposal: keep 8MB/20s as the control-plane gate and make the full desktop budget informational (48MB/90s), or lazy-load the launcher index/icons behind first use. That change is not made in this round; the measured numbers are the finding.
 
 ### Open bench work
 
-- C2/C3 at 2560x1440 on the real host output (needs the host session unlocked).
+- C2/C3 are measured above; they miss the C1 GTK bar.
 - C6 `egl-headless` on the same guest sizes for the agent comparison.
-- Input latency p50/p95 needs the guest evdev capture script.
+- Mouse input latency still needs a tablet marker capture.
 - Per-delivered-frame CPU/GPU, not just totals.
 
 ## Rules

@@ -10,7 +10,7 @@ One real app window (xdg_toplevel, movable/tiled/floating in Hyprland) built wit
 - The app window is built on a reusable **window primitive**, because the user will build more apps on it later.
 - Everything must be proven with screenshots and comparisons against the real desktop, plus benchmarks (CPU and GPU for QEMU, the viewer and Hyprland) against the current QEMU GTK window. If the GTK window turns out faster, say so with numbers.
 - Agent (non-human) mode must cost less: render fewer pixels when nobody is viewing.
-- The clock fix (`-rtc base=utc,clock=host` + `timedatectl set-ntp false` in the guest) comes AFTER this work. Do not do it now.
+- Clock fix applied: `-rtc base=utc,clock=host` + guest NTP off.
 
 ## Rules (from AGENTS.md, enforced)
 
@@ -154,13 +154,17 @@ sd-bus peer connection (C API, the same lib the daemon already links for tray/no
 
 ## Next before compare/bench (user, 2026-11-03)
 
-1. Launcher: the "Virtual machines" entry opens the new vms app, not the in-launcher VM list. Delete the old VmSection screen from the launcher.
-2. vms app landing: no VM selected or rendered by default. Show grayed thumbnails from the last viewed screenshot of each VM; a click/take-control shows the live VM.
-3. Mouse: the viewer consumes the pointer and the guest pointer is slow and buggy. Map the pointer to the letterboxed guest rect, keep the host pointer visible, and make F11/escape free it for other windows. Test with ydotoold and wtype.
-4. Aspect: the guest must not warp or resize itself to the preview. Keep the guest at the host output mode (2560x1440 scale 1.6667) and letterbox the preview with black bars at the screen aspect. Only SetUIInfo for the fullscreen host size.
-5. Virgl alpha: the guest overlay backdrop is still black under virgl (no alpha EGL config). Fix it with a guest-only wallpaper-image backdrop (`YUDAE_GUEST=1`) or a Mesa/virgl alpha config; pick one and prove it.
+1. Launcher: done. The entry opens the vms app; the launcher has no VmSection reference. VmSection.qml remains only for ProcessPanel's VM usage.
+2. vms app landing: done. Gray last-viewed thumbnails; no live render until a card click. Proof: `vm/runs/demo/proof/gallery.png`, `gallery-live.png`.
+3. Mouse: mapping to the letterboxed rect and 125 Hz coalescing done; key latency p50 5.49ms/p95 16.00ms. Mouse latency was not captured because the tablet marker produced no samples; visual mapping is proven.
+4. Aspect: fixed. The guest stays at 2560x1440 scale 1.6667 and the preview letterboxes. The app no longer auto-renders the first VM at 1536; a click/`--vm` sends view first, so F11 is 1:1.
+5. Virgl alpha: fixed. Hyprland was filtering ARGB because the guest primary plane is XR24-only; `quirks:skip_non_kms_dmabuf_formats = false` advertises non-KMS formats, system Mesa exposes ARGB8888, and the guest launcher is transparent. Proof: `vm/runs/demo/proof/launcher-alpha-hyprland-quirk.png`. No Mesa/Hyprland fork needed; the local Mesa fork was deleted.
 6. Wallpaper: stop copying the wallpaper into `vm/hostwall`. Read the active path from `shell/cache/settings.lua` in the guest and mount that directory read-only over virtiofs so the guest uses the same file. Keep the awww binary copy only if the guest lacks it.
-7. Then `vm/compare` and C2/C3/input latency.
+7. `vm/compare` done: 8 scenes, exact 2560x1440, masked RMSE in `docs/perf.md`; C2/C3 measured; key latency recorded. Mouse latency still open.
+
+## Clock
+
+- QEMU uses `-rtc base=utc,clock=host`; guest NTP is off (`timedatectl set-ntp false` in setGuestMode and vm/desktop). Guest NTP=no, timesyncd inactive.
 
 ## Gotchas learned this session
 
