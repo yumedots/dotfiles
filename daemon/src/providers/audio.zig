@@ -131,6 +131,8 @@ pub const Audio = struct {
 	}
 
 	pub fn start(self: *Audio) !void {
+		self.sampleSerial();
+
 		const thread = try std.Thread.spawn(.{}, loop, .{self});
 		thread.detach();
 

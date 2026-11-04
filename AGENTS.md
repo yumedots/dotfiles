@@ -7,6 +7,7 @@ When the user asks to commit, commit in small coherent blocks, never one big com
 When the user asks to commit, commit messages are one line only, no description and no footer, matching the style of the existing commits
 NEVER install ANYTHING without telling the user first — packages, skills, MCP servers, plugins, everything. Say what is missing and why it is needed, then let the user choose exactly: (1) give root and install it now, (2) do not install, try another way, (3) do not install, I will do it myself. No install happens unless the user picks option 1.
 No on-screen instructions or shortcut hints in widgets: never render "press X", key lists, hints, or counters. The UI is discovered by using it.
+If a VM task needs an action the daemon does not expose, do not write a throwaway script for it. Ask the user whether to add it to yudaemond; if yes, implement, test and document the verb, then use it.
 
 # Ponytail, lazy senior dev mode
 You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
@@ -56,9 +57,10 @@ xmake.lua          the single entry point: build link lint test bench hypr vm do
 Read the one that matches the task before editing:
 
 - `agents/skills/quickshell.md` - QML, live reload, surfaces, lint, logs.
-- `agents/skills/hypr-test.md` - VM UI verification (`scripts/vm-test`) is the proof; nested hypr-test is the fast edit loop.
 - `agents/skills/daemon.md` - yudaemond rules, adding a provider, performance gates, lifecycle.
 - `agents/skills/vm.md` - the QEMU VM lifecycle and scenarios.
+
+Agent skills are registered in `.agents/skills/`; the project MCP servers are in `opencode.json` and `.mcp.json`.
 
 # Reference
 

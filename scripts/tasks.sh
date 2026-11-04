@@ -40,6 +40,11 @@ task_link() {
 	link_one "$ROOT/scripts/yudae" "$HOME_DIR/.local/bin/yudae" || ok=1
 	link_one "$ROOT/scripts/xmake" "$HOME_DIR/.local/bin/xmake" || ok=1
 
+	link_one "$ROOT/shell/assets/providers/opencode.svg" "$HOME_DIR/.local/share/icons/hicolor/scalable/apps/opencode.svg" || ok=1
+	link_one "$ROOT/shell/assets/providers/claude.svg" "$HOME_DIR/.local/share/icons/hicolor/scalable/apps/claude.svg" || ok=1
+	link_one "$ROOT/shell/assets/providers/codex.svg" "$HOME_DIR/.local/share/icons/hicolor/scalable/apps/codex.svg" || ok=1
+	link_one "$ROOT/shell/assets/providers/opencode-logo.png" "$HOME_DIR/.local/share/icons/hicolor/256x256/apps/opencode.png" || ok=1
+
 	if [ "$ok" -ne 0 ]; then
 		echo "link incomplete" >&2
 		exit 1
