@@ -10,6 +10,7 @@
 #include <QTimer>
 #include <QOpenGLFunctions>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QSGSimpleTextureNode>
 #include <QSGTexture>
 #include <QtQuick/qsgtexture_platform.h>
@@ -154,6 +155,9 @@ struct VmDisplay::Private {
 	bool y0top = false;
 	QSGTexture *nodeTexture = nullptr;
 	QImage cursorImage;
+	QRectF dstRect;
+	int hotX = 0;
+	int hotY = 0;
 	int mapFd = -1;
 	void *mapBase = nullptr;
 	void *mapData = nullptr;
@@ -198,10 +202,13 @@ VmDisplay::VmDisplay(QQuickItem *parent) : QQuickItem(parent), d(new Private) {
 	});
 	connect(d->display, &QmpDisplay::cursorImage, this, [this](const QImage &image, int hotX, int hotY) {
 		d->cursorImage = image;
+		d->hotX = hotX;
+		d->hotY = hotY;
 		setCursor(QCursor(QPixmap::fromImage(image), hotX, hotY));
 	});
 	connect(d->display, &QmpDisplay::mouseState, this, [this](int, int, bool visible) {
-		setCursor(visible && !d->cursorImage.isNull() ? QCursor(QPixmap::fromImage(d->cursorImage)) : Qt::BlankCursor);
+		if (!visible) return;
+		if (!d->cursorImage.isNull()) setCursor(QCursor(QPixmap::fromImage(d->cursorImage), d->hotX, d->hotY));
 	});
 	connect(d->display, &QmpDisplay::failed, this, [this](const QString &message) {
 		m_error = message;
@@ -234,10 +241,13 @@ void VmDisplay::setQmp(const QString &value) {
 void VmDisplay::maybeStart() {
 	if (m_qmp.isEmpty() || !window() || width() <= 0 || height() <= 0) return;
 	if (m_running) return;
-	const int w = qRound(width() * window()->devicePixelRatio());
-	const int h = qRound(height() * window()->devicePixelRatio());
-	if (w <= 0 || h <= 0) return;
-	d->display->start(m_qmp, w, h);
+	QScreen *screen = window()->screen();
+	const QSize device = screen ? QSize(qRound(screen->size().width() * screen->devicePixelRatio()),
+	                                    qRound(screen->size().height() * screen->devicePixelRatio()))
+	                            : QSize(qRound(width() * window()->devicePixelRatio()),
+	                                    qRound(height() * window()->devicePixelRatio()));
+	if (device.width() <= 0 || device.height() <= 0) return;
+	d->display->start(m_qmp, device.width(), device.height());
 	m_running = true;
 	emit runningChanged();
 }
@@ -246,9 +256,10 @@ void VmDisplay::geometryChange(const QRectF &next, const QRectF &prev) {
 	QQuickItem::geometryChange(next, prev);
 	if (next.size().toSize() == prev.size().toSize()) return;
 	maybeStart();
-	if (m_running && window()) {
-		d->display->setUiInfo(qRound(width() * window()->devicePixelRatio()),
-		                      qRound(height() * window()->devicePixelRatio()));
+	if (m_running && window() && window()->visibility() == QWindow::FullScreen) {
+		QScreen *screen = window()->screen();
+		if (screen) d->display->setUiInfo(qRound(screen->size().width() * screen->devicePixelRatio()),
+		                                  qRound(screen->size().height() * screen->devicePixelRatio()));
 	}
 	update();
 }
@@ -312,11 +323,16 @@ void VmDisplay::wheelEvent(QWheelEvent *event) {
 }
 
 void VmDisplay::sendPosition(const QPointF &pos) {
-	const int w = qRound(width() * (window() ? window()->devicePixelRatio() : 1));
-	const int h = qRound(height() * (window() ? window()->devicePixelRatio() : 1));
+	const int w = d->textureW > 0 ? d->textureW : qRound(width() * (window() ? window()->devicePixelRatio() : 1));
+	const int h = d->textureH > 0 ? d->textureH : qRound(height() * (window() ? window()->devicePixelRatio() : 1));
 	if (w <= 0 || h <= 0) return;
-	int x = qBound(0, qRound(pos.x() * w / qMax(1.0, width())), w - 1);
-	int y = qBound(0, qRound(pos.y() * h / qMax(1.0, height())), h - 1);
+
+	QRectF dst = d->dstRect.isValid() && !d->dstRect.isEmpty() ? d->dstRect : boundingRect();
+	if (!dst.contains(pos)) return;
+	const qreal fx = (pos.x() - dst.x()) / dst.width();
+	const qreal fy = (pos.y() - dst.y()) / dst.height();
+	int x = qBound(0, qRound(fx * w), w - 1);
+	int y = qBound(0, qRound(fy * h), h - 1);
 	d->display->mouseAbs(x, y);
 }
 
@@ -518,8 +534,16 @@ QSGNode *VmDisplay::updatePaintNode(QSGNode *node, UpdatePaintNodeData *) {
 
 	auto *textureNode = static_cast<QSGSimpleTextureNode *>(node);
 	if (!textureNode) textureNode = new QSGSimpleTextureNode;
-	textureNode->setRect(boundingRect());
-	if (!d->texture || d->textureW <= 0 || d->textureH <= 0) return textureNode;
+	if (!d->texture || d->textureW <= 0 || d->textureH <= 0) {
+		d->dstRect = QRectF();
+		textureNode->setRect(boundingRect());
+		return textureNode;
+	}
+	const QSizeF area = boundingRect().size();
+	const qreal scale = qMin(area.width() / qreal(d->textureW), area.height() / qreal(d->textureH));
+	const QSizeF fitted(qreal(d->textureW) * scale, qreal(d->textureH) * scale);
+	d->dstRect = QRectF((area.width() - fitted.width()) / 2, (area.height() - fitted.height()) / 2, fitted.width(), fitted.height());
+	textureNode->setRect(d->dstRect);
 	if (!d->nodeTexture) {
 		d->nodeTexture = QNativeInterface::QSGOpenGLTexture::fromNative(d->texture, window(), QSize(d->textureW, d->textureH), QQuickWindow::TextureHasAlphaChannel);
 	}

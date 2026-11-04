@@ -185,6 +185,11 @@ AppWindow {
 			width: parent.width - sidebar.width
 			height: parent.height
 
+			Rectangle {
+				anchors.fill: parent
+				color: "black"
+			}
+
 			VmDisplay {
 				anchors.fill: parent
 				qmp: win.selected.length > 0 ? win.root + "/" + win.selected + "/display.qmp" : ""
