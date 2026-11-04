@@ -36,6 +36,7 @@ signals:
 
 protected:
 	void geometryChange(const QRectF &next, const QRectF &prev) override;
+	void itemChange(ItemChange change, const ItemChangeData &value) override;
 	void mousePressEvent(QMouseEvent *event) override;
 	void mouseReleaseEvent(QMouseEvent *event) override;
 	void mouseMoveEvent(QMouseEvent *event) override;

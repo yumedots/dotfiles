@@ -20,26 +20,6 @@ local function wakeLauncher(action)
     end
 end
 
-local function activeVm()
-    local win = hl.get_active_window()
-    if not win or win.class ~= "qemu" then return nil end
-    return win.title and win.title:match("yudae%-([%w%-_]+)%)")
-end
-
-local function vmAction(action)
-    local name = activeVm()
-    if not name then return false end
-    hl.exec_cmd("yudae vm ui " .. name .. " " .. action)
-    return true
-end
-
-local function vmKeys(keys)
-    local name = activeVm()
-    if not name then return false end
-    hl.exec_cmd("yudae vm key " .. name .. " --human " .. keys)
-    return true
-end
-
 local function gotoWorkspace(workspace)
     return function()
         hl.dispatch(hl.dsp.focus({ workspace = workspace }))
@@ -164,7 +144,6 @@ end
 for i = 1, 10 do
     local key = i % 10
     hl.bind(mainMod .. " + " .. key,         function()
-        if vmKeys("meta_l " .. key) then return end
         gotoWorkspace(i)()
     end)
     hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i, follow = false }))
@@ -184,11 +163,9 @@ hl.bind("ALT + mouse_down",         function() versions.step(1) end)
 hl.bind("ALT + mouse_up",           function() versions.step(-1) end)
 
 hl.bind(mainMod .. " + RETURN", function()
-    if vmKeys("meta_l ret") then return end
     hl.dispatch(hl.dsp.exec_cmd(programs.terminal))
 end)
 hl.bind(mainMod .. " + W", function()
-    if vmKeys("meta_l w") then return end
     hl.dispatch(hl.dsp.window.close())
 end, { repeating = true })
 hl.bind("F11", hl.dsp.window.fullscreen())
@@ -201,24 +178,20 @@ hl.bind("SUPER + ALT + ESCAPE", function()
     end
 
     hl.dispatch(hl.dsp.focus({ workspace = 1 }))
-end)
+end, { dont_inhibit = true })
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd(programs.session))
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(programs.browser))
 hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd(programs.fileManager))
 hl.bind(mainMod .. " + SPACE", function()
-    if vmKeys("meta_l spc") then return end
     actions.floatToggle()
 end)
 hl.bind("ALT + SPACE", function()
-    if vmAction("launcher") then return end
     hl.dispatch(hl.dsp.global("quickshell:launcher"))
 end)
 hl.bind(mainMod .. " + B", function()
-    if vmAction("clipboard") then return end
     hl.dispatch(hl.dsp.global("quickshell:clipboard"))
 end)
 hl.bind(mainMod .. " + TAB", function()
-    if vmAction("windows") then return end
     hl.dispatch(hl.dsp.global("quickshell:windows"))
 end, { repeating = true })
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))

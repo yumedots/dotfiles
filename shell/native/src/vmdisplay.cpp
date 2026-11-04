@@ -1,5 +1,6 @@
 #include "vmdisplay.h"
 #include "qmp.h"
+#include "inhibitor.h"
 
 #include <QGuiApplication>
 #include <QKeyEvent>
@@ -14,6 +15,8 @@
 #include <QtQuick/qsgtexture_platform.h>
 #include <QWheelEvent>
 #include <QtGui/qopenglcontext_platform.h>
+#include <QtGui/qguiapplication_platform.h>
+#include <qpa/qplatformwindow_p.h>
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -151,6 +154,8 @@ struct VmDisplay::Private {
 	bool y0top = false;
 	QSGTexture *nodeTexture = nullptr;
 	QImage cursorImage;
+	WaylandInhibitor inhibitor;
+	QMetaObject::Connection activeConnection;
 };
 
 VmDisplay::VmDisplay(QQuickItem *parent) : QQuickItem(parent), d(new Private) {
@@ -213,6 +218,40 @@ void VmDisplay::geometryChange(const QRectF &next, const QRectF &prev) {
 		d->display->setUiInfo(qRound(width() * window()->devicePixelRatio()),
 		                      qRound(height() * window()->devicePixelRatio()));
 	}
+	update();
+}
+
+void VmDisplay::itemChange(ItemChange change, const ItemChangeData &value) {
+	QQuickItem::itemChange(change, value);
+	if (change != ItemSceneChange) return;
+
+	if (d->activeConnection) QObject::disconnect(d->activeConnection);
+
+	QQuickWindow *win = value.window;
+	if (!win) {
+		d->inhibitor.inhibit(false);
+		return;
+	}
+
+	const auto update = [this]() {
+		QQuickWindow *window = this->window();
+		if (!window) return;
+
+		if (!window->isActive()) {
+			d->inhibitor.inhibit(false);
+			return;
+		}
+
+		auto *application = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>();
+		auto *wayland = window->nativeInterface<QNativeInterface::Private::QWaylandWindow>();
+		if (!application || !wayland) return;
+
+		d->inhibitor.setSurface(application->display(), application->seat(), wayland->surface());
+		d->inhibitor.inhibit(true);
+		forceActiveFocus();
+	};
+
+	d->activeConnection = connect(win, &QQuickWindow::activeChanged, this, update);
 	update();
 }
 
