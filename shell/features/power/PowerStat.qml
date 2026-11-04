@@ -10,6 +10,7 @@ BarStat {
 	readonly property var battery: (Yudae.system.battery && Yudae.system.battery.present) ? Yudae.system.battery : (Config.powerDemo ? root.demo : null)
 	readonly property var governors: Yudae.system.governors || []
 	property string governor: Yudae.system.governor || ""
+	readonly property var awake: Yudae.system.awake || null
 	property bool applyFailed: false
 	readonly property int flow: !root.battery ? 0 : (root.battery.state === "Charging" ? 1 : (root.battery.state === "Discharging" ? -1 : 0))
 
@@ -82,6 +83,10 @@ BarStat {
 		root.governor = next;
 	}
 
+	function setKeepAwake(next) {
+		Yudae.systemCommand({ keepAwake: next });
+	}
+
 	popupContent: Component {
 		PowerMonitor {
 			id: monitor
@@ -90,6 +95,9 @@ BarStat {
 			onCloseRequested: root.closePopup()
 			onGovernorPicked: function (next) {
 				root.setGovernor(next);
+			}
+			onAwakePicked: function (next) {
+				root.setKeepAwake(next);
 			}
 		}
 	}

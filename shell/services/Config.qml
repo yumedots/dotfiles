@@ -265,6 +265,11 @@ QtObject {
 	readonly property var powerDemo: settings.powerDemo !== undefined ? settings.powerDemo : false
 	readonly property var powerFlowHeight: settings.powerFlowHeight !== undefined ? settings.powerFlowHeight : 40
 	readonly property var powerGovernorTitle: settings.powerGovernorTitle !== undefined ? settings.powerGovernorTitle : "Governor"
+	readonly property var powerAwakeTitle: settings.powerAwakeTitle !== undefined ? settings.powerAwakeTitle : "Keep awake"
+	readonly property var powerAwakeGlyph: settings.powerAwakeGlyph !== undefined ? settings.powerAwakeGlyph : "\uf0f4"
+	readonly property var powerAwakeOff: settings.powerAwakeOff !== undefined ? settings.powerAwakeOff : "Off"
+	readonly property var powerAwakeOn: settings.powerAwakeOn !== undefined ? settings.powerAwakeOn : "On"
+	readonly property var powerAwakeAuto: settings.powerAwakeAuto !== undefined ? settings.powerAwakeAuto : "Auto"
 
 	// lock screen
 	readonly property var lockAfterMinutes: settings.lockAfterMinutes !== undefined ? settings.lockAfterMinutes : 10
