@@ -2023,7 +2023,7 @@ test "process rows keep every process, hottest first" {
 	const io = std.testing.io;
 
 	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
-	const system = try sysmod.System.create(allocator, io, &hub);
+	const system = try sysmod.System.create(allocator, io, &hub, null);
 	const self = try Launcher.create(allocator, io, &hub);
 	self.system = system;
 
@@ -2049,7 +2049,7 @@ test "every mode id renders rows of its own kind" {
 	const io = std.testing.io;
 
 	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
-	const system = try sysmod.System.create(allocator, io, &hub);
+	const system = try sysmod.System.create(allocator, io, &hub, null);
 	const self = try Launcher.create(allocator, io, &hub);
 	self.system = system;
 

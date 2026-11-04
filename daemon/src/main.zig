@@ -335,6 +335,11 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	if (json.field(value, "system")) |system_cmd| {
 		if (json.flag(system_cmd, "logout")) context.system.logout();
 
+		if (json.field(system_cmd, "keepAwake")) |awake| switch (awake) {
+			.bool => |on| context.system.setKeepAwake(on),
+			else => {},
+		};
+
 		const governor = json.textAt(system_cmd, "governor");
 		if (governor.len > 0) context.system.setGovernor(governor);
 
@@ -523,7 +528,7 @@ fn run(io: std.Io) !void {
 	const weather_provider = try weather.Weather.create(allocator, io, hub, client);
 	try hub.add(weather_provider.provider());
 
-	const system_provider = try system.System.create(allocator, io, hub);
+	const system_provider = try system.System.create(allocator, io, hub, opencode_provider);
 	try hub.add(system_provider.provider());
 
 	const apps_provider = try apps.Apps.create(allocator, io, hub);

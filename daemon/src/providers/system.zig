@@ -1,9 +1,11 @@
 const std = @import("std");
 const setStr = @import("opencode.zig").setStr;
+const Opencode = @import("opencode.zig").Opencode;
 const hubmod = @import("../hub.zig");
 const color = @import("../primitives/color.zig");
 const config = @import("../primitives/config.zig");
 const proc = @import("../primitives/proc.zig");
+const inhibit = @import("../primitives/inhibit.zig");
 const sleep = @import("../primitives/sleep.zig");
 
 const Allocator = std.mem.Allocator;
@@ -115,17 +117,25 @@ const PanelOut = struct {
 	rows: []ProcessOut,
 };
 
+const AwakeOut = struct {
+	held: bool,
+	manual: bool,
+	agents: bool,
+};
+
 const Out = struct {
 	governor: []const u8,
 	governors: [][]const u8,
 	cpu: CpuOut,
 	memory: MemoryOut,
 	battery: BatteryOut,
+	awake: AwakeOut,
 	processes: []ProcessOut,
 	byCpu: []ProcessOut,
 	byMem: []ProcessOut,
 	panel: PanelOut,
 };
+
 
 const Palette = struct {
 	mono: bool = true,
@@ -222,6 +232,7 @@ pub const System = struct {
 	allocator: Allocator,
 	io: Io,
 	hub: *Hub,
+	opencode: ?*Opencode = null,
 	mutex: std.Io.Mutex = .init,
 	scratch: std.heap.ArenaAllocator,
 	cpu_pct: f64 = 0,
@@ -266,13 +277,20 @@ pub const System = struct {
 	panel_cpu: []i32 = &.{},
 	panel_mem: []i32 = &.{},
 	palette: Palette = .{},
+	keep_awake: bool = false,
+	awake_held: bool = false,
+	awake_agents: bool = false,
+	awake_want: bool = false,
+	awake_fd: c_int = -1,
+	awake_retry_at: i64 = 0,
 
-	pub fn create(allocator: Allocator, io: Io, hub: *Hub) !*System {
+	pub fn create(allocator: Allocator, io: Io, hub: *Hub, opencode: ?*Opencode) !*System {
 		const self = try allocator.create(System);
 		self.* = .{
 			.allocator = allocator,
 			.io = io,
 			.hub = hub,
+			.opencode = opencode,
 			.scratch = std.heap.ArenaAllocator.init(allocator),
 		};
 
@@ -472,6 +490,7 @@ pub const System = struct {
 			self.sampleMemory();
 			self.sampleBattery();
 			self.sampleGovernors();
+			self.syncAwake();
 
 			if (tick % 3 == 0) self.sampleProcesses();
 
@@ -754,6 +773,40 @@ pub const System = struct {
 		self.hub.publish();
 	}
 
+	pub fn setKeepAwake(self: *System, on: bool) void {
+		self.mutex.lockUncancelable(self.io);
+		self.keep_awake = on;
+		self.mutex.unlock(self.io);
+
+		self.syncAwake();
+		self.hub.publish();
+	}
+
+	fn syncAwake(self: *System) void {
+		const now = std.Io.Clock.real.now(self.io).toMilliseconds();
+		const working = if (self.opencode) |agent| std.mem.eql(u8, agent.faceState(), "working") else false;
+
+		self.mutex.lockUncancelable(self.io);
+
+		const want = self.keep_awake or working;
+		const changed = want != self.awake_want or working != self.awake_agents;
+		self.awake_want = want;
+		self.awake_agents = working;
+
+		if (want and !self.awake_held and now >= self.awake_retry_at) {
+			self.awake_fd = inhibit.hold("an agent is working");
+			if (self.awake_fd >= 0) self.awake_held = true else self.awake_retry_at = now + 30_000;
+		} else if (!want and (self.awake_held or self.awake_fd >= 0)) {
+			inhibit.release(self.awake_fd);
+			self.awake_fd = -1;
+			self.awake_held = false;
+		}
+
+		self.mutex.unlock(self.io);
+
+		if (changed) self.hub.publish();
+	}
+
 	fn sampleGovernors(self: *System) void {
 		const available = proc.readFile(self.io, self.allocator, "/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors") catch return;
 		defer self.allocator.free(available);
@@ -873,6 +926,11 @@ pub const System = struct {
 				.state = self.battery_state,
 				.watts = self.battery_watts,
 			},
+			.awake = .{
+				.held = self.awake_held,
+				.manual = self.keep_awake,
+				.agents = self.awake_agents,
+			},
 			.processes = processes.items,
 			.byCpu = processes.items,
 			.byMem = by_mem.items,
@@ -975,7 +1033,7 @@ test "the full list reports every sampled process" {
 	const io = std.testing.io;
 
 	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
-	const system = try System.create(allocator, io, &hub);
+	const system = try System.create(allocator, io, &hub, null);
 
 	var idle = Process{ .pid = 42, .rss_kb = 8 };
 	@memcpy(idle.comm[0..7], "kthread");
@@ -1000,7 +1058,7 @@ test "one synchronous sample fills the list before the first snapshot" {
 	const io = std.testing.io;
 
 	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
-	const system = try System.create(allocator, io, &hub);
+	const system = try System.create(allocator, io, &hub, null);
 
 	try std.testing.expectEqual(@as(usize, 0), system.all.items.len);
 
@@ -1020,7 +1078,7 @@ test "one synchronous sample seeds the cpu and the rss lists" {
 	const io = std.testing.io;
 
 	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
-	const system = try System.create(allocator, io, &hub);
+	const system = try System.create(allocator, io, &hub, null);
 
 	system.sampleProcesses();
 
