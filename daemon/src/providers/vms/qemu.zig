@@ -11,17 +11,23 @@ pub const Config = struct {
 	mem_mb: u32,
 	cid: u32,
 	gl: bool,
-	view: bool = true,
 };
 
 pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	var list: std.ArrayList([]const u8) = .empty;
 
 	const qmp = try std.fs.path.join(allocator, &.{ config.dir, "qmp.sock" });
+	const display_qmp = try std.fs.path.join(allocator, &.{ config.dir, "display.qmp" });
 	const serial = try std.fs.path.join(allocator, &.{ config.dir, "serial.log" });
 	const vfs = try std.fs.path.join(allocator, &.{ config.dir, "virtiofsd.sock" });
 
-	try list.append(allocator, "qemu-system-x86_64");
+	const binary = blk: {
+		if (std.c.getenv("YUDAE_QEMU")) |value| break :blk std.mem.span(value);
+		const home = if (std.c.getenv("HOME")) |value| std.mem.span(value) else break :blk "qemu-system-x86_64";
+		const path = std.fmt.allocPrint(allocator, "{s}/qemu-linux/install/bin/qemu-system-x86_64", .{home}) catch break :blk "qemu-system-x86_64";
+		break :blk path;
+	};
+	try list.append(allocator, binary);
 	try addPair(allocator, &list, "-name", try std.fmt.allocPrint(allocator, "yudae-{s}", .{config.name}));
 	try addPair(allocator, &list, "-machine", "q35,accel=kvm");
 	try list.append(allocator, "-nodefaults");
@@ -32,13 +38,10 @@ pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	try addPair(allocator, &list, "-numa", "node,memdev=mem");
 	try addPair(allocator, &list, "-drive", try std.fmt.allocPrint(allocator, "file={s},if=virtio,format=qcow2,cache=none,aio=io_uring", .{config.disk}));
 
-	const xres: u32 = if (config.view) 2560 else 1280;
-	const yres: u32 = if (config.view) 1440 else 720;
-
 	if (config.gl) {
-		try addPair(allocator, &list, "-device", try std.fmt.allocPrint(allocator, "virtio-gpu-gl-pci,xres={d},yres={d},max_outputs=1", .{ xres, yres }));
+		try addPair(allocator, &list, "-device", "virtio-gpu-gl-pci,xres=2560,yres=1440,max_outputs=1");
 	} else {
-		try addPair(allocator, &list, "-device", try std.fmt.allocPrint(allocator, "virtio-gpu-pci,xres={d},yres={d},max_outputs=1", .{ xres, yres }));
+		try addPair(allocator, &list, "-device", "virtio-gpu-pci,xres=2560,yres=1440,max_outputs=1");
 	}
 
 	try addPair(allocator, &list, "-device", "virtio-balloon-pci,free-page-reporting=on");
@@ -52,13 +55,10 @@ pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	try addPair(allocator, &list, "-netdev", "user,id=net0");
 	try addPair(allocator, &list, "-device", "virtio-net-pci,netdev=net0");
 	try addPair(allocator, &list, "-qmp", try std.fmt.allocPrint(allocator, "unix:{s},server=on,wait=off", .{qmp}));
+	try addPair(allocator, &list, "-qmp", try std.fmt.allocPrint(allocator, "unix:{s},server=on,wait=off", .{display_qmp}));
 	try addPair(allocator, &list, "-serial", try std.fmt.allocPrint(allocator, "file:{s}", .{serial}));
 	try addPair(allocator, &list, "-monitor", "none");
-	if (config.view) {
-		try addPair(allocator, &list, "-display", "gtk,gl=on,grab-on-hover=off,full-screen=on");
-	} else {
-		try addPair(allocator, &list, "-display", "egl-headless");
-	}
+	try addPair(allocator, &list, "-display", if (config.gl) "dbus,p2p=yes,gl=on" else "dbus,p2p=yes");
 	try list.append(allocator, "-no-reboot");
 
 	return list.toOwnedSlice(allocator);

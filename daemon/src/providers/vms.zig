@@ -24,13 +24,16 @@ const Vm = struct {
 	disk: []u8,
 	agent: []u8,
 	controller: []u8,
+	harness: []u8,
+	session: []u8,
+	agent_since_ms: i64 = 0,
+	last_call_ms: i64 = 0,
 	screen_w: u32 = 0,
 	screen_h: u32 = 0,
 	cid: u32,
 	cores: u32,
 	mem_mb: u32,
 	gl: bool,
-	view: bool = true,
 	tier: tiers.Tier = .off,
 	pid: i32 = 0,
 	vfs_pid: i32 = 0,
@@ -46,6 +49,31 @@ const Vm = struct {
 	rss_kb: u64 = 0,
 };
 
+
+fn writeVm(writer: *Writer, vm: *const Vm, now: i64) !void {
+	try writer.writeAll("{\"name\":");
+	try std.json.Stringify.encodeJsonString(vm.name, .{}, writer);
+	try writer.writeAll(",\"tier\":");
+	try std.json.Stringify.encodeJsonString(vm.tier.text(), .{}, writer);
+	try writer.print(",\"cid\":{d},\"pid\":{d},\"cores\":{d},\"memMb\":{d},\"gl\":{s},\"cpu\":{d:.1},\"rssKb\":{d},\"agent\":", .{
+		vm.cid,
+		vm.pid,
+		vm.cores,
+		vm.mem_mb,
+		if (vm.gl) "true" else "false",
+		vm.cpu_pct,
+		vm.rss_kb,
+	});
+	try std.json.Stringify.encodeJsonString(vm.agent, .{}, writer);
+	try writer.writeAll(",\"controller\":");
+	try std.json.Stringify.encodeJsonString(vm.controller, .{}, writer);
+	try writer.writeAll(",\"harness\":");
+	try std.json.Stringify.encodeJsonString(vm.harness, .{}, writer);
+	try writer.writeAll(",\"session\":");
+	try std.json.Stringify.encodeJsonString(vm.session, .{}, writer);
+	try writer.print(",\"agentSinceMs\":{d},\"lastCallMs\":{d},\"lastUsed\":{d},\"upMs\":{d}}}", .{ vm.agent_since_ms, vm.last_call_ms, vm.used_ms, now - vm.created_ms });
+}
+
 pub const Vms = struct {
 	allocator: Allocator,
 	io: Io,
@@ -53,6 +81,7 @@ pub const Vms = struct {
 	mutex: std.Io.Mutex = .init,
 	op: std.Io.Mutex = .init,
 	list: std.ArrayList(*Vm) = .empty,
+	selected: []u8 = &.{},
 	limit: budget.Budget,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *hubmod.Hub) !*Vms {
@@ -141,7 +170,7 @@ pub const Vms = struct {
 			}
 		}
 
-		try writer.print("{{\"budget\":{{\"memMb\":{d},\"cores\":{d},\"usedMemMb\":{d},\"usedCores\":{d},\"gl\":{d},\"maxGl\":{d}}},\"list\":[", .{
+		try writer.print("{{\"budget\":{{\"memMb\":{d},\"cores\":{d},\"usedMemMb\":{d},\"usedCores\":{d},\"gl\":{d},\"maxGl\":{d}}},\"selected\":", .{
 			self.limit.mem_mb,
 			self.limit.cores,
 			used_mem,
@@ -149,27 +178,12 @@ pub const Vms = struct {
 			gl_count,
 			@max(self.limit.cores / 2, 1),
 		});
+		try std.json.Stringify.encodeJsonString(self.selected, .{}, writer);
+		try writer.writeAll(",\"list\":[");
 
 		for (self.list.items, 0..) |vm, index| {
 			if (index > 0) try writer.writeAll(",");
-
-			try writer.writeAll("{\"name\":");
-			try std.json.Stringify.encodeJsonString(vm.name, .{}, writer);
-			try writer.writeAll(",\"tier\":");
-			try std.json.Stringify.encodeJsonString(vm.tier.text(), .{}, writer);
-			try writer.print(",\"cid\":{d},\"pid\":{d},\"cores\":{d},\"memMb\":{d},\"gl\":{s},\"cpu\":{d:.1},\"rssKb\":{d},\"agent\":", .{
-				vm.cid,
-				vm.pid,
-				vm.cores,
-				vm.mem_mb,
-				if (vm.gl) "true" else "false",
-				vm.cpu_pct,
-				vm.rss_kb,
-			});
-			try std.json.Stringify.encodeJsonString(vm.agent, .{}, writer);
-			try writer.writeAll(",\"controller\":");
-			try std.json.Stringify.encodeJsonString(vm.controller, .{}, writer);
-			try writer.print(",\"lastUsed\":{d},\"upMs\":{d}}}", .{ vm.used_ms, now - vm.created_ms });
+			try writeVm(writer, vm, now);
 		}
 
 		try writer.writeAll("]}");
@@ -208,6 +222,8 @@ pub const Vms = struct {
 		if (std.mem.eql(u8, method, "restore")) return self.restoreVm(args, allocator);
 		if (std.mem.eql(u8, method, "fork")) return self.forkVm(args, allocator);
 		if (std.mem.eql(u8, method, "view")) return self.viewVm(args, allocator);
+		if (std.mem.eql(u8, method, "agent")) return self.agentVm(args, allocator);
+		if (std.mem.eql(u8, method, "select")) return self.selectVm(args, allocator);
 		if (std.mem.eql(u8, method, "ui")) return self.uiVm(args, allocator);
 		if (std.mem.eql(u8, method, "release")) return self.releaseVm(args, allocator);
 		if (std.mem.eql(u8, method, "push")) return self.pushVm(args, allocator);
@@ -372,11 +388,12 @@ pub const Vms = struct {
 			.disk = disk,
 			.agent = try self.allocator.dupe(u8, json.textAt(args, "agent")),
 			.controller = try self.allocator.dupe(u8, "agent"),
+			.harness = try self.allocator.dupe(u8, json.textAt(args, "harness")),
+			.session = try self.allocator.dupe(u8, json.textAt(args, "session")),
 			.cid = cid,
 			.cores = cores,
 			.mem_mb = mem,
 			.gl = gl,
-			.view = if (json.field(args, "view")) |_| json.flag(args, "view") else true,
 			.tier = .off,
 			.created_ms = fmt.nowMs(self.io),
 			.used_ms = fmt.nowMs(self.io),
@@ -478,7 +495,6 @@ pub const Vms = struct {
 			.mem_mb = vm.mem_mb,
 			.cid = vm.cid,
 			.gl = vm.gl,
-			.view = vm.view,
 		});
 
 		const qmp_path = try std.fs.path.join(self.allocator, &.{ vm.dir, "qmp.sock" });
@@ -566,11 +582,12 @@ pub const Vms = struct {
 				.disk = std.fs.path.join(self.allocator, &.{ dir_path, "disk.qcow2" }) catch "",
 				.agent = self.allocator.dupe(u8, json.textAt(parsed.value, "agent")) catch "",
 				.controller = self.allocator.dupe(u8, "agent") catch "",
+				.harness = self.allocator.dupe(u8, json.textAt(parsed.value, "harness")) catch "",
+				.session = self.allocator.dupe(u8, json.textAt(parsed.value, "session")) catch "",
 				.cid = @intCast(@max(json.integer(json.field(parsed.value, "cid")), 3)),
 				.cores = @intCast(@max(json.integer(json.field(parsed.value, "cores")), 1)),
 				.mem_mb = @intCast(@max(json.integer(json.field(parsed.value, "memMb")), 512)),
 				.gl = json.flag(parsed.value, "gl"),
-				.view = if (json.field(parsed.value, "view")) |_| json.flag(parsed.value, "view") else true,
 				.tier = if (alive) .hot else .off,
 				.pid = if (alive) pid else 0,
 				.created_ms = fmt.nowMs(self.io),
@@ -621,15 +638,16 @@ pub const Vms = struct {
 			result.deinit(self.allocator);
 		} else |_| {}
 
-		const body = std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"cores\":{d},\"memMb\":{d},\"gl\":{s},\"view\":{s},\"pid\":{d},\"agent\":\"{s}\",\"base\":\"{s}\",\"dirty\":{s},\"packages\":\"{s}\"}}", .{
+		const body = std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"cores\":{d},\"memMb\":{d},\"gl\":{s},\"pid\":{d},\"agent\":\"{s}\",\"harness\":\"{s}\",\"session\":\"{s}\",\"base\":\"{s}\",\"dirty\":{s},\"packages\":\"{s}\"}}", .{
 			vm.name,
 			vm.cid,
 			vm.cores,
 			vm.mem_mb,
 			if (vm.gl) "true" else "false",
-			if (vm.view) "true" else "false",
 			vm.pid,
 			vm.agent,
+			vm.harness,
+			vm.session,
 			base_mem orelse "",
 			dirty,
 			packages_mem orelse "",
@@ -1165,6 +1183,49 @@ pub const Vms = struct {
 		return std.mem.eql(u8, vm.controller, "human");
 	}
 
+	fn selectVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
+		const name = json.textAt(args, "name");
+		if (name.len == 0) return error.MissingArgs;
+
+		self.mutex.lockUncancelable(self.io);
+		const vm = self.findLocked(name) orelse {
+			self.mutex.unlock(self.io);
+			return error.NotFound;
+		};
+		self.allocator.free(self.selected);
+		self.selected = try self.allocator.dupe(u8, vm.name);
+		self.mutex.unlock(self.io);
+
+		self.hub.publish();
+		return allocator.dupe(u8, "{}");
+	}
+
+	fn agentVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
+		const name = json.textAt(args, "name");
+		if (name.len == 0) return error.MissingArgs;
+
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		const vm = self.findLocked(name) orelse return error.NotFound;
+		const harness = json.textAt(args, "harness");
+		const session = json.textAt(args, "session");
+		const now = fmt.nowMs(self.io);
+
+		if (harness.len > 0) {
+			self.allocator.free(vm.harness);
+			vm.harness = try self.allocator.dupe(u8, harness);
+		}
+		if (session.len > 0) {
+			self.allocator.free(vm.session);
+			vm.session = try self.allocator.dupe(u8, session);
+		}
+		if (vm.agent_since_ms == 0) vm.agent_since_ms = now;
+		vm.last_call_ms = now;
+
+		return allocator.dupe(u8, "{}");
+	}
+
 	fn viewVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
 		const name = json.textAt(args, "name");
 
@@ -1173,18 +1234,11 @@ pub const Vms = struct {
 			self.mutex.unlock(self.io);
 			return error.NotFound;
 		};
-		const restart = vm.tier != .off and !vm.view;
-
 		vm.controller = try self.allocator.dupe(u8, "human");
-		vm.view = true;
 		vm.used_ms = fmt.nowMs(self.io);
+		self.allocator.free(self.selected);
+		self.selected = try self.allocator.dupe(u8, vm.name);
 		self.mutex.unlock(self.io);
-
-		if (restart) {
-			self.op.lockUncancelable(self.io);
-			self.cleanupVm(vm);
-			self.op.unlock(self.io);
-		}
 
 		self.hub.publish();
 
@@ -1426,11 +1480,12 @@ pub const Vms = struct {
 			.disk = target,
 			.agent = try self.allocator.dupe(u8, "agent"),
 			.controller = try self.allocator.dupe(u8, "agent"),
+			.harness = try self.allocator.dupe(u8, ""),
+			.session = try self.allocator.dupe(u8, ""),
 			.cid = cid,
 			.cores = cores,
 			.mem_mb = mem,
 			.gl = gl,
-			.view = if (json.field(args, "view")) |_| json.flag(args, "view") else true,
 			.tier = .off,
 			.created_ms = fmt.nowMs(self.io),
 			.used_ms = fmt.nowMs(self.io),
@@ -1648,4 +1703,34 @@ fn buttonEvent(client: *qmp.Qmp, allocator: Allocator, button: []const u8, down:
 	try writer.writeAll("}}]}");
 
 	_ = client.execute(allocator, "input-send-event", body.written()) catch return error.InputFailed;
+}
+
+test "the vm json carries the agent fields" {
+	var vm: Vm = .{
+		.name = @constCast("demo"),
+		.dir = @constCast(""),
+		.disk = @constCast(""),
+		.agent = @constCast("agent-1"),
+		.controller = @constCast("agent"),
+		.harness = @constCast("opencode"),
+		.session = @constCast("ses_123"),
+		.cid = 3,
+		.cores = 2,
+		.mem_mb = 2048,
+		.gl = true,
+		.created_ms = 1000,
+		.used_ms = 2000,
+		.agent_since_ms = 1500,
+		.last_call_ms = 2500,
+	};
+
+	var buffer: [1024]u8 = undefined;
+	var writer = std.Io.Writer.fixed(&buffer);
+	try writeVm(&writer, &vm, 3000);
+
+	const body = writer.buffered();
+	try std.testing.expect(std.mem.indexOf(u8, body, "\"harness\":\"opencode\"") != null);
+	try std.testing.expect(std.mem.indexOf(u8, body, "\"session\":\"ses_123\"") != null);
+	try std.testing.expect(std.mem.indexOf(u8, body, "\"agentSinceMs\":1500") != null);
+	try std.testing.expect(std.mem.indexOf(u8, body, "\"lastCallMs\":2500") != null);
 }

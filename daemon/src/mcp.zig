@@ -59,6 +59,9 @@ pub fn run(io: Io, args: []const []const u8) !void {
 	var file_writer = std.Io.File.stdout().writer(io, &out_buffer);
 	const writer = &file_writer.interface;
 
+	var harness: []const u8 = "";
+	const session: []const u8 = envFirst();
+
 	while (true) {
 		const line = reader.interface.takeDelimiter('\n') catch break orelse break;
 		const message = std.mem.trim(u8, line, " \r");
@@ -74,6 +77,20 @@ pub fn run(io: Io, args: []const []const u8) !void {
 		const method = json.textAt(root, "method");
 
 		if (std.mem.eql(u8, method, "initialize")) {
+			const params = json.field(root, "params") orelse json.Value{ .null = {} };
+			const info = json.field(params, "clientInfo") orelse json.Value{ .null = {} };
+			const raw = json.textAt(info, "name");
+			if (raw.len > 0) {
+				const mapped = if (std.mem.indexOf(u8, raw, "opencode") != null)
+					"opencode"
+				else if (std.mem.indexOf(u8, raw, "claude") != null)
+					"claude"
+				else if (std.mem.indexOf(u8, raw, "codex") != null)
+					"codex"
+				else
+					raw;
+				harness = gpa.dupe(u8, mapped) catch harness;
+			}
 			try respond(writer, allocator, id, Initialize{
 				.protocolVersion = "2025-06-18",
 				.serverInfo = .{ .name = "yudaemond", .version = "1" },
@@ -92,7 +109,7 @@ pub fn run(io: Io, args: []const []const u8) !void {
 			const name = json.textAt(params, "name");
 			const arguments = json.field(params, "arguments") orelse json.Value{ .object = .empty };
 
-			const body = call(io, allocator, name, arguments) catch |err| {
+			const body = call(io, allocator, name, arguments, harness, session) catch |err| {
 				try respondError(writer, allocator, id, @errorName(err));
 				continue;
 			};
@@ -108,7 +125,12 @@ pub fn run(io: Io, args: []const []const u8) !void {
 	}
 }
 
-fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.Value) ![]const u8 {
+fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.Value, harness: []const u8, session: []const u8) ![]const u8 {
+	if (std.mem.startsWith(u8, name, "vm_") and !std.mem.eql(u8, name, "vm_create")) {
+		const vm_name = json.textAt(arguments, "name");
+		if (vm_name.len > 0) stampAgent(io, allocator, vm_name, harness, session);
+	}
+
 	if (std.mem.eql(u8, name, "state")) return fetch(io, allocator);
 
 	if (std.mem.eql(u8, name, "providers")) {
@@ -159,6 +181,38 @@ fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.
 	if (std.mem.startsWith(u8, name, "vm_")) return callDaemon(io, allocator, "vms", name["vm_".len..], arguments);
 
 	return error.UnknownTool;
+}
+
+fn envFirst() []const u8 {
+	const keys = [_][*:0]const u8{ "OPENCODE_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CODEX_SESSION_ID" };
+	for (keys) |key| {
+		if (std.c.getenv(key)) |value| {
+			const slice = std.mem.span(value);
+			if (slice.len > 0) return slice;
+		}
+	}
+	return "";
+}
+
+fn stampAgent(io: Io, allocator: std.mem.Allocator, name: []const u8, harness: []const u8, session: []const u8) void {
+	if (harness.len == 0 and session.len == 0) return;
+
+	var out: std.Io.Writer.Allocating = .init(allocator);
+	const writer = &out.writer;
+
+	writer.writeAll("{\"call\":{\"target\":\"vms\",\"method\":\"agent\",\"args\":{\"name\":") catch return;
+	std.json.Stringify.encodeJsonString(name, .{}, writer) catch return;
+	writer.writeAll(",\"harness\":") catch return;
+	std.json.Stringify.encodeJsonString(harness, .{}, writer) catch return;
+	writer.writeAll(",\"session\":") catch return;
+	std.json.Stringify.encodeJsonString(session, .{}, writer) catch return;
+	writer.writeAll("}}}") catch return;
+
+	const path = proc.socketPath(io, allocator) catch return;
+	var buffer: [4096]u8 = undefined;
+	var connection = sock.Connection.connect(path, &buffer) catch return;
+	defer connection.close();
+	connection.writeLine(out.written()) catch {};
 }
 
 fn spawnViewer(io: Io, allocator: std.mem.Allocator, name: []const u8) void {
