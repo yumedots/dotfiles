@@ -22,3 +22,5 @@ target("checks")
 
         return false
     end)
+
+includes("shell/native")

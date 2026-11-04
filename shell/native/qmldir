@@ -1,0 +1,5 @@
+module Yudae.Native
+plugin YudaeNative
+classname YudaeNativePlugin
+typeinfo plugin.qmltypes
+VmDisplay 1.0 VmDisplay

@@ -63,3 +63,6 @@ hypr/plugins/borders-plus-plus/borders-plus-plus.so
 vm/hostbin
 vm/hostwall
 vm/hoststate
+
+shell/native/qml
+/build/
