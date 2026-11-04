@@ -92,15 +92,7 @@ PanelWindow {
 	implicitWidth: bar.screen ? bar.screen.width : 0
 	implicitHeight: Math.ceil(bar.contentHeight) + 2 * border.inset
 	exclusiveZone: bar.implicitHeight
-	color: BarInk.bare || (bar.fullscreen && !bar.slideMode) ? "transparent" : Config.surfaceTranslucent
-
-	Behavior on color {
-		ColorAnimation {
-			duration: Config.barFadeMs
-			easing.type: Easing.BezierSpline
-			easing.bezierCurve: [0.15, 0, 0.1, 1, 1, 1]
-		}
-	}
+	color: "transparent"
 
 	function componentFor(id) {
 		if (id === "workspaces") return workspacesComponent;
@@ -308,6 +300,19 @@ PanelWindow {
 			}
 
 			Component.onDestruction: bar.unregister(modelData.id)
+		}
+	}
+
+	Rectangle {
+		anchors.fill: parent
+		color: BarInk.bare || (bar.fullscreen && !bar.slideMode) ? "transparent" : Config.surfaceTranslucent
+
+		Behavior on color {
+			ColorAnimation {
+				duration: Config.barFadeMs
+				easing.type: Easing.BezierSpline
+				easing.bezierCurve: [0.15, 0, 0.1, 1, 1, 1]
+			}
 		}
 	}
 
