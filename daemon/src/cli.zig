@@ -78,8 +78,8 @@ pub fn doctor(io: Io) !void {
 	var writer = std.Io.File.stdout().writer(io, &buffer);
 	const w = &writer.interface;
 
-	const open = json.field(parsed.value, "opencode") orelse null;
-	if (open) |provider| {
+	const opencode_state = json.field(parsed.value, "opencode") orelse null;
+	if (opencode_state) |provider| {
 		const connected = json.flag(provider, "connected");
 		const state_text = json.textAt(provider, "state");
 		const usage = json.textAt(provider, "usageError");
@@ -234,6 +234,36 @@ fn stampVm(io: Io, allocator: Allocator, name: []const u8) void {
 	out.writer.writeAll("}}}") catch return;
 
 	_ = roundTrip(io, allocator, out.written(), true) catch {};
+}
+
+pub fn open(io: Io, args: []const []const u8) !void {
+	if (args.len < 3) {
+		std.debug.print("usage: yudae open <vm> [app]\n", .{});
+		std.process.exit(2);
+	}
+
+	const name = args[2];
+
+	if (args.len < 4) {
+		var view_args = [_][]const u8{ "yudae", "vm", "view", name };
+		return virtualMachines(io, &view_args);
+	}
+
+	const app_name = args[3];
+
+	var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+	defer arena.deinit();
+	const allocator = arena.allocator();
+
+	var out: std.Io.Writer.Allocating = .init(allocator);
+	out.writer.writeAll("{\"call\":{\"target\":\"vms\",\"method\":\"gui\",\"args\":{\"name\":") catch return;
+	std.json.Stringify.encodeJsonString(name, .{}, &out.writer) catch return;
+	out.writer.writeAll(",\"app\":") catch return;
+	std.json.Stringify.encodeJsonString(app_name, .{}, &out.writer) catch return;
+	out.writer.writeAll("}}}") catch return;
+
+	const result = roundTrip(io, allocator, out.written(), false) catch std.process.exit(1);
+	printResult(io, result);
 }
 
 pub fn virtualMachines(io: Io, args: []const []const u8) !void {

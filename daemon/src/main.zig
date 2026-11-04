@@ -454,6 +454,7 @@ pub fn main() !void {
 
 	if (std.mem.eql(u8, command, "call")) return cli.call(io, args);
 	if (std.mem.eql(u8, command, "vm")) return cli.virtualMachines(io, args);
+	if (std.mem.eql(u8, command, "open")) return cli.open(io, args);
 	if (std.mem.eql(u8, command, "app")) return cli.app(io, args);
 	if (std.mem.eql(u8, command, "ui")) return cli.ui(io, args);
 	if (std.mem.eql(u8, command, "spawn-check")) return cli.spawnCheck(io, args);
@@ -465,7 +466,7 @@ pub fn main() !void {
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|vm|app|ui|spawn-check|logout]\n", .{});
+		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|vm|open|app|ui|spawn-check|logout]\n", .{});
 		return;
 	}
 

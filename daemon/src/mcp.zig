@@ -18,10 +18,6 @@ const tools = [_]Tool{
 	.{ .name = "providers", .description = "Per provider health: opencode, codex, cursor.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
 	.{ .name = "bench", .description = "Build, start, idle RSS/CPU, shell total and hoggers.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"seconds\":{\"type\":\"integer\"}}}" },
 	.{ .name = "parity", .description = "State parity check for the panel.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
-	.{ .name = "hypr_start", .description = "Start the nested Hyprland test instance.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
-	.{ .name = "hypr_shot", .description = "Screenshot the test instance, returns the png path.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
-	.{ .name = "hypr_run", .description = "Run a command inside the test instance.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"args\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"args\"]}" },
-	.{ .name = "hypr_stop", .description = "Stop the test instance and remove its worktree.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
 	.{ .name = "qs_log", .description = "Tail the newest quickshell log.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"integer\"}}}" },
 	.{ .name = "vm_create", .description = "Boot a VM from the golden layer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"from\":{\"type\":\"string\"},\"cores\":{\"type\":\"integer\"},\"mem\":{\"type\":\"integer\"},\"gl\":{\"type\":\"boolean\"},\"agent\":{\"type\":\"string\"}}}" },
 	.{ .name = "vm_start", .description = "Boot an existing VM.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
@@ -35,6 +31,7 @@ const tools = [_]Tool{
 	.{ .name = "vm_move", .description = "Move the pointer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"}},\"required\":[\"name\",\"x\",\"y\"]}" },
 	.{ .name = "vm_scroll", .description = "Scroll the guest pointer by wheel notches.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"dy\":{\"type\":\"integer\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"}},\"required\":[\"name\",\"dy\"]}" },
 	.{ .name = "vm_gui", .description = "Open a Quickshell app inside the guest.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"app\":{\"type\":\"string\"}},\"required\":[\"name\",\"app\"]}" },
+	.{ .name = "vm_config", .description = "Change a VM's cores or memory.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"cores\":{\"type\":\"integer\"},\"mem\":{\"type\":\"integer\"}},\"required\":[\"name\"]}" },
 	.{ .name = "vm_wait", .description = "Wait for a guest predicate, no sleep loops.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"until\":{\"type\":\"string\"},\"timeout\":{\"type\":\"integer\"}},\"required\":[\"name\",\"until\"]}" },
 	.{ .name = "vm_stop", .description = "Exit QEMU and keep the run overlay for an offline snapshot.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
 	.{ .name = "vm_sleep", .description = "Stop the VM and inflate the balloon.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
@@ -158,21 +155,6 @@ fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.
 
 	if (std.mem.eql(u8, name, "parity")) return runSelf(io, allocator, &.{"parity"});
 
-	if (std.mem.eql(u8, name, "hypr_start")) return hypr(io, allocator, &.{"start"});
-	if (std.mem.eql(u8, name, "hypr_shot")) return hypr(io, allocator, &.{"shot"});
-	if (std.mem.eql(u8, name, "hypr_stop")) return hypr(io, allocator, &.{"stop"});
-
-	if (std.mem.eql(u8, name, "hypr_run")) {
-		const list = json.listAt(arguments, "args");
-		if (list.len == 0) return error.MissingArgs;
-
-		var argv: std.ArrayList([]const u8) = .empty;
-		try argv.append(allocator, "run");
-		for (list) |entry| try argv.append(allocator, json.text(entry));
-
-		return hypr(io, allocator, argv.items);
-	}
-
 	if (std.mem.eql(u8, name, "qs_log")) return logTail(io, allocator, arguments);
 
 	if (std.mem.eql(u8, name, "vm_view")) {
@@ -291,19 +273,6 @@ fn runSelf(io: Io, allocator: std.mem.Allocator, argv: []const []const u8) ![]co
 	return result.out;
 }
 
-fn hypr(io: Io, allocator: std.mem.Allocator, argv: []const []const u8) ![]const u8 {
-	const root = std.mem.trimEnd(u8, try proc.readFile(io, allocator, "/proc/self/exe"), "\x00\n");
-	_ = root;
-
-	const script = try std.fmt.allocPrint(allocator, "{s}/scripts/hypr-test", .{proc.repo(io, allocator)});
-
-	var full: std.ArrayList([]const u8) = .empty;
-	try full.append(allocator, script);
-	for (argv) |arg| try full.append(allocator, arg);
-
-	const result = try exec.run(io, allocator, full.items);
-	return result.out;
-}
 
 fn logTail(io: Io, allocator: std.mem.Allocator, arguments: json.Value) ![]const u8 {
 	const base = try std.fmt.allocPrint(allocator, "{s}/quickshell/by-id", .{proc.runtimeDir(io, allocator)});

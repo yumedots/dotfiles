@@ -50,7 +50,8 @@ yudae vm key <name> <qcode...> | type <name> <text> | click <name> <x> <y> | mov
 yudae vm wait <name> --until guest|<text>|exec:<cmd> [--timeout MS]
 yudae vm sleep | park | wake | stop | destroy | snapshot <name> <tag> | restore <name> <tag> | fork <new> <from>
 yudae vm view <name> | release <name> | scenario <name>
-yudae vm gui <name> <app> | scroll <name> <dy> [x y]
+yudae open <name> [app] | vm gui <name> <app> | scroll <name> <dy> [x y]
+yudae vm config <name> [--cores N] [--mem MB]
 yudae app open vms --vm <name>
 scripts/vm-test start | restart | shot [path] | run <cmd> | stop | destroy
 ```
@@ -61,7 +62,7 @@ Wallpaper and its daemon come from the host: `vm/desktop-sync` records the activ
 
 Snapshots are offline: `yudae vm stop` exits QEMU and keeps the overlay, then `vm snapshot`/`vm restore` work, then `vm start` boots it again.
 
-The same verbs are MCP tools. `vm view` marks the human as controller and opens the Quickshell app; agent key/type/click/move then fails with `HumanControl` until the viewer closes or `vm release`. The viewer inhibits host shortcuts while it is focused, so `ALT+SPACE`, `SUPER+1..0`, `SUPER+RETURN`, `SUPER+W`, `SUPER+B`, `SUPER+TAB` and `SUPER+SPACE` reach the guest; `SUPER+ALT+ESCAPE` bypasses the inhibitor and leaves the window.
+The same verbs are MCP tools under the project's `yudae` server. `vm view` marks the human as controller and opens the Quickshell app; agent key/type/click/move then fails with `HumanControl` until the viewer closes or `vm release`. The viewer inhibits host shortcuts while it is focused, so `ALT+SPACE`, `SUPER+1..0`, `SUPER+RETURN`, `SUPER+W`, `SUPER+B`, `SUPER+TAB` and `SUPER+SPACE` reach the guest; `SUPER+ALT+ESCAPE` bypasses the inhibitor and leaves the window.
 
 Every run writes `vm/runs/<name>/vm.json` with the git base, dirty flag and host package-list hash, plus the serial log and screenshots, so a failure can be replayed on the same state.
 

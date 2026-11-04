@@ -243,6 +243,7 @@ pub const Vms = struct {
 		if (std.mem.eql(u8, method, "select")) return self.selectVm(args, allocator);
 		if (std.mem.eql(u8, method, "ui")) return self.uiVm(args, allocator);
 		if (std.mem.eql(u8, method, "gui")) return self.guiVm(args, allocator);
+		if (std.mem.eql(u8, method, "config")) return self.configVm(args, allocator);
 		if (std.mem.eql(u8, method, "scroll")) return self.scrollVm(args, allocator);
 		if (std.mem.eql(u8, method, "release")) return self.releaseVm(args, allocator);
 		if (std.mem.eql(u8, method, "push")) return self.pushVm(args, allocator);
@@ -1573,19 +1574,52 @@ pub const Vms = struct {
 		const cid = self.cidOf(name) orelse return error.NotFound;
 		const repo = proc.repo(self.io, self.allocator);
 		const entry = try std.fs.path.join(allocator, &.{ repo, "shell", try std.fmt.allocPrint(allocator, "app-{s}.qml", .{app}) });
-		if (!proc.exists(self.io, entry)) return error.NotFound;
+		const shell_app = proc.exists(self.io, entry);
 
-		const command = try std.fmt.allocPrint(allocator,
+		const env =
 			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
 			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\\.lock$' | head -1)); " ++
-			"export HYPRLAND_INSTANCE_SIGNATURE=$(for d in $(ls -t /run/user/1000/hypr); do [ -S /run/user/1000/hypr/$d/.socket.sock ] && echo $d && break; done); " ++
-			"setsid quickshell -p {s} >/tmp/quickshell-{s}.log 2>&1 &",
-			.{ entry, app });
+			"export HYPRLAND_INSTANCE_SIGNATURE=$(for d in $(ls -t /run/user/1000/hypr); do [ -S /run/user/1000/hypr/$d/.socket.sock ] && echo $d && break; done); ";
+
+		const command = if (shell_app)
+			try std.fmt.allocPrint(allocator, "{s}setsid quickshell -p {s} >/tmp/quickshell-{s}.log 2>&1 &", .{ env, entry, app })
+		else
+			try std.fmt.allocPrint(allocator, "{s}setsid {s} >/tmp/{s}.log 2>&1 &", .{ env, app, app });
 
 		const result = self.guestExec(cid, &.{ "sh", "-lc", command }, allocator) catch return error.GuestUnreachable;
 		if (result.code != 0) return error.AppFailed;
 
 		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"app\":\"{s}\"}}", .{ name, app });
+	}
+
+	fn configVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
+		const name = json.textAt(args, "name");
+		if (name.len == 0) return error.MissingArgs;
+
+		const cores = json.integer(json.field(args, "cores"));
+		const mem = json.integer(json.field(args, "mem"));
+		if (cores == 0 and mem == 0) return error.MissingArgs;
+		if (cores != 0 and (cores < 1 or cores > 32)) return error.BadValue;
+		if (mem != 0 and (mem < 512 or mem > 65536)) return error.BadValue;
+
+		self.mutex.lockUncancelable(self.io);
+		const vm = self.findLocked(name) orelse {
+			self.mutex.unlock(self.io);
+			return error.NotFound;
+		};
+
+		if (cores > 0) vm.cores = @intCast(cores);
+		if (mem > 0) vm.mem_mb = @intCast(mem);
+		self.writeMeta(vm);
+
+		const reply = std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"cores\":{d},\"memMb\":{d}}}", .{ vm.name, vm.cores, vm.mem_mb }) catch {
+			self.mutex.unlock(self.io);
+			return error.OutOfMemory;
+		};
+		self.mutex.unlock(self.io);
+		self.hub.publish();
+
+		return reply;
 	}
 
 	fn scrollVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {

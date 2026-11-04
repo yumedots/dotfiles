@@ -8,6 +8,7 @@ Everything an agent needs is a CLI or an MCP tool. Never guess a command.
 yudae call <target> <method> [args...]     # -q: quiet no-op if nothing is running
 yudae state | doctor | bench | parity | ui tree
 yudae vm <verb> ...                        # same verbs as the MCP tools
+yudae open <vm> [app]                      # open the viewer, or an app inside the guest
 ```
 
 - The daemon owns routing. A feature registers its target in its provider (`weather`, `launcher`, `bar`, `menu`, `lock`, `vms`).
@@ -20,8 +21,8 @@ yudae vm <verb> ...                        # same verbs as the MCP tools
 `yudaemond mcp` is a stdio JSON-RPC server.
 
 - state, providers, bench, parity
-- hypr_start, hypr_shot, hypr_run, hypr_stop, qs_log
-- vm_create, vm_list, vm_state, vm_exec, vm_push, vm_pull, vm_key, vm_type, vm_click, vm_move, vm_scroll, vm_gui, vm_screenshot, vm_wait, vm_sleep, vm_wake, vm_park, vm_stop, vm_destroy, vm_snapshot, vm_restore, vm_fork, vm_view, vm_ui_tree, vm_run_scenario
+- qs_log
+- vm_create, vm_list, vm_state, vm_exec, vm_push, vm_pull, vm_key, vm_type, vm_click, vm_move, vm_scroll, vm_gui, vm_config, vm_screenshot, vm_wait, vm_sleep, vm_wake, vm_park, vm_stop, vm_destroy, vm_snapshot, vm_restore, vm_fork, vm_view, vm_ui_tree, vm_run_scenario
 
 Every result is bounded and typed: capped output with a handle for the rest, exit codes, durations.
 
