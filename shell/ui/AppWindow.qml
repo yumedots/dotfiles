@@ -7,7 +7,7 @@ FloatingWindow {
 
 	default property alias content: body.data
 
-	signal closed()
+	signal appClosed()
 
 	property string appTitle: ""
 	property int appMinWidth: 640
@@ -21,7 +21,7 @@ FloatingWindow {
 
 	onVisibleChanged: {
 		if (visible) return;
-		root.closed();
+		root.appClosed();
 		Qt.quit();
 	}
 

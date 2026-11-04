@@ -154,6 +154,21 @@ struct VmDisplay::Private {
 	bool y0top = false;
 	QSGTexture *nodeTexture = nullptr;
 	QImage cursorImage;
+	int mapFd = -1;
+	void *mapBase = nullptr;
+	void *mapData = nullptr;
+	size_t mapSize = 0;
+	size_t mapMapSize = 0;
+	int mapW = 0;
+	int mapH = 0;
+	int mapStride = 0;
+	int mapOffset = 0;
+	bool mapMode = false;
+	int updateX = 0;
+	int updateY = 0;
+	int updateW = 0;
+	int updateH = 0;
+	bool updatePending = false;
 	WaylandInhibitor inhibitor;
 	QMetaObject::Connection activeConnection;
 };
@@ -165,7 +180,22 @@ VmDisplay::VmDisplay(QQuickItem *parent) : QQuickItem(parent), d(new Private) {
 	d->display = new QmpDisplay(this);
 	connect(d->display, &QmpDisplay::frameReady, this, [this]() { update(); });
 	connect(d->display, &QmpDisplay::mapReady, this, [this]() { update(); });
-	connect(d->display, &QmpDisplay::updated, this, [this]() { update(); });
+	connect(d->display, &QmpDisplay::pixmapReady, this, [this]() { update(); });
+	connect(d->display, &QmpDisplay::updated, this, [this](int x, int y, int w, int h) {
+		if (d->mapMode) {
+			if (!d->updatePending) {
+				d->updateX = x; d->updateY = y; d->updateW = w; d->updateH = h;
+				d->updatePending = true;
+			} else {
+				const int x0 = qMin(d->updateX, x);
+				const int y0 = qMin(d->updateY, y);
+				const int x1 = qMax(d->updateX + d->updateW, x + w);
+				const int y1 = qMax(d->updateY + d->updateH, y + h);
+				d->updateX = x0; d->updateY = y0; d->updateW = x1 - x0; d->updateH = y1 - y0;
+			}
+		}
+		update();
+	});
 	connect(d->display, &QmpDisplay::cursorImage, this, [this](const QImage &image, int hotX, int hotY) {
 		d->cursorImage = image;
 		setCursor(QCursor(QPixmap::fromImage(image), hotX, hotY));
@@ -189,6 +219,8 @@ VmDisplay::~VmDisplay() {
 		if (ctx) ctx->functions()->glDeleteTextures(1, &d->texture);
 	}
 	if (d->image != EGL_NO_IMAGE_KHR && d->eglDisplay != EGL_NO_DISPLAY) destroyImage(d->eglDisplay, d->image);
+	if (d->mapBase) munmap(d->mapBase, d->mapMapSize);
+	if (d->mapFd >= 0) close(d->mapFd);
 	delete d;
 }
 
@@ -224,6 +256,8 @@ void VmDisplay::geometryChange(const QRectF &next, const QRectF &prev) {
 void VmDisplay::itemChange(ItemChange change, const ItemChangeData &value) {
 	QQuickItem::itemChange(change, value);
 	if (change != ItemSceneChange) return;
+
+	maybeStart();
 
 	if (d->activeConnection) QObject::disconnect(d->activeConnection);
 
@@ -334,6 +368,14 @@ QSGNode *VmDisplay::updatePaintNode(QSGNode *node, UpdatePaintNodeData *) {
 	if (!createImage || !imageTarget) return nullptr;
 
 	if (auto frame = d->display->takeFrame(); frame.fd >= 0) {
+		if (d->mapBase) {
+			munmap(d->mapBase, d->mapMapSize);
+			d->mapBase = nullptr;
+			d->mapData = nullptr;
+			d->mapSize = 0;
+			d->mapMapSize = 0;
+		}
+		d->mapMode = false;
 		if (frame.fd >= 0 && d->eglDisplay != EGL_NO_DISPLAY) {
 			destroyImage(d->eglDisplay, d->image);
 			d->image = EGL_NO_IMAGE_KHR;
@@ -376,30 +418,102 @@ QSGNode *VmDisplay::updatePaintNode(QSGNode *node, UpdatePaintNodeData *) {
 
 	if (auto map = d->display->takeMap(); map.fd >= 0) {
 		if (map.w > 0 && map.h > 0 && map.stride > 0) {
-			if (!d->texture) {
-				glGenTextures(1, &d->texture);
+			if (d->mapBase) munmap(d->mapBase, d->mapMapSize);
+			if (d->mapFd >= 0) close(d->mapFd);
+			d->mapBase = nullptr;
+			d->mapData = nullptr;
+			d->mapFd = map.fd;
+			d->mapW = map.w;
+			d->mapH = map.h;
+			d->mapStride = map.stride;
+			d->mapOffset = map.offset;
+			d->mapSize = size_t(map.stride) * map.h;
+			d->mapMapSize = d->mapSize + size_t(map.offset);
+			d->mapBase = mmap(nullptr, d->mapMapSize, PROT_READ, MAP_SHARED, map.fd, 0);
+			if (d->mapBase == MAP_FAILED) {
+				d->mapBase = nullptr;
+				d->mapData = nullptr;
+				d->mapSize = 0;
+				d->mapMapSize = 0;
+				close(map.fd);
+				d->mapFd = -1;
+			} else {
+				d->mapData = static_cast<char *>(d->mapBase) + map.offset;
+				close(map.fd);
+				d->mapFd = -1;
+				if (!d->texture) glGenTextures(1, &d->texture);
 				glBindTexture(GL_TEXTURE_2D, d->texture);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			} else {
-				glBindTexture(GL_TEXTURE_2D, d->texture);
+				QByteArray rgba(static_cast<int>(d->mapW) * d->mapH * 4, Qt::Uninitialized);
+				for (int row = 0; row < d->mapH; row++) {
+					const unsigned char *src = static_cast<const unsigned char *>(d->mapData) + size_t(row) * d->mapStride;
+					unsigned char *dst = reinterpret_cast<unsigned char *>(rgba.data()) + size_t(row) * d->mapW * 4;
+					for (int col = 0; col < d->mapW; col++) {
+						dst[col * 4 + 0] = src[col * 4 + 2];
+						dst[col * 4 + 1] = src[col * 4 + 1];
+						dst[col * 4 + 2] = src[col * 4 + 0];
+						dst[col * 4 + 3] = src[col * 4 + 3];
+					}
+				}
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, d->mapW, d->mapH, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.constData());
+				d->textureW = d->mapW;
+				d->textureH = d->mapH;
+				d->y0top = true;
+				d->mapMode = true;
+				d->updatePending = false;
+				if (d->nodeTexture) {
+					delete d->nodeTexture;
+					d->nodeTexture = nullptr;
+				}
 			}
-			void *data = mmap(nullptr, size_t(map.stride) * map.h, PROT_READ, MAP_SHARED, map.fd, map.offset);
-			if (data != MAP_FAILED) {
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, map.stride / 4);
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, map.w, map.h, 0, GL_BGRA, GL_UNSIGNED_BYTE, data);
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-				munmap(data, size_t(map.stride) * map.h);
-			}
-			d->textureW = map.w;
-			d->textureH = map.h;
-			d->y0top = true;
-			if (d->nodeTexture) {
-				delete d->nodeTexture;
-				d->nodeTexture = nullptr;
-			}
+		} else {
+			close(map.fd);
 		}
-		close(map.fd);
+	}
+
+	if (auto pixmap = d->display->takePixmap(); !pixmap.data.isEmpty() && pixmap.stride > 0) {
+		if (!d->texture) {
+			glGenTextures(1, &d->texture);
+			glBindTexture(GL_TEXTURE_2D, d->texture);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		} else {
+			glBindTexture(GL_TEXTURE_2D, d->texture);
+		}
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, pixmap.stride / 4);
+		if (!pixmap.update) {
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pixmap.w, pixmap.h, 0, GL_BGRA, GL_UNSIGNED_BYTE, pixmap.data.constData());
+			d->textureW = pixmap.w;
+			d->textureH = pixmap.h;
+		} else if (d->textureW > 0 && d->textureH > 0) {
+			glTexSubImage2D(GL_TEXTURE_2D, 0, pixmap.x, pixmap.y, pixmap.uw, pixmap.uh, GL_BGRA, GL_UNSIGNED_BYTE, pixmap.data.constData());
+		}
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+		d->mapMode = false;
+		d->y0top = false;
+		if (d->nodeTexture) {
+			delete d->nodeTexture;
+			d->nodeTexture = nullptr;
+		}
+	}
+
+	if (d->mapMode && d->updatePending && d->texture && d->mapData) {
+		const int x = qBound(0, d->updateX, d->mapW);
+		const int y = qBound(0, d->updateY, d->mapH);
+		const int w = qBound(0, d->updateX + d->updateW, d->mapW) - x;
+		const int h = qBound(0, d->updateY + d->updateH, d->mapH) - y;
+		if (w > 0 && h > 0) {
+			glBindTexture(GL_TEXTURE_2D, d->texture);
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, d->mapStride / 4);
+			glPixelStorei(GL_UNPACK_SKIP_PIXELS, x);
+			glPixelStorei(GL_UNPACK_SKIP_ROWS, y);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, GL_BGRA, GL_UNSIGNED_BYTE, d->mapData);
+			glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+			glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+		}
+		d->updatePending = false;
 	}
 
 	auto *textureNode = static_cast<QSGSimpleTextureNode *>(node);

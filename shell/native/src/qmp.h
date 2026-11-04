@@ -35,6 +35,19 @@ public:
 		uint32_t format = 0;
 	};
 
+	struct Pixmap {
+		QByteArray data;
+		int w = 0;
+		int h = 0;
+		int stride = 0;
+		uint32_t format = 0;
+		int x = 0;
+		int y = 0;
+		int uw = 0;
+		int uh = 0;
+		bool update = false;
+	};
+
 	explicit QmpDisplay(QObject *parent = nullptr);
 	~QmpDisplay() override;
 
@@ -49,10 +62,12 @@ public:
 	bool hasFrame() const;
 	Frame takeFrame();
 	Map takeMap();
+	Pixmap takePixmap();
 
 signals:
 	void frameReady();
 	void mapReady();
+	void pixmapReady();
 	void updated(int x, int y, int w, int h);
 	void cursorImage(const QImage &image, int hotX, int hotY);
 	void mouseState(int x, int y, bool visible);

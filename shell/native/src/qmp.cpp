@@ -110,6 +110,9 @@ struct QmpDisplay::Impl {
 	Frame pendingFrame;
 	std::mutex mapMutex;
 	Map pendingMap;
+	std::mutex pixmapMutex;
+	Pixmap pendingPixmap;
+	bool hasPixmap = false;
 
 	void post(std::function<void()> fn) {
 		auto *heap = new std::function<void()>(std::move(fn));
@@ -133,7 +136,6 @@ struct QmpDisplay::Impl {
 		GVariant *r = g_dbus_connection_call_sync(control, nullptr, "/org/qemu/Display1/Console_0", iface, method,
 			params, nullptr, G_DBUS_CALL_FLAGS_NONE, 5000, nullptr, &err);
 		if (r) g_variant_unref(r);
-		if (err) g_error_free(err);
 	}
 
 	static void onMethod(GDBusConnection *, const gchar *, const gchar *, const gchar *iface, const gchar *method,
@@ -199,6 +201,42 @@ struct QmpDisplay::Impl {
 				d->pendingMap = map;
 			}
 			emit d->q->mapReady();
+			g_dbus_method_invocation_return_value(inv, nullptr);
+			return;
+		}
+		if (g_str_equal(iface, "org.qemu.Display1.Listener") && g_str_equal(method, "Scanout")) {
+			guint32 w, h, stride, format;
+			GVariant *data = nullptr;
+			g_variant_get(params, "(uuuu@ay)", &w, &h, &stride, &format, &data);
+			Pixmap pixmap;
+			pixmap.w = w; pixmap.h = h; pixmap.stride = stride; pixmap.format = format;
+			pixmap.data = QByteArray(static_cast<const char *>(g_variant_get_data(data)), static_cast<int>(g_variant_get_size(data)));
+			if (data) g_variant_unref(data);
+			{
+				std::lock_guard<std::mutex> lock(d->pixmapMutex);
+				d->pendingPixmap = pixmap;
+				d->hasPixmap = true;
+			}
+			emit d->q->pixmapReady();
+			g_dbus_method_invocation_return_value(inv, nullptr);
+			return;
+		}
+		if (g_str_equal(iface, "org.qemu.Display1.Listener") && g_str_equal(method, "Update")) {
+			gint32 x, y, w, h;
+			guint32 stride, format;
+			GVariant *data = nullptr;
+			g_variant_get(params, "(iiiiuu@ay)", &x, &y, &w, &h, &stride, &format, &data);
+			Pixmap pixmap;
+			pixmap.x = x; pixmap.y = y; pixmap.uw = w; pixmap.uh = h;
+			pixmap.stride = stride; pixmap.format = format; pixmap.update = true;
+			pixmap.data = QByteArray(static_cast<const char *>(g_variant_get_data(data)), static_cast<int>(g_variant_get_size(data)));
+			if (data) g_variant_unref(data);
+			{
+				std::lock_guard<std::mutex> lock(d->pixmapMutex);
+				d->pendingPixmap = pixmap;
+				d->hasPixmap = true;
+			}
+			emit d->q->pixmapReady();
 			g_dbus_method_invocation_return_value(inv, nullptr);
 			return;
 		}
@@ -330,7 +368,6 @@ struct QmpDisplay::Impl {
 			return;
 		}
 		qmpSend(qmp, "{\"execute\":\"qmp_capabilities\"}", -1);
-		qmpWait(qmp, "\"return\"");
 		if (!connectControl(qmp)) {
 			emit q->failed("dbus control");
 			close(qmp);
@@ -345,6 +382,20 @@ struct QmpDisplay::Impl {
 			return;
 		}
 		running = true;
+		g_timeout_add(600, [](gpointer data) -> gboolean {
+			auto *d = static_cast<Impl *>(data);
+			const int nw = d->width > 1 ? d->width / 2 : 0;
+			const int nh = d->height > 1 ? d->height / 2 : 0;
+			if (nw > 0 && nh > 0) {
+				d->callSync("org.qemu.Display1.Console", "SetUIInfo", g_variant_new("(qqiiuu)", 600, 340, 0, 0, nw, nh));
+				g_timeout_add(700, [](gpointer data2) -> gboolean {
+					auto *d2 = static_cast<Impl *>(data2);
+					d2->callSync("org.qemu.Display1.Console", "SetUIInfo", g_variant_new("(qqiiuu)", 600, 340, 0, 0, d2->width, d2->height));
+					return G_SOURCE_REMOVE;
+				}, d);
+			}
+			return G_SOURCE_REMOVE;
+		}, this);
 		g_main_loop_run(loop);
 		running = false;
 		g_main_context_pop_thread_default(context);
@@ -465,4 +516,13 @@ QmpDisplay::Map QmpDisplay::takeMap() {
 	Map map = d->pendingMap;
 	d->pendingMap = Map{};
 	return map;
+}
+
+QmpDisplay::Pixmap QmpDisplay::takePixmap() {
+	std::lock_guard<std::mutex> lock(d->pixmapMutex);
+	if (!d->hasPixmap) return Pixmap{};
+	Pixmap pixmap = d->pendingPixmap;
+	d->pendingPixmap = Pixmap{};
+	d->hasPixmap = false;
+	return pixmap;
 }

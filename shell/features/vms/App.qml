@@ -26,7 +26,7 @@ AppWindow {
 		Yudae.vmsCommand(method, args);
 	}
 
-	onClosed: if (win.selected.length > 0) Yudae.vmsCommand("release", { name: win.selected })
+	onAppClosed: if (win.selected.length > 0) Yudae.vmsCommand("release", { name: win.selected })
 
 	function pick(name) {
 		win.fallback = name;
@@ -182,7 +182,7 @@ AppWindow {
 		}
 
 		Item {
-			width: win.width - sidebar.width
+			width: parent.width - sidebar.width
 			height: parent.height
 
 			VmDisplay {
