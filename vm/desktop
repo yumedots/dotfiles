@@ -14,8 +14,10 @@ export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
 timezone=$(cat "$ROOT/vm/hoststate/timezone" 2>/dev/null || true)
 if [ -n "$timezone" ] && [ "$(cat /etc/timezone 2>/dev/null)" != "$timezone" ]; then
 	sudo timedatectl set-timezone "$timezone" >/dev/null 2>&1 || true
-	sudo timedatectl set-ntp true >/dev/null 2>&1 || true
+	sudo -n timedatectl set-ntp false >/dev/null 2>&1 || true
 fi
+
+sudo -n timedatectl set-ntp false >/dev/null 2>&1 || true
 
 mkdir -p "$HOME/.local/bin" "$HOME/Documents/Wallpaper"
 

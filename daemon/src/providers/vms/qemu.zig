@@ -32,6 +32,7 @@ pub fn args(allocator: Allocator, config: Config) ![]const []const u8 {
 	try list.append(allocator, binary);
 	try addPair(allocator, &list, "-name", try std.fmt.allocPrint(allocator, "yudae-{s}", .{config.name}));
 	try addPair(allocator, &list, "-machine", "q35,accel=kvm");
+	try addPair(allocator, &list, "-rtc", "base=utc,clock=host");
 	try list.append(allocator, "-nodefaults");
 	try addPair(allocator, &list, "-cpu", "host");
 	try addPair(allocator, &list, "-smp", try std.fmt.allocPrint(allocator, "{d}", .{config.cores}));
