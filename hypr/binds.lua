@@ -194,7 +194,7 @@ end)
 hl.bind(mainMod .. " + TAB", function()
     hl.dispatch(hl.dsp.global("quickshell:windows"))
 end, { repeating = true })
-hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
+hl.bind(mainMod .. " + D", hl.dsp.layout("togglesplit"))
 
 local resizeStep = 40
 
