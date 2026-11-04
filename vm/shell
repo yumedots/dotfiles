@@ -7,11 +7,16 @@ export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
 export HYPRLAND_INSTANCE_SIGNATURE=${HYPRLAND_INSTANCE_SIGNATURE:-$(ls "$XDG_RUNTIME_DIR/hypr" | head -1)}
 export QSG_RHI_BACKEND=${QSG_RHI_BACKEND:-opengl}
 
+entry="$ROOT/shell/shell.qml"
+if systemd-detect-virt -q --vm && [ -f "$ROOT/shell/shell-guest.qml" ]; then
+	entry="$ROOT/shell/shell-guest.qml"
+fi
+
 case "${1:-}" in
 	restart)
 		pkill -x quickshell 2>/dev/null || true
 		sleep 0.4
-		setsid quickshell -p "$ROOT/shell/shell.qml" >>/tmp/quickshell.log 2>&1 &
+		setsid quickshell -p "$entry" >>/tmp/quickshell.log 2>&1 &
 		;;
 	wait)
 		for _ in $(seq 1 80); do

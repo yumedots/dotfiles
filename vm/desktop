@@ -25,6 +25,12 @@ done
 
 chmod +x "$HOME/.local/bin/awww" "$HOME/.local/bin/awww-daemon" 2>/dev/null || true
 
+native=$ROOT/vm/hostbin/yudae-native
+if [ -d "$native" ]; then
+	mkdir -p "$HOME/.local/lib/yudae/qml"
+	cp -rf "$native"/. "$HOME/.local/lib/yudae/qml/"
+fi
+
 pgrep -x awww-daemon >/dev/null || (setsid "$HOME/.local/bin/awww-daemon" >/tmp/awww.log 2>&1 &)
 
 for _ in $(seq 1 60); do
@@ -37,3 +43,7 @@ for file in "$WALL"/*; do
 	cp -f "$file" "$HOME/Documents/Wallpaper/$(basename "$file")"
 	"$HOME/.local/bin/awww" img --transition-type none "$HOME/Documents/Wallpaper/$(basename "$file")" >/dev/null 2>&1 || true
 done
+
+if [ -d "$HOME/.local/lib/yudae/qml/Yudae/Native" ] && pgrep -x quickshell >/dev/null; then
+	"$ROOT/vm/shell" restart >/dev/null 2>&1 || true
+fi
