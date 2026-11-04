@@ -19,8 +19,7 @@ FloatingWindow {
 	width: 1280
 	height: 800
 
-	onVisibleChanged: {
-		if (visible) return;
+	onClosed: {
 		root.appClosed();
 		Qt.quit();
 	}
