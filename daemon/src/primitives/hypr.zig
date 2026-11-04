@@ -11,29 +11,79 @@ pub fn request(io: Io, allocator: Allocator, command: []const u8) ![]u8 {
 }
 
 pub fn findSignature(io: Io, allocator: Allocator) ![]const u8 {
-	if (proc.env(io, allocator, "HYPRLAND_INSTANCE_SIGNATURE")) |value| return value;
-
 	const runtime = proc.runtimeDir(io, allocator);
+
+	if (proc.env(io, allocator, "HYPRLAND_INSTANCE_SIGNATURE")) |value| {
+		const socket = try std.fmt.allocPrint(allocator, "{s}/hypr/{s}/.socket.sock", .{ runtime, value });
+		defer allocator.free(socket);
+
+		if (proc.exists(io, socket)) return value;
+	}
+
 	const dir_path = try std.fmt.allocPrint(allocator, "{s}/hypr", .{runtime});
 	defer allocator.free(dir_path);
 
-	var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return error.NoHyprland;
+	return newestSignature(io, allocator, dir_path);
+}
+
+fn newestSignature(io: Io, allocator: Allocator, base: []const u8) ![]const u8 {
+	var dir = std.Io.Dir.cwd().openDir(io, base, .{ .iterate = true }) catch return error.NoHyprland;
 	defer dir.close(io);
 
 	var iterator = dir.iterate();
+	var best: ?[]u8 = null;
+	errdefer if (best) |value| allocator.free(value);
+	var best_time: i96 = std.math.minInt(i96);
 
 	while (iterator.next(io) catch null) |entry| {
 		if (entry.kind != .directory) continue;
 
-		const socket = try std.fmt.allocPrint(allocator, "{s}/hypr/{s}/.socket.sock", .{ runtime, entry.name });
-		defer allocator.free(socket);
+		const socket = try std.fmt.allocPrint(allocator, "{s}/{s}/.socket.sock", .{ base, entry.name });
+		const stat = std.Io.Dir.cwd().statFile(io, socket, .{}) catch {
+			allocator.free(socket);
+			continue;
+		};
+		allocator.free(socket);
 
-		if (!proc.exists(io, socket)) continue;
+		if (best != null and stat.mtime.nanoseconds <= best_time) continue;
 
-		return allocator.dupe(u8, entry.name);
+		const picked = try allocator.dupe(u8, entry.name);
+		if (best) |value| allocator.free(value);
+		best = picked;
+		best_time = stat.mtime.nanoseconds;
 	}
 
-	return error.NoHyprland;
+	return best orelse error.NoHyprland;
+}
+
+test "the newest live instance wins over a stale one" {
+	const io = std.testing.io;
+
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+
+	const base = try std.fmt.allocPrint(std.testing.allocator, ".zig-cache/tmp/{s}/hypr", .{tmp.sub_path});
+	defer std.testing.allocator.free(base);
+
+	for ([_][]const u8{ "stale", "live", "quiet" }, 0..) |name, at| {
+		const dir_path = try std.fmt.allocPrint(std.testing.allocator, "{s}/{s}", .{ base, name });
+		defer std.testing.allocator.free(dir_path);
+		try std.Io.Dir.cwd().createDirPath(io, dir_path);
+
+		if (at == 2) continue;
+
+		const socket = try std.fmt.allocPrint(std.testing.allocator, "{s}/.socket.sock", .{dir_path});
+		defer std.testing.allocator.free(socket);
+
+		var file = try std.Io.Dir.cwd().createFile(io, socket, .{});
+		try file.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = @intCast(at) } } });
+		file.close(io);
+	}
+
+	const picked = try newestSignature(io, std.testing.allocator, base);
+	defer std.testing.allocator.free(picked);
+
+	try std.testing.expectEqualStrings("live", picked);
 }
 
 pub fn requestSigned(io: Io, allocator: Allocator, signature: []const u8, command: []const u8) ![]u8 {
