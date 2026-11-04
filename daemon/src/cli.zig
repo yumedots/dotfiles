@@ -220,7 +220,7 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 		const start = try std.fmt.allocPrint(view_allocator, "{{\"call\":{{\"target\":\"vms\",\"method\":\"start\",\"args\":{{\"name\":\"{s}\"}}}}}}", .{rest[0]});
 		_ = roundTrip(io, view_allocator, start, true) catch {};
 
-		focusVmWindow(io, view_allocator, rest[0]);
+		app(io, &.{ "yudae", "app", "open", "vms", "--vm", rest[0] }) catch {};
 
 		printResult(io, result);
 		return;
@@ -268,8 +268,6 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 			try writeField(allocator, writer, &wrote, "timeout", rest[index]);
 		} else if (std.mem.eql(u8, arg, "--gl")) {
 			try writeRawField(writer, &wrote, "gl", "true");
-		} else if (std.mem.eql(u8, arg, "--headless")) {
-			try writeRawField(writer, &wrote, "view", "false");
 		} else if (std.mem.eql(u8, arg, "--human")) {
 			try writeRawField(writer, &wrote, "human", "true");
 		} else if (name.len == 0) {
@@ -430,6 +428,12 @@ pub fn app(io: Io, args: []const []const u8) !void {
 	const repo = proc.repo(io, allocator);
 	const class = try std.fmt.allocPrint(allocator, "com.yudae.{s}", .{name});
 
+	if (vm.len > 0) {
+		const select = try std.fmt.allocPrint(allocator,
+			"{{\"call\":{{\"target\":\"vms\",\"method\":\"select\",\"args\":{{\"name\":\"{s}\"}}}}}}", .{vm});
+		_ = roundTrip(io, allocator, select, true) catch {};
+	}
+
 	const listing = exec.run(io, allocator, &.{ "hyprctl", "clients", "-j" }) catch null;
 	if (listing) |result| {
 		defer result.deinit(allocator);
@@ -517,16 +521,3 @@ pub fn print(io: Io, comptime message: []const u8) void {
 test "cli module compiles" {
 	try std.testing.expect(true);
 }
-
-fn focusVmWindow(io: Io, allocator: Allocator, name: []const u8) void {
-	const command = std.fmt.allocPrint(allocator,
-		"dispatch function() for _, w in ipairs(hl.get_windows()) do " ++
-			"if w.class == \"qemu\" and w.title and w.title:find(\"yudae-{s}\", 1, true) then " ++
-			"hl.dispatch(hl.dsp.focus({{window=w}})); " ++
-			"if w.fullscreen == 0 then hl.dispatch(hl.dsp.window.fullscreen()) end; return end end end",
-		.{name}) catch return;
-
-	const reply = hypr.request(io, allocator, command) catch return;
-	allocator.free(reply);
-}
-

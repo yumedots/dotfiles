@@ -10,7 +10,8 @@ AppWindow {
 
 	readonly property var vms: Yudae.vms.list || []
 	readonly property string root: Quickshell.env("YUDAE_VM_ROOT") || "/home/gabriel/dotfiles/vm/runs"
-	property string selected: Quickshell.env("YUDAE_VM") || (win.vms.length > 0 ? win.vms[0].name : "")
+	property string fallback: Quickshell.env("YUDAE_VM") || ""
+	readonly property string selected: (Yudae.vms.selected || "").length > 0 ? Yudae.vms.selected : (win.fallback.length > 0 ? win.fallback : (win.vms.length > 0 ? win.vms[0].name : ""))
 	readonly property var current: {
 		for (let i = 0; i < win.vms.length; i++)
 			if (win.vms[i].name === win.selected) return win.vms[i];
@@ -23,6 +24,11 @@ AppWindow {
 
 	function act(method, args) {
 		Yudae.vmsCommand(method, args);
+	}
+
+	function pick(name) {
+		win.fallback = name;
+		Yudae.vmsCommand("select", { name: name });
 	}
 
 	Row {
@@ -111,7 +117,7 @@ AppWindow {
 									MouseArea {
 										anchors.fill: parent
 										onClicked: {
-											win.selected = modelData.name;
+											win.pick(modelData.name);
 											win.act("view", { name: modelData.name });
 										}
 									}
@@ -159,7 +165,7 @@ AppWindow {
 						MouseArea {
 							anchors.fill: parent
 							z: -1
-							onClicked: win.selected = modelData.name
+							onClicked: win.pick(modelData.name)
 						}
 					}
 				}

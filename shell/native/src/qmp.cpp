@@ -358,6 +358,18 @@ struct QmpDisplay::Impl {
 		if (listenerThread.joinable()) listenerThread.join();
 	}
 
+	void reset() {
+		stop();
+		cleanup();
+		context = nullptr;
+		loop = nullptr;
+		listenerContext = nullptr;
+		listenerLoop = nullptr;
+		control = nullptr;
+		listener = nullptr;
+		cancel = nullptr;
+	}
+
 	void cleanup() {
 		{
 			std::lock_guard<std::mutex> lock(frameMutex);
@@ -384,12 +396,11 @@ QmpDisplay::QmpDisplay(QObject *parent) : QObject(parent), d(new Impl) {
 }
 
 QmpDisplay::~QmpDisplay() {
-	d->stop();
-	d->cleanup();
+	d->reset();
 }
 
 void QmpDisplay::start(const QString &qmpPath, int width, int height) {
-	d->stop();
+	d->reset();
 	d->qmpPath = qmpPath;
 	d->width = width;
 	d->height = height;

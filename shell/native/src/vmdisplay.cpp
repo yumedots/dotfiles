@@ -6,6 +6,7 @@
 #include <QMouseEvent>
 #include <QOpenGLContext>
 #include <QDebug>
+#include <QTimer>
 #include <QOpenGLFunctions>
 #include <QQuickWindow>
 #include <QSGSimpleTextureNode>
@@ -169,7 +170,10 @@ VmDisplay::VmDisplay(QQuickItem *parent) : QQuickItem(parent), d(new Private) {
 	});
 	connect(d->display, &QmpDisplay::failed, this, [this](const QString &message) {
 		m_error = message;
+		m_running = false;
 		emit errorChanged();
+		emit runningChanged();
+		QTimer::singleShot(1000, this, [this]() { maybeStart(); });
 	});
 }
 
