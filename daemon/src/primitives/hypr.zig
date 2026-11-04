@@ -11,19 +11,31 @@ pub fn request(io: Io, allocator: Allocator, command: []const u8) ![]u8 {
 }
 
 pub fn findSignature(io: Io, allocator: Allocator) ![]const u8 {
-	const runtime = proc.runtimeDir(io, allocator);
-
 	if (proc.env(io, allocator, "HYPRLAND_INSTANCE_SIGNATURE")) |value| {
-		const socket = try std.fmt.allocPrint(allocator, "{s}/hypr/{s}/.socket.sock", .{ runtime, value });
-		defer allocator.free(socket);
-
-		if (proc.exists(io, socket)) return value;
+		if (socketLive(io, allocator, value)) return value;
 	}
 
+	const runtime = proc.runtimeDir(io, allocator);
 	const dir_path = try std.fmt.allocPrint(allocator, "{s}/hypr", .{runtime});
 	defer allocator.free(dir_path);
 
 	return newestSignature(io, allocator, dir_path);
+}
+
+fn socketLive(io: Io, allocator: Allocator, signature: []const u8) bool {
+	const runtime = proc.runtimeDir(io, allocator);
+	const path = std.fmt.allocPrint(allocator, "{s}/hypr/{s}/.socket.sock", .{ runtime, signature }) catch return false;
+	defer allocator.free(path);
+
+	return connects(io, path);
+}
+
+fn connects(io: Io, path: []const u8) bool {
+	const address = std.Io.net.UnixAddress.init(path) catch return false;
+	const stream = address.connect(io) catch return false;
+	stream.close(io);
+
+	return true;
 }
 
 fn newestSignature(io: Io, allocator: Allocator, base: []const u8) ![]const u8 {
@@ -31,9 +43,14 @@ fn newestSignature(io: Io, allocator: Allocator, base: []const u8) ![]const u8 {
 	defer dir.close(io);
 
 	var iterator = dir.iterate();
-	var best: ?[]u8 = null;
-	errdefer if (best) |value| allocator.free(value);
-	var best_time: i96 = std.math.minInt(i96);
+	var live: ?[]u8 = null;
+	var live_time: i96 = std.math.minInt(i96);
+	var any: ?[]u8 = null;
+	var any_time: i96 = std.math.minInt(i96);
+	errdefer {
+		if (live) |value| allocator.free(value);
+		if (any) |value| allocator.free(value);
+	}
 
 	while (iterator.next(io) catch null) |entry| {
 		if (entry.kind != .directory) continue;
@@ -43,17 +60,28 @@ fn newestSignature(io: Io, allocator: Allocator, base: []const u8) ![]const u8 {
 			allocator.free(socket);
 			continue;
 		};
+		const alive = connects(io, socket);
 		allocator.free(socket);
 
-		if (best != null and stat.mtime.nanoseconds <= best_time) continue;
+		if (alive and stat.mtime.nanoseconds > live_time) {
+			if (live) |value| allocator.free(value);
+			live = try allocator.dupe(u8, entry.name);
+			live_time = stat.mtime.nanoseconds;
+		}
 
-		const picked = try allocator.dupe(u8, entry.name);
-		if (best) |value| allocator.free(value);
-		best = picked;
-		best_time = stat.mtime.nanoseconds;
+		if (any == null or stat.mtime.nanoseconds > any_time) {
+			if (any) |value| allocator.free(value);
+			any = try allocator.dupe(u8, entry.name);
+			any_time = stat.mtime.nanoseconds;
+		}
 	}
 
-	return best orelse error.NoHyprland;
+	if (live) |value| {
+		if (any) |other| allocator.free(other);
+		return value;
+	}
+
+	return any orelse error.NoHyprland;
 }
 
 test "the newest live instance wins over a stale one" {
@@ -65,6 +93,9 @@ test "the newest live instance wins over a stale one" {
 	const base = try std.fmt.allocPrint(std.testing.allocator, ".zig-cache/tmp/{s}/hypr", .{tmp.sub_path});
 	defer std.testing.allocator.free(base);
 
+	var live_server: ?std.Io.net.Server = null;
+	defer if (live_server) |*server| server.deinit(io);
+
 	for ([_][]const u8{ "stale", "live", "quiet" }, 0..) |name, at| {
 		const dir_path = try std.fmt.allocPrint(std.testing.allocator, "{s}/{s}", .{ base, name });
 		defer std.testing.allocator.free(dir_path);
@@ -75,8 +106,14 @@ test "the newest live instance wins over a stale one" {
 		const socket = try std.fmt.allocPrint(std.testing.allocator, "{s}/.socket.sock", .{dir_path});
 		defer std.testing.allocator.free(socket);
 
+		if (at == 1) {
+			const address = try std.Io.net.UnixAddress.init(socket);
+			live_server = try address.listen(io, .{});
+			continue;
+		}
+
 		var file = try std.Io.Dir.cwd().createFile(io, socket, .{});
-		try file.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = @intCast(at) } } });
+		try file.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = std.math.maxInt(i64) } } });
 		file.close(io);
 	}
 

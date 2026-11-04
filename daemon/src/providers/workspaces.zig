@@ -62,8 +62,18 @@ pub const Workspaces = struct {
 	pub fn start(self: *Workspaces) !void {
 		self.refresh();
 
-		const thread = try std.Thread.spawn(.{}, loop, .{self});
-		thread.detach();
+		const listener = try std.Thread.spawn(.{}, loop, .{self});
+		listener.detach();
+
+		const poller = try std.Thread.spawn(.{}, poll, .{self});
+		poller.detach();
+	}
+
+	fn poll(self: *Workspaces) void {
+		while (true) {
+			sleep.ms(1000);
+			self.refresh();
+		}
 	}
 
 	fn loop(self: *Workspaces) void {
