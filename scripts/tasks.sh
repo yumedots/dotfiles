@@ -89,15 +89,6 @@ task_bench() {
 	"$ROOT/scripts/bench" "$@"
 }
 
-task_hypr() {
-	if [ $# -eq 0 ]; then
-		"$ROOT/scripts/hypr-test" list
-		return
-	fi
-
-	"$ROOT/scripts/hypr-test" "$@"
-}
-
 task_vm() {
 	"$ROOT/scripts/vm" "$@"
 }
@@ -141,7 +132,7 @@ task_doctor() {
 }
 
 usage() {
-	echo "usage: xmake build|link|lint|bench|hypr|vm|doctor" >&2
+	echo "usage: xmake build|link|lint|bench|vm|doctor" >&2
 	exit 2
 }
 
@@ -153,7 +144,6 @@ case "$command" in
 	link) task_link ;;
 	lint) task_lint ;;
 	bench) task_bench "$@" ;;
-	hypr) task_hypr "$@" ;;
 	vm) task_vm "$@" ;;
 	doctor) task_doctor ;;
 	*) usage ;;

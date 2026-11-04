@@ -30,8 +30,8 @@ Rules:
 - `AGENTS.md` becomes an index. Procedure goes in `agents/skills/`, reference in `docs/`.
 - Only `xmake link` writes into `~/.config`. It refuses to overwrite a real file and prints what it would replace.
 
-Moves, in order (each one verified with hypr-test before the next):
-1. Inside the current repo: create `config/`, `shell/`, `daemon/`, `hypr/` and move things in. Fix every path (systemd units, greetd, hypr exec lines, `scripts/yubuild`, `hypr-test`).
+Moves, in order (each one verified in the VM before the next):
+1. Inside the current repo: create `config/`, `shell/`, `daemon/`, `hypr/` and move things in. Fix every path (systemd units, greetd, hypr exec lines, `scripts/yubuild`).
 2. Add `xmake link`, replace the files in `~/.config` with symlinks.
 3. Move the repo root to `~/dotfiles` (the existing clone there is a stale copy of the same remote, replace it).
 
@@ -48,7 +48,6 @@ Risk: the shell and greeter currently assume `~/.config/quickshell`. Both must r
 | `xmake lint` | qmllint on `shell/`, `node shell/lib/check.js` |
 | `xmake test` | daemon parsers/protocol tests, qml fixtures, idle-spawn test |
 | `xmake bench` | `yudaemond bench`, compared with `bench/baseline.json` |
-| `xmake hypr` | nested hypr-test (start, shot, run, stop) |
 | `xmake vm ...` | section 3 |
 | `xmake doctor` | what is missing and why |
 
@@ -168,7 +167,7 @@ Quickshell as an MCP surface is done at the daemon: `yudae ui tree` and `yudae c
 
 `vm/scenarios/<name>.json` with `context`, `steps` and `proof`. First ones: session boots healthy, lock and unlock, greeter login, launcher search and launch, workspace switch, bar unmaps in fullscreen, idle shell spawns no process.
 
-`hypr-test` stays for fast nested checks while editing. VMs cover greetd, the lock, real session start, a clean-machine install and parallel agents.
+The VM guest covers greetd, the lock, real session start, a clean-machine install and parallel agents.
 
 ### Host prerequisites
 

@@ -50,6 +50,7 @@ yudae vm key <name> <qcode...> | type <name> <text> | click <name> <x> <y> | mov
 yudae vm wait <name> --until guest|<text>|exec:<cmd> [--timeout MS]
 yudae vm sleep | park | wake | stop | destroy | snapshot <name> <tag> | restore <name> <tag> | fork <new> <from>
 yudae vm view <name> | release <name> | scenario <name>
+yudae vm gui <name> <app> | scroll <name> <dy> [x y]
 yudae app open vms --vm <name>
 scripts/vm-test start | restart | shot [path] | run <cmd> | stop | destroy
 ```
@@ -66,6 +67,5 @@ Every run writes `vm/runs/<name>/vm.json` with the git base, dirty flag and host
 
 ## Verify
 
-- Nested checks while editing: `agents/skills/hypr-test.md`.
 - VM checks: `vm/scenarios/<name>.json` with `context`, `steps` and `proof`.
 - Stop every test instance when done.

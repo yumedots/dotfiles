@@ -29,4 +29,4 @@ Exit 255 means a syntax error; quickshell dialect warnings are noise. `lib/*.js`
 
 ## Verify
 
-Visual changes are not done until seen through `agents/skills/hypr-test.md`.
+Visual changes are not done until seen through `scripts/vm-test` (start, restart, shot).
