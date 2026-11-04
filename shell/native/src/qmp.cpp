@@ -95,6 +95,9 @@ struct QmpDisplay::Impl {
 	std::thread thread;
 	GMainContext *context = nullptr;
 	GMainLoop *loop = nullptr;
+	GMainContext *listenerContext = nullptr;
+	GMainLoop *listenerLoop = nullptr;
+	std::thread listenerThread;
 	GDBusConnection *control = nullptr;
 	GDBusConnection *listener = nullptr;
 	GCancellable *cancel = nullptr;
@@ -279,36 +282,42 @@ struct QmpDisplay::Impl {
 		int pair[2];
 		if (socketpair(AF_UNIX, SOCK_STREAM, 0, pair) < 0) return false;
 
+		listenerContext = g_main_context_new();
+		listenerLoop = g_main_loop_new(listenerContext, FALSE);
+		listenerThread = std::thread([this, fd = pair[0]]() {
+			g_main_context_push_thread_default(listenerContext);
+			GError *err = nullptr;
+			GSocket *socket = g_socket_new_from_fd(fd, &err);
+			GSocketConnection *conn = socket ? g_socket_connection_factory_create_connection(socket) : nullptr;
+			if (conn) {
+				listener = g_dbus_connection_new_sync(G_IO_STREAM(conn), nullptr,
+					(GDBusConnectionFlags)(G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT | G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING),
+					nullptr, nullptr, &err);
+			}
+			if (err) g_error_free(err);
+			if (listener) {
+				GDBusNodeInfo *info = g_dbus_node_info_new_for_xml(kListenerXml, nullptr);
+				static GDBusInterfaceVTable vtable = {onMethod, onProperty, nullptr, {nullptr}};
+				for (int i = 0; info && info->interfaces[i]; i++) {
+					g_dbus_connection_register_object(listener, "/org/qemu/Display1/Listener", info->interfaces[i],
+					                                  &vtable, this, nullptr, nullptr);
+				}
+				g_dbus_connection_start_message_processing(listener);
+				g_main_loop_run(listenerLoop);
+			}
+			g_main_context_pop_thread_default(listenerContext);
+		});
+
 		GError *err = nullptr;
 		GUnixFDList *fdlist = g_unix_fd_list_new();
 		g_unix_fd_list_append(fdlist, pair[1], &err);
 		close(pair[1]);
-		g_dbus_connection_call_with_unix_fd_list(control, nullptr,
+		GVariant *reply = g_dbus_connection_call_with_unix_fd_list_sync(control, nullptr,
 			"/org/qemu/Display1/Console_0", "org.qemu.Display1.Console", "RegisterListener",
-			g_variant_new("(h)", 0), G_VARIANT_TYPE("()"), G_DBUS_CALL_FLAGS_NONE, 5000, fdlist,
-			nullptr, nullptr, nullptr);
+			g_variant_new("(h)", 0), G_VARIANT_TYPE("()"), G_DBUS_CALL_FLAGS_NONE, 5000, fdlist, nullptr, nullptr, &err);
 		g_object_unref(fdlist);
-
-		GSocket *socket = g_socket_new_from_fd(pair[0], &err);
-		if (!socket) return false;
-		GSocketConnection *conn = g_socket_connection_factory_create_connection(socket);
-		listener = g_dbus_connection_new_sync(G_IO_STREAM(conn), nullptr,
-			(GDBusConnectionFlags)(G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT | G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING),
-			nullptr, nullptr, &err);
 		if (err) g_error_free(err);
-		if (!listener) return false;
-
-		GDBusNodeInfo *info = g_dbus_node_info_new_for_xml(kListenerXml, &err);
-		if (!info) {
-			if (err) g_error_free(err);
-			return false;
-		}
-		static GDBusInterfaceVTable vtable = {onMethod, onProperty, nullptr, {nullptr}};
-		for (int i = 0; info->interfaces[i]; i++) {
-			g_dbus_connection_register_object(listener, "/org/qemu/Display1/Listener", info->interfaces[i],
-			                                  &vtable, this, nullptr, nullptr);
-		}
-		g_dbus_connection_start_message_processing(listener);
+		if (reply) g_variant_unref(reply);
 		return true;
 	}
 
@@ -343,8 +352,10 @@ struct QmpDisplay::Impl {
 
 	void stop() {
 		if (loop) g_main_loop_quit(loop);
+		if (listenerLoop) g_main_loop_quit(listenerLoop);
 		if (cancel) g_cancellable_cancel(cancel);
 		if (thread.joinable()) thread.join();
+		if (listenerThread.joinable()) listenerThread.join();
 	}
 
 	void cleanup() {
@@ -360,6 +371,8 @@ struct QmpDisplay::Impl {
 		}
 		if (listener) g_object_unref(listener);
 		if (control) g_object_unref(control);
+		if (listenerLoop) g_main_loop_unref(listenerLoop);
+		if (listenerContext) g_main_context_unref(listenerContext);
 		if (loop) g_main_loop_unref(loop);
 		if (cancel) g_object_unref(cancel);
 		if (context) g_main_context_unref(context);
