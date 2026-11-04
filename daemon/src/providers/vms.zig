@@ -236,6 +236,7 @@ pub const Vms = struct {
 		if (std.mem.eql(u8, method, "fork")) return self.forkVm(args, allocator);
 		if (std.mem.eql(u8, method, "view")) return self.viewVm(args, allocator);
 		if (std.mem.eql(u8, method, "agent")) return self.agentVm(args, allocator);
+		if (std.mem.eql(u8, method, "app")) return self.openApp(allocator);
 		if (std.mem.eql(u8, method, "select")) return self.selectVm(args, allocator);
 		if (std.mem.eql(u8, method, "ui")) return self.uiVm(args, allocator);
 		if (std.mem.eql(u8, method, "release")) return self.releaseVm(args, allocator);
@@ -1318,6 +1319,29 @@ pub const Vms = struct {
 
 		const vm = self.findLocked(name) orelse return false;
 		return std.mem.eql(u8, vm.controller, "human");
+	}
+
+	fn openApp(self: *Vms, allocator: Allocator) ![]u8 {
+		const repo = proc.repo(self.io, self.allocator);
+		const class = "com.yudae.vms";
+
+		if (exec.run(self.io, self.allocator, &.{ "hyprctl", "clients", "-j" })) |result| {
+			defer result.deinit(self.allocator);
+			if (std.mem.indexOf(u8, result.out, class) != null) {
+				const focus = std.fmt.allocPrint(allocator,
+					"function() for _,w in ipairs(hl.get_windows()) do if w.class == \"{s}\" then hl.dispatch(hl.dsp.focus({{window=w}})) return end end end",
+					.{class}) catch return allocator.dupe(u8, "{}");
+				const hypr = @import("../primitives/hypr.zig");
+				const reply = hypr.request(self.io, allocator, focus) catch null;
+				if (reply) |body| allocator.free(body);
+				return allocator.dupe(u8, "{}");
+			}
+		} else |_| {}
+
+		const entry = std.fmt.allocPrint(self.allocator, "{s}/shell/app-vms.qml", .{repo}) catch return error.OutOfMemory;
+		const argv = [_][]const u8{ "setsid", "quickshell", "-p", entry };
+		_ = exec.spawn(self.io, .{ .argv = &argv, .stdin = .ignore, .stdout = .ignore, .stderr = .ignore }) catch return error.SpawnFailed;
+		return allocator.dupe(u8, "{}");
 	}
 
 	fn selectVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {

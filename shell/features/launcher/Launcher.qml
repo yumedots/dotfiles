@@ -618,6 +618,12 @@ PanelWindow {
 			return;
 
 		if (entry.kind === "mode") {
+			if (entry.mode === "vms") {
+				root.close();
+				Yudae.vmsCommand("app", {});
+				return;
+			}
+
 			root.group = "";
 			root.forced = entry.mode;
 			root.query = "";
