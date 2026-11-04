@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Claude
+Name=Claude Code
 GenericName=AI coding agent
 Comment=Run the Claude Code agent in a terminal
 Exec=claude
