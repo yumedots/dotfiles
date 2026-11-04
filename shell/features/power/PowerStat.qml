@@ -83,8 +83,8 @@ BarStat {
 		root.governor = next;
 	}
 
-	function setKeepAwake(next) {
-		Yudae.systemCommand({ keepAwake: next });
+	function setKeepAwake(mode) {
+		Yudae.systemCommand({ keepAwake: mode });
 	}
 
 	popupContent: Component {
@@ -96,8 +96,8 @@ BarStat {
 			onGovernorPicked: function (next) {
 				root.setGovernor(next);
 			}
-			onAwakePicked: function (next) {
-				root.setKeepAwake(next);
+			onAwakePicked: function (mode) {
+				root.setKeepAwake(mode);
 			}
 		}
 	}

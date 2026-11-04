@@ -21,6 +21,7 @@ PowerFlow 1.0 PowerFlow.qml
 SignalBars 1.0 SignalBars.qml
 SpeedGauge 1.0 SpeedGauge.qml
 StepBar 1.0 StepBar.qml
+PillSwitch 1.0 PillSwitch.qml
 Highlight 1.0 Highlight.qml
 Icon 1.0 Icon.qml
 IconRow 1.0 IconRow.qml

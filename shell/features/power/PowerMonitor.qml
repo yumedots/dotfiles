@@ -12,6 +12,19 @@ ProcessPanel {
 
 	readonly property color accentInk: Config.mono ? Config.powerBaseMono : Config.powerBase
 	readonly property int governorIndex: Math.max(0, root.governors.indexOf(root.governor))
+	readonly property var awakeModes: [
+		{ value: "off", label: Config.iconAwakeOff },
+		{ value: "auto", label: Config.iconAwakeAuto },
+		{ value: "on", label: Config.iconAwakeOn }
+	]
+	readonly property string awakeMode: root.awake && root.awake.mode ? root.awake.mode : "auto"
+	readonly property int awakeIndex: Math.max(0, root.awakeModes.findIndex((entry) => entry.value === root.awakeMode))
+
+	function cycleAwake() {
+		const next = root.awakeModes[(root.awakeIndex + 1) % root.awakeModes.length];
+
+		root.awakePicked(next.value);
+	}
 
 	title: Config.powerGovernorTitle
 	showTotal: true
@@ -27,7 +40,7 @@ ProcessPanel {
 		if (event.key !== Qt.Key_Space && event.key !== Qt.Key_Return && event.key !== Qt.Key_Enter)
 			return false;
 
-		root.awakePicked(!(root.awake && root.awake.manual === true));
+		root.cycleAwake();
 		event.accepted = true;
 		return true;
 	}
@@ -62,19 +75,10 @@ ProcessPanel {
 		Item {
 			id: awakeRow
 
-			readonly property var state: root.awake || ({})
-			readonly property bool held: state.held === true
-			readonly property bool manual: state.manual === true
-			readonly property bool agents: state.agents === true
-			readonly property bool wanted: manual || agents
-			readonly property string label: manual ? Config.powerAwakeOn : (agents ? Config.powerAwakeAuto : Config.powerAwakeOff)
+			readonly property bool armed: root.awakeMode !== "off"
 
 			width: parent.width
-			height: Math.max(awakeTitle.implicitHeight, awakeState.implicitHeight) + 8
-
-			function toggle() {
-				root.awakePicked(!awakeRow.manual);
-			}
+			height: Math.max(awakeTitle.implicitHeight, awakeSwitch.implicitHeight) + 8
 
 			Text {
 				id: awakeGlyph
@@ -84,8 +88,8 @@ ProcessPanel {
 
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize + 2
-				color: awakeHit.containsMouse ? Config.launcherHighlightText : (awakeRow.wanted ? root.accentInk : Config.dim)
-				text: Config.powerAwakeGlyph
+				color: awakeRow.armed ? root.accentInk : Config.dim
+				text: Config.iconAwake
 			}
 
 			Text {
@@ -97,53 +101,25 @@ ProcessPanel {
 
 				font.family: Config.fontFamily
 				font.pixelSize: Settings.fontSize
-				color: awakeHit.containsMouse ? Config.launcherHighlightText : (awakeRow.wanted ? Config.foreground : Config.dim)
+				color: awakeRow.armed ? Config.foreground : Config.dim
 				text: Config.powerAwakeTitle
 			}
 
-			Text {
-				id: awakeState
-
-				anchors.right: awakeCell.left
-				anchors.rightMargin: 8
-				anchors.verticalCenter: parent.verticalCenter
-
-				font.family: Config.fontFamily
-				font.pixelSize: Settings.fontSize
-				color: awakeHit.containsMouse ? Config.launcherHighlightText : (awakeRow.wanted ? root.accentInk : Config.dim)
-				text: awakeRow.label
-			}
-
-			Rectangle {
-				id: awakeCell
+			PillSwitch {
+				id: awakeSwitch
 
 				anchors.right: parent.right
 				anchors.verticalCenter: parent.verticalCenter
 
-				width: 8
-				height: 8
-				color: awakeRow.held ? root.accentInk : "transparent"
-				border.width: 1
-				border.color: awakeRow.wanted ? root.accentInk : Config.dim
-			}
+				model: root.awakeModes
+				selected: root.awakeIndex
+				ink: root.accentInk
 
-			MouseArea {
-				id: awakeHit
-
-				anchors.fill: parent
-				hoverEnabled: true
-
-				onClicked: awakeRow.toggle()
-			}
-
-			Highlight {
-				anchors.fill: parent
-				active: awakeHit.containsMouse
-				z: -1
+				onPick: (value) => root.awakePicked(String(value))
 			}
 		}
 	]
 
 	signal governorPicked(string governor)
-	signal awakePicked(bool on)
+	signal awakePicked(string mode)
 }

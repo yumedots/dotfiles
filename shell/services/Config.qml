@@ -110,6 +110,10 @@ QtObject {
 	readonly property var iconBatteryLow: settings.iconBatteryLow !== undefined ? settings.iconBatteryLow : "\udb80\udc7c"
 	readonly property var iconBatteryAlert: settings.iconBatteryAlert !== undefined ? settings.iconBatteryAlert : "\udb80\udc83"
 	readonly property var iconBatteryCharge: settings.iconBatteryCharge !== undefined ? settings.iconBatteryCharge : "\udb80\udc84"
+	readonly property var iconAwake: settings.iconAwake !== undefined ? settings.iconAwake : "\uf0f4"
+	readonly property var iconAwakeOff: settings.iconAwakeOff !== undefined ? settings.iconAwakeOff : "\udb83\udfaa"
+	readonly property var iconAwakeAuto: settings.iconAwakeAuto !== undefined ? settings.iconAwakeAuto : "\udb80\udd77"
+	readonly property var iconAwakeOn: settings.iconAwakeOn !== undefined ? settings.iconAwakeOn : "\udb80\udd76"
 	readonly property var iconSun: settings.iconSun !== undefined ? settings.iconSun : "\uf522"
 	readonly property var iconMoon: settings.iconMoon !== undefined ? settings.iconMoon : "\ue3a4"
 
@@ -266,10 +270,19 @@ QtObject {
 	readonly property var powerFlowHeight: settings.powerFlowHeight !== undefined ? settings.powerFlowHeight : 40
 	readonly property var powerGovernorTitle: settings.powerGovernorTitle !== undefined ? settings.powerGovernorTitle : "Governor"
 	readonly property var powerAwakeTitle: settings.powerAwakeTitle !== undefined ? settings.powerAwakeTitle : "Keep awake"
-	readonly property var powerAwakeGlyph: settings.powerAwakeGlyph !== undefined ? settings.powerAwakeGlyph : "\uf0f4"
-	readonly property var powerAwakeOff: settings.powerAwakeOff !== undefined ? settings.powerAwakeOff : "Off"
-	readonly property var powerAwakeOn: settings.powerAwakeOn !== undefined ? settings.powerAwakeOn : "On"
-	readonly property var powerAwakeAuto: settings.powerAwakeAuto !== undefined ? settings.powerAwakeAuto : "Auto"
+
+	// pill switch
+	readonly property var toggleHeight: settings.toggleHeight !== undefined ? settings.toggleHeight : 22
+	readonly property var togglePadding: settings.togglePadding !== undefined ? settings.togglePadding : 2
+	readonly property var toggleLabelPad: settings.toggleLabelPad !== undefined ? settings.toggleLabelPad : 4
+	readonly property var toggleFontSize: settings.toggleFontSize !== undefined ? settings.toggleFontSize : 11
+	readonly property var toggleEmpty: settings.toggleEmpty !== undefined ? settings.toggleEmpty : "|"
+	readonly property var toggleTrack: settings.toggleTrack !== undefined ? settings.toggleTrack : "#2f2f2f"
+	readonly property var toggleHover: settings.toggleHover !== undefined ? settings.toggleHover : "#3f3f3f"
+	readonly property var toggleLabelInk: settings.toggleLabelInk !== undefined ? settings.toggleLabelInk : "#101010"
+	readonly property var toggleFaded: settings.toggleFaded !== undefined ? settings.toggleFaded : "#8f8f8f"
+	readonly property var toggleLabelLift: settings.toggleLabelLift !== undefined ? settings.toggleLabelLift : 0
+	readonly property var toggleMs: settings.toggleMs !== undefined ? settings.toggleMs : 160
 
 	// lock screen
 	readonly property var lockAfterMinutes: settings.lockAfterMinutes !== undefined ? settings.lockAfterMinutes : 10
@@ -551,6 +564,10 @@ QtObject {
 
 	readonly property var icons: ({
 		app: root.iconApp,
+		awake: root.iconAwake,
+		awakeAuto: root.iconAwakeAuto,
+		awakeOff: root.iconAwakeOff,
+		awakeOn: root.iconAwakeOn,
 		batteryAlert: root.iconBatteryAlert,
 		batteryCharge: root.iconBatteryCharge,
 		batteryFull: root.iconBatteryFull,
