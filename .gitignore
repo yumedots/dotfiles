@@ -11,3 +11,5 @@ vm/hostwall
 vm/hoststate
 shell/native/qml
 /build/
+config/zsh/.zcompdump-*
+config/zsh/.zsh_history
