@@ -21,6 +21,7 @@ AppWindow {
 	property string selectedName: ""
 	property string live: Quickshell.env("YUDAE_VM") || ""
 	property bool powerOpen: false
+	property bool settingsOpen: false
 	property string powerConfirm: ""
 	readonly property bool focusMode: win.fullscreen && win.live.length > 0
 	readonly property string selected: win.live.length > 0 ? win.live : (win.selectedName.length > 0 ? win.selectedName : (Yudae.vms.selected || (win.vms.length > 0 ? win.vms[0].name : "")))
@@ -32,8 +33,16 @@ AppWindow {
 	readonly property string tier: win.current.tier || "off"
 	readonly property bool running: win.tier !== "off"
 	readonly property bool awake: win.tier === "hot"
+	readonly property var powerEntries: {
+		const list = [];
+		if (win.awake) list.push({ label: "Sleep", action: "sleep" });
+		else if (win.running) list.push({ label: "Wake", action: "wake" });
+		list.push({ label: "Stop", action: "stop", enabled: win.running });
+		list.push({ label: win.powerConfirm === "destroy" ? "Confirm destroy" : "Destroy", action: "destroy", danger: true });
+		return list;
+	}
 
-	appTitle: "Virtual machines"
+	appTitle: "Virtual Machine Manager"
 	implicitWidth: 1400
 	implicitHeight: 820
 
@@ -63,6 +72,12 @@ AppWindow {
 		if (win.live === name) win.live = "";
 	}
 
+	function closeMenus() {
+		win.powerOpen = false;
+		win.settingsOpen = false;
+		win.powerConfirm = "";
+	}
+
 	function power(action) {
 		if (action === "destroy" && win.powerConfirm !== "destroy") {
 			win.powerConfirm = "destroy";
@@ -70,11 +85,25 @@ AppWindow {
 			return;
 		}
 
-		win.powerOpen = false;
-		win.powerConfirm = "";
+		win.closeMenus();
 		win.live = "";
 		win.act(action, { name: win.selected });
 		if (action === "destroy") win.selectedName = "";
+	}
+
+	function settingsRows() {
+		return [
+			{ label: "Cores", value: win.current.cores || 1, min: 1, max: 32, step: 1, suffix: "" },
+			{ label: "Memory", value: win.current.memMb || 512, min: 512, max: 65536, step: 512, suffix: "MB" }
+		];
+	}
+
+	function configure(index, value) {
+		if (win.selected.length === 0)
+			return;
+
+		if (index === 0) win.act("config", { name: win.selected, cores: value });
+		else win.act("config", { name: win.selected, mem: value });
 	}
 
 	function lastViewed(stamp) {
@@ -104,8 +133,29 @@ AppWindow {
 	MouseArea {
 		anchors.fill: parent
 		z: 9
-		visible: win.powerOpen
-		onClicked: win.powerOpen = false
+		visible: win.powerOpen || win.settingsOpen
+		onClicked: win.closeMenus()
+	}
+
+	ContextMenu {
+		id: powerMenu
+
+		anchor: powerButton
+		entries: win.powerEntries
+		z: 11
+		visible: win.powerOpen && !win.focusMode
+		onPicked: entry => win.power(entry.action)
+	}
+
+	SettingsMenu {
+		id: settingsPanel
+
+		anchor: gearButton
+		title: "Settings"
+		rows: win.settingsRows()
+		z: 11
+		visible: win.settingsOpen && !win.focusMode
+		onChanged: (index, value) => win.configure(index, value)
 	}
 
 	Item {
@@ -118,31 +168,22 @@ AppWindow {
 			anchors.margins: win.focusMode ? 0 : 24
 			spacing: win.focusMode ? 0 : 20
 
-			Row {
+			Item {
 				id: pageHeader
 
 				width: parent.width
 				height: win.focusMode ? 0 : 40
 				visible: !win.focusMode
 
-				Column {
+				Text {
+					anchors.left: parent.left
 					anchors.verticalCenter: parent.verticalCenter
-					spacing: 2
 
-					Text {
-						font.family: Config.fontFamily
-						font.pixelSize: 24
-						font.weight: Font.DemiBold
-						color: win.ink
-						text: "Virtual machines"
-					}
-
-					Text {
-						font.family: Config.fontFamily
-						font.pixelSize: 12
-						color: win.faint
-						text: win.vms.length + (win.vms.length === 1 ? " machine" : " machines") + " · local"
-					}
+					font.family: Config.fontFamily
+					font.pixelSize: 24
+					font.weight: Font.DemiBold
+					color: win.ink
+					text: "Virtual Machine Manager"
 				}
 			}
 
@@ -175,7 +216,7 @@ AppWindow {
 							font.pixelSize: 12
 							font.weight: Font.Medium
 							color: win.secondary
-							text: "Machines"
+							text: "\uf108  Machines"
 						}
 
 						Text {
@@ -195,7 +236,8 @@ AppWindow {
 						id: list
 
 						anchors.top: listHeader.bottom
-						anchors.bottom: parent.bottom
+						anchors.bottom: sidebarActions.top
+						anchors.bottomMargin: 6
 						width: parent.width - 8
 						clip: true
 						model: win.vms
@@ -207,7 +249,7 @@ AppWindow {
 							required property var modelData
 
 							width: list.width
-							height: 92
+							height: 76
 
 							Rectangle {
 								anchors.fill: parent
@@ -218,7 +260,7 @@ AppWindow {
 								id: rowThumb
 
 								x: 0
-								y: 19
+								y: 11
 								width: 96
 								height: 54
 								clip: true
@@ -249,7 +291,7 @@ AppWindow {
 								anchors.leftMargin: 12
 								anchors.verticalCenter: parent.verticalCenter
 								width: parent.width - rowThumb.width - 12
-								spacing: 5
+								spacing: 3
 
 								Text {
 									id: rowName
@@ -269,26 +311,6 @@ AppWindow {
 									height: 1
 									color: win.ink
 									visible: win.selected === modelData.name
-								}
-
-								Text {
-									width: parent.width
-									elide: Text.ElideRight
-
-									font.family: Config.fontFamily
-									font.pixelSize: 11
-									color: win.secondary
-									text: (modelData.tier || "off") + " · " + (modelData.controller || "agent") + " · " + (modelData.harness || "no agent")
-								}
-
-								Text {
-									width: parent.width
-									elide: Text.ElideRight
-
-									font.family: Config.fontFamily
-									font.pixelSize: 11
-									color: win.faint
-									text: Math.round(modelData.cpu || 0) + "% · " + Math.round((modelData.rssKb || 0) / 1024) + "MB"
 								}
 							}
 
@@ -324,6 +346,75 @@ AppWindow {
 						color: win.faint
 						text: "No machines"
 						visible: win.vms.length === 0
+					}
+
+					Row {
+						id: sidebarActions
+
+						anchors.right: parent.right
+						anchors.bottom: parent.bottom
+						height: 40
+						spacing: 2
+
+						Item {
+							id: gearButton
+
+							width: 32
+							height: 32
+							y: 4
+
+							Text {
+								anchors.centerIn: parent
+
+								font.family: Config.fontFamily
+								font.pixelSize: 15
+								color: gearMouse.containsMouse || win.settingsOpen ? win.ink : win.secondary
+								text: "\uf013"
+							}
+
+							MouseArea {
+								id: gearMouse
+
+								anchors.fill: parent
+								hoverEnabled: true
+								enabled: win.current.name !== undefined
+								onClicked: {
+									win.settingsOpen = !win.settingsOpen;
+									win.powerOpen = false;
+									win.powerConfirm = "";
+								}
+							}
+						}
+
+						Item {
+							id: powerButton
+
+							width: 32
+							height: 32
+							y: 4
+
+							Text {
+								anchors.centerIn: parent
+
+								font.family: Config.fontFamily
+								font.pixelSize: 15
+								color: powerMouse.containsMouse || win.powerOpen ? win.ink : win.secondary
+								text: "\uf011"
+							}
+
+							MouseArea {
+								id: powerMouse
+
+								anchors.fill: parent
+								hoverEnabled: true
+								enabled: win.current.name !== undefined
+								onClicked: {
+									win.powerOpen = !win.powerOpen;
+									win.settingsOpen = false;
+									win.powerConfirm = "";
+								}
+							}
+						}
 					}
 
 					Rectangle {
@@ -460,7 +551,7 @@ AppWindow {
 								id: stage
 
 								width: parent.width
-								height: win.focusMode ? detailScroll.height : Math.round(parent.width * 9 / 16)
+								height: win.focusMode ? detailScroll.height : Math.min(Math.round(parent.width * 9 / 16), Math.max(140, detailScroll.height - 66))
 								color: "#000000"
 								border.width: win.focusMode ? 0 : 1
 								border.color: win.rule
@@ -484,6 +575,9 @@ AppWindow {
 									source: stageThumb
 									saturation: -1.0
 									brightness: -0.08
+									blurEnabled: win.live.length === 0
+									blur: 0.4
+									blurMax: 28
 									visible: win.live.length === 0
 								}
 
@@ -630,7 +724,6 @@ AppWindow {
 						anchors.bottom: parent.bottom
 						height: win.focusMode ? 0 : 26
 						visible: !win.focusMode
-						z: 10
 
 						Text {
 							anchors.left: parent.left
@@ -641,187 +734,7 @@ AppWindow {
 							color: win.powerConfirm === "destroy" ? Config.red : win.faint
 							text: win.powerConfirm === "destroy"
 								? "destroy deletes the disk"
-								: ((win.current.cores || 0) + " cores · " + (win.current.memMb || 0) + " MB")
-						}
-
-						Item {
-							id: powerButton
-
-							anchors.right: parent.right
-							anchors.verticalCenter: parent.verticalCenter
-							width: powerText.implicitWidth + 24
-							height: 26
-
-							Rectangle {
-								anchors.fill: parent
-								color: powerMouse.containsMouse || win.powerOpen ? Config.launcherSearchBox : "transparent"
-							}
-
-							Text {
-								id: powerText
-
-								anchors.centerIn: parent
-
-								font.family: Config.fontFamily
-								font.pixelSize: 12
-								color: win.powerOpen ? win.ink : win.secondary
-								text: "Power"
-							}
-
-							MouseArea {
-								id: powerMouse
-
-								anchors.fill: parent
-								hoverEnabled: true
-								onClicked: {
-									win.powerOpen = !win.powerOpen;
-									win.powerConfirm = "";
-								}
-							}
-						}
-
-						Rectangle {
-							id: powerMenu
-
-							anchors.right: parent.right
-							anchors.bottom: parent.top
-							anchors.bottomMargin: 6
-							width: 190
-							height: powerColumn.height + 12
-							color: Config.surface
-							border.width: 1
-							border.color: win.rule
-							visible: win.powerOpen
-							z: 10
-							clip: true
-
-							Column {
-								id: powerColumn
-
-								anchors.left: parent.left
-								anchors.right: parent.right
-								anchors.top: parent.top
-								anchors.topMargin: 6
-								spacing: 0
-
-								Item {
-									width: parent.width
-									height: 32
-									visible: win.awake
-
-									Rectangle {
-										anchors.fill: parent
-										color: sleepMouse.containsMouse ? win.hover : "transparent"
-									}
-
-									Text {
-										anchors.left: parent.left
-										anchors.leftMargin: 12
-										anchors.verticalCenter: parent.verticalCenter
-
-										font.family: Config.fontFamily
-										font.pixelSize: 12
-										color: win.secondary
-										text: "Sleep"
-									}
-
-									MouseArea {
-										id: sleepMouse
-
-										anchors.fill: parent
-										hoverEnabled: true
-										onClicked: win.power("sleep")
-									}
-								}
-
-								Item {
-									width: parent.width
-									height: 32
-									visible: !win.awake && win.running
-
-									Rectangle {
-										anchors.fill: parent
-										color: wakeMouse.containsMouse ? win.hover : "transparent"
-									}
-
-									Text {
-										anchors.left: parent.left
-										anchors.leftMargin: 12
-										anchors.verticalCenter: parent.verticalCenter
-
-										font.family: Config.fontFamily
-										font.pixelSize: 12
-										color: win.secondary
-										text: "Wake"
-									}
-
-									MouseArea {
-										id: wakeMouse
-
-										anchors.fill: parent
-										hoverEnabled: true
-										onClicked: win.power("wake")
-									}
-								}
-
-								Item {
-									width: parent.width
-									height: 32
-
-									Rectangle {
-										anchors.fill: parent
-										color: stopMouse.containsMouse && win.running ? win.hover : "transparent"
-									}
-
-									Text {
-										anchors.left: parent.left
-										anchors.leftMargin: 12
-										anchors.verticalCenter: parent.verticalCenter
-
-										font.family: Config.fontFamily
-										font.pixelSize: 12
-										color: win.running ? win.secondary : Config.dim
-										text: "Stop"
-									}
-
-									MouseArea {
-										id: stopMouse
-
-										anchors.fill: parent
-										hoverEnabled: true
-										onClicked: if (win.running) win.power("stop")
-									}
-								}
-
-								Item {
-									width: parent.width
-									height: 32
-
-									Rectangle {
-										anchors.fill: parent
-										color: destroyMouse.containsMouse ? win.hover : "transparent"
-									}
-
-									Text {
-										anchors.left: parent.left
-										anchors.leftMargin: 12
-										anchors.verticalCenter: parent.verticalCenter
-
-										font.family: Config.fontFamily
-										font.pixelSize: 12
-										color: win.powerConfirm === "destroy" ? Config.red : win.secondary
-										text: win.powerConfirm === "destroy" ? "Confirm destroy" : "Destroy"
-									}
-
-									MouseArea {
-										id: destroyMouse
-
-										anchors.fill: parent
-										hoverEnabled: true
-										onClicked: win.power("destroy")
-									}
-								}
-							}
+								: (Config.iconCpu + "  " + (win.current.cores || 0) + " cores · " + (win.current.memMb || 0) + " MB")
 						}
 					}
 				}
