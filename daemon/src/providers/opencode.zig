@@ -452,6 +452,12 @@ pub const Opencode = struct {
 		return session;
 	}
 
+	pub fn sessionTitle(self: *Opencode, allocator: Allocator, id: []const u8) ![]u8 {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+		return allocator.dupe(u8, self.titleLocked(id));
+	}
+
 	fn titleLocked(self: *Opencode, id: []const u8) []const u8 {
 		if (self.sessions.get(id)) |session| {
 			if (session.title.len > 0) return session.title;

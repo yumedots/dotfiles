@@ -584,6 +584,7 @@ fn run(io: std.Io) !void {
 	try hub.add(calendar_provider.provider());
 
 	const vms_provider = try vms.Vms.create(allocator, io, hub);
+	vms_provider.attachOpencode(opencode_provider);
 	try hub.add(vms_provider.provider());
 	launcher_provider.attachVms(vms_provider);
 

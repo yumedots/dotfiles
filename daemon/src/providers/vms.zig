@@ -13,6 +13,7 @@ const budget = @import("vms/budget.zig");
 const tiers = @import("vms/tiers.zig");
 const input = @import("vms/input.zig");
 const cgroup = @import("vms/cgroup.zig");
+const opencode = @import("opencode.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -26,6 +27,7 @@ const Vm = struct {
 	controller: []u8,
 	harness: []u8,
 	session: []u8,
+	session_title: []u8 = &.{},
 	agent_since_ms: i64 = 0,
 	last_call_ms: i64 = 0,
 	screen_w: u32 = 0,
@@ -73,6 +75,8 @@ fn writeVm(writer: *Writer, vm: *const Vm, now: i64) !void {
 	try std.json.Stringify.encodeJsonString(vm.harness, .{}, writer);
 	try writer.writeAll(",\"session\":");
 	try std.json.Stringify.encodeJsonString(vm.session, .{}, writer);
+	try writer.writeAll(",\"sessionTitle\":");
+	try std.json.Stringify.encodeJsonString(vm.session_title, .{}, writer);
 	try writer.print(",\"agentSinceMs\":{d},\"lastCallMs\":{d},\"lastUsed\":{d},\"upMs\":{d}}}", .{ vm.agent_since_ms, vm.last_call_ms, vm.used_ms, now - vm.created_ms });
 }
 
@@ -84,6 +88,7 @@ pub const Vms = struct {
 	op: std.Io.Mutex = .init,
 	list: std.ArrayList(*Vm) = .empty,
 	selected: []u8 = &.{},
+	opencode: ?*opencode.Opencode = null,
 	limit: budget.Budget,
 
 	pub fn create(allocator: Allocator, io: Io, hub: *hubmod.Hub) !*Vms {
@@ -101,6 +106,10 @@ pub const Vms = struct {
 		thread.detach();
 
 		return self;
+	}
+
+	pub fn attachOpencode(self: *Vms, client: *opencode.Opencode) void {
+		self.opencode = client;
 	}
 
 	pub const Info = struct {
@@ -591,6 +600,7 @@ pub const Vms = struct {
 				.controller = self.allocator.dupe(u8, "agent") catch "",
 				.harness = self.allocator.dupe(u8, json.textAt(parsed.value, "harness")) catch "",
 				.session = self.allocator.dupe(u8, json.textAt(parsed.value, "session")) catch "",
+				.session_title = self.allocator.dupe(u8, json.textAt(parsed.value, "sessionTitle")) catch "",
 				.cid = @intCast(@max(json.integer(json.field(parsed.value, "cid")), 3)),
 				.cores = @intCast(@max(json.integer(json.field(parsed.value, "cores")), 1)),
 				.mem_mb = @intCast(@max(json.integer(json.field(parsed.value, "memMb")), 512)),
@@ -645,7 +655,7 @@ pub const Vms = struct {
 			result.deinit(self.allocator);
 		} else |_| {}
 
-		const body = std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"cores\":{d},\"memMb\":{d},\"gl\":{s},\"pid\":{d},\"agent\":\"{s}\",\"harness\":\"{s}\",\"session\":\"{s}\",\"base\":\"{s}\",\"dirty\":{s},\"packages\":\"{s}\"}}", .{
+		const body = std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"cores\":{d},\"memMb\":{d},\"gl\":{s},\"pid\":{d},\"agent\":\"{s}\",\"harness\":\"{s}\",\"session\":\"{s}\",\"sessionTitle\":\"{s}\",\"base\":\"{s}\",\"dirty\":{s},\"packages\":\"{s}\"}}", .{
 			vm.name,
 			vm.cid,
 			vm.cores,
@@ -655,6 +665,7 @@ pub const Vms = struct {
 			vm.agent,
 			vm.harness,
 			vm.session,
+			vm.session_title,
 			base_mem orelse "",
 			dirty,
 			packages_mem orelse "",
@@ -1279,6 +1290,14 @@ pub const Vms = struct {
 		if (session.len > 0) {
 			self.allocator.free(vm.session);
 			vm.session = try self.allocator.dupe(u8, session);
+
+			if (self.opencode) |source| {
+				const title = source.sessionTitle(self.allocator, session) catch null;
+				if (title) |value| {
+					self.allocator.free(vm.session_title);
+					vm.session_title = value;
+				}
+			}
 		}
 		if (vm.agent_since_ms == 0) vm.agent_since_ms = now;
 		vm.last_call_ms = now;
@@ -1781,6 +1800,7 @@ test "the vm json carries the agent fields" {
 		.controller = @constCast("agent"),
 		.harness = @constCast("opencode"),
 		.session = @constCast("ses_123"),
+		.session_title = @constCast("fix the vm"),
 		.cid = 3,
 		.cores = 2,
 		.mem_mb = 2048,
@@ -1798,6 +1818,7 @@ test "the vm json carries the agent fields" {
 	const body = writer.buffered();
 	try std.testing.expect(std.mem.indexOf(u8, body, "\"harness\":\"opencode\"") != null);
 	try std.testing.expect(std.mem.indexOf(u8, body, "\"session\":\"ses_123\"") != null);
+	try std.testing.expect(std.mem.indexOf(u8, body, "\"sessionTitle\":\"fix the vm\"") != null);
 	try std.testing.expect(std.mem.indexOf(u8, body, "\"agentSinceMs\":1500") != null);
 	try std.testing.expect(std.mem.indexOf(u8, body, "\"lastCallMs\":2500") != null);
 }
