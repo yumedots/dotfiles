@@ -16,8 +16,8 @@ FloatingWindow {
 	title: root.appTitle
 	color: Config.surface
 	visible: true
-	width: 1280
-	height: 800
+	implicitWidth: 1280
+	implicitHeight: 800
 
 	onClosed: {
 		root.appClosed();

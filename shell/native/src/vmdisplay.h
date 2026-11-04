@@ -5,6 +5,7 @@
 #include <QString>
 
 class QmpDisplay;
+class QTimer;
 
 class VmDisplay : public QQuickItem {
 	Q_OBJECT
@@ -42,12 +43,17 @@ protected:
 	void mouseMoveEvent(QMouseEvent *event) override;
 	void wheelEvent(QWheelEvent *event) override;
 	void hoverEnterEvent(QHoverEvent *event) override;
+	void hoverMoveEvent(QHoverEvent *event) override;
+	void hoverLeaveEvent(QHoverEvent *event) override;
 	void keyPressEvent(QKeyEvent *event) override;
 	void keyReleaseEvent(QKeyEvent *event) override;
 
 private:
 	void maybeStart();
+	void updateInhibitor();
+	bool insideImage(const QPointF &pos) const;
 	void sendPosition(const QPointF &pos);
+	void flushPosition();
 	void sendMouse(const QPointF &pos, Qt::MouseButton button, bool down);
 
 	struct Private;
@@ -58,4 +64,7 @@ private:
 	int m_guestWidth = 0;
 	int m_guestHeight = 0;
 	QString m_error;
+	QTimer *m_mouseTimer = nullptr;
+	QPointF m_pendingPos;
+	bool m_hasPending = false;
 };

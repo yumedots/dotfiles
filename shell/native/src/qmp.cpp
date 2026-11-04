@@ -136,6 +136,7 @@ struct QmpDisplay::Impl {
 		GVariant *r = g_dbus_connection_call_sync(control, nullptr, "/org/qemu/Display1/Console_0", iface, method,
 			params, nullptr, G_DBUS_CALL_FLAGS_NONE, 5000, nullptr, &err);
 		if (r) g_variant_unref(r);
+		if (err) g_error_free(err);
 	}
 
 	static void onMethod(GDBusConnection *, const gchar *, const gchar *, const gchar *iface, const gchar *method,

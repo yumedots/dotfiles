@@ -167,7 +167,7 @@ hl.bind(mainMod .. " + RETURN", function()
 end)
 hl.bind(mainMod .. " + W", function()
     hl.dispatch(hl.dsp.window.close())
-end, { repeating = true })
+end, { repeating = true, dont_inhibit = true })
 hl.bind("F11", hl.dsp.window.fullscreen())
 hl.bind("SUPER + ALT + ESCAPE", function()
     for _, win in ipairs(hl.get_windows()) do

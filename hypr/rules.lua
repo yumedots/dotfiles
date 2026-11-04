@@ -36,6 +36,14 @@ hl.window_rule({
 
 
 hl.window_rule({
+    name  = "float-yudae-apps",
+    match = { class = "^com\\.yudae\\..*$" },
+
+    float  = true,
+    center = true,
+})
+
+hl.window_rule({
     name  = "no-shadow-on-tiled",
     match = { float = false },
 

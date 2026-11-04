@@ -175,6 +175,9 @@ struct VmDisplay::Private {
 	bool updatePending = false;
 	WaylandInhibitor inhibitor;
 	QMetaObject::Connection activeConnection;
+	bool pointerInside = false;
+	int lastX = -1;
+	int lastY = -1;
 };
 
 VmDisplay::VmDisplay(QQuickItem *parent) : QQuickItem(parent), d(new Private) {
@@ -182,6 +185,10 @@ VmDisplay::VmDisplay(QQuickItem *parent) : QQuickItem(parent), d(new Private) {
 	setAcceptedMouseButtons(Qt::AllButtons);
 	setAcceptHoverEvents(true);
 	d->display = new QmpDisplay(this);
+	m_mouseTimer = new QTimer(this);
+	m_mouseTimer->setInterval(8);
+	connect(m_mouseTimer, &QTimer::timeout, this, &VmDisplay::flushPosition);
+	m_mouseTimer->start();
 	connect(d->display, &QmpDisplay::frameReady, this, [this]() { update(); });
 	connect(d->display, &QmpDisplay::mapReady, this, [this]() { update(); });
 	connect(d->display, &QmpDisplay::pixmapReady, this, [this]() { update(); });
@@ -278,29 +285,13 @@ void VmDisplay::itemChange(ItemChange change, const ItemChangeData &value) {
 		return;
 	}
 
-	const auto update = [this]() {
-		QQuickWindow *window = this->window();
-		if (!window) return;
-
-		if (!window->isActive()) {
-			d->inhibitor.inhibit(false);
-			return;
-		}
-
-		auto *application = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>();
-		auto *wayland = window->nativeInterface<QNativeInterface::Private::QWaylandWindow>();
-		if (!application || !wayland) return;
-
-		d->inhibitor.setSurface(application->display(), application->seat(), wayland->surface());
-		d->inhibitor.inhibit(true);
-		forceActiveFocus();
-	};
-
-	d->activeConnection = connect(win, &QQuickWindow::activeChanged, this, update);
-	update();
+	d->activeConnection = connect(win, &QQuickWindow::activeChanged, this, [this]() { updateInhibitor(); });
+	updateInhibitor();
 }
 
 void VmDisplay::mousePressEvent(QMouseEvent *event) {
+	d->pointerInside = insideImage(event->position());
+	updateInhibitor();
 	forceActiveFocus();
 	sendMouse(event->position(), event->button(), true);
 	event->accept();
@@ -323,21 +314,33 @@ void VmDisplay::wheelEvent(QWheelEvent *event) {
 }
 
 void VmDisplay::sendPosition(const QPointF &pos) {
+	m_pendingPos = pos;
+	m_hasPending = true;
+}
+
+void VmDisplay::flushPosition() {
+	if (!m_hasPending) return;
+	m_hasPending = false;
+
 	const int w = d->textureW > 0 ? d->textureW : qRound(width() * (window() ? window()->devicePixelRatio() : 1));
 	const int h = d->textureH > 0 ? d->textureH : qRound(height() * (window() ? window()->devicePixelRatio() : 1));
 	if (w <= 0 || h <= 0) return;
 
 	QRectF dst = d->dstRect.isValid() && !d->dstRect.isEmpty() ? d->dstRect : boundingRect();
-	if (!dst.contains(pos)) return;
-	const qreal fx = (pos.x() - dst.x()) / dst.width();
-	const qreal fy = (pos.y() - dst.y()) / dst.height();
+	if (!dst.contains(m_pendingPos)) return;
+	const qreal fx = (m_pendingPos.x() - dst.x()) / dst.width();
+	const qreal fy = (m_pendingPos.y() - dst.y()) / dst.height();
 	int x = qBound(0, qRound(fx * w), w - 1);
 	int y = qBound(0, qRound(fy * h), h - 1);
+	if (x == d->lastX && y == d->lastY) return;
+	d->lastX = x;
+	d->lastY = y;
 	d->display->mouseAbs(x, y);
 }
 
 void VmDisplay::sendMouse(const QPointF &pos, Qt::MouseButton button, bool down) {
 	sendPosition(pos);
+	flushPosition();
 	int qbutton = 0;
 	switch (button) {
 	case Qt::LeftButton: qbutton = 0; break;
@@ -368,9 +371,49 @@ void VmDisplay::keyReleaseEvent(QKeyEvent *event) {
 	event->accept();
 }
 
-void VmDisplay::hoverEnterEvent(QHoverEvent *event) {
+bool VmDisplay::insideImage(const QPointF &pos) const {
+	if (d->dstRect.isValid() && !d->dstRect.isEmpty()) return d->dstRect.contains(pos);
+	return boundingRect().contains(pos);
+}
+
+void VmDisplay::updateInhibitor() {
+	QQuickWindow *window = this->window();
+	if (!window || !window->isActive() || !d->pointerInside) {
+		d->inhibitor.inhibit(false);
+		return;
+	}
+
+	auto *application = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>();
+	auto *wayland = window->nativeInterface<QNativeInterface::Private::QWaylandWindow>();
+	if (!application || !wayland) return;
+
+	d->inhibitor.setSurface(application->display(), application->seat(), wayland->surface());
+	d->inhibitor.inhibit(true);
 	forceActiveFocus();
+}
+
+void VmDisplay::hoverEnterEvent(QHoverEvent *event) {
+	d->pointerInside = insideImage(event->position());
+	updateInhibitor();
+	if (d->pointerInside) forceActiveFocus();
 	QQuickItem::hoverEnterEvent(event);
+}
+
+void VmDisplay::hoverMoveEvent(QHoverEvent *event) {
+	sendPosition(event->position());
+	const bool inside = insideImage(event->position());
+	if (inside != d->pointerInside) {
+		d->pointerInside = inside;
+		updateInhibitor();
+		if (inside) forceActiveFocus();
+	}
+	QQuickItem::hoverMoveEvent(event);
+}
+
+void VmDisplay::hoverLeaveEvent(QHoverEvent *event) {
+	d->pointerInside = false;
+	updateInhibitor();
+	QQuickItem::hoverLeaveEvent(event);
 }
 
 QSGNode *VmDisplay::updatePaintNode(QSGNode *node, UpdatePaintNodeData *) {
