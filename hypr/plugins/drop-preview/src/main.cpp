@@ -28,6 +28,7 @@ struct SState {
     CBox                                  current;
     float                                 alpha = 0.F;
     bool                                  visible = false;
+    PHLWINDOWREF                          dragged;
     std::chrono::steady_clock::time_point lastStep;
     std::vector<CHyprSignalListener>      listeners;
 };
@@ -48,6 +49,7 @@ static void hide() {
     g_state.visible = false;
     g_state.alpha   = 0.F;
     g_state.goal.reset();
+    g_state.dragged.reset();
 }
 
 static CBox withSpacing(const CBox& box) {
@@ -101,6 +103,7 @@ static void update() {
             g_state.current = BOX;
         g_state.goal    = BOX;
         g_state.visible = true;
+        g_state.dragged = PREDICTION->dragged;
     } else
         g_state.goal.reset();
 
@@ -229,8 +232,15 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     g_state.listeners.emplace_back(Event::bus()->m_events.render.pre.listen([](PHLMONITOR) { update(); }));
     g_state.listeners.emplace_back(Event::bus()->m_events.render.stage.listen([](Event::SRenderStageEvent e) {
-        if (e.stage == RENDER_POST_WINDOWS && e.context)
-            draw(e.context->get());
+        if (e.stage != RENDER_PRE_WINDOW || !e.context)
+            return;
+
+        const auto DRAGGED = g_state.dragged.lock();
+        auto&      CTX     = e.context->get();
+        if (!DRAGGED || CTX.readOnlyEffects() || CTX.m_renderingSnapshot || CTX.m_data.currentWindow.lock() != DRAGGED)
+            return;
+
+        draw(CTX);
     }));
     g_state.listeners.emplace_back(Event::bus()->m_events.input.mouse.button.listen([](IPointer::SButtonEvent e, Event::SCallbackInfo&) { trackPointerButton(e); }));
 

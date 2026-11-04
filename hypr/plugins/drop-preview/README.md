@@ -16,8 +16,8 @@ Hyprland update.
 - groups: `group:drag_into_group = 1` highlights the group you hover.
 - master / scrolling / monocle: approximate, highlights the tiled window under the cursor.
 - Floating windows get no preview, they stay where you drop them.
-- Drawn above windows, full monitor damage, edges snapped to whole pixels, so the box slides
-  without jitter.
+- Drawn just behind the dragged window, above the rest, full monitor damage, edges snapped to
+  whole pixels, so the box slides without jitter.
 
 ## Build
 
@@ -47,7 +47,7 @@ or `general:border_size` changes the preview immediately.
 ## Test harness
 
 `test/harness.cpp` is a test-only plugin. Never load it in a real session. It performs
-synthetic drags inside a nested Hyprland (`scripts/hypr-test`) and compares `predictDrop()`
+synthetic drags inside the `vm-test` guest and compares `predictDrop()`
 with where Hyprland actually places the window; it also holds a drag open for screenshots
 and reports the resolved rounding/border values. Results go to `/tmp/dp-results.txt`.
 
