@@ -407,6 +407,67 @@ fn writeArg(allocator: Allocator, writer: *std.Io.Writer, arg: []const u8) !void
 	}
 }
 
+
+pub fn app(io: Io, args: []const []const u8) !void {
+	if (args.len < 4 or !std.mem.eql(u8, args[2], "open")) {
+		std.debug.print("usage: yudae app open <name> [--vm <vm>]\n", .{});
+		std.process.exit(2);
+	}
+
+	const name = args[3];
+	var vm: []const u8 = "";
+	var index: usize = 4;
+	while (index < args.len) : (index += 1) {
+		if (std.mem.eql(u8, args[index], "--vm") and index + 1 < args.len) {
+			index += 1;
+			vm = args[index];
+		}
+	}
+
+	var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+	defer arena.deinit();
+	const allocator = arena.allocator();
+	const repo = proc.repo(io, allocator);
+	const class = try std.fmt.allocPrint(allocator, "com.yudae.{s}", .{name});
+
+	const listing = exec.run(io, allocator, &.{ "hyprctl", "clients", "-j" }) catch null;
+	if (listing) |result| {
+		defer result.deinit(allocator);
+		if (std.mem.indexOf(u8, result.out, class) != null) {
+			const focus = try std.fmt.allocPrint(allocator,
+				"function() for _,w in ipairs(hl.get_windows()) do if w.class == \"{s}\" then hl.dispatch(hl.dsp.focus({{window=w}})) return end end end",
+				.{class});
+			const reply = hypr.request(io, allocator, focus) catch null;
+			if (reply) |body| allocator.free(body);
+			return;
+		}
+	}
+
+	const entry = if (std.mem.eql(u8, name, "vms"))
+		try std.fmt.allocPrint(allocator, "{s}/shell/app-vms.qml", .{repo})
+	else
+		try std.fmt.allocPrint(allocator, "{s}/shell/app.qml", .{repo});
+	const import_path = try std.fmt.allocPrint(allocator, "QML_IMPORT_PATH={s}/shell/native/qml", .{repo});
+
+	var argv: std.ArrayList([]const u8) = .empty;
+	try argv.append(allocator, "setsid");
+	try argv.append(allocator, "env");
+	try argv.append(allocator, import_path);
+	try argv.append(allocator, "QSG_RHI_BACKEND=opengl");
+	try argv.append(allocator, try std.fmt.allocPrint(allocator, "YUDAE_APP={s}", .{name}));
+	if (vm.len > 0) try argv.append(allocator, try std.fmt.allocPrint(allocator, "YUDAE_VM={s}", .{vm}));
+	try argv.append(allocator, "quickshell");
+	try argv.append(allocator, "-p");
+	try argv.append(allocator, entry);
+
+	_ = exec.spawn(io, .{
+		.argv = argv.items,
+		.stdin = .ignore,
+		.stdout = .ignore,
+		.stderr = .ignore,
+	}) catch return error.SpawnFailed;
+}
+
 pub fn spawnCheck(io: Io, args: []const []const u8) !void {
 	var seconds: u64 = 5;
 	var index: usize = 2;

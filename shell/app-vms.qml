@@ -3,9 +3,8 @@
 //@ pragma AppId com.yudae.vms
 import QtQuick
 import Quickshell
+import "features/vms"
 
 ShellRoot {
-	Loader {
-		source: "features/vms/App.qml"
-	}
+	App {}
 }
