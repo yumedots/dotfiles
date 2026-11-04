@@ -61,10 +61,12 @@ Host: RTX 3070, 615.78.08, Hyprland 0.57.0, QEMU 11.1.3, guest 2560x1440 at scal
 | C5 pump S2 | 1536x864 1.0 | 194.4% | pump 13.4% | 38.7% | qemu 1.86GB, pump 19MB | measured |
 | C2 viewer windowed | - | - | - | - | - | needs host run |
 | C3 viewer fullscreen | - | - | - | - | - | needs host run |
-| C4 ScanoutMap | - | - | - | - | - | needs the map fallback |
+| C4 ScanoutMap/pixmap | 2560x1440 | - | - | - | works, not timed |
 | C6 egl-headless | - | - | - | - | - | needs a fresh boot |
 
 The C5 pump is the agent baseline: no human window, 1536x864 at scale 1, guest still presenting. It is cheaper than GTK S2 on CPU (208% total against 364%) but the GPU sample is higher (38.7% against 29.8%); the viewer C3 numbers are pending because the host session is locked and the nested test output is 1514x398, not 2560x1440.
+
+The C4 fallback is proven separately with a non-GL guest (`virtio-gpu-pci`, llvmpipe, `-display dbus,p2p=yes`): QEMU sends `ScanoutMap` with a 2560x1440 memfd, stride 10240; the viewer mmaps it, swizzles BGRA to RGBA and uploads the texture. The first full scanout is lost to the listener-registration race, so the viewer nudges `SetUIInfo` once after connecting to force a fresh scanout. The screenshot is `vm/runs/demo/proof/scanout-map.png`. Not timed yet; the pixmap path copies and swizzles the whole frame.
 
 The native viewer does receive 150 `UpdateDMABUF` frames/s on the animation, so the ack/toy-client throttle from the spikes is gone. A screenshot of the viewer shows the guest bar, the animation and the sidebar.
 
@@ -74,6 +76,7 @@ The native viewer does receive 150 `UpdateDMABUF` frames/s on the animation, so 
 2. QEMU caches the export by texture id; repeat scanouts become `UpdateDMABUF`.
 3. `/home/gabriel/dotfiles/daemon/zig-out/bin/yudae-pump` keeps an agent VM presenting with no viewer, at 1536x864 scale 1.
 4. `yudae vm view` stops the pump, sets 2560x1440 scale 1.6667 in the guest and opens `shell/app-vms.qml`; `vm release` restores 1536x864 and restarts the pump. No VM restart.
+5. The guest overlays are transparent: the native plugin is copied into `~/.local/lib/yudae/qml` by `vm/desktop`, `shell/shell-guest.qml` imports it, and its `registerTypes` calls `QQuickWindow::setDefaultAlphaBuffer(true)`. Proof: `vm/runs/demo/proof/guest-launcher-alpha.jpg`.
 
 ### Open bench work
 

@@ -21,7 +21,7 @@ virgl (`virtio-gpu-gl-pci`, OpenGL) is the default because the desktop is OpenGL
 
 The viewer is the Quickshell app, `shell/app-vms.qml`, built on `Yudae.Native.VmDisplay`. It reads `ScanoutDMABUF2` over the peer-to-peer D-Bus display, imports the dmabuf with EGL and draws it in the scene graph; `ScanoutMap` is the fallback. It sends absolute mouse, wheel and evdev->qnum keys over the D-Bus console. The `zwp_keyboard_shortcuts_inhibitor_v1` protocol sends host shortcuts to the guest while the window is focused; `SUPER+ALT+ESCAPE` is a `dont_inhibit` bind that leaves the VM. F11 is fullscreen and hides the sidebar.
 
-`yudae vm view <name>` sets the guest to 2560x1440 at scale 1.6667 and opens the app on that VM; the VM does not restart. Close the window or `yudae vm release <name>` to return to agent mode: 1536x864 at scale 1, kept live by the headless `yudae-pump` process the daemon starts at boot.
+The guest runs `shell/shell-guest.qml` (the autostart and `vm/shell` pick it with `systemd-detect-virt`). `vm/desktop-sync` copies the built `Yudae.Native` plugin into `vm/hostbin/yudae-native`; the guest's `vm/desktop` copies it to `~/.local/lib/yudae/qml` and restarts the shell, so the plugin's `setDefaultAlphaBuffer(true)` clears the black backdrop behind the launcher, calendar and other overlays. `yudae vm view <name>` sets the guest to 2560x1440 at scale 1.6667 and opens the app on that VM; the VM does not restart. Close the window or `yudae vm release <name>` to return to agent mode: 1536x864 at scale 1, kept live by the headless `yudae-pump` process the daemon starts at boot.
 
 A virgl VM cannot be saved or migrated, so GL VMs have no RAM-to-file save.
 
