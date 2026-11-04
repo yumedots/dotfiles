@@ -107,14 +107,14 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 
 | scene | dimensions | masked RMSE |
 | --- | --- | --- |
-| idle | 2560x1440 | 1092.87 |
-| bar | 2560x1440 | 4863.63 |
-| launcher | 2560x1440 | 5083.95 |
-| launcher-fire | 2560x1440 | 7998.07 |
-| calendar | 2560x1440 | 5147.11 |
-| power | 2560x1440 | 1463.41 |
-| tiled | 2560x1440 | 6720.31 |
-| fullscreen | 2560x1440 | 3804.77 |
+| idle | 2560x1440 | 1043.74 |
+| bar | 2560x1440 | 4852.83 |
+| launcher | 2560x1440 | 5152.76 |
+| launcher-fire | 2560x1440 | 7992.21 |
+| calendar | 2560x1440 | 5205.03 |
+| power | 2560x1440 | 1446.53 |
+| tiled | 2560x1440 | 6711.25 |
+| fullscreen | 2560x1440 | 3804.78 |
 
 Expected differences: `launcher-fire` shows host-only games in the guest query; calendar meters and the guest cursor differ; the tiled/fullscreen terminals are at different window positions. The images were inspected; these are not pixel-identical.
 
