@@ -4,7 +4,10 @@ pub const Value = std.json.Value;
 pub const Allocator = std.mem.Allocator;
 
 pub fn parse(allocator: Allocator, body: []const u8) !std.json.Parsed(Value) {
-	return std.json.parseFromSlice(Value, allocator, body, .{ .allocate = .alloc_always });
+	return std.json.parseFromSlice(Value, allocator, body, .{
+		.allocate = .alloc_always,
+		.duplicate_field_behavior = .use_last,
+	});
 }
 
 pub fn field(value: Value, key: []const u8) ?Value {
@@ -119,4 +122,13 @@ test "json rejects garbage" {
 	defer arena.deinit();
 
 	try std.testing.expectError(error.SyntaxError, parse(arena.allocator(), "not json"));
+}
+
+test "json keeps the last of a repeated field" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const parsed = try parse(arena.allocator(), "{\"info\":{\"a\":1},\"info\":{\"a\":2}}");
+
+	try std.testing.expectEqual(@as(f64, 2), numberAt(field(parsed.value, "info").?, "a"));
 }
