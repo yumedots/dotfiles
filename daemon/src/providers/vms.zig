@@ -212,7 +212,8 @@ pub const Vms = struct {
 				std.mem.eql(u8, method, "screenshot") or std.mem.eql(u8, method, "key") or
 				std.mem.eql(u8, method, "type") or std.mem.eql(u8, method, "click") or
 				std.mem.eql(u8, method, "move") or std.mem.eql(u8, method, "wait") or
-				std.mem.eql(u8, method, "wake") or std.mem.eql(u8, method, "view");
+				std.mem.eql(u8, method, "wake") or std.mem.eql(u8, method, "view") or
+				std.mem.eql(u8, method, "gui") or std.mem.eql(u8, method, "scroll");
 
 			if (wakeable) self.wakeForCall(name);
 		}
@@ -241,6 +242,8 @@ pub const Vms = struct {
 		if (std.mem.eql(u8, method, "app")) return self.openApp(allocator);
 		if (std.mem.eql(u8, method, "select")) return self.selectVm(args, allocator);
 		if (std.mem.eql(u8, method, "ui")) return self.uiVm(args, allocator);
+		if (std.mem.eql(u8, method, "gui")) return self.guiVm(args, allocator);
+		if (std.mem.eql(u8, method, "scroll")) return self.scrollVm(args, allocator);
 		if (std.mem.eql(u8, method, "release")) return self.releaseVm(args, allocator);
 		if (std.mem.eql(u8, method, "push")) return self.pushVm(args, allocator);
 		if (std.mem.eql(u8, method, "pull")) return self.pullVm(args, allocator);
@@ -267,14 +270,39 @@ pub const Vms = struct {
 		vm.tier = .hot;
 		vm.used_ms = fmt.nowMs(self.io);
 		const client = vm.qmp;
+		const cid = vm.cid;
 		self.mutex.unlock(self.io);
 
-		if (previous == .warm or previous == .parked) {
-			if (client) |qmp_client| {
-				_ = qmp_client.execute(null, "balloon", "{\"value\":0}") catch {};
-				_ = qmp_client.execute(null, "cont", null) catch {};
-			}
+		if (client) |qmp_client| {
+			_ = qmp_client.execute(null, "balloon", "{\"value\":0}") catch {};
+			_ = qmp_client.execute(null, "cont", null) catch {};
 		}
+
+		if (previous == .warm or previous == .parked) self.syncGuestClock(cid);
+	}
+
+	fn pidAlive(self: *Vms, pid: i32) bool {
+		if (pid <= 0) return false;
+
+		var buffer: [64]u8 = undefined;
+		const path = std.fmt.bufPrint(&buffer, "/proc/{d}/stat", .{pid}) catch return false;
+		const body = proc.readFile(self.io, self.allocator, path) catch return false;
+		defer self.allocator.free(body);
+
+		const close = std.mem.lastIndexOfScalar(u8, body, ')') orelse return false;
+		if (close + 2 >= body.len) return false;
+
+		const state = body[close + 2];
+		return state != 'Z' and state != 'X';
+	}
+
+	fn syncGuestClock(self: *Vms, cid: u32) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+		const allocator = arena.allocator();
+		const command = std.fmt.allocPrint(allocator, "sudo -n date -s \"@{d}\" >/dev/null 2>&1 || true", .{@divTrunc(fmt.nowMs(self.io), 1000)}) catch return;
+
+		_ = self.guestExec(cid, &.{ "sh", "-lc", command }, allocator) catch return;
 	}
 
 	fn governorLoop(self: *Vms) void {
@@ -294,6 +322,12 @@ pub const Vms = struct {
 		self.mutex.lockUncancelable(self.io);
 
 		for (self.list.items) |vm| {
+			if (vm.tier != .off and !self.pidAlive(vm.pid)) {
+				self.haltVm(vm);
+				changed = true;
+				continue;
+			}
+
 			if (std.mem.eql(u8, vm.controller, "human") and now - vm.used_ms > 600000) {
 				vm.controller = self.allocator.dupe(u8, "agent") catch vm.controller;
 				changed = true;
@@ -676,9 +710,11 @@ pub const Vms = struct {
 			};
 
 			const thumb_path = std.fs.path.join(self.allocator, &.{ vm.dir, "thumb.jpg" }) catch "";
-			if (thumb_path.len > 0 and proc.exists(self.io, thumb_path)) {
-				vm.thumb = true;
-				vm.thumb_ms = 1;
+			if (thumb_path.len > 0) {
+				if (std.Io.Dir.cwd().statFile(self.io, thumb_path, .{})) |stat| {
+					vm.thumb = true;
+					vm.thumb_ms = @intCast(@divTrunc(stat.mtime.nanoseconds, std.time.ns_per_ms));
+				} else |_| {}
 			}
 
 			if (alive) {
@@ -773,6 +809,10 @@ pub const Vms = struct {
 		vm.vfs_pid = 0;
 		vm.wall_pid = 0;
 		vm.tier = .off;
+		vm.cpu_pct = 0;
+		vm.cpu_ticks = 0;
+		vm.cpu_ms = 0;
+		vm.rss_kb = 0;
 	}
 
 	fn setGuestMode(self: *Vms, cid: u32, width: u32, height: u32, scale: []const u8) void {
@@ -783,7 +823,7 @@ pub const Vms = struct {
 		const command = std.fmt.allocPrint(allocator,
 			"sudo -n timedatectl set-ntp false >/dev/null 2>&1; " ++
 			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
-			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | head -1)); " ++
+			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\\.lock$' | head -1)); " ++
 			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
 			"hyprctl dispatch 'function() hl.monitor({{output=\"Virtual-1\",mode=\"{d}x{d}@279.96\",position=\"auto\",scale=\"{s}\"}}) end'",
 			.{ width, height, scale }) catch return;
@@ -930,20 +970,27 @@ pub const Vms = struct {
 			self.mutex.unlock(self.io);
 			return error.NotFound;
 		};
-		self.mutex.unlock(self.io);
 
 		if (vm.qmp) |client| {
 			_ = client.execute(null, "stop", null) catch {};
 			var buffer: [128]u8 = undefined;
-			const body = try std.fmt.bufPrint(&buffer, "{{\"value\":{d}}}", .{balloonBytes(vm.mem_mb)});
+			const body = std.fmt.bufPrint(&buffer, "{{\"value\":{d}}}", .{balloonBytes(vm.mem_mb)}) catch {
+				self.mutex.unlock(self.io);
+				return error.OutOfMemory;
+			};
 			_ = client.execute(null, "balloon", body) catch {};
 		}
 
 		vm.tier = .warm;
 		vm.used_ms = fmt.nowMs(self.io);
+		const reply = std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"tier\":\"warm\"}}", .{vm.name}) catch {
+			self.mutex.unlock(self.io);
+			return error.OutOfMemory;
+		};
+		self.mutex.unlock(self.io);
 		self.hub.publish();
 
-		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"tier\":\"warm\"}}", .{vm.name});
+		return reply;
 	}
 
 	fn parkVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
@@ -954,12 +1001,14 @@ pub const Vms = struct {
 			self.mutex.unlock(self.io);
 			return error.NotFound;
 		};
-		self.mutex.unlock(self.io);
 
 		if (vm.qmp) |client| {
 			_ = client.execute(null, "stop", null) catch {};
 			var buffer: [128]u8 = undefined;
-			const body = try std.fmt.bufPrint(&buffer, "{{\"value\":{d}}}", .{balloonBytes(vm.mem_mb)});
+			const body = std.fmt.bufPrint(&buffer, "{{\"value\":{d}}}", .{balloonBytes(vm.mem_mb)}) catch {
+				self.mutex.unlock(self.io);
+				return error.OutOfMemory;
+			};
 			_ = client.execute(null, "balloon", body) catch {};
 		}
 
@@ -967,9 +1016,14 @@ pub const Vms = struct {
 
 		vm.tier = .parked;
 		vm.used_ms = fmt.nowMs(self.io);
+		const reply = std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"tier\":\"parked\"}}", .{vm.name}) catch {
+			self.mutex.unlock(self.io);
+			return error.OutOfMemory;
+		};
+		self.mutex.unlock(self.io);
 		self.hub.publish();
 
-		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"tier\":\"parked\"}}", .{vm.name});
+		return reply;
 	}
 
 	fn wakeVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
@@ -981,10 +1035,12 @@ pub const Vms = struct {
 			return error.NotFound;
 		};
 		const off = vm.tier == .off;
-		self.mutex.unlock(self.io);
+		if (off) {
+			self.mutex.unlock(self.io);
+			return self.startVm(args, allocator);
+		}
 
-		if (off) return self.startVm(args, allocator);
-
+		const slept = vm.tier != .hot;
 		if (vm.qmp) |client| {
 			_ = client.execute(null, "balloon", "{\"value\":0}") catch {};
 			_ = client.execute(null, "cont", null) catch {};
@@ -992,6 +1048,11 @@ pub const Vms = struct {
 
 		vm.tier = .hot;
 		vm.used_ms = fmt.nowMs(self.io);
+		const cid = vm.cid;
+		self.mutex.unlock(self.io);
+
+		if (slept) self.syncGuestClock(cid);
+
 		self.hub.publish();
 
 		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"tier\":\"hot\"}}", .{vm.name});
@@ -1040,7 +1101,7 @@ pub const Vms = struct {
 	fn guestScreenshot(self: *Vms, vm: *Vm, path: []const u8, allocator: Allocator) !void {
 		const command =
 			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
-			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | head -1)); " ++
+			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\\.lock$' | head -1)); " ++
 			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
 			"grim -s $(python3 -c 'import json,subprocess;print(json.loads(subprocess.check_output([\"hyprctl\",\"monitors\",\"-j\"]))[0][\"scale\"])') /tmp/yudae-shot.png >/dev/null 2>&1; base64 -w0 /tmp/yudae-shot.png";
 
@@ -1101,7 +1162,7 @@ pub const Vms = struct {
 	fn guestThumb(self: *Vms, vm: *Vm, path: []const u8, allocator: Allocator) !void {
 		const command =
 			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
-			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | head -1)); " ++
+			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\\.lock$' | head -1)); " ++
 			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
 			"grim -s 0.25 -t jpeg -q 80 /tmp/yudae-thumb.jpg >/dev/null 2>&1; base64 -w0 /tmp/yudae-thumb.jpg";
 
@@ -1265,7 +1326,7 @@ pub const Vms = struct {
 		const state = try self.guestState(cid, allocator);
 		const command =
 			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
-			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | head -1)); " ++
+			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\\.lock$' | head -1)); " ++
 			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
 			"hyprctl -j clients";
 
@@ -1439,9 +1500,11 @@ pub const Vms = struct {
 		if (name.len == 0) return error.MissingArgs;
 
 		self.mutex.lockUncancelable(self.io);
-		defer self.mutex.unlock(self.io);
 
-		const vm = self.findLocked(name) orelse return error.NotFound;
+		const vm = self.findLocked(name) orelse {
+			self.mutex.unlock(self.io);
+			return error.NotFound;
+		};
 		const harness = json.textAt(args, "harness");
 		const session = json.textAt(args, "session");
 		const now = fmt.nowMs(self.io);
@@ -1464,6 +1527,10 @@ pub const Vms = struct {
 		}
 		if (vm.agent_since_ms == 0) vm.agent_since_ms = now;
 		vm.last_call_ms = now;
+		vm.used_ms = now;
+		self.mutex.unlock(self.io);
+
+		self.hub.publish();
 
 		return allocator.dupe(u8, "{}");
 	}
@@ -1497,6 +1564,54 @@ pub const Vms = struct {
 		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"controller\":\"human\"}}", .{vm.name});
 	}
 
+	fn guiVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
+		const name = json.textAt(args, "name");
+		const app = json.textAt(args, "app");
+		if (name.len == 0 or app.len == 0) return error.MissingArgs;
+		if (!validName(app)) return error.BadName;
+
+		const cid = self.cidOf(name) orelse return error.NotFound;
+		const repo = proc.repo(self.io, self.allocator);
+		const entry = try std.fs.path.join(allocator, &.{ repo, "shell", try std.fmt.allocPrint(allocator, "app-{s}.qml", .{app}) });
+		if (!proc.exists(self.io, entry)) return error.NotFound;
+
+		const command = try std.fmt.allocPrint(allocator,
+			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
+			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\\.lock$' | head -1)); " ++
+			"export HYPRLAND_INSTANCE_SIGNATURE=$(for d in $(ls -t /run/user/1000/hypr); do [ -S /run/user/1000/hypr/$d/.socket.sock ] && echo $d && break; done); " ++
+			"setsid quickshell -p {s} >/tmp/quickshell-{s}.log 2>&1 &",
+			.{ entry, app });
+
+		const result = self.guestExec(cid, &.{ "sh", "-lc", command }, allocator) catch return error.GuestUnreachable;
+		if (result.code != 0) return error.AppFailed;
+
+		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"app\":\"{s}\"}}", .{ name, app });
+	}
+
+	fn scrollVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
+		const name = json.textAt(args, "name");
+		if (self.humanHolds(name) and !humanRequest(args)) return error.HumanControl;
+		const client = self.qmpOf(name) orelse return error.NotRunning;
+		const dy = json.integer(json.field(args, "dy"));
+		if (dy == 0) return error.MissingArgs;
+
+		const x = json.numberAt(args, "x");
+		const y = json.numberAt(args, "y");
+		if (x > 0 or y > 0) try pointer(self.io, client, allocator, x, y, self.screenOf(name));
+
+		const up = dy < 0;
+		var count: usize = @intCast(if (up) -dy else dy);
+		if (count > 20) count = 20;
+
+		for (0..count) |_| {
+			try buttonEvent(client, allocator, if (up) "wheel-up" else "wheel-down", true);
+			try buttonEvent(client, allocator, if (up) "wheel-up" else "wheel-down", false);
+			sleep.ms(30);
+		}
+
+		return std.fmt.allocPrint(allocator, "{{\"scrolled\":{d}}}", .{count});
+	}
+
 	fn uiVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
 		const name = json.textAt(args, "name");
 		const action = json.textAt(args, "action");
@@ -1511,7 +1626,7 @@ pub const Vms = struct {
 
 		const command = try std.fmt.allocPrint(allocator,
 			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
-			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | head -1)); " ++
+			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\\.lock$' | head -1)); " ++
 			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
 			"hyprctl dispatch 'hl.dsp.global(\"quickshell:{s}\")'",
 			.{glyph});
@@ -1532,6 +1647,15 @@ pub const Vms = struct {
 		};
 		vm.controller = try self.allocator.dupe(u8, "agent");
 		const cid = vm.cid;
+
+		if (vm.tier == .warm or vm.tier == .parked) {
+			if (vm.qmp) |client| {
+				_ = client.execute(null, "balloon", "{\"value\":0}") catch {};
+				_ = client.execute(null, "cont", null) catch {};
+			}
+			vm.tier = .hot;
+		}
+
 		self.allocator.free(self.selected);
 		self.selected = try self.allocator.dupe(u8, "");
 		self.mutex.unlock(self.io);

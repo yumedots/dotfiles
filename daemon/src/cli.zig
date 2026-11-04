@@ -195,6 +195,47 @@ pub fn ui(io: Io, args: []const []const u8) !void {
 	printResult(io, result);
 }
 
+
+fn envText(keys: []const [*:0]const u8) []const u8 {
+	for (keys) |key| {
+		if (std.c.getenv(key)) |value| {
+			const text = std.mem.span(value);
+			if (text.len > 0) return text;
+		}
+	}
+
+	return "";
+}
+
+fn agentHarness() []const u8 {
+	const direct = envText(&.{"AI_AGENT"});
+	if (direct.len > 0) return direct;
+	if (std.c.getenv("OPENCODE") != null) return "opencode";
+	if (std.c.getenv("CLAUDECODE") != null) return "claude";
+	if (std.c.getenv("CODEX_HOME") != null) return "codex";
+	return "";
+}
+
+fn stampVm(io: Io, allocator: Allocator, name: []const u8) void {
+	if (name.len == 0) return;
+
+	const harness = agentHarness();
+	const session = envText(&.{ "OPENCODE_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CODEX_SESSION_ID" });
+	if (harness.len == 0 and session.len == 0) return;
+
+	var out: std.Io.Writer.Allocating = .init(allocator);
+
+	out.writer.writeAll("{\"call\":{\"target\":\"vms\",\"method\":\"agent\",\"args\":{\"name\":") catch return;
+	std.json.Stringify.encodeJsonString(name, .{}, &out.writer) catch return;
+	out.writer.writeAll(",\"harness\":") catch return;
+	std.json.Stringify.encodeJsonString(harness, .{}, &out.writer) catch return;
+	out.writer.writeAll(",\"session\":") catch return;
+	std.json.Stringify.encodeJsonString(session, .{}, &out.writer) catch return;
+	out.writer.writeAll("}}}") catch return;
+
+	_ = roundTrip(io, allocator, out.written(), true) catch {};
+}
+
 pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 	if (args.len < 3) {
 		std.debug.print("usage: yudae vm <create|list|start|stop|exec|screenshot|key|type|click|move|wait|sleep|wake|destroy|snapshot|restore|fork|state|view|scenario> [args...]\n", .{});
@@ -213,6 +254,8 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 		var view_arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
 		defer view_arena.deinit();
 		const view_allocator = view_arena.allocator();
+
+		stampVm(io, view_allocator, rest[0]);
 
 		const message = try std.fmt.allocPrint(view_allocator, "{{\"call\":{{\"target\":\"vms\",\"method\":\"view\",\"args\":{{\"name\":\"{s}\"}}}}}}", .{rest[0]});
 		const result = roundTrip(io, view_allocator, message, false) catch std.process.exit(1);
@@ -279,6 +322,8 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 
 	if (name.len > 0) try writeField(allocator, writer, &wrote, "name", name);
 
+	if (name.len > 0 and !std.mem.eql(u8, method, "run_scenario")) stampVm(io, allocator, name);
+
 	if (std.mem.eql(u8, method, "exec")) {
 		try writeField(allocator, writer, &wrote, "cmd", try std.mem.join(allocator, " ", positional.items));
 	} else if (std.mem.eql(u8, method, "type")) {
@@ -290,6 +335,12 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 	} else if (std.mem.eql(u8, method, "click") or std.mem.eql(u8, method, "move")) {
 		if (positional.items.len >= 1) try writeRawField(writer, &wrote, "x", positional.items[0]);
 		if (positional.items.len >= 2) try writeRawField(writer, &wrote, "y", positional.items[1]);
+	} else if (std.mem.eql(u8, method, "gui")) {
+		if (positional.items.len >= 1) try writeField(allocator, writer, &wrote, "app", positional.items[0]);
+	} else if (std.mem.eql(u8, method, "scroll")) {
+		if (positional.items.len >= 1) try writeRawField(writer, &wrote, "dy", positional.items[0]);
+		if (positional.items.len >= 2) try writeRawField(writer, &wrote, "x", positional.items[1]);
+		if (positional.items.len >= 3) try writeRawField(writer, &wrote, "y", positional.items[2]);
 	} else if (std.mem.eql(u8, method, "run_scenario")) {
 		if (positional.items.len >= 1) {
 			try writeField(allocator, writer, &wrote, "scenario", positional.items[0]);

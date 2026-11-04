@@ -21,7 +21,7 @@ yudae vm <verb> ...                        # same verbs as the MCP tools
 
 - state, providers, bench, parity
 - hypr_start, hypr_shot, hypr_run, hypr_stop, qs_log
-- vm_create, vm_list, vm_state, vm_exec, vm_push, vm_pull, vm_key, vm_type, vm_click, vm_move, vm_screenshot, vm_wait, vm_sleep, vm_wake, vm_park, vm_stop, vm_destroy, vm_snapshot, vm_restore, vm_fork, vm_view, vm_ui_tree, vm_run_scenario
+- vm_create, vm_list, vm_state, vm_exec, vm_push, vm_pull, vm_key, vm_type, vm_click, vm_move, vm_scroll, vm_gui, vm_screenshot, vm_wait, vm_sleep, vm_wake, vm_park, vm_stop, vm_destroy, vm_snapshot, vm_restore, vm_fork, vm_view, vm_ui_tree, vm_run_scenario
 
 Every result is bounded and typed: capped output with a handle for the rest, exit codes, durations.
 
