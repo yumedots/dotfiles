@@ -335,10 +335,8 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 	if (json.field(value, "system")) |system_cmd| {
 		if (json.flag(system_cmd, "logout")) context.system.logout();
 
-		if (json.field(system_cmd, "keepAwake")) |awake| switch (awake) {
-			.bool => |on| context.system.setKeepAwake(on),
-			else => {},
-		};
+		const awake = json.textAt(system_cmd, "keepAwake");
+		if (awake.len > 0) context.system.setKeepAwake(awake);
 
 		const governor = json.textAt(system_cmd, "governor");
 		if (governor.len > 0) context.system.setGovernor(governor);

@@ -117,9 +117,11 @@ const PanelOut = struct {
 	rows: []ProcessOut,
 };
 
+const AwakeMode = enum { off, auto, on };
+
 const AwakeOut = struct {
+	mode: AwakeMode,
 	held: bool,
-	manual: bool,
 	agents: bool,
 };
 
@@ -277,7 +279,7 @@ pub const System = struct {
 	panel_cpu: []i32 = &.{},
 	panel_mem: []i32 = &.{},
 	palette: Palette = .{},
-	keep_awake: bool = false,
+	awake_mode: AwakeMode = .auto,
 	awake_held: bool = false,
 	awake_agents: bool = false,
 	awake_want: bool = false,
@@ -773,9 +775,11 @@ pub const System = struct {
 		self.hub.publish();
 	}
 
-	pub fn setKeepAwake(self: *System, on: bool) void {
+	pub fn setKeepAwake(self: *System, mode: []const u8) void {
+		const next = std.meta.stringToEnum(AwakeMode, mode) orelse return;
+
 		self.mutex.lockUncancelable(self.io);
-		self.keep_awake = on;
+		self.awake_mode = next;
 		self.mutex.unlock(self.io);
 
 		self.syncAwake();
@@ -788,7 +792,7 @@ pub const System = struct {
 
 		self.mutex.lockUncancelable(self.io);
 
-		const want = self.keep_awake or working;
+		const want = self.awake_mode == .on or (self.awake_mode == .auto and working);
 		const changed = want != self.awake_want or working != self.awake_agents;
 		self.awake_want = want;
 		self.awake_agents = working;
@@ -927,8 +931,8 @@ pub const System = struct {
 				.watts = self.battery_watts,
 			},
 			.awake = .{
+				.mode = self.awake_mode,
 				.held = self.awake_held,
-				.manual = self.keep_awake,
 				.agents = self.awake_agents,
 			},
 			.processes = processes.items,
