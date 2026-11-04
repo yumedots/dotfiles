@@ -62,9 +62,11 @@ Host: RTX 3070, 615.78.08, Hyprland 0.57.0, QEMU 11.1.3, guest 2560x1440 at scal
 | C2 viewer windowed | - | - | - | - | - | needs host run |
 | C3 viewer fullscreen | - | - | - | - | - | needs host run |
 | C4 ScanoutMap/pixmap | 2560x1440 | - | - | - | works, not timed |
-| C6 egl-headless | - | - | - | - | - | needs a fresh boot |
+| C6 egl-headless S2 | 1536x864 1.0 | 201.7% | - | 29.1% | 1.92GB | measured |
 
-The C5 pump is the agent baseline: no human window, 1536x864 at scale 1, guest still presenting. It is cheaper than GTK S2 on CPU (208% total against 364%) but the GPU sample is higher (38.7% against 29.8%); the viewer C3 numbers are pending because the host session is locked and the nested test output is 1514x398, not 2560x1440.
+The C5 pump is the agent baseline: no human window, 1536x864 at scale 1, guest still presenting. The C6 `egl-headless` baseline at the same size is slightly cheaper: 201.7% CPU and 29.1% GPU against 207.8% total CPU (194.4% qemu + 13.4% pump) and 38.7% GPU. The dbus display therefore costs about 3% more CPU and 9.6 GPU points for agents, and it is kept because viewing then needs no VM restart. The earlier frozen-guest C5 numbers were invalid and are gone.
+
+The viewer C3 numbers are pending because the host session is locked and the nested test output is 1514x398, not 2560x1440.
 
 The C4 fallback is proven separately with a non-GL guest (`virtio-gpu-pci`, llvmpipe, `-display dbus,p2p=yes`): QEMU sends `ScanoutMap` with a 2560x1440 memfd, stride 10240; the viewer mmaps it, swizzles BGRA to RGBA and uploads the texture. The first full scanout is lost to the listener-registration race, so the viewer nudges `SetUIInfo` once after connecting to force a fresh scanout. The screenshot is `vm/runs/demo/proof/scanout-map.png`. Not timed yet; the pixmap path copies and swizzles the whole frame.
 
