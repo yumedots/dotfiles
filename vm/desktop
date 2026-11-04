@@ -14,7 +14,11 @@ export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
 timezone=$(cat "$ROOT/vm/hoststate/timezone" 2>/dev/null || true)
 if [ -n "$timezone" ] && [ "$(cat /etc/timezone 2>/dev/null)" != "$timezone" ]; then
 	sudo timedatectl set-timezone "$timezone" >/dev/null 2>&1 || true
-	sudo -n timedatectl set-ntp false >/dev/null 2>&1 || true
+fi
+
+epoch=$(cat "$ROOT/vm/hoststate/epoch" 2>/dev/null || true)
+if [ -n "$epoch" ]; then
+	sudo -n date -s "@$epoch" >/dev/null 2>&1 || true
 fi
 
 sudo -n timedatectl set-ntp false >/dev/null 2>&1 || true

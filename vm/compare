@@ -7,7 +7,11 @@ OUT=$ROOT/vm/runs/$VM/compare
 Y=$ROOT/scripts/yudae
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/1000}
 export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
-export HYPRLAND_INSTANCE_SIGNATURE=${HYPRLAND_INSTANCE_SIGNATURE:-$(ls "$XDG_RUNTIME_DIR"/hypr | head -1)}
+if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+	for dir in $(ls -t "$XDG_RUNTIME_DIR"/hypr 2>/dev/null); do
+		[ -S "$XDG_RUNTIME_DIR/hypr/$dir/.socket.sock" ] && export HYPRLAND_INSTANCE_SIGNATURE=$dir && break
+	done
+fi
 
 mkdir -p "$OUT"
 
