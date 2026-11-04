@@ -26,6 +26,8 @@ AppWindow {
 		Yudae.vmsCommand(method, args);
 	}
 
+	onClosed: if (win.selected.length > 0) Yudae.vmsCommand("release", { name: win.selected })
+
 	function pick(name) {
 		win.fallback = name;
 		Yudae.vmsCommand("select", { name: name });

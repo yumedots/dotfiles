@@ -37,9 +37,11 @@ const Vm = struct {
 	tier: tiers.Tier = .off,
 	pid: i32 = 0,
 	vfs_pid: i32 = 0,
+	pump_pid: i32 = 0,
 	qmp: ?*qmp.Qmp = null,
 	qemu_child: ?std.process.Child = null,
 	vfs_child: ?std.process.Child = null,
+	pump_child: ?std.process.Child = null,
 	cgroup: ?cgroup.Cgroup = null,
 	created_ms: i64,
 	used_ms: i64,
@@ -534,6 +536,11 @@ pub const Vms = struct {
 		vm.tier = .hot;
 		vm.used_ms = fmt.nowMs(self.io);
 		self.writeMeta(vm);
+
+		self.startPump(vm);
+
+		const agent = std.Thread.spawn(.{}, agentBoot, .{ self, vm.cid }) catch null;
+		if (agent) |thread| thread.detach();
 	}
 
 	fn recover(self: *Vms) void {
@@ -668,6 +675,7 @@ pub const Vms = struct {
 
 		if (vm.pid > 0) kill(vm.pid);
 		if (vm.vfs_pid > 0) kill(vm.vfs_pid);
+		self.stopPump(vm);
 
 		if (vm.qemu_child) |*child| {
 			_ = child.wait(self.io) catch {};
@@ -684,6 +692,57 @@ pub const Vms = struct {
 		vm.tier = .off;
 	}
 
+	fn setGuestMode(self: *Vms, cid: u32, width: u32, height: u32, scale: []const u8) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+		const allocator = arena.allocator();
+
+		const command = std.fmt.allocPrint(allocator,
+			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
+			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | head -1)); " ++
+			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
+			"hyprctl dispatch 'function() hl.monitor({{output=\"Virtual-1\",mode=\"{d}x{d}@279.96\",position=\"auto\",scale=\"{s}\"}}) end'",
+			.{ width, height, scale }) catch return;
+
+		_ = self.guestExec(cid, &.{ "sh", "-lc", command }, allocator) catch return;
+	}
+
+	fn agentBoot(self: *Vms, cid: u32) void {
+		var attempt: usize = 0;
+		while (attempt < 45) : (attempt += 1) {
+			var arena = std.heap.ArenaAllocator.init(self.allocator);
+			defer arena.deinit();
+			if (self.guestExec(cid, &.{ "sh", "-lc", "pgrep -x Hyprland >/dev/null" }, arena.allocator())) |result| {
+				if (result.code == 0) break;
+			} else |_| {}
+			sleep.ms(2000);
+		}
+		self.setGuestMode(cid, 1536, 864, "1");
+	}
+
+	fn startPump(self: *Vms, vm: *Vm) void {
+		if (vm.pump_pid > 0) return;
+
+		const repo = proc.repo(self.io, self.allocator);
+		const display_qmp = std.fs.path.join(self.allocator, &.{ vm.dir, "display.qmp" }) catch return;
+		const pump_path = std.fmt.allocPrint(self.allocator, "{s}/daemon/zig-out/bin/yudae-pump", .{repo}) catch return;
+		const pump_args = [_][]const u8{ "setsid", pump_path, "--qmp", display_qmp, "--width", "1536", "--height", "864" };
+
+		if (exec.spawn(self.io, .{ .argv = &pump_args, .stdin = .ignore, .stdout = .ignore, .stderr = .ignore })) |pump| {
+			vm.pump_pid = pump.id orelse 0;
+			vm.pump_child = pump;
+		} else |_| {}
+	}
+
+	fn stopPump(self: *Vms, vm: *Vm) void {
+		if (vm.pump_pid > 0) kill(vm.pump_pid);
+		if (vm.pump_child) |*child| {
+			_ = child.wait(self.io) catch {};
+			vm.pump_child = null;
+		}
+		vm.pump_pid = 0;
+	}
+
 	fn cleanupVm(self: *Vms, vm: *Vm) void {
 		if (vm.qmp) |client| {
 			_ = client.execute(null, "quit", null) catch {};
@@ -693,6 +752,7 @@ pub const Vms = struct {
 
 		if (vm.pid > 0) kill(vm.pid);
 		if (vm.vfs_pid > 0) kill(vm.vfs_pid);
+		self.stopPump(vm);
 
 		if (vm.qemu_child) |*child| {
 			_ = child.wait(self.io) catch {};
@@ -1238,7 +1298,11 @@ pub const Vms = struct {
 		vm.used_ms = fmt.nowMs(self.io);
 		self.allocator.free(self.selected);
 		self.selected = try self.allocator.dupe(u8, vm.name);
+		const cid = vm.cid;
 		self.mutex.unlock(self.io);
+
+		self.stopPump(vm);
+		self.setGuestMode(cid, 2560, 1440, "1.6667");
 
 		self.hub.publish();
 
@@ -1282,8 +1346,11 @@ pub const Vms = struct {
 			return error.NotFound;
 		};
 		vm.controller = try self.allocator.dupe(u8, "agent");
+		const cid = vm.cid;
 		self.mutex.unlock(self.io);
 
+		self.setGuestMode(cid, 1536, 864, "1");
+		self.startPump(vm);
 		self.hub.publish();
 
 		return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"controller\":\"agent\"}}", .{vm.name});
