@@ -12,7 +12,7 @@ local autostart = {
   { "awww-daemon", "awww-daemon" },
   -- { "foot", "foot --server" },
   { "alacritty", "alacritty --daemon --socket $XDG_RUNTIME_DIR/alacritty.sock" },
-  { "quickshell", "sh -c 'ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=threaded; exec quickshell -p " .. repo .. "/shell/" .. (os.execute("systemd-detect-virt -q --vm") and "shell-guest.qml" or "shell.qml") .. "'" },
+  { "quickshell", "sh -c 'ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=threaded; exec quickshell -p " .. repo .. "/shell/" .. (((os.execute("systemd-detect-virt -q --vm") == 0) or (os.execute("systemd-detect-virt -q --vm") == true)) and "shell-guest.qml" or "shell.qml") .. "'" },
   { "polkit-gnome-au", "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1" },
 }
 

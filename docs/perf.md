@@ -78,7 +78,7 @@ The native viewer does receive 150 `UpdateDMABUF` frames/s on the animation, so 
 2. QEMU caches the export by texture id; repeat scanouts become `UpdateDMABUF`.
 3. `/home/gabriel/dotfiles/daemon/zig-out/bin/yudae-pump` keeps an agent VM presenting with no viewer, at 1536x864 scale 1.
 4. `yudae vm view` stops the pump, sets 2560x1440 scale 1.6667 in the guest and opens `shell/app-vms.qml`; `vm release` restores 1536x864 and restarts the pump. No VM restart.
-5. The guest overlays are transparent: the native plugin is copied into `~/.local/lib/yudae/qml` by `vm/desktop`, `shell/shell-guest.qml` imports it, and its `registerTypes` calls `QQuickWindow::setDefaultAlphaBuffer(true)`. Proof: `vm/runs/demo/proof/guest-launcher-alpha.jpg`.
+5. The native plugin is copied into `~/.local/lib/yudae/qml` by `vm/desktop`, `shell/shell-guest.qml` imports it, and its `registerTypes` calls `QQuickWindow::setDefaultAlphaBuffer(true)`. Under llvmpipe this clears the launcher backdrop (`vm/runs/demo/proof/guest-launcher-alpha.jpg`). Under virgl the launcher backdrop is still black (`vm/runs/demo/proof/guest-launcher-virgl.jpg`): the guest's EGL config has no alpha surface, so this remains an open virgl limit.
 
 ### Open bench work
 
