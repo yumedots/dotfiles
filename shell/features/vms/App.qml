@@ -22,6 +22,8 @@ AppWindow {
 	property string live: Quickshell.env("YUDAE_VM") || ""
 	property bool powerOpen: false
 	property bool settingsOpen: false
+	property Item menuAnchor: null
+	property string menuVm: ""
 	property string powerConfirm: ""
 	readonly property bool focusMode: win.fullscreen && win.live.length > 0
 	readonly property string selected: win.live.length > 0 ? win.live : (win.selectedName.length > 0 ? win.selectedName : (Yudae.vms.selected || (win.vms.length > 0 ? win.vms[0].name : "")))
@@ -76,6 +78,20 @@ AppWindow {
 		win.powerOpen = false;
 		win.settingsOpen = false;
 		win.powerConfirm = "";
+		win.menuVm = "";
+	}
+
+	function openMenu(name, anchor, settings) {
+		const same = win.menuVm === name && (settings ? win.settingsOpen : win.powerOpen);
+		win.closeMenus();
+		if (same)
+			return;
+
+		win.selectVm(name);
+		win.menuAnchor = anchor;
+		win.menuVm = name;
+		if (settings) win.settingsOpen = true;
+		else win.powerOpen = true;
 	}
 
 	function power(action) {
@@ -134,13 +150,20 @@ AppWindow {
 		anchors.fill: parent
 		z: 9
 		visible: win.powerOpen || win.settingsOpen
-		onClicked: win.closeMenus()
+		onPressed: mouse => {
+			const anchor = win.menuAnchor;
+			const point = anchor ? mapToItem(anchor, mouse.x, mouse.y) : null;
+			const onAnchor = point && point.x >= -6 && point.y >= -6 && point.x <= anchor.width + 6 && point.y <= anchor.height + 6;
+			if (!onAnchor)
+				win.closeMenus();
+			mouse.accepted = false;
+		}
 	}
 
 	ContextMenu {
 		id: powerMenu
 
-		anchor: powerButton
+		anchor: win.menuAnchor
 		entries: win.powerEntries
 		z: 11
 		visible: win.powerOpen && !win.focusMode
@@ -150,7 +173,7 @@ AppWindow {
 	SettingsMenu {
 		id: settingsPanel
 
-		anchor: gearButton
+		anchor: win.menuAnchor
 		title: "Settings"
 		rows: win.settingsRows()
 		z: 11
@@ -236,24 +259,29 @@ AppWindow {
 						id: list
 
 						anchors.top: listHeader.bottom
-						anchors.bottom: sidebarActions.top
-						anchors.bottomMargin: 6
+						anchors.bottom: parent.bottom
 						width: parent.width - 8
 						clip: true
 						model: win.vms
 						spacing: 0
-						reuseItems: true
 						cacheBuffer: 600
+						readonly property int hoverIndex: listHover.containsMouse ? list.indexAt(listHover.mouseX, listHover.mouseY + list.contentY) : -1
 
 						delegate: Item {
+							id: row
+
 							required property var modelData
+							required property int index
+							readonly property bool rowHovered: list.hoverIndex === row.index
+							readonly property bool actionsShown: row.rowHovered || win.menuVm === modelData.name
 
 							width: list.width
 							height: 76
 
+
 							Rectangle {
 								anchors.fill: parent
-								color: win.selected === modelData.name ? win.active : (rowMouse.containsMouse ? win.hover : "transparent")
+								color: win.selected === modelData.name ? win.active : (row.rowHovered ? win.hover : "transparent")
 							}
 
 							Item {
@@ -290,7 +318,7 @@ AppWindow {
 								anchors.left: rowThumb.right
 								anchors.leftMargin: 12
 								anchors.verticalCenter: parent.verticalCenter
-								width: parent.width - rowThumb.width - 12
+								width: parent.width - rowThumb.width - 12 - rowActions.width - 8
 								spacing: 3
 
 								Text {
@@ -322,6 +350,37 @@ AppWindow {
 								onClicked: win.selectVm(modelData.name)
 							}
 
+							Row {
+								id: rowActions
+
+								anchors.right: parent.right
+								anchors.rightMargin: 10
+								anchors.verticalCenter: parent.verticalCenter
+								spacing: 14
+
+								RevealIcon {
+									id: gearIcon
+
+									shown: row.actionsShown
+									font.pixelSize: 15
+									baseColor: win.settingsOpen && win.menuVm === row.modelData.name ? win.ink : win.secondary
+									hoverColor: win.ink
+									text: "\uf013"
+									onClicked: win.openMenu(row.modelData.name, gearIcon, true)
+								}
+
+								RevealIcon {
+									id: powerIcon
+
+									shown: row.actionsShown
+									font.pixelSize: 15
+									baseColor: win.powerOpen && win.menuVm === row.modelData.name ? win.ink : win.secondary
+									hoverColor: win.ink
+									text: "\uf011"
+									onClicked: win.openMenu(row.modelData.name, powerIcon, false)
+								}
+							}
+
 							Rectangle {
 								anchors.left: parent.left
 								anchors.right: parent.right
@@ -331,6 +390,15 @@ AppWindow {
 								color: win.rule
 							}
 						}
+					}
+
+					MouseArea {
+						id: listHover
+
+						anchors.fill: list
+						z: 5
+						acceptedButtons: Qt.NoButton
+						hoverEnabled: true
 					}
 
 					Scrollbar {
@@ -346,75 +414,6 @@ AppWindow {
 						color: win.faint
 						text: "No machines"
 						visible: win.vms.length === 0
-					}
-
-					Row {
-						id: sidebarActions
-
-						anchors.right: parent.right
-						anchors.bottom: parent.bottom
-						height: 40
-						spacing: 2
-
-						Item {
-							id: gearButton
-
-							width: 32
-							height: 32
-							y: 4
-
-							Text {
-								anchors.centerIn: parent
-
-								font.family: Config.fontFamily
-								font.pixelSize: 15
-								color: gearMouse.containsMouse || win.settingsOpen ? win.ink : win.secondary
-								text: "\uf013"
-							}
-
-							MouseArea {
-								id: gearMouse
-
-								anchors.fill: parent
-								hoverEnabled: true
-								enabled: win.current.name !== undefined
-								onClicked: {
-									win.settingsOpen = !win.settingsOpen;
-									win.powerOpen = false;
-									win.powerConfirm = "";
-								}
-							}
-						}
-
-						Item {
-							id: powerButton
-
-							width: 32
-							height: 32
-							y: 4
-
-							Text {
-								anchors.centerIn: parent
-
-								font.family: Config.fontFamily
-								font.pixelSize: 15
-								color: powerMouse.containsMouse || win.powerOpen ? win.ink : win.secondary
-								text: "\uf011"
-							}
-
-							MouseArea {
-								id: powerMouse
-
-								anchors.fill: parent
-								hoverEnabled: true
-								enabled: win.current.name !== undefined
-								onClicked: {
-									win.powerOpen = !win.powerOpen;
-									win.settingsOpen = false;
-									win.powerConfirm = "";
-								}
-							}
-						}
 					}
 
 					Rectangle {
