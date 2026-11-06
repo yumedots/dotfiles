@@ -1165,7 +1165,7 @@ pub const Vms = struct {
 			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
 			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\\.lock$' | head -1)); " ++
 			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
-			"grim -s 0.25 -t jpeg -q 80 /tmp/yudae-thumb.jpg >/dev/null 2>&1; base64 -w0 /tmp/yudae-thumb.jpg";
+			"grim -t jpeg -q 80 /tmp/yudae-thumb.jpg >/dev/null 2>&1; base64 -w0 /tmp/yudae-thumb.jpg";
 
 		var text: []const u8 = "";
 		var attempts: usize = 0;
