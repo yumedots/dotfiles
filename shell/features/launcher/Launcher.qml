@@ -92,7 +92,7 @@ PanelWindow {
 
 	readonly property bool spotlight: Config.launcherSpotlight && !root.windows
 	readonly property bool home: root.forced === "" && root.group === ""
-	readonly property bool revealed: !root.spotlight || !root.home || root.query !== ""
+	readonly property bool revealed: !root.spotlight || !root.home || (root.query !== "" && !!root.live.intent && root.live.intent.query !== "")
 	readonly property real fontSize: root.spotlight ? Config.launcherSpotlightFontSize : Config.launcherFontSize
 	readonly property real iconSize: root.spotlight ? Math.round(root.fontSize * 1.4) : Config.launcherIconSize
 	readonly property real rowHeight: root.spotlight
