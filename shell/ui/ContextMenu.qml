@@ -24,10 +24,12 @@ Rectangle {
 
 		const point = root.anchor.mapToItem(root.parent, 0, 0);
 		root.x = Math.max(0, Math.min(root.parent.width - root.width, point.x + root.anchor.width - root.width));
-		root.y = Math.max(0, point.y - root.height - 6);
+		const below = point.y + root.anchor.height + 6;
+		root.y = below + root.height <= root.parent.height ? below : Math.max(0, point.y - root.height - 6);
 	}
 
 	onVisibleChanged: if (visible) root.place()
+	onAnchorChanged: if (visible) root.place()
 	onHeightChanged: if (visible) root.place()
 
 	Column {
