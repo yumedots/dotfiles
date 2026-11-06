@@ -17,6 +17,9 @@ AppWindow {
 	readonly property color rule: "#1f1f1f"
 	readonly property color active: "#181818"
 	readonly property color hover: "#141414"
+	readonly property int thumbFill: Image.PreserveAspectCrop
+	readonly property real thumbSaturation: -1.0
+	readonly property real thumbBrightness: -0.08
 
 	property string selectedName: ""
 	property string live: Quickshell.env("YUDAE_VM") || ""
@@ -299,7 +302,7 @@ AppWindow {
 									anchors.fill: parent
 
 									source: modelData.thumb === true ? win.root + "/" + modelData.name + "/thumb.jpg?v=" + (modelData.thumbAt || 0) : ""
-									fillMode: Image.PreserveAspectCrop
+									fillMode: win.thumbFill
 									asynchronous: false
 									cache: true
 									visible: false
@@ -309,8 +312,8 @@ AppWindow {
 									anchors.fill: parent
 
 									source: rowImage
-									saturation: -1.0
-									brightness: -0.08
+									saturation: win.thumbSaturation
+									brightness: win.thumbBrightness
 								}
 							}
 
@@ -562,7 +565,7 @@ AppWindow {
 									anchors.fill: parent
 
 									source: win.live.length === 0 && win.current.thumb === true ? win.root + "/" + win.current.name + "/thumb.jpg?v=" + (win.current.thumbAt || 0) : ""
-									fillMode: Image.PreserveAspectFit
+									fillMode: win.thumbFill
 									asynchronous: false
 									cache: true
 									visible: false
@@ -572,11 +575,8 @@ AppWindow {
 									anchors.fill: parent
 
 									source: stageThumb
-									saturation: -1.0
-									brightness: -0.08
-									blurEnabled: win.live.length === 0
-									blur: 0.4
-									blurMax: 28
+									saturation: win.thumbSaturation
+									brightness: win.thumbBrightness
 									visible: win.live.length === 0
 								}
 
