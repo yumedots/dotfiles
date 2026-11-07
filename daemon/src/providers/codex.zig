@@ -199,8 +199,19 @@ pub const Codex = struct {
 			.{ .name = "chatgpt-account-id", .value = account_header },
 		};
 
-		const parsed = self.http.getJson(self.allocator, "https://chatgpt.com/backend-api/wham/usage", auth, &extra) catch {
+		const reply = self.http.get(self.allocator, "https://chatgpt.com/backend-api/wham/usage", auth, &extra) catch {
 			self.setFailure("plan unreachable");
+			return;
+		};
+		defer reply.deinit(self.allocator);
+
+		if (!reply.ok()) {
+			self.setFailure(if (reply.status == .unauthorized) "expired" else "plan unavailable");
+			return;
+		}
+
+		const parsed = json.parse(self.allocator, reply.body) catch {
+			self.setFailure("plan unavailable");
 			return;
 		};
 		defer parsed.deinit();
@@ -237,8 +248,11 @@ pub const Codex = struct {
 
 	fn setFailure(self: *Codex, message: []const u8) void {
 		self.mutex.lockUncancelable(self.io);
+		self.clearLimits();
 		setStr(self.allocator, &self.failure, message) catch {};
 		self.mutex.unlock(self.io);
+
+		self.hub.publish();
 	}
 
 	fn pollLoop(self: *Codex) void {

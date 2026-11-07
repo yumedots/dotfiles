@@ -115,7 +115,7 @@ pub const Claude = struct {
 
 		const expires = json.integer(json.deep(creds.value, &.{ "claudeAiOauth", "expiresAt" }));
 		if (expires > 0 and expires <= std.Io.Clock.real.now(self.io).toMilliseconds()) {
-			self.setFailure(plan, "plan expired");
+			self.setFailure(plan, "expired");
 			cooldown = rate_limit_refresh_ms;
 			return;
 		}
@@ -134,8 +134,9 @@ pub const Claude = struct {
 
 		if (!reply.ok()) {
 			const limited = reply.status == .too_many_requests;
+			const expired = reply.status == .unauthorized;
 
-			self.setTransientFailure(plan, if (limited) "rate limited" else "plan unavailable");
+			self.setTransientFailure(plan, if (limited) "rate limited" else if (expired) "expired" else "plan unavailable");
 			cooldown = if (limited) rate_limit_refresh_ms else error_refresh_ms;
 			return;
 		}
@@ -228,7 +229,7 @@ pub const Claude = struct {
 
 		self.freeLimits();
 		self.limits = .empty;
-		self.replace(&self.failure, "");
+		self.replace(&self.failure, "not signed in");
 	}
 
 	fn freeLimits(self: *Claude) void {
