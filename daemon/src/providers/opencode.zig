@@ -19,6 +19,7 @@ const Session = struct {
 	id: []u8,
 	title: []u8 = &.{},
 	provider: []u8 = &.{},
+	source: []u8 = &.{},
 	parent: []u8 = &.{},
 	directory: []u8 = &.{},
 	status: []u8 = &.{},
@@ -31,6 +32,7 @@ const Session = struct {
 const Done = struct {
 	id: []u8,
 	title: []u8,
+	source: []u8,
 	at: i64,
 };
 
@@ -44,6 +46,7 @@ const SessionOut = struct {
 	id: []const u8,
 	title: []const u8,
 	provider: []const u8,
+	source: []const u8,
 	parent: []const u8,
 	directory: []const u8,
 	status: []const u8,
@@ -55,6 +58,7 @@ const SessionOut = struct {
 const DoneOut = struct {
 	id: []const u8,
 	title: []const u8,
+	source: []const u8,
 	at: i64,
 };
 
@@ -158,19 +162,7 @@ pub const Opencode = struct {
 
 	pub fn dismiss(self: *Opencode, id: []const u8) void {
 		self.mutex.lockUncancelable(self.io);
-
-		var index: usize = 0;
-		while (index < self.done.items.len) {
-			if (std.mem.eql(u8, self.done.items[index].id, id)) {
-				const entry = self.done.orderedRemove(index);
-				self.allocator.free(entry.id);
-				self.allocator.free(entry.title);
-				continue;
-			}
-
-			index += 1;
-		}
-
+		self.dropDoneLocked(id);
 		self.mutex.unlock(self.io);
 		self.hub.publish();
 	}
@@ -376,7 +368,8 @@ pub const Opencode = struct {
 		self.mutex.lockUncancelable(self.io);
 
 		const title = self.titleLocked(id);
-		const app = appName(if (self.sessions.get(id)) |session| session.provider else "");
+		const source = if (self.sessions.get(id)) |session| session.source else "";
+		const app = appName(source);
 		const copy_id = self.allocator.dupe(u8, id) catch {
 			self.mutex.unlock(self.io);
 			return;
@@ -386,11 +379,20 @@ pub const Opencode = struct {
 			self.mutex.unlock(self.io);
 			return;
 		};
-		const note_title = self.allocator.dupe(u8, copy_title) catch null;
-
-		self.done.insert(self.allocator, 0, .{ .id = copy_id, .title = copy_title, .at = fmt.nowMs(self.io) }) catch {
+		const copy_source = self.allocator.dupe(u8, source) catch {
 			self.allocator.free(copy_id);
 			self.allocator.free(copy_title);
+			self.mutex.unlock(self.io);
+			return;
+		};
+		const note_title = self.allocator.dupe(u8, copy_title) catch null;
+
+		self.dropDoneLocked(id);
+
+		self.done.insert(self.allocator, 0, .{ .id = copy_id, .title = copy_title, .source = copy_source, .at = fmt.nowMs(self.io) }) catch {
+			self.allocator.free(copy_id);
+			self.allocator.free(copy_title);
+			self.allocator.free(copy_source);
 			if (note_title) |text| self.allocator.free(text);
 			self.mutex.unlock(self.io);
 			return;
@@ -400,6 +402,7 @@ pub const Opencode = struct {
 			const entry = self.done.pop().?;
 			self.allocator.free(entry.id);
 			self.allocator.free(entry.title);
+			self.allocator.free(entry.source);
 		}
 
 		self.mutex.unlock(self.io);
@@ -414,9 +417,24 @@ pub const Opencode = struct {
 		self.hub.publish();
 	}
 
-	fn appName(name: []const u8) []const u8 {
-		if (std.mem.startsWith(u8, name, "claude")) return "Claude";
-		if (std.mem.eql(u8, name, "openai") or std.mem.startsWith(u8, name, "codex")) return "Codex";
+	fn dropDoneLocked(self: *Opencode, id: []const u8) void {
+		var index: usize = 0;
+		while (index < self.done.items.len) {
+			if (std.mem.eql(u8, self.done.items[index].id, id)) {
+				const entry = self.done.orderedRemove(index);
+				self.allocator.free(entry.id);
+				self.allocator.free(entry.title);
+				self.allocator.free(entry.source);
+				continue;
+			}
+
+			index += 1;
+		}
+	}
+
+	fn appName(source: []const u8) []const u8 {
+		if (std.mem.eql(u8, source, "claude")) return "Claude";
+		if (std.mem.eql(u8, source, "codex")) return "Codex";
 		return "OpenCode";
 	}
 
@@ -696,8 +714,19 @@ pub const Opencode = struct {
 		const bearer = http.bearer(self.allocator, token) catch return;
 		defer self.allocator.free(bearer);
 
-		const parsed_usage = self.http.getJson(self.allocator, "https://opencode.ai/zen/go/v1/usage", bearer, &.{}) catch {
+		const reply = self.http.get(self.allocator, "https://opencode.ai/zen/go/v1/usage", bearer, &.{}) catch {
 			self.setUsageError("plan unreachable");
+			return;
+		};
+		defer reply.deinit(self.allocator);
+
+		if (reply.status == .unauthorized or reply.status == .forbidden) {
+			self.setUsageError("expired");
+			return;
+		}
+
+		const parsed_usage = json.parse(self.allocator, reply.body) catch {
+			self.setUsageError("plan unavailable");
 			return;
 		};
 		defer parsed_usage.deinit();
@@ -804,7 +833,7 @@ pub const Opencode = struct {
 		return "";
 	}
 
-	pub fn track(self: *Opencode, id: []const u8, title: []const u8, provider_name: []const u8, working: bool, blocked: bool, at: i64) void {
+	pub fn track(self: *Opencode, id: []const u8, title: []const u8, provider_name: []const u8, source: []const u8, working: bool, blocked: bool, at: i64) void {
 		self.mutex.lockUncancelable(self.io);
 		const session = self.sessionFor(id) catch {
 			self.mutex.unlock(self.io);
@@ -814,6 +843,7 @@ pub const Opencode = struct {
 		const was = isBusy(session.status);
 		setStr(self.allocator, &session.title, title) catch {};
 		setStr(self.allocator, &session.provider, provider_name) catch {};
+		setStr(self.allocator, &session.source, source) catch {};
 		setStr(self.allocator, &session.status, if (working) "busy" else "idle") catch {};
 		session.updated = at;
 		session.local = true;
@@ -853,6 +883,7 @@ pub const Opencode = struct {
 				.id = session.id,
 				.title = session.title,
 				.provider = session.provider,
+				.source = if (session.source.len == 0) "opencode" else session.source,
 				.parent = session.parent,
 				.directory = session.directory,
 				.status = session.status,
@@ -864,7 +895,7 @@ pub const Opencode = struct {
 
 		var done: std.ArrayListUnmanaged(DoneOut) = .empty;
 		for (self.done.items) |entry| {
-			try done.append(arena, .{ .id = entry.id, .title = entry.title, .at = entry.at });
+			try done.append(arena, .{ .id = entry.id, .title = entry.title, .source = if (entry.source.len == 0) "opencode" else entry.source, .at = entry.at });
 		}
 
 		var limits: std.ArrayListUnmanaged(LimitOut) = .empty;
@@ -986,6 +1017,32 @@ test "a finished session posts a notification" {
 	try std.testing.expectEqualStrings("OpenCode", notes.rows.items[0].app);
 	try std.testing.expectEqualStrings("Greeting", notes.rows.items[0].summary);
 	try std.testing.expectEqualStrings("Task finished", notes.rows.items[0].body);
+}
+
+test "a session that finishes twice is listed once and dismissed once" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	const io = std.testing.io;
+
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
+	var client = http.Client.init(allocator, io);
+	const self = try Opencode.create(allocator, io, &hub, &client);
+
+	self.handleEvent("{\"type\":\"session.created\",\"data\":{\"sessionID\":\"ses_a\",\"title\":\"A\"}}");
+	self.handleEvent("{\"type\":\"session.created\",\"data\":{\"sessionID\":\"ses_b\",\"title\":\"B\"}}");
+	self.handleEvent("{\"type\":\"session.execution.succeeded\",\"data\":{\"sessionID\":\"ses_a\"}}");
+	self.handleEvent("{\"type\":\"session.execution.succeeded\",\"data\":{\"sessionID\":\"ses_b\"}}");
+	self.handleEvent("{\"type\":\"session.execution.succeeded\",\"data\":{\"sessionID\":\"ses_a\"}}");
+
+	try std.testing.expectEqual(@as(usize, 2), self.done.items.len);
+	try std.testing.expectEqualStrings("ses_a", self.done.items[0].id);
+
+	self.dismiss("ses_a");
+
+	try std.testing.expectEqual(@as(usize, 1), self.done.items.len);
+	try std.testing.expectEqualStrings("ses_b", self.done.items[0].id);
 }
 
 const credential_query = "SELECT COALESCE(json_extract(value, '$.key'), json_extract(value, '$.access')) AS token FROM credential WHERE active = 1 AND integration_id IN ('opencode-go', 'opencode') AND json_valid(value) AND COALESCE(json_extract(value, '$.key'), json_extract(value, '$.access')) IS NOT NULL ORDER BY CASE integration_id WHEN 'opencode-go' THEN 0 ELSE 1 END, time_updated DESC LIMIT 1;";

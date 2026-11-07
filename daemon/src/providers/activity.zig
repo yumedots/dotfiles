@@ -9,6 +9,7 @@ const Io = std.Io;
 const stale_ms: i64 = 600_000;
 const recent_ms: i64 = 3_600_000;
 const tail_bytes: u64 = 524_288;
+const codex_days: usize = 7;
 
 const Kind = enum { claude, codex };
 
@@ -23,6 +24,7 @@ pub const Activity = struct {
 	io: Io,
 	opencode: *Opencode,
 	known: std.StringHashMapUnmanaged(Seen) = .empty,
+	hosted: std.StringHashMapUnmanaged(void) = .empty,
 
 	pub fn create(allocator: Allocator, io: Io, opencode: *Opencode) !*Activity {
 		const self = try allocator.create(Activity);
@@ -52,7 +54,14 @@ pub const Activity = struct {
 		const age = now - mtime;
 		const last = self.known.get(id);
 
+		if (self.hosted.contains(id)) return;
 		if (last == null and age > recent_ms) return;
+
+		if (last == null and kind == .claude and self.isHosted(path, stat.size)) {
+			const key = self.allocator.dupe(u8, id) catch return;
+			self.hosted.put(self.allocator, key, {}) catch self.allocator.free(key);
+			return;
+		}
 
 		const working = if (age >= stale_ms)
 			false
@@ -76,7 +85,7 @@ pub const Activity = struct {
 			self.known.getPtr(id).?.* = .{ .working = working, .blocked = blocked, .mtime = mtime };
 		}
 
-		self.opencode.track(id, title, provider, working, blocked, mtime);
+		self.opencode.track(id, title, provider, @tagName(kind), working, blocked, mtime);
 	}
 
 	fn hookBlocked(self: *Activity, id: []const u8) bool {
@@ -89,19 +98,37 @@ pub const Activity = struct {
 		return std.mem.startsWith(u8, body, "blocked");
 	}
 
-	fn decide(self: *Activity, path: []const u8, size: u64, kind: Kind) bool {
-		var file = std.Io.Dir.cwd().openFile(self.io, path, .{}) catch return false;
+	fn isHosted(self: *Activity, path: []const u8, size: u64) bool {
+		const tail = self.readTail(path, size) orelse return false;
+		defer self.allocator.free(tail);
+
+		return hostedEntry(tail);
+	}
+
+	fn readTail(self: *Activity, path: []const u8, size: u64) ?[]u8 {
+		var file = std.Io.Dir.cwd().openFile(self.io, path, .{}) catch return null;
 		defer file.close(self.io);
 
 		const length: usize = @intCast(@min(size, tail_bytes));
-		const buffer = self.allocator.alloc(u8, length) catch return false;
-		defer self.allocator.free(buffer);
+		const buffer = self.allocator.alloc(u8, length) catch return null;
 
 		var scratch: [4096]u8 = undefined;
 		var reader = file.reader(self.io, &scratch);
-		reader.seekTo(size - length) catch return false;
-		const count = reader.interface.readSliceShort(buffer) catch return false;
-		const tail = buffer[0..count];
+		reader.seekTo(size - length) catch {
+			self.allocator.free(buffer);
+			return null;
+		};
+		const count = reader.interface.readSliceShort(buffer) catch {
+			self.allocator.free(buffer);
+			return null;
+		};
+
+		return self.allocator.realloc(buffer, count) catch buffer[0..count];
+	}
+
+	fn decide(self: *Activity, path: []const u8, size: u64, kind: Kind) bool {
+		const tail = self.readTail(path, size) orelse return false;
+		defer self.allocator.free(tail);
 
 		return switch (kind) {
 			.claude => claudeWorking(tail),
@@ -146,51 +173,61 @@ pub const Activity = struct {
 	}
 
 	fn scanCodex(self: *Activity, home: []const u8) void {
-		var path = std.fmt.allocPrint(self.allocator, "{s}/.codex/sessions", .{home}) catch return;
+		const root = std.fmt.allocPrint(self.allocator, "{s}/.codex/sessions", .{home}) catch return;
+		defer self.allocator.free(root);
 
-		var level: usize = 0;
-		while (level < 3) : (level += 1) {
-			const next = self.greatest(path) orelse {
-				self.allocator.free(path);
-				return;
-			};
-			self.allocator.free(path);
-			path = next;
+		var days: std.ArrayListUnmanaged([]u8) = .empty;
+		defer {
+			for (days.items) |day| self.allocator.free(day);
+			days.deinit(self.allocator);
 		}
-		defer self.allocator.free(path);
+
+		self.collectDays(root, 0, &days);
+		std.mem.sort([]u8, days.items, {}, newerFirst);
+
+		for (days.items[0..@min(days.items.len, codex_days)]) |day| {
+			var dir = std.Io.Dir.cwd().openDir(self.io, day, .{ .iterate = true }) catch continue;
+			defer dir.close(self.io);
+
+			var it = dir.iterate();
+			while (it.next(self.io) catch null) |item| {
+				if (item.kind != .file or !std.mem.endsWith(u8, item.name, ".jsonl")) continue;
+
+				const file = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ day, item.name }) catch continue;
+				defer self.allocator.free(file);
+				self.report(item.name[0 .. item.name.len - 6], "codex", "openai", file, .codex);
+			}
+		}
+	}
+
+	fn collectDays(self: *Activity, path: []const u8, level: usize, out: *std.ArrayListUnmanaged([]u8)) void {
+		if (level == 3) {
+			const copy = self.allocator.dupe(u8, path) catch return;
+			out.append(self.allocator, copy) catch self.allocator.free(copy);
+			return;
+		}
 
 		var dir = std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true }) catch return;
 		defer dir.close(self.io);
 
 		var it = dir.iterate();
 		while (it.next(self.io) catch null) |item| {
-			if (item.kind != .file or !std.mem.endsWith(u8, item.name, ".jsonl")) continue;
+			if (item.kind != .directory) continue;
 
-			const file = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ path, item.name }) catch continue;
-			defer self.allocator.free(file);
-			self.report(item.name[0 .. item.name.len - 6], "codex", "openai", file, .codex);
+			const next = std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ path, item.name }) catch continue;
+			defer self.allocator.free(next);
+			self.collectDays(next, level + 1, out);
 		}
-	}
-
-	fn greatest(self: *Activity, path: []const u8) ?[]u8 {
-		var dir = std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true }) catch return null;
-		defer dir.close(self.io);
-
-		var top: [64]u8 = undefined;
-		var top_len: usize = 0;
-		var it = dir.iterate();
-		while (it.next(self.io) catch null) |item| {
-			if (item.kind != .directory or item.name.len > top.len) continue;
-			if (top_len == 0 or std.mem.order(u8, item.name, top[0..top_len]) == .gt) {
-				@memcpy(top[0..item.name.len], item.name);
-				top_len = item.name.len;
-			}
-		}
-
-		if (top_len == 0) return null;
-		return std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ path, top[0..top_len] }) catch null;
 	}
 };
+
+fn newerFirst(_: void, left: []u8, right: []u8) bool {
+	return std.mem.order(u8, left, right) == .gt;
+}
+
+fn hostedEntry(tail: []const u8) bool {
+	return std.mem.indexOf(u8, tail, "\"entrypoint\":\"sdk") != null;
+}
 
 fn claudeWorking(tail: []const u8) bool {
 	var end = tail.len;
@@ -236,4 +273,9 @@ test "a slash command is not work" {
 test "codex is working between started and complete" {
 	try std.testing.expect(codexWorking("{\"type\":\"task_started\"}\n"));
 	try std.testing.expect(!codexWorking("{\"type\":\"task_started\"}\n{\"type\":\"task_complete\"}\n"));
+}
+
+test "a claude session started by another agent is not an agent of its own" {
+	try std.testing.expect(hostedEntry("{\"type\":\"user\",\"entrypoint\":\"sdk-ts\"}\n"));
+	try std.testing.expect(!hostedEntry("{\"type\":\"user\",\"entrypoint\":\"cli\"}\n"));
 }
