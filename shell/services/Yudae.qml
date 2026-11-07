@@ -42,7 +42,13 @@ QtObject {
 		return "";
 	}
 
-	readonly property var doneSessions: root.opencode.done || []
+	readonly property var doneSessions: {
+		const rows = root.opencode.done || [];
+
+		return rows.map(function (row) {
+			return { id: row.id, title: row.title, icon: root.iconOf(row.source || "") };
+		});
+	}
 
 	readonly property var subscriptions: root.snapshot.subscriptions ? (root.snapshot.subscriptions.list || []) : []
 
@@ -68,9 +74,9 @@ QtObject {
 
 	readonly property var planRings: {
 		const out = [];
-		const find = function (limits, title) {
+		const find = function (limits, titles) {
 			for (let i = 0; i < limits.length; i++)
-				if (String(limits[i].title || "").toLowerCase() === title)
+				if (titles.indexOf(String(limits[i].title || "").toLowerCase()) >= 0)
 					return limits[i];
 
 			return null;
@@ -82,16 +88,28 @@ QtObject {
 			if (plan.failure !== "" || !plan.limits || plan.limits.length === 0)
 				continue;
 
-			const limit = find(plan.limits, "monthly") || find(plan.limits, "weekly");
+			const rings = [find(plan.limits, ["session", "rolling"]), find(plan.limits, ["weekly"]), find(plan.limits, ["monthly"])].filter(function (limit) {
+				return limit !== null;
+			});
 
-			if (limit === null || limit.percent < Config.agentRingWarnPercent)
+			if (rings.length === 0)
+				continue;
+
+			let top = rings[0];
+
+			for (let j = 1; j < rings.length; j++)
+				if (rings[j].percent > top.percent)
+					top = rings[j];
+
+			if (top.percent < Config.agentRingWarnPercent)
 				continue;
 
 			out.push({
 				title: plan.title,
 				icon: plan.icon,
-				percent: limit.percent,
-				resetsAt: limit.resetsAt,
+				percent: top.percent,
+				resetsAt: top.resetsAt,
+				rings: rings,
 			});
 		}
 
@@ -129,7 +147,7 @@ QtObject {
 			rows.push({
 				id: id,
 				title: session.title || "session",
-				icon: root.iconOf(session.provider || ""),
+				icon: root.iconOf(session.source || ""),
 				working: running,
 				question: question || root.asking.indexOf(id) >= 0,
 				failed: failed,
@@ -195,64 +213,14 @@ QtObject {
 		return null;
 	}
 
-	function iconOf(providerID) {
-		const id = String(providerID || "").toLowerCase();
-
-		if (!id)
-			return "";
-
-		if (id.indexOf("opencode") >= 0 || id.indexOf("zen") >= 0)
-			return "opencode";
-
-		if (id.indexOf("anthropic") >= 0 || id.indexOf("claude") >= 0)
+	function iconOf(source) {
+		if (source === "claude")
 			return "claude";
 
-		if (id.indexOf("azure") >= 0)
-			return "microsoftazure";
-
-		if (id.indexOf("openai") >= 0 || id.indexOf("codex") >= 0)
+		if (source === "codex")
 			return "openai";
 
-		if (id.indexOf("google") >= 0 || id.indexOf("gemini") >= 0 || id.indexOf("vertex") >= 0)
-			return "google";
-
-		if (id.indexOf("copilot") >= 0)
-			return "githubcopilot";
-
-		if (id.indexOf("grok") >= 0 || id.indexOf("xai") >= 0)
-			return "x";
-
-		if (id.indexOf("openrouter") >= 0)
-			return "openrouter";
-
-		if (id.indexOf("mistral") >= 0)
-			return "mistralai";
-
-		if (id.indexOf("deepseek") >= 0)
-			return "deepseek";
-
-		if (id.indexOf("kimi") >= 0 || id.indexOf("moonshot") >= 0)
-			return "kimi";
-
-		if (id.indexOf("qwen") >= 0 || id.indexOf("alibaba") >= 0)
-			return "alibabacloud";
-
-		if (id.indexOf("perplexity") >= 0)
-			return "perplexity";
-
-		if (id.indexOf("ollama") >= 0)
-			return "ollama";
-
-		if (id.indexOf("huggingface") >= 0)
-			return "huggingface";
-
-		if (id.indexOf("bedrock") >= 0 || id.indexOf("amazon") >= 0)
-			return "amazonaws";
-
-		if (id.indexOf("nvidia") >= 0)
-			return "nvidia";
-
-		return "";
+		return "opencode";
 	}
 
 	property bool gazeWanted: false

@@ -21,6 +21,8 @@ local autostart = {
 }
 
 hl.on("hyprland.start", function ()
+  hl.exec_cmd("sh -c 'systemctl --user import-environment DISPLAY WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP && systemctl --user restart yudaemond'")
+
   for _, app in ipairs(autostart) do once(app[1], app[2]) end
 
 end)

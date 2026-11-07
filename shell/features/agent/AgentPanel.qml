@@ -102,7 +102,7 @@ Item {
 	}
 
 	implicitWidth: Config.agentPanelWidth + 2 * Config.agentPanelPadding
-	implicitHeight: Config.agentPanelHeight + 2 * Config.agentPanelPadding
+	implicitHeight: 2 * Config.agentPanelPadding + content.y + Math.max(doneList.y + doneList.height, planStack.height)
 
 	clip: true
 
@@ -376,10 +376,11 @@ Item {
 					anchors.left: parent.left
 					anchors.right: parent.right
 
-					height: visible ? Config.agentRingSize : 0
-					visible: Yudae.planRings.length > 0
+					height: Config.agentRingSize
 
 					Row {
+						visible: Yudae.planRings.length > 0
+
 						spacing: Config.agentRingGap
 
 						Repeater {
@@ -393,19 +394,31 @@ Item {
 								width: Config.agentRingSize
 								height: Config.agentRingSize
 
-								StepBar {
-									anchors.fill: parent
+								readonly property real ringStep: (Config.agentRingWidth + Config.agentRingSpacing) * 2
+								readonly property real innerSize: Config.agentRingSize - planRing.ringStep * (planRing.modelData.rings.length - 1)
 
-									circular: true
-									ringWidth: Config.agentRingWidth
-									level: planRing.modelData.percent / 100
-									ink: planRing.modelData.percent >= Config.agentRingAlarmPercent ? Config.red : Config.yellow
-									track: Config.dim
+								Repeater {
+									model: planRing.modelData.rings
+
+									delegate: StepBar {
+										required property var modelData
+										required property int index
+
+										anchors.centerIn: parent
+										width: Config.agentRingSize - planRing.ringStep * index
+										height: width
+
+										circular: true
+										ringWidth: Config.agentRingWidth
+										level: modelData.percent / 100
+										ink: modelData.percent >= Config.agentRingAlarmPercent ? Config.red : Config.yellow
+										track: Config.dim
+									}
 								}
 
 								Image {
 									visible: planRing.modelData.icon !== ""
-									width: Math.round(Config.agentRingSize * 0.5)
+									width: Math.max(0, Math.round(planRing.innerSize - Config.agentRingWidth * 2 - 4))
 									height: width
 									x: Math.round((parent.width - width) / 2)
 									y: Math.round((parent.height - height) / 2)
@@ -422,15 +435,30 @@ Item {
 					}
 				}
 
-				ListView {
+				Text {
+					id: workTitle
+
+					anchors.top: planRingStrip.bottom
+					anchors.topMargin: 8
+					anchors.left: parent.left
+
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: Config.muted
+					text: Config.agentWorkingText
+				}
+
+				StepList {
 					id: workList
 
-					anchors.top: parent.top
-					anchors.topMargin: planRingStrip.visible ? planRingStrip.height + 8 : 0
+					shown: tasksBox.listRows
+
+					anchors.top: workTitle.bottom
+					anchors.topMargin: 4
 					anchors.left: parent.left
 					anchors.right: parent.right
 
-					height: Math.min(contentHeight, tasksBox.listHeight)
+					height: tasksBox.listHeight
 
 					clip: true
 					spacing: 2
@@ -439,7 +467,7 @@ Item {
 					delegate: AgentRow {
 						required property var modelData
 
-						width: workList.width - 8
+						width: workList.width
 						height: root.rowHeight
 
 						kind: modelData.working ? "working" : (modelData.question ? "question" : "failed")
@@ -448,16 +476,11 @@ Item {
 					}
 				}
 
-				Scrollbar {
-					view: workList
-					offset: 4
-				}
-
 				Text {
 					id: doneTitle
 
 					anchors.top: workList.bottom
-					anchors.topMargin: workList.count > 0 ? 6 : 0
+					anchors.topMargin: 6
 					anchors.left: parent.left
 
 					font.family: Config.fontFamily
@@ -466,15 +489,17 @@ Item {
 					text: Config.agentDoneTitle
 				}
 
-				ListView {
+				StepList {
 					id: doneList
+
+					shown: tasksBox.listRows
 
 					anchors.top: doneTitle.bottom
 					anchors.topMargin: 4
 					anchors.left: parent.left
 					anchors.right: parent.right
 
-					height: Math.min(contentHeight, tasksBox.listHeight)
+					height: tasksBox.listHeight
 
 					clip: true
 					spacing: 2
@@ -483,10 +508,11 @@ Item {
 					delegate: AgentRow {
 						required property var modelData
 
-						width: doneList.width - 8
+						width: doneList.width
 						height: root.rowHeight
 
 						kind: "done"
+						icon: modelData.icon
 						title: modelData.title
 						dismissable: true
 
@@ -494,10 +520,6 @@ Item {
 					}
 				}
 
-				Scrollbar {
-					view: doneList
-					offset: 4
-				}
 			}
 
 			Item {
@@ -506,168 +528,151 @@ Item {
 				anchors.fill: parent
 				visible: body.tab === 1
 
-				Flickable {
-					id: planFlick
+				Column {
+					id: planStack
 
 					anchors.top: parent.top
 					anchors.left: parent.left
 					anchors.right: parent.right
-					anchors.rightMargin: 10
-					anchors.bottom: parent.bottom
+					spacing: 6
 
-					contentWidth: width
-					contentHeight: planStack.height
-					clip: true
+					// One block for each plan the shell knows about: its
+					// name, and the windows of what is left of it.
+					Repeater {
+						model: Yudae.plans
 
-					Column {
-						id: planStack
+						delegate: Column {
+							id: planBlock
 
-						width: planFlick.width
-						spacing: 6
+							required property var modelData
 
-						// One block for each plan the shell knows about: its
-						// name, and the windows of what is left of it.
-						Repeater {
-							model: Yudae.plans
+							width: planStack.width
+							spacing: 6
 
-							delegate: Column {
-								id: planBlock
-
-								required property var modelData
-
-								width: planStack.width
+							Row {
 								spacing: 6
 
-								Row {
-									spacing: 6
+								Image {
+									visible: planBlock.modelData.icon !== ""
+									width: 18
+									height: 18
 
-									Image {
-										visible: planBlock.modelData.icon !== ""
-										width: 18
-										height: 18
-
-										source: planBlock.modelData.icon === ""
-											? ""
-											: "file://" + Quickshell.shellDir + "/assets/providers/" + planBlock.modelData.icon + ".svg?v=4"
-										sourceSize.width: Math.round(18 * root.dpr)
-										sourceSize.height: Math.round(18 * root.dpr)
-										fillMode: Image.PreserveAspectFit
-									}
-
-									Text {
-										font.family: Config.fontFamily
-										font.pixelSize: Settings.fontSize
-										color: Config.foreground
-										text: planBlock.modelData.title
-									}
+									source: planBlock.modelData.icon === ""
+										? ""
+										: "file://" + Quickshell.shellDir + "/assets/providers/" + planBlock.modelData.icon + ".svg?v=4"
+									sourceSize.width: Math.round(18 * root.dpr)
+									sourceSize.height: Math.round(18 * root.dpr)
+									fillMode: Image.PreserveAspectFit
 								}
 
 								Text {
-									width: planBlock.width
-									visible: planBlock.modelData.failure !== ""
-									elide: Text.ElideRight
-
 									font.family: Config.fontFamily
 									font.pixelSize: Settings.fontSize
-									color: Config.muted
-									text: planBlock.modelData.failure
+									color: Config.foreground
+									text: planBlock.modelData.title
 								}
+							}
 
-								Repeater {
-									model: planBlock.modelData.limits
+							Text {
+								width: planBlock.width
+								visible: planBlock.modelData.failure !== ""
+								elide: Text.ElideRight
 
-									delegate: Item {
-										id: limitRow
+								font.family: Config.fontFamily
+								font.pixelSize: Settings.fontSize
+								color: Config.muted
+								text: planBlock.modelData.failure
+							}
 
-										required property var modelData
+							Repeater {
+								model: planBlock.modelData.limits
 
-										width: planBlock.width
-										height: Math.max(limitLabel.implicitHeight, limitReset.implicitHeight)
+								delegate: Item {
+									id: limitRow
 
-										readonly property bool alarming: modelData.percent >= 90
+									required property var modelData
 
-										// The label and the numbers are fixed columns, so
-										// every bar starts and ends in the same place. The
-										// percentage sits before the bar, so the bar is
-										// read as the rest.
-										Text {
-											id: limitLabel
+									width: planBlock.width
+									height: Math.max(limitLabel.implicitHeight, limitReset.implicitHeight)
 
-											anchors.left: parent.left
-											anchors.verticalCenter: parent.verticalCenter
-											width: 68
+									readonly property bool alarming: modelData.percent >= 90
 
-											font.family: Config.fontFamily
-											font.pixelSize: Settings.fontSize
-											color: Config.foreground
-											text: modelData.title
-										}
+									// The label and the numbers are fixed columns, so
+									// every bar starts and ends in the same place. The
+									// percentage sits before the bar, so the bar is
+									// read as the rest.
+									Text {
+										id: limitLabel
 
-										StepBar {
-											id: limitMeter
+										anchors.left: parent.left
+										anchors.verticalCenter: parent.verticalCenter
+										width: 68
 
-											anchors.left: limitLabel.right
-											anchors.right: limitValue.left
-											anchors.leftMargin: 8
-											anchors.rightMargin: 10
-											anchors.verticalCenter: parent.verticalCenter
+										font.family: Config.fontFamily
+										font.pixelSize: Settings.fontSize
+										color: Config.foreground
+										text: modelData.title
+									}
 
-											level: modelData.percent / 100
-											ink: limitRow.alarming ? Config.red : Config.foreground
-											track: Config.dim
-										}
+									StepBar {
+										id: limitMeter
 
-										Text {
-											id: limitValue
+										anchors.left: limitLabel.right
+										anchors.right: limitValue.left
+										anchors.leftMargin: 8
+										anchors.rightMargin: 10
+										anchors.verticalCenter: parent.verticalCenter
 
-											anchors.right: limitReset.left
-											anchors.rightMargin: 6
-											anchors.verticalCenter: parent.verticalCenter
-											width: 34
+										level: modelData.percent / 100
+										ink: limitRow.alarming ? Config.red : Config.foreground
+										track: Config.dim
+									}
 
-											horizontalAlignment: Text.AlignRight
+									Text {
+										id: limitValue
 
-											font.family: Config.fontFamily
-											font.pixelSize: Settings.fontSize
-											color: limitRow.alarming ? Config.red : Config.muted
-											text: Math.round(modelData.percent) + "%"
-										}
+										anchors.right: limitReset.left
+										anchors.rightMargin: 6
+										anchors.verticalCenter: parent.verticalCenter
+										width: 34
 
-										Text {
-											id: limitReset
+										horizontalAlignment: Text.AlignRight
 
-											anchors.right: parent.right
-											anchors.verticalCenter: parent.verticalCenter
-											width: 26
+										font.family: Config.fontFamily
+										font.pixelSize: Settings.fontSize
+										color: limitRow.alarming ? Config.red : Config.muted
+										text: Math.round(modelData.percent) + "%"
+									}
 
-											horizontalAlignment: Text.AlignRight
+									Text {
+										id: limitReset
 
-											font.family: Config.fontFamily
-											font.pixelSize: Settings.fontSize
-											color: Config.muted
-											text: root.countdown(modelData.resetsAt)
-										}
+										anchors.right: parent.right
+										anchors.verticalCenter: parent.verticalCenter
+										width: 26
+
+										horizontalAlignment: Text.AlignRight
+
+										font.family: Config.fontFamily
+										font.pixelSize: Settings.fontSize
+										color: Config.muted
+										text: root.countdown(modelData.resetsAt)
 									}
 								}
 							}
 						}
-
-						Text {
-							width: parent.width
-							visible: Yudae.plans.length === 0 && root.planError !== ""
-							elide: Text.ElideRight
-
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: Config.muted
-							text: root.planError
-						}
 					}
-				}
 
-				Scrollbar {
-					view: planFlick
-					offset: 4
+					Text {
+						width: parent.width
+						visible: Yudae.plans.length === 0 && root.planError !== ""
+						elide: Text.ElideRight
+
+						font.family: Config.fontFamily
+						font.pixelSize: Settings.fontSize
+						color: Config.muted
+						text: root.planError
+					}
 				}
 			}
 		}
