@@ -13,6 +13,7 @@ ProcessList 1.0 ProcessList.qml
 ProcessPanel 1.0 ProcessPanel.qml
 Selector 1.0 Selector.qml
 Scrollbar 1.0 Scrollbar.qml
+StepList 1.0 StepList.qml
 ContextMenu 1.0 ContextMenu.qml
 SettingsMenu 1.0 SettingsMenu.qml
 SearchField 1.0 SearchField.qml
