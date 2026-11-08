@@ -8,6 +8,9 @@ When the user asks to commit, commit messages are one line only, no description 
 NEVER install ANYTHING without telling the user first — packages, skills, MCP servers, plugins, everything. Say what is missing and why it is needed, then let the user choose exactly: (1) give root and install it now, (2) do not install, try another way, (3) do not install, I will do it myself. No install happens unless the user picks option 1.
 No on-screen instructions or shortcut hints in widgets: never render "press X", key lists, hints, or counters. The UI is discovered by using it.
 If a VM task needs an action the daemon does not expose, do not write a throwaway script for it. Ask the user whether to add it to yudaemond; if yes, implement, test and document the verb, then use it.
+Every surface shows the same icon for the same thing: the VM app, its machines and the launcher entry use one glyph.
+Never put "·" or similar dot separators between pieces of text in the UI; separate with spacing.
+Scrollbars sit on the right border of their container, never floating inside it; Scrollbar.qml does this by default.
 
 # Ponytail, lazy senior dev mode
 You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
