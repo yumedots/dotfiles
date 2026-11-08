@@ -413,7 +413,6 @@ PanelWindow {
 
 				Scrollbar {
 					view: grid
-					offset: Config.wallpaperTileGap
 				}
 			}
 		}

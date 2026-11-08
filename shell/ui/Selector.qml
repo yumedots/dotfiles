@@ -106,6 +106,5 @@ Item {
 	Scrollbar {
 		visible: root.scrollWidth > 0 && list.contentHeight > list.height + 1
 		view: list
-		offset: root.rowSpacing
 	}
 }
