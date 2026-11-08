@@ -54,6 +54,7 @@ hl.config({
 
     render = {
         new_render_scheduling = true,
+        cm_auto_hdr           = 0,
     },
 
     quirks = {
@@ -79,3 +80,4 @@ hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1,   bezier = "qu
 hl.animation({ leaf = "workspaces",    enabled = false })
 hl.animation({ leaf = "workspacesIn",  enabled = false })
 hl.animation({ leaf = "workspacesOut", enabled = false })
+
