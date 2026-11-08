@@ -31,7 +31,6 @@ ProcessPanel {
 	totalOverride: govStep.hoverLabel !== "" ? govStep.hoverLabel : root.governor
 	totalInk: root.accentInk
 	showProcessList: false
-	showVms: false
 	listInk: root.accentInk
 	panelWidth: Config.powerTooltipWidth
 	panelPadding: Config.powerTooltipPadding
