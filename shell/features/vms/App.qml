@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import Quickshell
 import qs
 import qs.services
@@ -15,11 +14,10 @@ AppWindow {
 	readonly property color secondary: "#b4b4b4"
 	readonly property color faint: "#949494"
 	readonly property color rule: "#1f1f1f"
+	readonly property color sidebar: "#0a0a0a"
+	readonly property string vmGlyph: "\uDB80\uDF79"
 	readonly property color active: "#181818"
 	readonly property color hover: "#141414"
-	readonly property int thumbFill: Image.PreserveAspectCrop
-	readonly property real thumbSaturation: -1.0
-	readonly property real thumbBrightness: -0.08
 
 	property string selectedName: ""
 	property string live: Quickshell.env("YUDAE_VM") || ""
@@ -48,6 +46,8 @@ AppWindow {
 	}
 
 	appTitle: "Virtual Machine Manager"
+	appMinWidth: 960
+	appMinHeight: 560
 	implicitWidth: 1400
 	implicitHeight: 820
 
@@ -84,8 +84,8 @@ AppWindow {
 		win.menuVm = "";
 	}
 
-	function openMenu(name, anchor, settings) {
-		const same = win.menuVm === name && (settings ? win.settingsOpen : win.powerOpen);
+	function openMenu(name, anchor) {
+		const same = win.menuVm === name && win.powerOpen;
 		win.closeMenus();
 		if (same)
 			return;
@@ -93,8 +93,14 @@ AppWindow {
 		win.selectVm(name);
 		win.menuAnchor = anchor;
 		win.menuVm = name;
-		if (settings) win.settingsOpen = true;
-		else win.powerOpen = true;
+		win.powerOpen = true;
+	}
+
+	function openSettings(name) {
+		win.closeMenus();
+		win.selectVm(name);
+		win.menuVm = name;
+		win.settingsOpen = true;
 	}
 
 	function power(action) {
@@ -125,25 +131,42 @@ AppWindow {
 		else win.act("config", { name: win.selected, mem: value });
 	}
 
-	function lastViewed(stamp) {
-		if (!stamp || stamp <= 0) return "never";
-		if (stamp < 1000) return "saved";
-		const seconds = Math.max(0, Math.floor((Date.now() - stamp) / 1000));
-		if (seconds < 60) return "just now";
-		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return minutes + "m ago";
-		const hours = Math.floor(minutes / 60);
-		if (hours < 24) return hours + "h ago";
-		return Math.floor(hours / 24) + "d ago";
+	function sessionLabel(vm) {
+		const title = vm.sessionTitle || vm.session || "";
+		if (title.length > 0) return title;
+		return (vm.harness || "").length > 0 ? "no session" : "no agent";
 	}
 
-	function sessionLabel(vm) {
-		const harness = vm.harness || "";
-		const title = vm.sessionTitle || vm.session || "";
-		if (harness.length > 0 && title.length > 0) return harness + " · " + title;
-		if (harness.length > 0) return harness + " · no session";
-		if (title.length > 0) return title;
-		return "no agent";
+	component AgentLine: Row {
+		id: line
+
+		property var vm: ({})
+		property int size: 13
+		property real maxWidth: 400
+		property color ink: win.secondary
+
+		spacing: 6
+
+		Image {
+			anchors.verticalCenter: parent.verticalCenter
+			width: line.size + 2
+			height: line.size + 2
+			visible: (line.vm.harness || "") !== ""
+			source: visible ? "file://" + Quickshell.shellDir + "/assets/providers/" + line.vm.harness + ".svg?v=4" : ""
+			sourceSize.width: width * 2
+			sourceSize.height: height * 2
+			fillMode: Image.PreserveAspectFit
+		}
+
+		Text {
+			width: Math.min(implicitWidth, Math.max(0, line.maxWidth - line.size - 8))
+			elide: Text.ElideRight
+
+			font.family: Config.fontFamily
+			font.pixelSize: line.size
+			color: line.ink
+			text: win.sessionLabel(line.vm)
+		}
 	}
 
 	onAppClosed: if (win.live.length > 0)
@@ -173,214 +196,204 @@ AppWindow {
 		onPicked: entry => win.power(entry.action)
 	}
 
-	SettingsMenu {
-		id: settingsPanel
+	Rectangle {
+		id: settingsPage
 
-		anchor: win.menuAnchor
-		title: "Settings"
-		rows: win.settingsRows()
-		z: 11
-		visible: win.settingsOpen && !win.focusMode
-		onChanged: (index, value) => win.configure(index, value)
-	}
-
-	Item {
 		anchors.fill: parent
+		z: 12
+		color: Config.surface
+		visible: win.settingsOpen && !win.focusMode
 
-		Column {
-			id: page
-
+		MouseArea {
 			anchors.fill: parent
-			anchors.margins: win.focusMode ? 0 : 24
-			spacing: win.focusMode ? 0 : 20
+			hoverEnabled: true
+		}
 
-			Item {
-				id: pageHeader
+		Item {
+			id: settingsHeader
 
-				width: parent.width
-				height: win.focusMode ? 0 : 40
-				visible: !win.focusMode
+			anchors.left: parent.left
+			anchors.right: parent.right
+			anchors.top: parent.top
+			height: 64
 
-				Text {
-					anchors.left: parent.left
-					anchors.verticalCenter: parent.verticalCenter
+			Text {
+				id: backIcon
 
-					font.family: Config.fontFamily
-					font.pixelSize: 24
-					font.weight: Font.DemiBold
-					color: win.ink
-					text: "Virtual Machine Manager"
+				anchors.left: parent.left
+				anchors.leftMargin: 24
+				anchors.verticalCenter: parent.verticalCenter
+
+				font.family: Config.fontFamily
+				font.pixelSize: 18
+				color: backMouse.containsMouse ? win.ink : win.secondary
+				text: ""
+
+				MouseArea {
+					id: backMouse
+
+					anchors.fill: parent
+					anchors.margins: -10
+					hoverEnabled: true
+					onClicked: win.closeMenus()
 				}
 			}
 
-			Row {
-				id: body
+			Text {
+				anchors.left: backIcon.right
+				anchors.leftMargin: 20
+				anchors.verticalCenter: parent.verticalCenter
 
-				width: parent.width
-				height: page.height - (win.focusMode ? 0 : 60)
-				spacing: win.focusMode ? 0 : 24
+				font.family: Config.fontFamily
+				font.pixelSize: 20
+				font.weight: Font.DemiBold
+				color: win.ink
+				text: win.current.name || ""
+			}
 
-				Item {
-					id: listPane
+			Rectangle {
+				anchors.left: parent.left
+				anchors.right: parent.right
+				anchors.bottom: parent.bottom
+				height: 1
+				color: win.rule
+			}
+		}
 
-					width: win.focusMode ? 0 : 340
-					height: body.height
-					visible: !win.focusMode
+		Item {
+			anchors.left: parent.left
+			anchors.right: parent.right
+			anchors.top: settingsHeader.bottom
+			anchors.bottom: parent.bottom
 
-					Row {
-						id: listHeader
+			Item {
+				id: settingsSide
 
-						width: parent.width
-						height: 28
+				anchors.left: parent.left
+				anchors.top: parent.top
+				anchors.bottom: parent.bottom
+				width: 300
 
-						Text {
-							width: listHeader.width - listCount.width
-							height: listHeader.height
-							verticalAlignment: Text.AlignVCenter
+				Rectangle {
+					anchors.left: parent.left
+					anchors.right: parent.right
+					anchors.top: parent.top
+					anchors.topMargin: 16
+					height: 44
+					color: win.active
 
-							font.family: Config.fontFamily
-							font.pixelSize: 12
-							font.weight: Font.Medium
-							color: win.secondary
-							text: "\uf108  Machines"
-						}
+					Text {
+						anchors.left: parent.left
+						anchors.leftMargin: 24
+						anchors.verticalCenter: parent.verticalCenter
 
-						Text {
-							id: listCount
-
-							height: listHeader.height
-							verticalAlignment: Text.AlignVCenter
-
-							font.family: Config.fontFamily
-							font.pixelSize: 12
-							color: win.faint
-							text: win.vms.length
-						}
+						font.family: Config.fontFamily
+						font.pixelSize: 14
+						color: win.ink
+						text: "Hardware"
 					}
+				}
 
-					ListView {
-						id: list
+				Rectangle {
+					anchors.right: parent.right
+					anchors.top: parent.top
+					anchors.bottom: parent.bottom
+					width: 1
+					color: win.rule
+				}
+			}
 
-						anchors.top: listHeader.bottom
-						anchors.bottom: parent.bottom
-						width: parent.width - 8
-						clip: true
-						model: win.vms
-						spacing: 0
-						cacheBuffer: 600
-						readonly property int hoverIndex: listHover.containsMouse ? list.indexAt(listHover.mouseX, listHover.mouseY + list.contentY) : -1
+			Item {
+				anchors.left: settingsSide.right
+				anchors.right: parent.right
+				anchors.top: parent.top
+				anchors.bottom: parent.bottom
+
+				Column {
+					anchors.horizontalCenter: parent.horizontalCenter
+					anchors.top: parent.top
+					anchors.topMargin: 32
+					width: Math.min(720, parent.width - 64)
+
+					Repeater {
+						model: win.settingsRows()
 
 						delegate: Item {
-							id: row
+							id: setting
 
 							required property var modelData
 							required property int index
-							readonly property bool rowHovered: list.hoverIndex === row.index
-							readonly property bool actionsShown: row.rowHovered || win.menuVm === modelData.name
 
-							width: list.width
-							height: 76
+							width: parent.width
+							height: 64
 
-
-							Rectangle {
-								anchors.fill: parent
-								color: win.selected === modelData.name ? win.active : (row.rowHovered ? win.hover : "transparent")
-							}
-
-							Item {
-								id: rowThumb
-
-								x: 0
-								y: 11
-								width: 96
-								height: 54
-								clip: true
-
-								Image {
-									id: rowImage
-
-									anchors.fill: parent
-
-									source: modelData.thumb === true ? win.root + "/" + modelData.name + "/thumb.jpg?v=" + (modelData.thumbAt || 0) : ""
-									fillMode: win.thumbFill
-									asynchronous: false
-									cache: true
-									visible: false
-								}
-
-								MultiEffect {
-									anchors.fill: parent
-
-									source: rowImage
-									saturation: win.thumbSaturation
-									brightness: win.thumbBrightness
-								}
-							}
-
-							Column {
-								anchors.left: rowThumb.right
-								anchors.leftMargin: 12
+							Text {
+								anchors.left: parent.left
 								anchors.verticalCenter: parent.verticalCenter
-								width: parent.width - rowThumb.width - 12 - rowActions.width - 8
-								spacing: 3
 
-								Text {
-									id: rowName
-
-									width: parent.width
-									elide: Text.ElideRight
-
-									font.family: Config.fontFamily
-									font.pixelSize: 14
-									font.weight: Font.Medium
-									color: win.ink
-									text: modelData.name
-								}
-
-								Rectangle {
-									width: Math.min(rowName.implicitWidth, parent.width)
-									height: 1
-									color: win.ink
-									visible: win.selected === modelData.name
-								}
-							}
-
-							MouseArea {
-								id: rowMouse
-
-								anchors.fill: parent
-								hoverEnabled: true
-								onClicked: win.selectVm(modelData.name)
+								font.family: Config.fontFamily
+								font.pixelSize: 15
+								color: win.ink
+								text: setting.modelData.label
 							}
 
 							Row {
-								id: rowActions
-
 								anchors.right: parent.right
-								anchors.rightMargin: 10
 								anchors.verticalCenter: parent.verticalCenter
-								spacing: 14
+								spacing: 8
 
-								RevealIcon {
-									id: gearIcon
+								Item {
+									width: 32
+									height: 32
 
-									shown: row.actionsShown
-									font.pixelSize: 15
-									baseColor: win.settingsOpen && win.menuVm === row.modelData.name ? win.ink : win.secondary
-									hoverColor: win.ink
-									text: "\uf013"
-									onClicked: win.openMenu(row.modelData.name, gearIcon, true)
+									Text {
+										anchors.centerIn: parent
+										font.family: Config.fontFamily
+										font.pixelSize: 14
+										color: minus.containsMouse ? win.ink : win.faint
+										text: ""
+									}
+
+									MouseArea {
+										id: minus
+
+										anchors.fill: parent
+										hoverEnabled: true
+										onClicked: win.configure(setting.index, Math.max(setting.modelData.min, setting.modelData.value - setting.modelData.step))
+									}
 								}
 
-								RevealIcon {
-									id: powerIcon
+								Text {
+									width: 110
+									height: 32
+									horizontalAlignment: Text.AlignHCenter
+									verticalAlignment: Text.AlignVCenter
 
-									shown: row.actionsShown
+									font.family: Config.fontFamily
 									font.pixelSize: 15
-									baseColor: win.powerOpen && win.menuVm === row.modelData.name ? win.ink : win.secondary
-									hoverColor: win.ink
-									text: "\uf011"
-									onClicked: win.openMenu(row.modelData.name, powerIcon, false)
+									color: win.ink
+									text: setting.modelData.value + (setting.modelData.suffix ? " " + setting.modelData.suffix : "")
+								}
+
+								Item {
+									width: 32
+									height: 32
+
+									Text {
+										anchors.centerIn: parent
+										font.family: Config.fontFamily
+										font.pixelSize: 14
+										color: plus.containsMouse ? win.ink : win.faint
+										text: ""
+									}
+
+									MouseArea {
+										id: plus
+
+										anchors.fill: parent
+										hoverEnabled: true
+										onClicked: win.configure(setting.index, Math.min(setting.modelData.max, setting.modelData.value + setting.modelData.step))
+									}
 								}
 							}
 
@@ -388,64 +401,195 @@ AppWindow {
 								anchors.left: parent.left
 								anchors.right: parent.right
 								anchors.bottom: parent.bottom
-
 								height: 1
 								color: win.rule
 							}
 						}
 					}
+				}
+			}
+		}
+	}
 
-					MouseArea {
-						id: listHover
+	Item {
+		id: frame
 
-						anchors.fill: list
-						z: 5
-						acceptedButtons: Qt.NoButton
-						hoverEnabled: true
-					}
+		anchors.fill: parent
 
-					Scrollbar {
-						view: list
-						offset: 4
-					}
+		Row {
+			id: body
 
-					Text {
-						anchors.centerIn: parent
+			anchors.fill: parent
 
-						font.family: Config.fontFamily
-						font.pixelSize: 13
-						color: win.faint
-						text: "No machines"
-						visible: win.vms.length === 0
-					}
+			Rectangle {
+				id: listPane
 
-					Rectangle {
-						anchors.right: parent.right
-						anchors.top: parent.top
-						anchors.bottom: parent.bottom
+				width: win.focusMode ? 0 : Math.max(240, Math.min(300, body.width * 0.28))
+				height: body.height
+				color: win.sidebar
+				visible: !win.focusMode
 
-						width: 1
-						color: win.rule
+				ListView {
+					id: list
+
+					anchors.fill: parent
+					anchors.rightMargin: 1
+					clip: true
+					model: win.vms
+					spacing: 0
+					cacheBuffer: 600
+					readonly property int hoverIndex: listHover.containsMouse ? list.indexAt(listHover.mouseX, listHover.mouseY + list.contentY) : -1
+
+					delegate: Item {
+						id: row
+
+						required property var modelData
+						required property int index
+						readonly property bool rowHovered: list.hoverIndex === row.index
+						readonly property bool actionsShown: row.rowHovered || win.menuVm === modelData.name
+
+						width: list.width
+						height: 64
+
+						Rectangle {
+							anchors.fill: parent
+							color: win.selected === modelData.name ? win.active : (row.rowHovered ? win.hover : "transparent")
+						}
+
+						Text {
+							id: rowIcon
+
+							anchors.left: parent.left
+							anchors.leftMargin: 20
+							anchors.verticalCenter: parent.verticalCenter
+
+							font.family: Config.fontFamily
+							font.pixelSize: 22
+							color: win.selected === row.modelData.name ? win.ink : win.secondary
+							text: win.vmGlyph
+						}
+
+						Column {
+							anchors.left: rowIcon.right
+							anchors.leftMargin: 16
+							anchors.verticalCenter: parent.verticalCenter
+							width: parent.width - 20 - rowIcon.width - 16 - rowActions.width - 8
+							spacing: 3
+
+							Text {
+								width: parent.width
+								elide: Text.ElideRight
+
+								font.family: Config.fontFamily
+								font.pixelSize: 14
+								font.weight: Font.Medium
+								color: win.ink
+								text: row.modelData.name
+							}
+
+							AgentLine {
+								vm: row.modelData
+								size: 12
+								maxWidth: parent.width
+							}
+						}
+
+						MouseArea {
+							anchors.fill: parent
+							onClicked: win.selectVm(row.modelData.name)
+						}
+
+						Row {
+							id: rowActions
+
+							anchors.right: parent.right
+							anchors.rightMargin: 12
+							anchors.verticalCenter: parent.verticalCenter
+							spacing: 14
+
+							RevealIcon {
+								id: gearIcon
+
+								shown: row.actionsShown
+								font.pixelSize: 15
+								baseColor: win.secondary
+								hoverColor: win.ink
+								text: "\uf013"
+								onClicked: win.openSettings(row.modelData.name)
+							}
+
+							RevealIcon {
+								id: powerIcon
+
+								shown: row.actionsShown
+								font.pixelSize: 15
+								baseColor: win.powerOpen && win.menuVm === row.modelData.name ? win.ink : win.secondary
+								hoverColor: win.ink
+								text: "\uf011"
+								onClicked: win.openMenu(row.modelData.name, powerIcon)
+							}
+						}
 					}
 				}
 
-				Item {
-					id: detail
+				MouseArea {
+					id: listHover
 
-					width: win.focusMode ? body.width : body.width - listPane.width - 24
-					height: body.height
+					anchors.fill: list
+					z: 5
+					acceptedButtons: Qt.NoButton
+					hoverEnabled: true
+				}
+
+				Scrollbar {
+					view: list
+				}
+
+				Text {
+					anchors.centerIn: parent
+
+					font.family: Config.fontFamily
+					font.pixelSize: 13
+					color: win.faint
+					text: "No machines"
+					visible: win.vms.length === 0
+				}
+
+				Rectangle {
+					anchors.right: parent.right
+					anchors.top: parent.top
+					anchors.bottom: parent.bottom
+
+					width: 1
+					color: win.rule
+				}
+			}
+
+			Item {
+				id: detail
+
+				width: body.width - listPane.width
+				height: body.height
+
+				Item {
+					id: detailBody
+
+					anchors.fill: parent
+					anchors.leftMargin: win.focusMode ? 0 : 24
+					anchors.rightMargin: win.focusMode ? 0 : 24
+					anchors.bottomMargin: win.focusMode ? 0 : 24
 
 					Row {
 						id: detailHeader
 
 						anchors.top: parent.top
 						width: parent.width
-						height: win.focusMode ? 0 : 40
-						spacing: 16
+						height: win.focusMode ? 0 : 64
+						spacing: 20
 						visible: !win.focusMode
 
 						Text {
-							width: parent.width - actions.width - 16
+							width: parent.width - actions.width - 20
 							height: detailHeader.height
 							verticalAlignment: Text.AlignVCenter
 							elide: Text.ElideRight
@@ -462,9 +606,23 @@ AppWindow {
 
 							width: implicitWidth
 							height: detailHeader.height
-							spacing: 14
+							spacing: 20
+
+							Text {
+								height: detailHeader.height
+								verticalAlignment: Text.AlignVCenter
+
+								font.family: Config.fontFamily
+								font.pixelSize: 12
+								color: win.powerConfirm === "destroy" ? Config.red : win.faint
+								visible: win.current.name !== undefined
+								text: win.powerConfirm === "destroy"
+									? "destroy deletes the disk"
+									: (Config.iconCpu + "  " + (win.current.cores || 0) + " cores  " + (win.current.memMb || 0) + " MB")
+							}
 
 							Rectangle {
+								anchors.verticalCenter: parent.verticalCenter
 								width: controlLabel.implicitWidth + 28
 								height: 32
 								color: controlMouse.containsMouse ? "#e6e6e6" : win.ink
@@ -492,6 +650,7 @@ AppWindow {
 							}
 
 							Rectangle {
+								anchors.verticalCenter: parent.verticalCenter
 								width: releaseLabel.implicitWidth + 28
 								height: 32
 								color: releaseMouse.containsMouse ? "#e6e6e6" : win.ink
@@ -520,220 +679,65 @@ AppWindow {
 						}
 					}
 
-					Flickable {
-						id: detailScroll
+					Item {
+						id: stageArea
 
 						anchors.top: detailHeader.bottom
-						anchors.topMargin: win.focusMode ? 0 : 10
-						width: win.focusMode ? detail.width : detail.width - 10
-						height: win.focusMode ? detail.height : detail.height - detailHeader.height - footerRow.height - 30
-						contentWidth: width
-						contentHeight: scrollColumn.height
-						clip: true
-						boundsBehavior: Flickable.StopAtBounds
-						interactive: !win.live
-
-						WheelHandler {
-							enabled: win.live.length > 0
-
-							onWheel: wheel => {
-								const maxY = Math.max(0, detailScroll.contentHeight - detailScroll.height);
-								detailScroll.contentY = Math.max(0, Math.min(maxY, detailScroll.contentY - wheel.angleDelta.y * 0.8));
-								wheel.accepted = true;
-							}
-						}
-
-						Column {
-							id: scrollColumn
-
-							width: detailScroll.width
-							spacing: 10
-
-							Rectangle {
-								id: stage
-
-								width: parent.width
-								height: win.focusMode ? detailScroll.height : Math.min(Math.round(parent.width * 9 / 16), Math.max(140, detailScroll.height - 66))
-								color: "#000000"
-								border.width: win.focusMode ? 0 : 1
-								border.color: win.rule
-								clip: true
-
-								Image {
-									id: stageThumb
-
-									anchors.fill: parent
-
-									source: win.live.length === 0 && win.current.thumb === true ? win.root + "/" + win.current.name + "/thumb.jpg?v=" + (win.current.thumbAt || 0) : ""
-									fillMode: win.thumbFill
-									asynchronous: false
-									cache: true
-									visible: false
-								}
-
-								MultiEffect {
-									anchors.fill: parent
-
-									source: stageThumb
-									saturation: win.thumbSaturation
-									brightness: win.thumbBrightness
-									visible: win.live.length === 0
-								}
-
-								Loader {
-									anchors.fill: parent
-									active: win.live.length > 0
-									sourceComponent: displayComponent
-								}
-
-								Component {
-									id: displayComponent
-
-									VmDisplay {
-										anchors.fill: parent
-										qmp: win.root + "/" + win.live + "/display.qmp"
-										onErrorChanged: if (error.length > 0) console.warn("VmDisplay:", error)
-									}
-								}
-							}
-
-							Row {
-								id: readout
-
-								width: parent.width
-								height: win.focusMode ? 0 : 56
-								visible: !win.focusMode
-
-								Item {
-									width: parent.width * 0.5
-									height: parent.height
-
-									Column {
-										anchors.verticalCenter: parent.verticalCenter
-										spacing: 3
-
-										Text {
-											font.family: Config.fontFamily
-											font.pixelSize: 11
-											color: win.faint
-											text: "Session"
-										}
-
-										Text {
-											width: parent.parent.width - 12
-											elide: Text.ElideRight
-
-											font.family: Config.fontFamily
-											font.pixelSize: 13
-											color: win.ink
-											text: win.sessionLabel(win.current)
-										}
-									}
-								}
-
-								Item {
-									width: parent.width * 0.25
-									height: parent.height
-
-									Rectangle {
-										anchors.left: parent.left
-										anchors.top: parent.top
-										anchors.bottom: parent.bottom
-
-										width: 1
-										color: win.rule
-									}
-
-									Column {
-										anchors.left: parent.left
-										anchors.leftMargin: 20
-										anchors.verticalCenter: parent.verticalCenter
-										spacing: 3
-
-										Text {
-											font.family: Config.fontFamily
-											font.pixelSize: 11
-											color: win.faint
-											text: "Machine"
-										}
-
-										Text {
-											width: parent.parent.width - 28
-											elide: Text.ElideRight
-
-											font.family: Config.fontFamily
-											font.pixelSize: 13
-											color: win.ink
-											text: win.tier + " · " + (win.current.controller || "agent")
-										}
-									}
-								}
-
-								Item {
-									width: parent.width * 0.25
-									height: parent.height
-
-									Rectangle {
-										anchors.left: parent.left
-										anchors.top: parent.top
-										anchors.bottom: parent.bottom
-
-										width: 1
-										color: win.rule
-									}
-
-									Column {
-										anchors.left: parent.left
-										anchors.leftMargin: 20
-										anchors.verticalCenter: parent.verticalCenter
-										spacing: 3
-
-										Text {
-											font.family: Config.fontFamily
-											font.pixelSize: 11
-											color: win.faint
-											text: "Viewed"
-										}
-
-										Text {
-											width: parent.parent.width - 28
-											elide: Text.ElideRight
-
-											font.family: Config.fontFamily
-											font.pixelSize: 13
-											color: win.ink
-											text: win.lastViewed(win.current.thumbAt || 0)
-										}
-									}
-								}
-							}
-						}
-					}
-
-					Scrollbar {
-						view: detailScroll
-						offset: 4
-					}
-
-					Item {
-						id: footerRow
-
+						anchors.topMargin: win.focusMode ? 0 : 16
+						anchors.bottom: parent.bottom
 						anchors.left: parent.left
 						anchors.right: parent.right
-						anchors.bottom: parent.bottom
-						height: win.focusMode ? 0 : 26
-						visible: !win.focusMode
 
-						Text {
-							anchors.left: parent.left
-							anchors.verticalCenter: parent.verticalCenter
+						Rectangle {
+							id: stage
 
-							font.family: Config.fontFamily
-							font.pixelSize: 11
-							color: win.powerConfirm === "destroy" ? Config.red : win.faint
-							text: win.powerConfirm === "destroy"
-								? "destroy deletes the disk"
-								: (Config.iconCpu + "  " + (win.current.cores || 0) + " cores · " + (win.current.memMb || 0) + " MB")
+							width: win.focusMode ? stageArea.width : Math.min(stageArea.width, Math.round(stageArea.height * 16 / 9))
+							height: win.focusMode ? stageArea.height : Math.round(width * 9 / 16)
+							color: "#000000"
+							clip: true
+							visible: win.live.length > 0 || win.running
+
+							Column {
+								anchors.centerIn: parent
+								spacing: 14
+								visible: win.live.length === 0
+
+								Image {
+									anchors.horizontalCenter: parent.horizontalCenter
+									width: 40
+									height: 40
+									visible: (win.current.harness || "") !== ""
+									source: visible ? "file://" + Quickshell.shellDir + "/assets/providers/" + win.current.harness + ".svg?v=4" : ""
+									sourceSize.width: 80
+									sourceSize.height: 80
+									fillMode: Image.PreserveAspectFit
+								}
+
+								Text {
+									anchors.horizontalCenter: parent.horizontalCenter
+
+									font.family: Config.fontFamily
+									font.pixelSize: 14
+									color: win.secondary
+									text: "Agents are working here"
+								}
+							}
+
+							Loader {
+								anchors.fill: parent
+								active: win.live.length > 0
+								sourceComponent: displayComponent
+							}
+
+							Component {
+								id: displayComponent
+
+								VmDisplay {
+									anchors.fill: parent
+									qmp: win.root + "/" + win.live + "/display.qmp"
+									onErrorChanged: if (error.length > 0) console.warn("VmDisplay:", error)
+								}
+							}
 						}
 					}
 				}

@@ -10,7 +10,7 @@ Item {
 	visible: false
 
 	readonly property var resolved: Yudae.icons.map || ({})
-	readonly property var glyphs: ({ "com.yudae.vms": "\uf108" })
+	readonly property var glyphs: ({ "com.yudae.vms": "\uDB80\uDF79" })
 	property var asked: ({})
 
 	function glyphOf(appId) {

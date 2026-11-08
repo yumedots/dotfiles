@@ -15,7 +15,6 @@ Selector 1.0 Selector.qml
 Scrollbar 1.0 Scrollbar.qml
 StepList 1.0 StepList.qml
 ContextMenu 1.0 ContextMenu.qml
-SettingsMenu 1.0 SettingsMenu.qml
 SearchField 1.0 SearchField.qml
 NotificationRow 1.0 NotificationRow.qml
 CellGrid 1.0 CellGrid.qml
