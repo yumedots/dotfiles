@@ -542,9 +542,8 @@ QtObject {
 	readonly property var agentPanelWidth: settings.agentPanelWidth !== undefined ? settings.agentPanelWidth : 300
 	readonly property var agentPanelHeight: settings.agentPanelHeight !== undefined ? settings.agentPanelHeight : 360
 	readonly property var agentPanelPadding: settings.agentPanelPadding !== undefined ? settings.agentPanelPadding : 12
-	readonly property var agentRingSize: settings.agentRingSize !== undefined ? settings.agentRingSize : 44
+	readonly property var agentRingSize: settings.agentRingSize !== undefined ? settings.agentRingSize : 32
 	readonly property var agentRingWidth: settings.agentRingWidth !== undefined ? settings.agentRingWidth : 3
-	readonly property var agentRingSpacing: settings.agentRingSpacing !== undefined ? settings.agentRingSpacing : 2
 	readonly property var agentRingGap: settings.agentRingGap !== undefined ? settings.agentRingGap : 12
 	readonly property var agentRingWarnPercent: settings.agentRingWarnPercent !== undefined ? settings.agentRingWarnPercent : 60
 	readonly property var agentRingAlarmPercent: settings.agentRingAlarmPercent !== undefined ? settings.agentRingAlarmPercent : 90

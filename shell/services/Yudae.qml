@@ -74,9 +74,9 @@ QtObject {
 
 	readonly property var planRings: {
 		const out = [];
-		const find = function (limits, titles) {
+		const find = function (limits, title) {
 			for (let i = 0; i < limits.length; i++)
-				if (titles.indexOf(String(limits[i].title || "").toLowerCase()) >= 0)
+				if (String(limits[i].title || "").toLowerCase() === title)
 					return limits[i];
 
 			return null;
@@ -88,28 +88,16 @@ QtObject {
 			if (plan.failure !== "" || !plan.limits || plan.limits.length === 0)
 				continue;
 
-			const rings = [find(plan.limits, ["session", "rolling"]), find(plan.limits, ["weekly"]), find(plan.limits, ["monthly"])].filter(function (limit) {
-				return limit !== null;
-			});
+			const limit = find(plan.limits, "monthly") || find(plan.limits, "weekly");
 
-			if (rings.length === 0)
-				continue;
-
-			let top = rings[0];
-
-			for (let j = 1; j < rings.length; j++)
-				if (rings[j].percent > top.percent)
-					top = rings[j];
-
-			if (top.percent < Config.agentRingWarnPercent)
+			if (limit === null || limit.percent < Config.agentRingWarnPercent)
 				continue;
 
 			out.push({
 				title: plan.title,
 				icon: plan.icon,
-				percent: top.percent,
-				resetsAt: top.resetsAt,
-				rings: rings,
+				percent: limit.percent,
+				resetsAt: limit.resetsAt,
 			});
 		}
 

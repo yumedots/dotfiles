@@ -394,31 +394,19 @@ Item {
 								width: Config.agentRingSize
 								height: Config.agentRingSize
 
-								readonly property real ringStep: (Config.agentRingWidth + Config.agentRingSpacing) * 2
-								readonly property real innerSize: Config.agentRingSize - planRing.ringStep * (planRing.modelData.rings.length - 1)
+								StepBar {
+									anchors.fill: parent
 
-								Repeater {
-									model: planRing.modelData.rings
-
-									delegate: StepBar {
-										required property var modelData
-										required property int index
-
-										anchors.centerIn: parent
-										width: Config.agentRingSize - planRing.ringStep * index
-										height: width
-
-										circular: true
-										ringWidth: Config.agentRingWidth
-										level: modelData.percent / 100
-										ink: modelData.percent >= Config.agentRingAlarmPercent ? Config.red : Config.yellow
-										track: Config.dim
-									}
+									circular: true
+									ringWidth: Config.agentRingWidth
+									level: planRing.modelData.percent / 100
+									ink: planRing.modelData.percent >= Config.agentRingAlarmPercent ? Config.red : Config.yellow
+									track: Config.dim
 								}
 
 								Image {
 									visible: planRing.modelData.icon !== ""
-									width: Math.max(0, Math.round(planRing.innerSize - Config.agentRingWidth * 2 - 4))
+									width: Math.round(Config.agentRingSize * 0.5)
 									height: width
 									x: Math.round((parent.width - width) / 2)
 									y: Math.round((parent.height - height) / 2)
