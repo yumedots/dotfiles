@@ -14,6 +14,7 @@ FloatingWindow {
 	property int appMinHeight: 400
 
 	title: root.appTitle
+	minimumSize: Qt.size(root.appMinWidth, root.appMinHeight)
 	color: Config.surface
 	visible: true
 	implicitWidth: 1280
@@ -21,7 +22,14 @@ FloatingWindow {
 
 	onClosed: {
 		root.appClosed();
-		Qt.quit();
+	}
+
+	Connections {
+		target: Quickshell
+
+		function onLastWindowClosed() {
+			Qt.quit();
+		}
 	}
 
 	Shortcut {
