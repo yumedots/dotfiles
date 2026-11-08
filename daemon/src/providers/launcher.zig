@@ -1170,7 +1170,7 @@ pub const Launcher = struct {
 				.kind = "vm",
 				.name = vm.name,
 				.glyph = glyph_vm,
-				.detail = try std.fmt.allocPrint(arena, "{s} · {d} MB · {d} cores", .{ vm.tier.text(), vm.mem_mb, vm.cores }),
+				.detail = try std.fmt.allocPrint(arena, "{s}  {d} MB  {d} cores", .{ vm.tier.text(), vm.mem_mb, vm.cores }),
 			});
 		}
 	}
