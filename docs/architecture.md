@@ -7,7 +7,8 @@ TLDR: one repo, split by what a thing is. xmake is the single entry point. `vm` 
 ```
 dotfiles/
   config/            plain app configs, one dir per app, each symlinked to ~/.config/<name>
-  hypr/              hyprland conf + cursor plugin (C++); the one non-config symlinked, hyprland reads ~/.config/hypr
+  plugins/           source-only plugins: hypr, theme, shell, app; see docs/plugins.md
+  hypr/              hyprland conf; the one non-config symlinked, hyprland reads ~/.config/hypr
   shell/             quickshell, run with `quickshell -p`, never symlinked
     features/<name>/ one folder per feature: Card.qml Widget.qml Service.qml feature.json
     ui/              primitives used twice or more; AppWindow is the xdg_toplevel primitive
@@ -40,7 +41,7 @@ xmake orchestrates, it does not replace the real builders.
 | `xmake build` | daemon (wraps `zig build`), cursor plugin, `Yudae.Native` QML module, `yudae-pump` (native C++ targets) |
 | `xmake link` | symlink `config/*` and `hypr/` into `~/.config` |
 | `xmake lint` | qmllint on `shell/`, `node shell/lib/check.js` |
-| `xmake test` | daemon parsers/protocol tests, qml fixtures, idle-spawn test |
+| `xmake test` | daemon parsers/protocol tests, plugin conformance, qml fixtures, idle-spawn test |
 | `xmake bench` | headless daemon cold build, size, start, idle RSS and spawns, then `yudaemond bench` against `bench/baseline.json` |
 | `scripts/vm-test` | VM UI loop (start, restart, shot, run) |
 | `xmake vm ...` | VM images and bench; running VMs are `yudae vm` |

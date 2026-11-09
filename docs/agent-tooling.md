@@ -7,6 +7,7 @@ Everything an agent needs is a CLI or an MCP tool. Never guess a command.
 ```
 yudae call <target> <method> [args...]     # -q: quiet no-op if nothing is running
 yudae state | doctor | bench | parity | ui tree
+yudae plugin list | build <id> | load <id> | unload <id> | add <url> | update <id> | reload
 yudae vm <verb> ...                        # same verbs as the MCP tools
 yudae open <vm> [app]                      # open the viewer, or an app inside the guest
 ```
@@ -22,6 +23,7 @@ yudae open <vm> [app]                      # open the viewer, or an app inside t
 
 - state, providers, bench, parity
 - qs_log
+- plugin_list, plugin_build, plugin_load, plugin_unload, plugin_add, plugin_update, plugin_reload
 - vm_create, vm_list, vm_state, vm_exec, vm_push, vm_pull, vm_key, vm_type, vm_click, vm_move, vm_scroll, vm_gui, vm_config, vm_screenshot, vm_wait, vm_sleep, vm_wake, vm_park, vm_stop, vm_destroy, vm_snapshot, vm_restore, vm_fork, vm_view, vm_ui_tree, vm_run_scenario
 
 Every result is bounded and typed: capped output with a handle for the rest, exit codes, durations.

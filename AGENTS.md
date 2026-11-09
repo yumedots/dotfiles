@@ -48,6 +48,7 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 
 ```
 config/            plain app configs, one dir per app, symlinked into ~/.config
+plugins/           source-only plugins, see docs/plugins.md
 hypr/              hyprland conf + plugins; the one non-config symlinked into ~/.config
 shell/             quickshell; run with `quickshell -p shell/shell.qml`, never symlinked
 daemon/            yudaemond (Zig); providers pair with shell/features/<name>
@@ -64,6 +65,7 @@ Read the one that matches the task before editing:
 - `agents/skills/quickshell.md` - QML, live reload, surfaces, lint, logs.
 - `agents/skills/daemon.md` - yudaemond rules, adding a provider, performance gates, lifecycle.
 - `agents/skills/vm.md` - the QEMU VM lifecycle and scenarios.
+- `agents/skills/plugin.md` - plugin folders, manifests, build and load contract.
 
 Agent skills are registered in `.agents/skills/`; the project MCP servers are in `opencode.json` and `.mcp.json`.
 
@@ -72,4 +74,5 @@ Agent skills are registered in `.agents/skills/`; the project MCP servers are in
 - `docs/architecture.md` - repo shape, feature pairing, xmake tasks.
 - `docs/daemon.md` - hub, IPC, snapshot, command routing, VM control plane.
 - `docs/agent-tooling.md` - `yudae` CLI, MCP tools, the agent workflow on a VM.
+- `docs/plugins.md` - the plugin standard: manifest, kinds, build and load.
 - `docs/perf.md` - budgets and the bench tools.
