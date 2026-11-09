@@ -112,6 +112,14 @@ iconAwakeAuto = "\U000F0177"
 iconAwakeOn = "\U000F0176"
 iconSun = "\uF522"
 iconMoon = "\uE3A4"
+iconWifi1 = "\U000F091F"
+iconWifi2 = "\U000F0922"
+iconWifi3 = "\U000F0925"
+iconWifi4 = "\U000F0928"
+iconWifiOff = "\U000F092D"
+iconWifiIdle = "\U000F092F"
+iconEthernet = "\U000F0200"
+iconLock = "\uF023"
 
 # cpu and process list
 [cpu]
@@ -169,6 +177,8 @@ mixerIconSize = 22
 mixerDeviceIconSize = 26
 mixerListGap = 8
 mixerRowRadius = 4
+rowHeight = 30
+rowInset = 3
 mixerMaxVolume = 1
 mixerStepCount = 10
 mixerStep = 0.1  # 1 / mixerStepCount
@@ -529,9 +539,6 @@ speedButtonPadY = 4
 networkTitle = "Network"
 networkWiredNothing = "No connection"
 networkPasswordHint = "Password"
-networkWifiIcons = ["\U000F08BC", "\U000F08BD", "\U000F08BE", "\U000F08BF"]
-networkLanIcon = "\U000F0200"
-networkLockIcon = "\uF023"
 
 # agent panel
 [agent]

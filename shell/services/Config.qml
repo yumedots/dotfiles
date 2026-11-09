@@ -116,6 +116,14 @@ QtObject {
 	readonly property var iconAwakeOn: settings.iconAwakeOn !== undefined ? settings.iconAwakeOn : "\udb80\udd76"
 	readonly property var iconSun: settings.iconSun !== undefined ? settings.iconSun : "\uf522"
 	readonly property var iconMoon: settings.iconMoon !== undefined ? settings.iconMoon : "\ue3a4"
+	readonly property var iconWifi1: settings.iconWifi1 !== undefined ? settings.iconWifi1 : "\udb82\udd1f"
+	readonly property var iconWifi2: settings.iconWifi2 !== undefined ? settings.iconWifi2 : "\udb82\udd22"
+	readonly property var iconWifi3: settings.iconWifi3 !== undefined ? settings.iconWifi3 : "\udb82\udd25"
+	readonly property var iconWifi4: settings.iconWifi4 !== undefined ? settings.iconWifi4 : "\udb82\udd28"
+	readonly property var iconWifiOff: settings.iconWifiOff !== undefined ? settings.iconWifiOff : "\udb82\udd2d"
+	readonly property var iconWifiIdle: settings.iconWifiIdle !== undefined ? settings.iconWifiIdle : "\udb82\udd2f"
+	readonly property var iconEthernet: settings.iconEthernet !== undefined ? settings.iconEthernet : "\udb80\ude00"
+	readonly property var iconLock: settings.iconLock !== undefined ? settings.iconLock : "\uf023"
 
 	// cpu and process list
 	readonly property var cpuBase: settings.cpuBase !== undefined ? settings.cpuBase : "#a78bfa"
@@ -272,10 +280,12 @@ QtObject {
 	readonly property var powerAwakeTitle: settings.powerAwakeTitle !== undefined ? settings.powerAwakeTitle : "Keep awake"
 
 	// pill switch
-	readonly property var toggleHeight: settings.toggleHeight !== undefined ? settings.toggleHeight : 22
+	readonly property var rowHeight: settings.rowHeight !== undefined ? settings.rowHeight : 30
+	readonly property var rowInset: settings.rowInset !== undefined ? settings.rowInset : 3
+	readonly property var toggleHeight: settings.toggleHeight !== undefined ? settings.toggleHeight : root.rowHeight - 2 * root.rowInset
 	readonly property var togglePadding: settings.togglePadding !== undefined ? settings.togglePadding : 2
 	readonly property var toggleLabelPad: settings.toggleLabelPad !== undefined ? settings.toggleLabelPad : 4
-	readonly property var toggleFontSize: settings.toggleFontSize !== undefined ? settings.toggleFontSize : 11
+	readonly property var toggleFontSize: settings.toggleFontSize !== undefined ? settings.toggleFontSize : 13
 	readonly property var toggleEmpty: settings.toggleEmpty !== undefined ? settings.toggleEmpty : "|"
 	readonly property var toggleTrack: settings.toggleTrack !== undefined ? settings.toggleTrack : "#2f2f2f"
 	readonly property var toggleHover: settings.toggleHover !== undefined ? settings.toggleHover : "#3f3f3f"
@@ -502,6 +512,7 @@ QtObject {
 	readonly property var networkTooltipWidth: settings.networkTooltipWidth !== undefined ? settings.networkTooltipWidth : 260
 	readonly property var networkTooltipPadding: settings.networkTooltipPadding !== undefined ? settings.networkTooltipPadding : 12
 	readonly property var networkRowHeight: settings.networkRowHeight !== undefined ? settings.networkRowHeight : 18
+	readonly property var networkDropdownRows: settings.networkDropdownRows !== undefined ? settings.networkDropdownRows : 6
 	readonly property var networkRowGap: settings.networkRowGap !== undefined ? settings.networkRowGap : 3
 	readonly property var networkBarCount: settings.networkBarCount !== undefined ? settings.networkBarCount : 4
 	readonly property var networkBarWidth: settings.networkBarWidth !== undefined ? settings.networkBarWidth : 3
@@ -530,9 +541,12 @@ QtObject {
 	readonly property var networkTitle: settings.networkTitle !== undefined ? settings.networkTitle : "Network"
 	readonly property var networkWiredNothing: settings.networkWiredNothing !== undefined ? settings.networkWiredNothing : "No connection"
 	readonly property var networkPasswordHint: settings.networkPasswordHint !== undefined ? settings.networkPasswordHint : "Password"
-	readonly property var networkWifiIcons: settings.networkWifiIcons !== undefined ? settings.networkWifiIcons : ["\udb82\udcbc", "\udb82\udcbd", "\udb82\udcbe", "\udb82\udcbf"]
-	readonly property var networkLanIcon: settings.networkLanIcon !== undefined ? settings.networkLanIcon : "\udb80\ude00"
-	readonly property var networkLockIcon: settings.networkLockIcon !== undefined ? settings.networkLockIcon : "\uf023"
+	readonly property var networkWifiLabel: settings.networkWifiLabel !== undefined ? settings.networkWifiLabel : "Wi-Fi"
+	readonly property var networkEthernetLabel: settings.networkEthernetLabel !== undefined ? settings.networkEthernetLabel : "Ethernet"
+	readonly property var networkWifiIdle: settings.networkWifiIdle !== undefined ? settings.networkWifiIdle : "Not connected"
+	readonly property var networkWifiConnecting: settings.networkWifiConnecting !== undefined ? settings.networkWifiConnecting : "Connecting\u2026"
+	readonly property var networkOtherLabel: settings.networkOtherLabel !== undefined ? settings.networkOtherLabel : "Other networks"
+	readonly property var networkWifiOff: settings.networkWifiOff !== undefined ? settings.networkWifiOff : "Wi-Fi is off"
 
 	// agent panel
 	readonly property var agentFaceSize: settings.agentFaceSize !== undefined ? settings.agentFaceSize : 44
@@ -580,6 +594,14 @@ QtObject {
 		cpu: root.iconCpu,
 		day: root.calendarIconDay,
 		display: root.iconDisplay,
+		ethernet: root.iconEthernet,
+		lock: root.iconLock,
+		wifi1: root.iconWifi1,
+		wifi2: root.iconWifi2,
+		wifi3: root.iconWifi3,
+		wifi4: root.iconWifi4,
+		wifiIdle: root.iconWifiIdle,
+		wifiOff: root.iconWifiOff,
 		down: root.iconDown,
 		github: root.iconGithub,
 		input: root.iconInput,
@@ -606,6 +628,10 @@ QtObject {
 		weatherRight: root.weatherIconRight,
 		year: root.calendarIconYear
 	})
+
+	function wifiGlyph(bars) {
+		return root["iconWifi" + Math.max(1, Math.min(4, bars || 1))];
+	}
 
 	function glyph(name) {
 		return root.icons[name] || "";

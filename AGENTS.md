@@ -9,6 +9,8 @@ NEVER install ANYTHING without telling the user first — packages, skills, MCP 
 No on-screen instructions or shortcut hints in widgets: never render "press X", key lists, hints, or counters. The UI is discovered by using it.
 If a VM task needs an action the daemon does not expose, do not write a throwaway script for it. Ask the user whether to add it to yudaemond; if yes, implement, test and document the verb, then use it.
 Every surface shows the same icon for the same thing: the VM app, its machines and the launcher entry use one glyph.
+Icons live once, in the icon list (`iconX` in `shell/services/Config.qml` and `shell/config.toml`, plus the `icons` map). Before using an icon, look it up in that list and reuse it everywhere, switches and rows included. Add one only when the list has none, and never invent a second glyph for something that already has one.
+Nerd font glyphs are always drawn through `shell/ui/Glyph.qml`, which centers the glyph ink in its box; never a bare `Text` inside a circle, badge, switch or slot.
 Never put "·" or similar dot separators between pieces of text in the UI; separate with spacing.
 Scrollbars sit on the right border of their container, never floating inside it; Scrollbar.qml does this by default.
 
