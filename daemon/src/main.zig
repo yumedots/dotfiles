@@ -171,6 +171,7 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 				json.textAt(l_cmd, "query"),
 				json.textAt(l_cmd, "forced"),
 				json.textAt(l_cmd, "group"),
+				json.flag(l_cmd, "all"),
 			);
 		}
 
