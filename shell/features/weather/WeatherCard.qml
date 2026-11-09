@@ -686,7 +686,7 @@ Item {
 								horizontalAlignment: Text.AlignHCenter
 								font.family: Config.fontFamily
 								font.pixelSize: Config.weatherDayLabelSize
-								color: Config.muted
+								color: Config.weatherDayLabelColor
 								text: dayCell.row ? dayCell.row.day : ""
 							}
 

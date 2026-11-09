@@ -400,6 +400,7 @@ QtObject {
 	readonly property var weatherSeparator: settings.weatherSeparator !== undefined ? settings.weatherSeparator : 1
 	readonly property var weatherSeparatorColor: settings.weatherSeparatorColor !== undefined ? settings.weatherSeparatorColor : "#2b2b2b"
 	readonly property var weatherDayCardColor: settings.weatherDayCardColor !== undefined ? settings.weatherDayCardColor : "#181818"
+	readonly property var weatherDayLabelColor: settings.weatherDayLabelColor !== undefined ? settings.weatherDayLabelColor : "#ffffff"
 	readonly property var weatherDayCardRadius: settings.weatherDayCardRadius !== undefined ? settings.weatherDayCardRadius : 8
 	readonly property var weatherCardSearchDebounce: settings.weatherCardSearchDebounce !== undefined ? settings.weatherCardSearchDebounce : 60
 	readonly property var weatherCodes: settings.weatherCodes !== undefined ? settings.weatherCodes : [
