@@ -140,6 +140,14 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 			if (ssid.len > 0) context.network.connect(ssid, password);
 		}
 
+		if (json.field(net_cmd, "radio")) |target| context.network.setRadio(json.flag(target, "on"));
+
+		if (json.field(net_cmd, "use")) |target| {
+			const kind = json.textAt(target, "kind");
+
+			if (kind.len > 0) context.network.useKind(kind);
+		}
+
 		if (json.field(net_cmd, "dns")) |target| {
 			context.network.dnsCmd(json.textAt(target, "action"), json.textAt(target, "server"));
 		}

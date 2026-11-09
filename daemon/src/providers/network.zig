@@ -7,6 +7,7 @@ const proc = @import("../primitives/proc.zig");
 const exec = @import("../primitives/exec.zig");
 const sleep = @import("../primitives/sleep.zig");
 const sleep_unused = sleep;
+const wifi = @import("network_wifi.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -25,15 +26,6 @@ const speed_down_url = "https://speed.cloudflare.com/__down";
 const speed_down_bytes: u64 = 90_000_000;
 const speed_up_url = "https://speed.cloudflare.com/__up";
 const speed_up_bytes: u64 = 25_000_000;
-
-const Wifi = struct {
-	ssid: []u8,
-	security: []u8,
-	signal: i64,
-	channel: i64,
-	frequency: i64,
-	in_use: bool,
-};
 
 const Stage = enum { none, down, up };
 
@@ -55,7 +47,12 @@ pub const Network = struct {
 	history: [history_len]Hist = @splat(.{ .down = 0, .up = 0 }),
 	history_count: usize = 0,
 	history_start: usize = 0,
-	networks: std.ArrayListUnmanaged(Wifi) = .empty,
+	networks: std.ArrayListUnmanaged(wifi.Wifi) = .empty,
+	adapters: std.ArrayListUnmanaged(wifi.Adapter) = .empty,
+	radio: bool = true,
+	wifi_pending: []u8 = &.{},
+	wifi_error: []u8 = &.{},
+	wifi_ask: []u8 = &.{},
 	ip: []u8 = &.{},
 	gateway: []u8 = &.{},
 	dns: []u8 = &.{},
@@ -63,6 +60,7 @@ pub const Network = struct {
 	dns_error: []u8 = &.{},
 	cells: usize = 26,
 	hold: std.atomic.Value(bool) = .init(false),
+	stale: std.atomic.Value(bool) = .init(false),
 	speed_stage: Stage = .none,
 	speed_live: f64 = 0,
 	speed_best: f64 = 0,
@@ -106,7 +104,7 @@ pub const Network = struct {
 		while (true) {
 			self.sample();
 
-			if (!self.hold.load(.monotonic) and tick % 15 == 0) self.describe();
+			if (!self.hold.load(.monotonic) and (self.stale.swap(false, .monotonic) or tick % 15 == 0)) self.describe();
 
 			tick += 1;
 			sleep_unused.ms(1000);
@@ -209,7 +207,18 @@ pub const Network = struct {
 			}
 		}
 
-		if (best_iface.len == 0) return;
+		if (best_iface.len == 0) {
+			self.mutex.lockUncancelable(self.io);
+			if (self.iface.len > 0) self.stale.store(true, .monotonic);
+			self.setStr(&self.iface, "");
+			self.setStr(&self.kind, "");
+			self.setStr(&self.ssid, "");
+			self.signal = 0;
+			self.connected = false;
+			self.link_speed = 0;
+			self.mutex.unlock(self.io);
+			return;
+		}
 
 		const wireless_path = std.fmt.allocPrint(self.allocator, "/sys/class/net/{s}/wireless", .{best_iface}) catch return;
 		defer self.allocator.free(wireless_path);
@@ -233,6 +242,7 @@ pub const Network = struct {
 		const speed = std.fmt.parseInt(i64, std.mem.trim(u8, speed_body, " \n\r"), 10) catch 0;
 
 		self.mutex.lockUncancelable(self.io);
+		if (!std.mem.eql(u8, self.iface, best_iface) or !std.mem.eql(u8, self.kind, kind)) self.stale.store(true, .monotonic);
 		self.setStr(&self.iface, best_iface);
 		self.setStr(&self.kind, kind);
 		self.connected = up;
@@ -240,7 +250,7 @@ pub const Network = struct {
 		self.mutex.unlock(self.io);
 	}
 
-	fn describe(self: *Network) void {
+	pub fn describe(self: *Network) void {
 		self.readCells();
 
 		self.mutex.lockUncancelable(self.io);
@@ -248,49 +258,35 @@ pub const Network = struct {
 			self.mutex.unlock(self.io);
 			return;
 		};
-		const wifi = std.mem.eql(u8, self.kind, "wifi");
 		self.mutex.unlock(self.io);
 		defer self.allocator.free(iface);
 
-		if (iface.len > 0) self.sampleAddresses(iface);
-
-		if (!wifi or iface.len == 0) {
+		if (iface.len > 0) {
+			self.sampleAddresses(iface);
+		} else {
 			self.mutex.lockUncancelable(self.io);
-			self.setStr(&self.ssid, "");
-			self.signal = 0;
+			self.setStr(&self.ip, "");
+			self.setStr(&self.gateway, "");
+			self.setStr(&self.dns, "");
 			self.mutex.unlock(self.io);
-			self.hub.publish();
-			return;
 		}
 
-		const result = exec.run(self.io, self.allocator, &.{ "iw", "dev", iface, "link" }) catch return;
-		defer result.deinit(self.allocator);
-
-		var ssid: []const u8 = "";
-		var signal: i64 = 0;
-
-		var lines = std.mem.splitScalar(u8, result.out, '\n');
-		while (lines.next()) |raw| {
-			const line = std.mem.trim(u8, raw, " \t\r");
-
-			if (std.mem.startsWith(u8, line, "SSID:")) ssid = std.mem.trim(u8, line["SSID:".len..], " \t");
-			if (std.mem.startsWith(u8, line, "signal:")) {
-				const text = std.mem.trim(u8, line["signal:".len..], " \tdBm");
-				signal = std.fmt.parseInt(i64, text, 10) catch 0;
-			}
-		}
-
-		const percent: i64 = if (signal == 0) 0 else std.math.clamp(2 * (signal + 100), 0, 100);
-
-		self.mutex.lockUncancelable(self.io);
-		self.setStr(&self.ssid, ssid);
-		self.signal = percent;
-		self.mutex.unlock(self.io);
-
+		wifi.refreshAdapters(self);
 		self.scan(false);
-
-		self.hub.publish();
 	}
+
+	pub fn hasWifi(self: *Network) bool {
+		for (self.adapters.items) |entry| {
+			if (std.mem.eql(u8, entry.kind, "wifi")) return true;
+		}
+
+		return false;
+	}
+
+	pub const scan = wifi.scan;
+	pub const connect = wifi.connect;
+	pub const setRadio = wifi.setRadio;
+	pub const useKind = wifi.useKind;
 
 	fn sampleAddresses(self: *Network, iface: []const u8) void {
 		const result = exec.run(self.io, self.allocator, &.{ "nmcli", "-t", "-f", "IP4.ADDRESS,IP4.GATEWAY,IP4.DNS", "device", "show", iface }) catch return;
@@ -341,64 +337,6 @@ pub const Network = struct {
 		self.mutex.unlock(self.io);
 	}
 
-	pub fn scan(self: *Network, rescan: bool) void {
-		if (self.hold.load(.monotonic)) return;
-
-		var argv: std.ArrayList([]const u8) = .empty;
-		defer argv.deinit(self.allocator);
-
-		const base = [_][]const u8{ "nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,CHAN,FREQ,SECURITY", "device", "wifi", "list" };
-		for (base) |arg| argv.append(self.allocator, arg) catch return;
-		if (rescan) argv.append(self.allocator, "--rescan") catch {};
-		if (rescan) argv.append(self.allocator, "yes") catch {};
-
-		const result = exec.run(self.io, self.allocator, argv.items) catch return;
-		defer result.deinit(self.allocator);
-
-		var next: std.ArrayListUnmanaged(Wifi) = .empty;
-		var lines = std.mem.splitScalar(u8, result.out, '\n');
-
-		while (lines.next()) |line| {
-			if (line.len == 0) continue;
-
-			var at: usize = 0;
-			const in_use = terseField(line, &at) orelse continue;
-			const ssid_raw = terseField(line, &at) orelse continue;
-			if (ssid_raw.len == 0) continue;
-
-			const signal_text = terseField(line, &at) orelse "0";
-			const channel_text = terseField(line, &at) orelse "0";
-			const freq_text = terseField(line, &at) orelse "0";
-			const security_raw = terseField(line, &at) orelse "";
-
-			const ssid = unescapeTerse(self.allocator, ssid_raw) catch continue;
-			const security = unescapeTerse(self.allocator, security_raw) catch {
-				self.allocator.free(ssid);
-				continue;
-			};
-
-			next.append(self.allocator, .{
-				.ssid = ssid,
-				.security = security,
-				.signal = std.fmt.parseInt(i64, signal_text, 10) catch 0,
-				.channel = std.fmt.parseInt(i64, channel_text, 10) catch 0,
-				.frequency = std.fmt.parseInt(i64, std.mem.trimEnd(u8, freq_text, " "), 10) catch 0,
-				.in_use = std.mem.eql(u8, std.mem.trim(u8, in_use, " "), "*"),
-			}) catch continue;
-		}
-
-		self.mutex.lockUncancelable(self.io);
-		for (self.networks.items) |entry| {
-			self.allocator.free(entry.ssid);
-			self.allocator.free(entry.security);
-		}
-		self.networks.deinit(self.allocator);
-		self.networks = next;
-		self.mutex.unlock(self.io);
-
-		self.hub.publish();
-	}
-
 	pub fn dnsCmd(self: *Network, action: []const u8, server: []const u8) void {
 		self.mutex.lockUncancelable(self.io);
 		const iface = self.allocator.dupe(u8, self.iface) catch {
@@ -441,7 +379,7 @@ pub const Network = struct {
 		};
 		defer result.deinit(self.allocator);
 
-		const failure = if (result.code == 0) "" else failureText(&result);
+		const failure = if (result.code == 0) "" else wifi.failureText(&result);
 
 		self.readDns(iface);
 		self.finishDns(failure);
@@ -474,7 +412,7 @@ pub const Network = struct {
 
 		self.mutex.lockUncancelable(self.io);
 		self.seedHistory(json.listAt(target, "history"));
-		self.seedWifi(json.listAt(target, "wifi"));
+		wifi.seed(self, json.listAt(target, "wifi"));
 
 		const kind = json.textAt(target, "kind");
 		if (kind.len > 0) self.setStr(&self.kind, kind);
@@ -517,38 +455,6 @@ pub const Network = struct {
 
 		self.history_start = self.history_count % history_len;
 		self.peak = peak;
-	}
-
-	fn seedWifi(self: *Network, items: []const json.Value) void {
-		if (items.len == 0) return;
-
-		var next: std.ArrayListUnmanaged(Wifi) = .empty;
-
-		for (self.networks.items) |entry| {
-			self.allocator.free(entry.ssid);
-			self.allocator.free(entry.security);
-		}
-
-		self.networks.deinit(self.allocator);
-
-		for (items) |item| {
-			const ssid = self.allocator.dupe(u8, json.textAt(item, "ssid")) catch continue;
-			const security = self.allocator.dupe(u8, json.textAt(item, "security")) catch {
-				self.allocator.free(ssid);
-				continue;
-			};
-
-			next.append(self.allocator, .{
-				.ssid = ssid,
-				.security = security,
-				.signal = json.integer(json.field(item, "signal")),
-				.channel = 0,
-				.frequency = 0,
-				.in_use = json.flag(item, "inUse"),
-			}) catch continue;
-		}
-
-		self.networks = next;
 	}
 
 	pub fn speedTest(self: *Network) void {
@@ -700,27 +606,17 @@ pub const Network = struct {
 		return 0;
 	}
 
-	pub fn connect(self: *Network, ssid: []const u8, password: []const u8) void {
-		var argv: std.ArrayList([]const u8) = .empty;
-		defer argv.deinit(self.allocator);
-
-		for ([_][]const u8{ "nmcli", "device", "wifi", "connect", ssid }) |arg| argv.append(self.allocator, arg) catch return;
-		if (password.len > 0) {
-			argv.append(self.allocator, "password") catch {};
-			argv.append(self.allocator, password) catch {};
-		}
-
-		const result = exec.run(self.io, self.allocator, argv.items) catch return;
-		result.deinit(self.allocator);
-
-		self.describe();
-		self.hub.publish();
-	}
-
-	fn setStr(self: *Network, slot: *[]u8, value: []const u8) void {
+	pub fn setStr(self: *Network, slot: *[]u8, value: []const u8) void {
 		const copy = self.allocator.dupe(u8, value) catch return;
 		self.allocator.free(slot.*);
 		slot.* = copy;
+	}
+
+	pub fn setNote(self: *Network, slot: *[]u8, value: []const u8) void {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		self.setStr(slot, value);
 	}
 
 	fn render(self: *Network, writer: *Writer) !void {
@@ -766,7 +662,13 @@ pub const Network = struct {
 			.dns = self.dns,
 			.dnsPending = self.dns_pending,
 			.dnsError = self.dns_error,
-			.wifi = try wifiOut(arena, self),
+			.wifi = try wifi.wifiOut(arena, self),
+			.radio = self.radio,
+			.hasWifi = self.hasWifi(),
+			.adapters = try wifi.adaptersOut(arena, self),
+			.wifiPending = self.wifi_pending,
+			.wifiError = self.wifi_error,
+			.wifiAsk = self.wifi_ask,
 			.speed = .{
 				.stage = if (self.speed_stage == .none) "" else @tagName(self.speed_stage),
 				.live = speed_live,
@@ -830,94 +732,9 @@ fn dnsList(allocator: Allocator, body: []const u8) ![]u8 {
 	return out.toOwnedSlice(allocator);
 }
 
-fn failureText(result: *const exec.Result) []const u8 {
-	const text = std.mem.trim(u8, result.err, " \t\r\n");
-
-	return if (text.len > 0) text else "nmcli failed";
-}
-
-fn locked(security: []const u8) bool {
-	return security.len > 0 and !std.mem.eql(u8, security, "--");
-}
-
-fn terseField(line: []const u8, at: *usize) ?[]const u8 {
-	if (at.* >= line.len) return null;
-
-	const start = at.*;
-	var index = start;
-
-	while (index < line.len) {
-		if (line[index] == '\\' and index + 1 < line.len) {
-			index += 2;
-			continue;
-		}
-
-		if (line[index] == ':') break;
-		index += 1;
-	}
-
-	at.* = index + 1;
-	return line[start..index];
-}
-
-fn unescapeTerse(allocator: Allocator, line: []const u8) ![]u8 {
-	var out: std.ArrayList(u8) = .empty;
-	errdefer out.deinit(allocator);
-
-	var index: usize = 0;
-	while (index < line.len) : (index += 1) {
-		if (line[index] == '\\' and index + 1 < line.len) {
-			index += 1;
-			try out.append(allocator, line[index]);
-			continue;
-		}
-
-		try out.append(allocator, line[index]);
-	}
-
-	return out.toOwnedSlice(allocator);
-}
-
 fn afterColon(line: []const u8) []const u8 {
 	const at = std.mem.indexOfScalar(u8, line, ':') orelse return "";
 	return std.mem.trim(u8, line[at + 1 ..], " \t\r");
-}
-
-fn wifiOut(arena: Allocator, self: *Network) ![]views.WifiOut {
-	var out: std.ArrayListUnmanaged(views.WifiOut) = .empty;
-
-	for (self.networks.items) |entry| {
-		try out.append(arena, .{
-			.ssid = entry.ssid,
-			.security = entry.security,
-			.locked = views.locked(entry.security),
-			.signal = entry.signal,
-			.signalText = try views.signalText(arena, entry.signal),
-			.bars = views.signalBars(entry.signal),
-			.channel = entry.channel,
-			.frequency = entry.frequency,
-			.inUse = entry.in_use,
-		});
-	}
-
-	return out.items;
-}
-
-test "nmcli terse lines keep escaped colons inside the ssid" {
-	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-	defer arena.deinit();
-
-	const line = "*:My\\:Net:80:6:2437:WPA2";
-	var at: usize = 0;
-
-	try std.testing.expectEqualStrings("*", terseField(line, &at).?);
-	const ssid = try unescapeTerse(arena.allocator(), terseField(line, &at).?);
-	try std.testing.expectEqualStrings("My:Net", ssid);
-	try std.testing.expectEqualStrings("80", terseField(line, &at).?);
-	try std.testing.expectEqualStrings("6", terseField(line, &at).?);
-	try std.testing.expectEqualStrings("2437", terseField(line, &at).?);
-	try std.testing.expectEqualStrings("WPA2", terseField(line, &at).?);
-	try std.testing.expect(terseField(line, &at) == null);
 }
 
 test "dns list joins every server nmcli prints" {
