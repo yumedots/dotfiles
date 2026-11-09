@@ -220,34 +220,24 @@ Item {
 		property var node
 		property int rowIndex: -1
 		property bool global: false
-		property bool small: false
 
 		readonly property bool stream: !!row.node && row.node.isStream === true
 		readonly property bool muted: !!row.node && row.node.muted === true
-		readonly property bool current: !row.stream && !!row.node && row.node.isDefault === true
 		readonly property bool selected: row.rowIndex === root.targetIndex
-		readonly property bool faderRow: row.stream || row.global
 		readonly property real volume: root.volumeOf(row.node)
-		readonly property real smallGlyph: Settings.fontSize + 2
-		readonly property real smallBadge: row.smallGlyph + 4
-		readonly property real smallRow: row.smallBadge + 4
 		readonly property string percentText: Math.round(row.volume * 100) + "%"
-		readonly property string label: row.node ? (row.node.description || row.node.name || "") : ""
 		readonly property string iconSource: row.stream ? root.iconFor(row.node) : ""
-		readonly property string glyph: row.stream ? Config.iconApp
-			: row.global ? Config.iconVolumeHigh
-			: Config.iconOutput
+		readonly property string glyph: row.stream ? Config.iconApp : Config.iconVolumeHigh
 		readonly property real level: Calc.clamp(row.volume / Config.mixerMaxVolume, 0, 1)
 		readonly property int step: Math.round(row.level * Config.mixerStepCount) - 1
 		readonly property real hoverPad: Math.max(0, (row.height - Config.mixerFaderThickness) / 2)
 
-		height: row.small ? row.smallRow : Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
+		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
 		implicitHeight: height
 
 		Highlight {
 			id: hl
 
-			radius: Config.mixerRowRadius
 			active: row.selected && root.keyboard
 		}
 
@@ -277,15 +267,6 @@ Item {
 			width: Config.mixerDeviceIconSize
 			height: Math.min(Config.mixerDeviceIconSize, row.height)
 
-			Rectangle {
-				anchors.centerIn: parent
-				width: row.smallBadge
-				height: row.smallBadge
-				radius: width / 2
-				color: Config.foreground
-				visible: row.small && row.current
-			}
-
 			AppIcon {
 				anchors.centerIn: parent
 				implicitSize: Config.mixerIconSize
@@ -294,29 +275,13 @@ Item {
 				source: row.iconSource
 			}
 
-			Text {
-				anchors.centerIn: parent
+			Glyph {
+				anchors.fill: parent
 				visible: row.iconSource === ""
-				font.family: Config.fontFamily
-				font.pixelSize: row.small ? row.smallGlyph : Config.mixerIconSize
-				color: row.small && row.current ? Config.surface : row.muted ? Config.muted : Config.foreground
-				text: row.glyph
+				size: Config.mixerIconSize
+				color: row.muted ? Config.muted : Config.foreground
+				glyph: row.glyph
 			}
-		}
-
-		Text {
-			id: name
-
-			anchors.left: iconSlot.right
-			anchors.leftMargin: Config.mixerListGap
-			anchors.right: parent.right
-			anchors.verticalCenter: parent.verticalCenter
-			visible: !row.faderRow
-			elide: Text.ElideRight
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			color: row.muted ? Config.muted : hl.ink
-			text: row.label
 		}
 
 		Text {
@@ -326,7 +291,6 @@ Item {
 			anchors.verticalCenter: parent.verticalCenter
 			width: sample.width
 			horizontalAlignment: Text.AlignRight
-			visible: row.faderRow
 			font.family: Config.fontFamily
 			font.pixelSize: Settings.fontSize
 			color: row.muted && !hl.active ? Config.muted : hl.ink
@@ -342,7 +306,6 @@ Item {
 			anchors.rightMargin: Config.mixerListGap
 			anchors.verticalCenter: parent.verticalCenter
 			height: parent.height
-			visible: row.faderRow
 
 			StepBar {
 				id: faderBar
@@ -363,11 +326,11 @@ Item {
 				anchors.fill: parent
 				preventStealing: true
 
-				onPressed: (mouse) => {
+				onPressed: mouse => {
 					root.beginDrag(row.node, fader, mouse.x);
 					root.dragFader(row.node, fader, faderBar, mouse.x, mouse.modifiers);
 				}
-				onPositionChanged: (mouse) => root.dragFader(row.node, fader, faderBar, mouse.x, mouse.modifiers)
+				onPositionChanged: mouse => root.dragFader(row.node, fader, faderBar, mouse.x, mouse.modifiers)
 			}
 		}
 	}
@@ -412,14 +375,26 @@ Item {
 		Repeater {
 			model: root.deviceRows
 
-			delegate: MixRow {
+			delegate: GlyphRow {
+				id: device
+
 				required property var modelData
 				required property int index
 
+				readonly property int rowIndex: root.globalOffset + root.appRows.length + device.index
+
 				width: parent.width
-				node: modelData
-				rowIndex: root.globalOffset + root.appRows.length + index
-				small: true
+				glyph: Config.iconOutput
+				label: device.modelData.description || device.modelData.name || ""
+				current: device.modelData.isDefault === true
+				dim: device.modelData.muted === true
+				selected: device.rowIndex === root.targetIndex && root.keyboard
+
+				onActivated: {
+					root.keyboard = false;
+					root.targetIndex = device.rowIndex;
+					root.activateNode(device.modelData);
+				}
 			}
 		}
 	}

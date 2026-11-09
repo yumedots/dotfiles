@@ -12,15 +12,35 @@ ProcessPanel {
 	property bool dnsTyping: false
 	property string dnsDraft: ""
 	property string wifiTarget: ""
-	property string wifiPassword: ""
+	property bool listOpen: false
+	property bool othersOpen: false
 
 	readonly property var net: Yudae.network
 	readonly property var speed: root.net.speed || ({})
 	readonly property var wifi: root.net.wifi || []
-	readonly property string connection: root.net.ssid || root.net.iface || ""
 	readonly property string dns: root.net.dns || ""
 	readonly property bool linked: root.net.connected === true
 	readonly property bool isWifi: root.net.kind === "wifi"
+	readonly property bool radio: root.net.radio !== false
+	readonly property bool hasWifi: root.net.hasWifi === true
+	readonly property bool showList: root.hasWifi && root.radio
+	readonly property var adapters: root.net.adapters || []
+	readonly property var knownWifi: root.wifi.filter((entry) => entry.saved === true || entry.inUse === true)
+	readonly property var otherWifi: root.wifi.filter((entry) => entry.saved !== true && entry.inUse !== true)
+	readonly property int litBars: {
+		for (let i = 0; i < root.wifi.length; i++) {
+			if (root.wifi[i].inUse === true)
+				return Calc.clamp(root.wifi[i].bars, 1, 4);
+		}
+
+		return 0;
+	}
+	readonly property string wifiError: root.net.wifiError || ""
+	readonly property string wifiAsk: root.net.wifiAsk || ""
+	readonly property var radioModes: [
+		{ value: false, label: Config.iconWifiOff },
+		{ value: true, label: Config.iconWifi4 }
+	]
 	readonly property color downInk: Config.mono ? Config.networkDownMono : Config.networkDown
 	readonly property color upInk: Config.mono ? Config.networkUpMono : Config.networkUp
 	readonly property bool testing: (root.speed.stage || "") !== ""
@@ -34,7 +54,6 @@ ProcessPanel {
 			: Config.networkSpeedNone
 
 	title: Config.networkTitle
-	detail: root.connection
 	detailColor: root.downInk
 	listInk: root.downInk
 	totalInk: root.downInk
@@ -87,27 +106,47 @@ ProcessPanel {
 	panelWidth: Config.networkTooltipWidth
 	panelPadding: Config.networkTooltipPadding
 
-	function openWifi(ssid, locked) {
-		if (locked) {
-			root.wifiTarget = ssid;
-			root.wifiPassword = "";
+	function adapterOf(kind) {
+		for (let i = 0; i < root.adapters.length; i++) {
+			if (root.adapters[i].kind === kind)
+				return root.adapters[i];
+		}
+
+		return null;
+	}
+
+	function useKind(kind) {
+		Yudae.cmd("network", { use: { kind: kind } });
+	}
+
+	function openWifi(entry) {
+		if (entry.locked && !entry.saved) {
+			root.wifiTarget = entry.ssid;
 			return;
 		}
 
-		Yudae.cmd("network", { connect: { ssid: ssid, password: "" } });
+		Yudae.cmd("network", { connect: { ssid: entry.ssid, password: "" } });
 	}
 
-	function connectWifi() {
+	onWifiAskChanged: {
+		if (root.wifiAsk === "")
+			return;
+
+		root.wifiTarget = root.wifiAsk;
+		root.listOpen = true;
+		root.othersOpen = true;
+	}
+
+	function sendPassword(password) {
 		if (root.wifiTarget === "")
 			return;
 
-		Yudae.cmd("network", { connect: { ssid: root.wifiTarget, password: root.wifiPassword || "" } });
+		Yudae.cmd("network", { connect: { ssid: root.wifiTarget, password: password } });
 		root.cancelWifi();
 	}
 
 	function cancelWifi() {
 		root.wifiTarget = "";
-		root.wifiPassword = "";
 		root.forceActiveFocus();
 	}
 
@@ -139,6 +178,199 @@ ProcessPanel {
 	}
 
 	viz: [
+		Item {
+			id: adapterBlock
+
+			width: parent.width
+			height: root.hasWifi ? adapterColumn.height : 0
+			visible: root.hasWifi
+			z: 10
+
+			Column {
+				id: adapterColumn
+
+				width: parent.width
+				spacing: Config.networkRowGap
+
+				GlyphRow {
+					id: lanRow
+
+					readonly property var adapter: root.adapterOf("ethernet")
+
+					width: parent.width
+					visible: lanRow.adapter !== null
+					height: visible ? implicitHeight : 0
+					hoverable: true
+					glyph: Config.iconEthernet
+					label: lanRow.adapter && lanRow.adapter.connected ? (lanRow.adapter.connection || Config.networkEthernetLabel) : Config.networkEthernetLabel
+					current: lanRow.adapter !== null && lanRow.adapter.active
+					dim: lanRow.adapter !== null && !lanRow.adapter.connected
+
+					onActivated: root.useKind("ethernet")
+				}
+
+				GlyphRow {
+					id: radioRow
+
+					readonly property var adapter: root.adapterOf("wifi")
+
+					width: parent.width
+					hoverable: true
+					glyph: !root.radio ? Config.iconWifiOff
+						: root.litBars > 0 ? Config.wifiGlyph(root.litBars)
+						: Config.iconWifiIdle
+					label: !root.radio ? Config.networkWifiOff
+						: radioRow.adapter && radioRow.adapter.connected ? (radioRow.adapter.connection || Config.networkWifiLabel)
+						: Config.networkWifiIdle
+					current: radioRow.adapter !== null && radioRow.adapter.active
+					dim: !root.radio || radioRow.adapter === null || !radioRow.adapter.connected
+
+					onActivated: {
+						if (root.radio)
+							root.listOpen = !root.listOpen;
+
+						if (radioRow.adapter && radioRow.adapter.connected && !radioRow.adapter.active)
+							root.useKind("wifi");
+					}
+
+					Item {
+						width: Config.toggleHeight
+						height: Config.toggleHeight
+						visible: root.radio
+
+						Rectangle {
+							anchors.fill: parent
+							radius: width / 2
+							color: Config.toggleHover
+							visible: chevronHit.containsMouse
+						}
+
+						Glyph {
+							anchors.fill: parent
+							size: Settings.fontSize
+							color: Config.foreground
+							glyph: root.listOpen ? Config.iconUp : Config.iconDown
+						}
+
+						MouseArea {
+							id: chevronHit
+
+							anchors.fill: parent
+							hoverEnabled: true
+
+							onClicked: root.listOpen = !root.listOpen
+						}
+					}
+
+					PillSwitch {
+						model: root.radioModes
+						selected: root.radio ? 1 : 0
+						ink: root.downInk
+
+						onPick: (value) => Yudae.cmd("network", { radio: { on: value === true } })
+					}
+				}
+			}
+
+			Drawer {
+				id: wifiDrawer
+
+				y: adapterColumn.height + Config.networkRowGap
+				width: parent.width
+				z: 10
+				maxHeight: Config.networkDropdownRows * (Config.rowHeight + Config.networkRowGap) + 2 * Config.rowInset
+				open: root.showList && root.listOpen
+
+				Repeater {
+					model: root.knownWifi
+
+					delegate: NetworkRow {
+						width: parent.width
+						pendingSsid: root.net.wifiPending || ""
+						targetSsid: root.wifiTarget
+
+						onActivated: root.openWifi(modelData)
+					}
+				}
+
+				GlyphRow {
+					width: parent.width
+					visible: root.otherWifi.length > 0
+					height: visible ? implicitHeight : 0
+					hoverable: true
+					glyph: root.othersOpen ? Config.iconUp : Config.iconDown
+					label: Config.networkOtherLabel
+
+					onActivated: root.othersOpen = !root.othersOpen
+				}
+
+				Repeater {
+					model: root.othersOpen ? root.otherWifi : []
+
+					delegate: NetworkRow {
+						width: parent.width
+						pendingSsid: root.net.wifiPending || ""
+						targetSsid: root.wifiTarget
+
+						onActivated: root.openWifi(modelData)
+					}
+				}
+
+				SearchField {
+					id: passwordField
+
+					width: parent.width
+					visible: root.wifiTarget !== ""
+					boxColor: Config.surface
+					boxHeight: Config.rowHeight
+					corner: Config.rowHeight / 2
+					padding: Config.rowInset
+					glyph: Config.iconLock
+					size: Settings.fontSize
+					glyphSize: Settings.fontSize + 2
+					glyphSlot: Config.rowHeight - 2 * Config.rowInset
+					gap: Config.mixerListGap
+					placeholder: Config.networkPasswordHint
+					echoMode: TextInput.Password
+					typing: root.wifiTarget !== ""
+
+					onTypingChanged: {
+						if (!passwordField.typing && root.wifiTarget !== "")
+							root.cancelWifi();
+					}
+
+					onKeyPressed: (event) => {
+						if (event.key !== Qt.Key_Return && event.key !== Qt.Key_Enter)
+							return;
+
+						const typed = passwordField.text;
+
+						passwordField.clear();
+						root.sendPassword(typed);
+						event.accepted = true;
+					}
+				}
+
+				Text {
+					width: parent.width
+					visible: root.wifiError !== ""
+					wrapMode: Text.WordWrap
+					maximumLineCount: 2
+					elide: Text.ElideRight
+					font.family: Config.fontFamily
+					font.pixelSize: Settings.fontSize
+					color: root.upInk
+					text: root.wifiError
+				}
+			}
+		},
+
+		Separator {
+			width: parent.width
+			visible: root.hasWifi
+			height: root.hasWifi ? implicitHeight : 0
+		},
+
 		Item {
 			width: parent.width
 			height: Math.max(rateDown.implicitHeight, rateUp.implicitHeight)
@@ -186,10 +418,8 @@ ProcessPanel {
 			}
 		},
 
-		Rectangle {
+		Separator {
 			width: parent.width
-			height: 1
-			color: Config.dim
 		},
 
 		Repeater {
@@ -227,129 +457,6 @@ ProcessPanel {
 		},
 
 		Item {
-			width: parent.width
-			height: root.isWifi ? wifiColumn.implicitHeight : 0
-			visible: height > 0
-
-			Column {
-				id: wifiColumn
-
-				width: parent.width
-				spacing: Config.networkRowGap
-
-				Repeater {
-					model: root.wifi
-
-					delegate: Item {
-						id: wifiRow
-
-						required property var modelData
-
-						readonly property bool current: wifiRow.modelData.inUse
-						readonly property bool picked: root.wifiTarget === wifiRow.modelData.ssid
-						readonly property bool locked: wifiRow.modelData.locked === true
-						readonly property bool hot: wifiRow.picked || wifiHit.containsMouse
-
-						width: wifiColumn.width
-						height: Config.networkRowHeight
-
-						Highlight {
-							active: wifiRow.picked || wifiHit.containsMouse
-						}
-
-						Text {
-							id: wifiGlyph
-
-							anchors.left: parent.left
-							anchors.verticalCenter: parent.verticalCenter
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: wifiRow.current ? root.downInk : (wifiRow.hot ? Config.launcherHighlightText : Config.muted)
-							text: wifiRow.locked ? Config.networkLockIcon : Config.networkWifiIcons[Calc.clamp(wifiRow.modelData.bars, 1, 4) - 1]
-						}
-
-						Text {
-							id: wifiName
-
-							anchors.left: wifiGlyph.right
-							anchors.leftMargin: Config.networkGraphGap * 3
-							anchors.right: wifiSignal.left
-							anchors.rightMargin: Config.networkGraphGap * 3
-							anchors.verticalCenter: parent.verticalCenter
-							elide: Text.ElideRight
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: wifiRow.hot ? Config.launcherHighlightText : Config.foreground
-							text: wifiRow.modelData.ssid
-						}
-
-						Text {
-							id: wifiSignal
-
-							anchors.right: parent.right
-							anchors.verticalCenter: parent.verticalCenter
-							font.family: Config.fontFamily
-							font.pixelSize: Settings.fontSize
-							color: wifiRow.current ? root.downInk : Config.muted
-							text: wifiRow.modelData.signalText
-						}
-
-						MouseArea {
-							id: wifiHit
-
-							anchors.fill: parent
-							hoverEnabled: true
-
-							onClicked: root.openWifi(wifiRow.modelData.ssid, wifiRow.locked)
-						}
-					}
-				}
-
-				Item {
-					width: wifiColumn.width
-					height: Config.networkRowHeight
-					visible: root.wifiTarget !== ""
-
-					Highlight {
-						active: true
-					}
-
-					TextInput {
-						anchors.fill: parent
-						verticalAlignment: TextInput.AlignVCenter
-
-						font.family: Config.fontFamily
-						font.pixelSize: Settings.fontSize
-						color: Config.launcherHighlightText
-						echoMode: TextInput.Password
-						selectByMouse: true
-						focus: root.wifiTarget !== ""
-						text: root.wifiPassword
-
-						onTextEdited: root.wifiPassword = text
-						onAccepted: root.connectWifi()
-						onActiveFocusChanged: if (activeFocus) selectAll()
-
-						Keys.onEscapePressed: (event) => {
-							root.cancelWifi();
-							event.accepted = true;
-						}
-					}
-
-					Text {
-						anchors.fill: parent
-						verticalAlignment: Text.AlignVCenter
-						visible: root.wifiPassword === ""
-						font.family: Config.fontFamily
-						font.pixelSize: Settings.fontSize
-						color: Config.muted
-						text: Config.networkPasswordHint
-					}
-				}
-			}
-		},
-
-		Item {
 			id: dnsRow
 
 			visible: root.dns !== "" || root.net.dnsError !== ""
@@ -370,6 +477,7 @@ ProcessPanel {
 
 			Highlight {
 				active: dnsRow.hot
+				radius: height / 2
 				fillParent: false
 				anchors.right: parent.right
 				anchors.verticalCenter: parent.verticalCenter
@@ -460,6 +568,7 @@ ProcessPanel {
 			Highlight {
 				anchors.fill: parent
 
+				radius: height / 2
 				active: runButton.activeFocus || runHit.containsMouse
 			}
 
@@ -494,7 +603,7 @@ ProcessPanel {
 		target: root
 
 		function onOnScreenChanged() {
-			if (root.onScreen && root.isWifi)
+			if (root.onScreen)
 				Yudae.cmd("network", { scan: true });
 		}
 	}

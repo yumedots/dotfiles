@@ -10,15 +10,15 @@ BarStat {
 
 	readonly property var net: Yudae.network
 	readonly property bool isWifi: root.net.kind === "wifi"
-	readonly property int wifiStep: Calc.clamp(root.net.bars || 0, 1, 4) - 1
-	readonly property string wifiIcon: Config.networkWifiIcons[root.wifiStep]
+	readonly property bool linked: root.net.connected === true && (root.net.kind || "") !== ""
+	readonly property string wifiIcon: Config.wifiGlyph(root.net.bars)
 
 	property bool testPending: false
 
 	mode: "icon"
 	barColor: Config.mono ? Config.networkBaseMono : Config.networkBase
 	textColor: root.barColor
-	icon: root.isWifi ? root.wifiIcon : Config.networkLanIcon
+	icon: root.isWifi ? root.wifiIcon : (!root.linked && root.net.hasWifi === true ? Config.iconWifiOff : Config.iconEthernet)
 
 	function requestSpeedTest() {
 		if (!root.popupVisible) {
