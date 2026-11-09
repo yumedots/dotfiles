@@ -19,7 +19,7 @@ dotfiles/
   vm/                images, overlays, qemu command builder, scenarios, compare/bench scripts
   ~/qemu-linux/      QEMU 11.1.3 fork (yumedots/qemu-linux, branch yudae) with the dbus display fixes
   docs/              reference: how the system is shaped
-  agents/skills/     task guides: how to do X
+  .agents/skills/    task guides: how to do X
   xmake.lua + one xmake.lua per dir
   plans.md AGENTS.md README.md
 ```
@@ -28,7 +28,7 @@ dotfiles/
 
 - A feature has one name. `features/weather/` on the QML side, `providers/weather.zig` on the daemon side. Add or delete both together.
 - `config/` has no code. Anything with logic leaves it.
-- `AGENTS.md` is an index. Procedure goes in `agents/skills/`, reference in `docs/`.
+- `AGENTS.md` is an index. Procedure goes in `.agents/skills/`, reference in `docs/`.
 - Only `xmake link` writes into `~/.config`. It refuses to overwrite a real file and prints what it would replace.
 - The shell and greeter run from the repo path, never from `~/.config`.
 

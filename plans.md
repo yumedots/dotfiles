@@ -66,7 +66,7 @@ Each kind has one adapter in yudaemond. A new kind is one adapter; plugins never
 
 ### Agents first
 
-- Skill in two files: content in `agents/skills/plugin.md`, a thin `.agents/skills/plugin/SKILL.md` with frontmatter and a few rules, one line added to the skills list in `AGENTS.md`.
+- Skill in `.agents/skills/plugin/SKILL.md` with frontmatter and a few rules; the reference is `docs/plugins.md`.
 - `plugins/_template-<kind>/`: one minimal working example per kind that passes the suite; an agent copies one.
 - The `yudae plugin` verbs are MCP tools.
 - `docs/plugins.md` comes after, written from the templates; `docs/architecture.md` and `docs/agent-tooling.md` updated.

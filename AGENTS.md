@@ -52,7 +52,7 @@ plugins/           source-only plugins, see docs/plugins.md
 hypr/              hyprland conf + plugins; the one non-config symlinked into ~/.config
 shell/             quickshell; run with `quickshell -p shell/shell.qml`, never symlinked
 daemon/            yudaemond (Zig); providers pair with shell/features/<name>
-systemd/ scripts/ vm/ docs/ agents/skills/
+systemd/ scripts/ vm/ docs/ .agents/skills/
 xmake.lua          the single entry point: build link lint test bench hypr vm doctor
 ```
 
@@ -60,14 +60,7 @@ xmake.lua          the single entry point: build link lint test bench hypr vm do
 
 # Skills
 
-Read the one that matches the task before editing:
-
-- `agents/skills/quickshell.md` - QML, live reload, surfaces, lint, logs.
-- `agents/skills/daemon.md` - yudaemond rules, adding a provider, performance gates, lifecycle.
-- `agents/skills/vm.md` - the QEMU VM lifecycle and scenarios.
-- `agents/skills/plugin.md` - plugin folders, manifests, build and load contract.
-
-Agent skills are registered in `.agents/skills/`; the project MCP servers are in `opencode.json` and `.mcp.json`.
+Task guides are registered in `.agents/skills/`; reference lives in `docs/`.
 
 # Reference
 

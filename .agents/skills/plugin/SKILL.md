@@ -3,7 +3,7 @@ name: Plugin
 description: Use when adding, changing or debugging a plugin under plugins/, its manifest, build, load list, theme or hypr.lua.
 ---
 
-Read `agents/skills/plugin.md` from the repo root first.
+Read `docs/plugins.md` from the repo root first.
 
 - One folder per plugin, source only; `make OUT=<dir>` writes exactly the `provides` paths.
 - Copy `plugins/_template-hypr/`, `_template-theme/`, `_template-shell/`, `_template-app/` or `_template-daemon/`; rename every `_template-*` name.
