@@ -1,0 +1,5 @@
+id = "_template-app"
+kind = "app"
+version = "0.1.0"
+build = "make"
+provides = ["app.conf"]
