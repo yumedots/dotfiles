@@ -29,6 +29,8 @@ GlyphRow {
 
 	Glyph {
 		visible: !row.pending && row.modelData.locked === true
+		width: row.badge
+		height: row.badge
 		size: Settings.fontSize
 		color: row.ink
 		glyph: Config.iconLock

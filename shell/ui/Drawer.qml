@@ -7,7 +7,7 @@ Item {
 	property bool open: false
 	property color color: Config.launcherSearchBox
 	property real padding: Config.rowInset
-	property real sidePadding: 0
+	property real bleed: Config.rowInset
 	property real spacing: Config.networkRowGap
 	property real maxHeight: 0
 
@@ -15,7 +15,6 @@ Item {
 
 	readonly property real natural: body.implicitHeight + 2 * root.padding
 
-	clip: true
 	visible: root.height > 0
 	height: root.open ? (root.maxHeight > 0 ? Math.min(root.natural, root.maxHeight) : root.natural) : 0
 
@@ -27,22 +26,18 @@ Item {
 	}
 
 	Rectangle {
-		anchors.fill: parent
-		radius: Math.min(height / 2, Config.rowHeight / 2 + root.padding)
+		x: -root.bleed
+		width: root.width + 2 * root.bleed
+		height: root.height
+		radius: Math.min(height / 2, Config.rowHeight / 2 + root.bleed)
 		color: root.color
-	}
-
-	MouseArea {
-		anchors.fill: parent
-		acceptedButtons: Qt.NoButton
 	}
 
 	Flickable {
 		id: view
 
-		x: root.sidePadding
 		y: root.padding
-		width: root.width - 2 * root.sidePadding
+		width: root.width
 		height: root.height - 2 * root.padding
 		contentWidth: width
 		contentHeight: body.implicitHeight
@@ -56,9 +51,5 @@ Item {
 			width: view.width
 			spacing: root.spacing
 		}
-	}
-
-	Scrollbar {
-		view: view
 	}
 }
