@@ -27,6 +27,7 @@ PillSwitch 1.0 PillSwitch.qml
 Highlight 1.0 Highlight.qml
 Icon 1.0 Icon.qml
 IconRow 1.0 IconRow.qml
+GlyphRow 1.0 GlyphRow.qml
 RevealIcon 1.0 RevealIcon.qml
 Figures 1.0 Figures.qml
 AgentFace 1.0 AgentFace.qml
@@ -36,3 +37,6 @@ DynamicIcon 1.0 DynamicIcon.qml
 singleton Handoff 1.0 Handoff.qml
 singleton Input 1.0 Input.qml
 GlyphStrip 1.0 GlyphStrip.qml
+Glyph 1.0 Glyph.qml
+Drawer 1.0 Drawer.qml
+Separator 1.0 Separator.qml
