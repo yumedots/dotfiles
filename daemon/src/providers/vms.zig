@@ -428,9 +428,10 @@ pub const Vms = struct {
 
 		const vm = try self.allocator.create(Vm);
 		const dir = try std.fs.path.join(self.allocator, &.{ proc.repo(self.io, self.allocator), "vm", "runs", name });
-		const disk = if (from.len > 0)
-			try self.cloneDisk(name, from)
-		else
+		const disk = if (from.len > 0) blk: {
+			if (self.diskOf(from) != null) break :blk try self.cloneDisk(name, from);
+			break :blk images.overlayFrom(self.io, self.allocator, name, from) catch return error.NotFound;
+		} else
 			try images.overlay(self.io, self.allocator, name);
 
 		vm.* = .{
@@ -1374,6 +1375,10 @@ pub const Vms = struct {
 		try writer.print("{d}", .{json.integer(json.field(context, "mem"))});
 		try writer.writeAll(",\"gl\":");
 		try writer.writeAll(if (json.flag(context, "gl")) "true" else "false");
+		if (json.textAt(context, "from").len > 0) {
+			try writer.writeAll(",\"from\":");
+			try std.json.Stringify.encodeJsonString(json.textAt(context, "from"), .{}, writer);
+		}
 		try writer.writeAll("}");
 
 		const created = try self.createVm((try json.parse(allocator, create_args.written())).value, allocator);

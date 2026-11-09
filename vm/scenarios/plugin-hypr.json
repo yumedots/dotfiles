@@ -1,0 +1,13 @@
+{
+  "context": { "cores": 2, "mem": 4096, "gl": true },
+  "steps": [
+    { "do": "wait", "until": "guest", "timeout": 60000 },
+    { "do": "wait", "until": "exec:pgrep -x yudaemond", "timeout": 60000 },
+    { "do": "wait", "until": "exec:pgrep -x quickshell", "timeout": 60000 },
+    { "do": "exec", "cmd": "mkdir -p /home/gabriel/.local/state/yudae && printf 'load = [\"_template-hypr\"]\\n' > /home/gabriel/.local/state/yudae/plugins.toml", "code": 0 },
+    { "do": "exec", "cmd": "/home/gabriel/dotfiles/scripts/yudae plugin reload", "code": 0 },
+    { "do": "wait", "until": "exec:export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); hyprctl plugin list | grep -q template-hypr", "timeout": 30000 },
+    { "do": "screenshot" }
+  ],
+  "proof": "a hypr plugin builds and loads live"
+}

@@ -1,0 +1,15 @@
+{
+  "context": { "cores": 2, "mem": 4096, "gl": true },
+  "steps": [
+    { "do": "wait", "until": "guest", "timeout": 60000 },
+    { "do": "wait", "until": "exec:pgrep -x yudaemond", "timeout": 60000 },
+    { "do": "wait", "until": "exec:pgrep -x quickshell", "timeout": 60000 },
+    { "do": "exec", "cmd": "mkdir -p /home/gabriel/.local/state/yudae && printf 'load = [\"_template-hypr\"]\\n' > /home/gabriel/.local/state/yudae/plugins.toml", "code": 0 },
+    { "do": "exec", "cmd": "/home/gabriel/dotfiles/scripts/yudae plugin reload", "code": 0 },
+    { "do": "wait", "until": "exec:test -f /home/gabriel/.local/state/yudae/build/_template-hypr/stamp", "timeout": 30000 },
+    { "do": "exec", "cmd": "cp /home/gabriel/.local/state/yudae/build/_template-hypr/stamp /tmp/stamp-same", "code": 0 },
+    { "do": "exec", "cmd": "/home/gabriel/dotfiles/scripts/yudae plugin reload", "code": 0 },
+    { "do": "exec", "cmd": "cmp -s /tmp/stamp-same /home/gabriel/.local/state/yudae/build/_template-hypr/stamp", "code": 0 }
+  ],
+  "proof": "reloading with the same Hyprland version and source does not rebuild"
+}

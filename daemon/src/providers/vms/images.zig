@@ -6,10 +6,19 @@ const Io = std.Io;
 const Allocator = std.mem.Allocator;
 
 pub fn overlay(io: Io, allocator: Allocator, name: []const u8) ![]u8 {
+	return overlayFrom(io, allocator, name, "");
+}
+
+pub fn overlayFrom(io: Io, allocator: Allocator, name: []const u8, tag: []const u8) ![]u8 {
 	const repo = proc.repo(io, allocator);
 	const script = try std.fs.path.join(allocator, &.{ repo, "vm", "images" });
 
-	const result = try exec.runLimit(io, allocator, &.{ "bash", script, "overlay", name }, null, 1024 * 1024);
+	var argv: std.ArrayListUnmanaged([]const u8) = .empty;
+	defer argv.deinit(allocator);
+	try argv.appendSlice(allocator, &.{ "bash", script, "overlay", name });
+	if (tag.len > 0) try argv.append(allocator, tag);
+
+	const result = try exec.runLimit(io, allocator, argv.items, null, 1024 * 1024);
 	defer result.deinit(allocator);
 
 	if (result.code != 0) return error.ImageFailed;

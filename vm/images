@@ -10,6 +10,7 @@ CLOUD_SHA=794eb4889b39e1f0ed7d5ae998b2a1ed2137db8cf8c3476cf2962c7437ecb003
 CLOUD=$CACHE/$CLOUD_NAME
 PACKAGES=$CACHE/packages.qcow2
 GOLDEN=$CACHE/golden.qcow2
+ARCH_SNAPSHOT=""
 SEED=$CACHE/seed.img
 LOG=$CACHE/provision.log
 QEMU=$(command -v qemu-system-x86_64)
@@ -24,7 +25,7 @@ mirrors=(
 )
 
 usage() {
-	echo "usage: vm/images fetch|packages|golden|ensure|overlay <name>|snapshot <name> <tag>|restore <name> <tag>|list" >&2
+	echo "usage: vm/images fetch|packages [--snapshot YYYY/MM/DD]|golden [--snapshot YYYY/MM/DD]|ensure|overlay <name> [golden-tag]|snapshot <name> <tag>|restore <name> <tag>|list" >&2
 	exit 2
 }
 
@@ -63,6 +64,7 @@ provision_script() {
 set -u
 exec > >(tee /dev/console) 2>&1
 echo "dotfiles: provision start"
+@SNAPSHOT@
 mkdir -p /mnt/hostpkg
 mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L,ro hostpkg /mnt/hostpkg
 mkdir -p /var/cache/pacman/pkg
@@ -106,7 +108,11 @@ cmd_packages() {
 	"$QEMU_IMG" create -f qcow2 -F qcow2 -b "$CLOUD" "$PACKAGES" 32G
 
 	mkdir -p "$CACHE/seed"
-	provision_script > "$CACHE/seed/provision.sh"
+	local snapshot_line=""
+	if [ -n "$ARCH_SNAPSHOT" ]; then
+		snapshot_line="echo 'Server = https://archive.archlinux.org/repos/${ARCH_SNAPSHOT}/\$repo/os/\$arch' > /etc/pacman.d/mirrorlist"
+	fi
+	provision_script | sed "s|@SNAPSHOT@|$snapshot_line|" > "$CACHE/seed/provision.sh"
 	pacman -Qqen > "$CACHE/seed/packages.txt"
 	cat > "$CACHE/seed/meta-data" <<EOF
 instance-id: dotfiles-packages
@@ -309,10 +315,18 @@ cmd_ensure() {
 cmd_overlay() {
 	[ $# -ge 1 ] || usage
 	local name=$1
-	cmd_ensure
+	local base=${2:-}
+	if [ -n "$base" ]; then
+		local golden="$CACHE/golden-$base.qcow2"
+		[ "$base" = current ] && golden=$GOLDEN
+		[ -f "$golden" ] || { echo "golden $base not built" >&2; exit 1; }
+	else
+		cmd_ensure
+		local golden="$GOLDEN"
+	fi
 	mkdir -p "$RUNS/$name"
 	rm -f "$RUNS/$name/disk.qcow2"
-	"$QEMU_IMG" create -f qcow2 -F qcow2 -b "$GOLDEN" "$RUNS/$name/disk.qcow2" 32G
+	"$QEMU_IMG" create -f qcow2 -F qcow2 -b "$golden" "$RUNS/$name/disk.qcow2" 32G
 	echo "$RUNS/$name/disk.qcow2"
 }
 
@@ -329,7 +343,14 @@ cmd_restore() {
 }
 
 cmd_list() {
-	"$QEMU_IMG" info "$GOLDEN" 2>/dev/null | sed -n 's/^backing file: /golden backing /p' || true
+	local golden tag
+	for golden in "$CACHE"/golden*.qcow2; do
+		[ -f "$golden" ] || continue
+		tag=$(basename "$golden" .qcow2)
+		tag=${tag#golden-}
+		[ "$tag" = "golden" ] && tag=current
+		echo "golden $tag"
+	done
 	find "$RUNS" -maxdepth 2 -name disk.qcow2 -printf '%h\n' 2>/dev/null | xargs -r -n1 basename
 }
 
@@ -338,8 +359,25 @@ shift || true
 
 case "$command" in
 	fetch) cmd_fetch ;;
-	packages) cmd_packages ;;
-	golden) cmd_golden ;;
+	packages|golden)
+		while [ $# -gt 0 ]; do
+			case "$1" in
+				--snapshot)
+					shift
+					[ $# -gt 0 ] || usage
+					ARCH_SNAPSHOT=$1
+					;;
+				*) usage ;;
+			esac
+			shift
+		done
+		if [ -n "$ARCH_SNAPSHOT" ]; then
+			slug=$(echo "$ARCH_SNAPSHOT" | tr '/' '-')
+			PACKAGES=$CACHE/packages-$slug.qcow2
+			GOLDEN=$CACHE/golden-$slug.qcow2
+		fi
+		if [ "$command" = packages ]; then cmd_packages; else cmd_golden; fi
+		;;
 	ensure) cmd_ensure ;;
 	overlay) cmd_overlay "$@" ;;
 	snapshot) cmd_snapshot "$@" ;;
