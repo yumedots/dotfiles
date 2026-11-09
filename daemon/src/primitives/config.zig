@@ -68,6 +68,14 @@ pub const Config = struct {
 		child.destroy(arena);
 	}
 
+	pub fn direct(self: Config, name: []const u8) ?Value {
+		for (self.root.entries.items) |entry| {
+			if (std.mem.eql(u8, entry.key, name)) return entry.value;
+		}
+
+		return null;
+	}
+
 	fn find(table: *Table, name: []const u8) ?Value {
 		for (table.entries.items) |entry| {
 			switch (entry.value) {

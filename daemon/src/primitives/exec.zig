@@ -29,9 +29,18 @@ pub fn runEnv(io: Io, allocator: Allocator, argv: []const []const u8, environ_ma
 	return runLimit(io, allocator, argv, environ_map, 4 * 1024 * 1024);
 }
 
+pub fn runDir(io: Io, allocator: Allocator, argv: []const []const u8, cwd: []const u8, environ_map: ?*const std.process.Environ.Map) !Result {
+	return runFull(io, allocator, argv, environ_map, 4 * 1024 * 1024, cwd);
+}
+
 pub fn runLimit(io: Io, allocator: Allocator, argv: []const []const u8, environ_map: ?*const std.process.Environ.Map, limit: usize) !Result {
+	return runFull(io, allocator, argv, environ_map, limit, null);
+}
+
+fn runFull(io: Io, allocator: Allocator, argv: []const []const u8, environ_map: ?*const std.process.Environ.Map, limit: usize, cwd: ?[]const u8) !Result {
 	var child = try std.process.spawn(io, .{
 		.argv = argv,
+		.cwd = if (cwd) |path| .{ .path = path } else .inherit,
 		.stdin = .ignore,
 		.stdout = .pipe,
 		.stderr = .pipe,

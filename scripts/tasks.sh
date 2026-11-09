@@ -54,9 +54,12 @@ task_link() {
 task_build() {
 	"$ROOT/scripts/yubuild"
 
-	for makefile in "$ROOT"/hypr/plugins/*/Makefile; do
+	local state=${XDG_STATE_HOME:-$HOME/.local/state}/yudae/build makefile id
+	for makefile in "$ROOT"/plugins/*/Makefile; do
 		[ -e "$makefile" ] || continue
-		make -C "$(dirname "$makefile")" >/dev/null
+		id=$(basename "$(dirname "$makefile")")
+		case "$id" in _template-*) continue ;; esac
+		make -C "$(dirname "$makefile")" OUT="$state/$id" >/dev/null
 	done
 }
 

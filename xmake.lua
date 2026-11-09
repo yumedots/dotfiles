@@ -4,6 +4,7 @@ target("checks")
     set_kind("phony")
     add_tests("daemon")
     add_tests("qml")
+    add_tests("plugins")
     add_tests("idle-spawn")
     on_test(function (target, opt)
         local name = opt.name:match("/(.+)$")
@@ -14,6 +15,10 @@ target("checks")
 
         if name == "qml" then
             return os.execv("sh", {"-c", "node shell/ui/AgentFace.check.js"}, {try = true}) == 0
+        end
+
+        if name == "plugins" then
+            return os.execv("sh", {"-c", "scripts/plugin-check"}, {try = true}) == 0
         end
 
         if name == "idle-spawn" then

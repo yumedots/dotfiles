@@ -55,10 +55,11 @@ var environ_block: ?[]const u8 = null;
 var environ_lock: std.Io.Mutex = .init;
 
 pub fn environ(io: Io, allocator: Allocator) ?[]const u8 {
+	_ = allocator;
 	environ_lock.lockUncancelable(io);
 	defer environ_lock.unlock(io);
 
-	if (environ_block == null) environ_block = readFile(io, allocator, "/proc/self/environ") catch null;
+	if (environ_block == null) environ_block = readFile(io, std.heap.smp_allocator, "/proc/self/environ") catch null;
 
 	return environ_block;
 }
@@ -116,6 +117,7 @@ pub fn writeFile(io: Io, path: []const u8, body: []const u8) !void {
 
 pub fn writeFileAtomic(io: Io, allocator: Allocator, path: []const u8, body: []const u8) !void {
 	const temp = try std.fmt.allocPrint(allocator, "{s}.tmp", .{path});
+	defer allocator.free(temp);
 
 	var file = try std.Io.Dir.cwd().createFile(io, temp, .{ .truncate = true });
 	var buffer: [4096]u8 = undefined;

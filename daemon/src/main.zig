@@ -15,6 +15,7 @@ const agentname = @import("providers/agentname.zig");
 const workspaces = @import("providers/workspaces.zig");
 const tray = @import("providers/tray.zig");
 const notifications = @import("providers/notifications.zig");
+const plugins = @import("providers/plugins.zig");
 const weather = @import("providers/weather.zig");
 const system = @import("providers/system.zig");
 const apps = @import("providers/apps.zig");
@@ -58,6 +59,7 @@ pub const Context = struct {
 	workspaces: *workspaces.Workspaces,
 	tray: *tray.Tray,
 	notifications: *notifications.Notifications,
+	plugins: *plugins.Plugins,
 	weather: *weather.Weather,
 	system: *system.System,
 	apps: *apps.Apps,
@@ -414,6 +416,7 @@ fn callThunk(ctx: *anyopaque, target: []const u8, method: []const u8, args: json
 	const context: *Context = @ptrCast(@alignCast(ctx));
 
 	if (std.mem.eql(u8, target, "vms")) return context.vms.call(method, args, allocator);
+	if (std.mem.eql(u8, target, "plugins")) return context.plugins.call(method, args, alloc);
 	if (std.mem.eql(u8, target, "state")) return context.hub.syncSnapshot(allocator);
 	if (std.mem.eql(u8, target, "ui")) return context.hub.syncSnapshot(allocator);
 
@@ -461,6 +464,7 @@ pub fn main() !void {
 	}
 
 	if (std.mem.eql(u8, command, "call")) return cli.call(io, args);
+	if (std.mem.eql(u8, command, "plugin")) return cli.plugin(io, args);
 	if (std.mem.eql(u8, command, "vm")) return cli.virtualMachines(io, args);
 	if (std.mem.eql(u8, command, "open")) return cli.open(io, args);
 	if (std.mem.eql(u8, command, "app")) return cli.app(io, args);
@@ -474,7 +478,7 @@ pub fn main() !void {
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|vm|open|app|ui|spawn-check|logout]\n", .{});
+		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|plugin|vm|open|app|ui|spawn-check|logout]\n", .{});
 		return;
 	}
 
@@ -523,6 +527,9 @@ fn run(io: std.Io) !void {
 	try hub.add(notify_provider.provider());
 	opencode_provider.attach(notify_provider);
 
+	const plugins_provider = try plugins.Plugins.create(allocator, io, hub, notify_provider);
+	try hub.add(plugins_provider.provider());
+
 	const workspaces_provider = try workspaces.Workspaces.create(allocator, io, hub);
 	try hub.add(workspaces_provider.provider());
 
@@ -548,6 +555,7 @@ fn run(io: std.Io) !void {
 	try hub.add(settings_provider.provider());
 
 	const config_settings = try config_provider.Config.create(allocator, io, hub);
+	plugins_provider.attachConfig(config_settings);
 	try hub.add(config_settings.provider());
 
 	const network_provider = try network.Network.create(allocator, io, hub);
@@ -617,6 +625,7 @@ fn run(io: std.Io) !void {
 		.workspaces = workspaces_provider,
 		.tray = tray_provider,
 		.notifications = notify_provider,
+		.plugins = plugins_provider,
 		.weather = weather_provider,
 		.system = system_provider,
 		.apps = apps_provider,
@@ -669,6 +678,7 @@ fn run(io: std.Io) !void {
 	try tray_provider.start();
 	try workspaces_provider.start();
 	try notify_provider.start();
+	try plugins_provider.start();
 	try weather_provider.start();
 	try apps_provider.start();
 	try screen_provider.start();

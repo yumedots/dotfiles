@@ -46,6 +46,13 @@ const tools = [_]Tool{
 	.{ .name = "vm_pull", .description = "Copy a guest file to the host.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"name\",\"path\"]}" },
 	.{ .name = "vm_ui_tree", .description = "Guest state plus the Hyprland client tree.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
 	.{ .name = "vm_run_scenario", .description = "Run a deterministic VM scenario.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"scenario\":{\"type\":\"string\"}},\"required\":[\"scenario\"]}" },
+	.{ .name = "plugin_list", .description = "List loaded plugins, kinds and build state.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "plugin_build", .description = "Rebuild a plugin from source.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_load", .description = "Add a plugin to the load list without building it.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_unload", .description = "Remove a plugin from the load list.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_add", .description = "Clone a plugin repository and install it.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}" },
+	.{ .name = "plugin_update", .description = "Pull and rebuild an installed plugin.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_reload", .description = "Rebuild stale plugins and apply the load list.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
 };
 
 pub fn run(io: Io, args: []const []const u8) !void {
@@ -156,6 +163,8 @@ fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.
 	if (std.mem.eql(u8, name, "parity")) return runSelf(io, allocator, &.{"parity"});
 
 	if (std.mem.eql(u8, name, "qs_log")) return logTail(io, allocator, arguments);
+
+	if (std.mem.startsWith(u8, name, "plugin_")) return callDaemon(io, allocator, "plugins", name["plugin_".len..], arguments);
 
 	if (std.mem.eql(u8, name, "vm_view")) {
 		spawnViewer(io, allocator, json.textAt(arguments, "name"));

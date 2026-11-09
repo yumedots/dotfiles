@@ -46,6 +46,10 @@ pub const Config = struct {
 		return std.fmt.allocPrint(allocator, "{s}/dotfiles/shell/config.toml", .{proc.home(self.io, allocator)}) catch "/nonexistent";
 	}
 
+	fn themePath(self: *Config, allocator: Allocator) []const u8 {
+		return std.fmt.allocPrint(allocator, "{s}/yudae/theme.toml", .{proc.stateHome(self.io, allocator)}) catch "/nonexistent";
+	}
+
 	fn watchLoop(self: *Config) void {
 		self.reload();
 
@@ -60,14 +64,27 @@ pub const Config = struct {
 		self.reload();
 	}
 
-	fn reload(self: *Config) void {
+	pub fn reload(self: *Config) void {
 		const file = self.path(self.allocator);
 		defer self.allocator.free(file);
 
 		const body = proc.readFile(self.io, self.allocator, file) catch return;
 		defer self.allocator.free(body);
 
-		const next = configmod.Config.parse(self.allocator, body) catch return;
+		const theme_file = self.themePath(self.allocator);
+		defer self.allocator.free(theme_file);
+		const theme = proc.readFile(self.io, self.allocator, theme_file) catch "";
+
+		var combined: std.ArrayList(u8) = .empty;
+		defer combined.deinit(self.allocator);
+		if (body.len > 0) combined.appendSlice(self.allocator, body) catch return;
+		combined.append(self.allocator, '\n') catch return;
+		if (theme.len > 0) {
+			combined.appendSlice(self.allocator, theme) catch return;
+			self.allocator.free(theme);
+		}
+
+		const next = configmod.Config.parse(self.allocator, combined.items) catch return;
 
 		self.mutex.lockUncancelable(self.io);
 		const previous = self.state;
