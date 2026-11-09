@@ -1,12 +1,6 @@
 -- drop-preview: shows where a dragged tiled window will land.
 -- Only active while a mouse button is held (mouse drags, not touch/tablet).
 
-local cfg  = (os.getenv("XDG_CONFIG_HOME") or ((os.getenv("HOME") or "") .. "/.config"))
-local path = cfg .. "/hypr/plugins/drop-preview/drop-preview.so"
-
-hl.permission({ binary = path, type = "plugin", mode = "allow" })
-hl.plugin.load(path)
-
 hl.config({
     plugin = {
         drop_preview = {

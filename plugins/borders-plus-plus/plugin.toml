@@ -1,0 +1,8 @@
+id = "borders-plus-plus"
+kind = "hypr"
+version = "1.0.0"
+build = "make"
+provides = ["borders-plus-plus.so"]
+
+[requires]
+hyprland = ">=0.50"
