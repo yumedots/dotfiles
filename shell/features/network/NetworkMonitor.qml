@@ -178,13 +178,13 @@ ProcessPanel {
 	}
 
 	viz: [
-		Item {
+		Column {
 			id: adapterBlock
 
 			width: parent.width
-			height: root.hasWifi ? adapterColumn.height : 0
+			height: root.hasWifi ? implicitHeight : 0
 			visible: root.hasWifi
-			z: 10
+			spacing: Config.networkRowGap
 
 			Column {
 				id: adapterColumn
@@ -275,27 +275,29 @@ ProcessPanel {
 			Drawer {
 				id: wifiDrawer
 
-				y: adapterColumn.height + Config.networkRowGap
 				width: parent.width
-				z: 10
 				maxHeight: Config.networkDropdownRows * (Config.rowHeight + Config.networkRowGap) + 2 * Config.rowInset
 				open: root.showList && root.listOpen
 
 				Repeater {
 					model: root.knownWifi
 
-					delegate: NetworkRow {
+					delegate: NetworkEntry {
 						width: parent.width
 						pendingSsid: root.net.wifiPending || ""
 						targetSsid: root.wifiTarget
+						errorText: root.wifiError
+						errorInk: root.upInk
 
 						onActivated: root.openWifi(modelData)
+						onSubmitted: (password) => root.sendPassword(password)
+						onCancelled: root.cancelWifi()
 					}
 				}
 
 				GlyphRow {
 					width: parent.width
-					visible: root.otherWifi.length > 0
+					visible: root.otherWifi.length > 0 && root.knownWifi.length > 0
 					height: visible ? implicitHeight : 0
 					hoverable: true
 					glyph: root.othersOpen ? Config.iconUp : Config.iconDown
@@ -305,62 +307,19 @@ ProcessPanel {
 				}
 
 				Repeater {
-					model: root.othersOpen ? root.otherWifi : []
+					model: root.othersOpen || root.knownWifi.length === 0 ? root.otherWifi : []
 
-					delegate: NetworkRow {
+					delegate: NetworkEntry {
 						width: parent.width
 						pendingSsid: root.net.wifiPending || ""
 						targetSsid: root.wifiTarget
+						errorText: root.wifiError
+						errorInk: root.upInk
 
 						onActivated: root.openWifi(modelData)
+						onSubmitted: (password) => root.sendPassword(password)
+						onCancelled: root.cancelWifi()
 					}
-				}
-
-				SearchField {
-					id: passwordField
-
-					width: parent.width
-					visible: root.wifiTarget !== ""
-					boxColor: Config.surface
-					boxHeight: Config.rowHeight
-					corner: Config.rowHeight / 2
-					padding: Config.rowInset
-					glyph: Config.iconLock
-					size: Settings.fontSize
-					glyphSize: Settings.fontSize + 2
-					glyphSlot: Config.rowHeight - 2 * Config.rowInset
-					gap: Config.mixerListGap
-					placeholder: Config.networkPasswordHint
-					echoMode: TextInput.Password
-					typing: root.wifiTarget !== ""
-
-					onTypingChanged: {
-						if (!passwordField.typing && root.wifiTarget !== "")
-							root.cancelWifi();
-					}
-
-					onKeyPressed: (event) => {
-						if (event.key !== Qt.Key_Return && event.key !== Qt.Key_Enter)
-							return;
-
-						const typed = passwordField.text;
-
-						passwordField.clear();
-						root.sendPassword(typed);
-						event.accepted = true;
-					}
-				}
-
-				Text {
-					width: parent.width
-					visible: root.wifiError !== ""
-					wrapMode: Text.WordWrap
-					maximumLineCount: 2
-					elide: Text.ElideRight
-					font.family: Config.fontFamily
-					font.pixelSize: Settings.fontSize
-					color: root.upInk
-					text: root.wifiError
 				}
 			}
 		},
