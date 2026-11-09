@@ -121,7 +121,6 @@ QtObject {
 	readonly property var iconWifi3: settings.iconWifi3 !== undefined ? settings.iconWifi3 : "\udb82\udd25"
 	readonly property var iconWifi4: settings.iconWifi4 !== undefined ? settings.iconWifi4 : "\udb82\udd28"
 	readonly property var iconWifiOff: settings.iconWifiOff !== undefined ? settings.iconWifiOff : "\udb82\udd2d"
-	readonly property var iconWifiIdle: settings.iconWifiIdle !== undefined ? settings.iconWifiIdle : "\udb82\udd2f"
 	readonly property var iconEthernet: settings.iconEthernet !== undefined ? settings.iconEthernet : "\udb80\ude00"
 	readonly property var iconLock: settings.iconLock !== undefined ? settings.iconLock : "\uf023"
 
@@ -600,7 +599,6 @@ QtObject {
 		wifi2: root.iconWifi2,
 		wifi3: root.iconWifi3,
 		wifi4: root.iconWifi4,
-		wifiIdle: root.iconWifiIdle,
 		wifiOff: root.iconWifiOff,
 		down: root.iconDown,
 		github: root.iconGithub,

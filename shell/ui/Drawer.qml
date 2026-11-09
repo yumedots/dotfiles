@@ -7,6 +7,7 @@ Item {
 	property bool open: false
 	property color color: Config.launcherSearchBox
 	property real padding: Config.rowInset
+	property real sidePadding: 0
 	property real spacing: Config.networkRowGap
 	property real maxHeight: 0
 
@@ -39,9 +40,9 @@ Item {
 	Flickable {
 		id: view
 
-		x: root.padding
+		x: root.sidePadding
 		y: root.padding
-		width: root.width - 2 * root.padding
+		width: root.width - 2 * root.sidePadding
 		height: root.height - 2 * root.padding
 		contentWidth: width
 		contentHeight: body.implicitHeight

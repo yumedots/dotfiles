@@ -217,8 +217,7 @@ ProcessPanel {
 					width: parent.width
 					hoverable: true
 					glyph: !root.radio ? Config.iconWifiOff
-						: root.litBars > 0 ? Config.wifiGlyph(root.litBars)
-						: Config.iconWifiIdle
+						: Config.wifiGlyph(root.litBars > 0 ? root.litBars : 4)
 					label: !root.radio ? Config.networkWifiOff
 						: radioRow.adapter && radioRow.adapter.connected ? (radioRow.adapter.connection || Config.networkWifiLabel)
 						: Config.networkWifiIdle
