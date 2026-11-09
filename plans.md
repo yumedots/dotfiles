@@ -55,7 +55,7 @@ Each kind has one adapter in yudaemond. A new kind is one adapter; plugins never
 
 ### Commands
 
-`yudae plugin list | build <id> | load <id> | unload <id> | add <git-url> | update <id> | reload`. `load` and `unload` only edit the TOML. `add` clones into `$XDG_DATA_HOME/yudae/plugins/<id>`, prints what it contains (kind, Makefile, Lua, scripts) and installs without a prompt, recording the commit.
+`yudae plugin list | build <id> | load <id> | unload <id> | add <git-url> | update <id> | reload`. `load` and `unload` edit the TOML and reload immediately. `add` clones into `$XDG_DATA_HOME/yudae/plugins/<id>`, prints what it contains (kind, Makefile, Lua, scripts) and installs without a prompt, recording the commit.
 
 ### Tests
 

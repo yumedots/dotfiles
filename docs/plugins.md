@@ -111,7 +111,7 @@ yudae plugin update <id>
 yudae plugin reload
 ```
 
-- `load` and `unload` only edit the TOML.
+- `load` and `unload` edit the TOML and reload immediately.
 - `build` forces one build, then reloads the generated Lua and live-loads Hyprland plugins.
 - `add` clones into `$XDG_DATA_HOME/yudae/plugins/<manifest id>`, records the commit in `$XDG_STATE_HOME/yudae/commits/<id>`, adds it to `load` and reloads. It prints kind, version, commit and path.
 - `update` pulls an installed plugin, records the commit and reloads. Repository plugins are not pulled.

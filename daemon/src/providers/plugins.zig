@@ -215,11 +215,14 @@ pub const Plugins = struct {
 				self.mutex.unlock(self.io);
 				return err;
 			};
+			self.reloadLocked();
 			const body = self.loadListJson(allocator) catch |err| {
 				self.mutex.unlock(self.io);
 				return err;
 			};
 			self.mutex.unlock(self.io);
+			self.hub.publish();
+			self.reloadConfig();
 
 			return body;
 		}
