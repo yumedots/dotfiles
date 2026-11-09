@@ -389,6 +389,10 @@ ShellRoot {
 		id: wallpaperWindow
 	}
 
+	PluginHost {
+		anchors.fill: parent
+	}
+
 	PowerMenu {
 		id: powerMenuWindow
 	}

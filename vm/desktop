@@ -54,7 +54,3 @@ if [ -n "$wall" ] && [ -d "$wall_dir" ]; then
 	mountpoint -q "$wall_dir" || sudo mount -t virtiofs wallpaper "$wall_dir" 2>/dev/null || true
 	"$HOME/.local/bin/awww" img --transition-type none "$wall" >/dev/null 2>&1 || true
 fi
-
-if [ -d "$HOME/.local/lib/yudae/qml/Yudae/Native" ] && pgrep -x quickshell >/dev/null; then
-	"$ROOT/vm/shell" restart >/dev/null 2>&1 || true
-fi
