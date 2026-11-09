@@ -87,8 +87,18 @@ const Color = struct {
 	value: []const u8,
 };
 
+const Section = struct {
+	name: []const u8,
+	entries: []const Color,
+};
+
 const Theme = struct {
-	colors: []const Color,
+	sections: []const Section,
+};
+
+const MergeSection = struct {
+	name: []const u8,
+	entries: std.ArrayListUnmanaged(Color) = .empty,
 };
 
 const SourceFile = struct {
@@ -503,22 +513,30 @@ pub const Plugins = struct {
 		defer self.allocator.free(body);
 
 		const cfg = configmod.Config.parse(arena, body) catch return error.BadTheme;
-		const colors = switch (cfg.direct("colors") orelse return error.BadTheme) {
-			.table => |table| table,
-			else => return error.BadTheme,
-		};
 
-		var out: std.ArrayListUnmanaged(Color) = .empty;
-		for (colors.entries.items) |entry| {
-			switch (entry.value) {
-				.string => |value| out.append(arena, .{ .key = entry.key, .value = value }) catch return error.BadTheme,
-				else => return error.BadTheme,
+		var sections: std.ArrayListUnmanaged(Section) = .empty;
+		for (cfg.root.entries.items) |entry| {
+			const table = switch (entry.value) {
+				.table => |inner| inner,
+				else => continue,
+			};
+
+			var colors: std.ArrayListUnmanaged(Color) = .empty;
+			for (table.entries.items) |item| {
+				switch (item.value) {
+					.string => |value| colors.append(arena, .{ .key = item.key, .value = value }) catch return error.BadTheme,
+					else => return error.BadTheme,
+				}
+			}
+
+			if (colors.items.len > 0) {
+				sections.append(arena, .{ .name = entry.key, .entries = colors.items }) catch return error.BadTheme;
 			}
 		}
 
-		if (out.items.len == 0) return error.BadTheme;
+		if (sections.items.len == 0) return error.BadTheme;
 
-		return .{ .colors = out.items };
+		return .{ .sections = sections.items };
 	}
 
 	fn sourceBinary(self: *Plugins, arena: Allocator, dir: []const u8) ?[]const u8 {
@@ -571,25 +589,44 @@ pub const Plugins = struct {
 		const path = self.paths.theme(arena) catch return;
 		std.Io.Dir.cwd().createDirPath(self.io, self.paths.state) catch {};
 
-		var merged: std.ArrayListUnmanaged(Color) = .empty;
+		var merged: std.ArrayListUnmanaged(MergeSection) = .empty;
 		for (themes) |theme| {
-			for (theme.colors) |color| {
+			for (theme.sections) |section| {
+				var target: *MergeSection = undefined;
 				var found = false;
 				for (merged.items) |*existing| {
-					if (!std.mem.eql(u8, existing.key, color.key)) continue;
-					existing.value = color.value;
+					if (!std.mem.eql(u8, existing.name, section.name)) continue;
+					target = existing;
 					found = true;
 					break;
 				}
-				if (!found) merged.append(arena, color) catch {};
+
+				if (!found) {
+					merged.append(arena, .{ .name = section.name }) catch return;
+					target = &merged.items[merged.items.len - 1];
+				}
+
+				for (section.entries) |color| {
+					var replaced = false;
+					for (target.entries.items) |*existing| {
+						if (!std.mem.eql(u8, existing.key, color.key)) continue;
+						existing.value = color.value;
+						replaced = true;
+						break;
+					}
+					if (!replaced) target.entries.append(arena, color) catch {};
+				}
 			}
 		}
 
 		var out: Writer.Allocating = .init(arena);
-		out.writer.writeAll("[colors]\n") catch return;
-		for (merged.items) |color| {
-			out.writer.print("{s} = ", .{color.key}) catch return;
-			writeTomlString(&out.writer, color.value) catch return;
+		for (merged.items) |section| {
+			out.writer.print("[{s}]\n", .{section.name}) catch return;
+			for (section.entries.items) |color| {
+				out.writer.print("{s} = ", .{color.key}) catch return;
+				writeTomlString(&out.writer, color.value) catch return;
+				out.writer.writeAll("\n") catch return;
+			}
 			out.writer.writeAll("\n") catch return;
 		}
 

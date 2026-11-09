@@ -10,9 +10,13 @@ toggleTrack = "#3b4261"
 toggleHover = "#4a5378"
 toggleLabelInk = "#1a1b26"
 toggleFaded = "#7aa2f7"
+
+[weather]
 weatherDayCardColor = "#3b4261"
 weatherDayLabelColor = "#7aa2f7"
 weatherSeparatorColor = "#292e42"
+
+[calendar]
 calendarBase = "#c0caf5"
 calendarOutside = "#565f89"
 calendarTodayBox = "#3b4261"

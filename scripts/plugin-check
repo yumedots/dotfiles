@@ -183,15 +183,16 @@ def check_theme(plugin_dir, data, out):
         raise Failure("theme plugin must provide theme.toml")
     with (out / "theme.toml").open("rb") as handle:
         theme = tomllib.load(handle)
-    colors = theme.get("colors")
-    if not isinstance(colors, dict) or not colors:
-        raise Failure("theme.toml needs a non-empty [colors] table")
+    tables = {name: entries for name, entries in theme.items() if isinstance(entries, dict)}
+    if not tables or not any(tables.values()):
+        raise Failure("theme.toml needs at least one color table")
     allowed = color_keys()
-    for name, value in colors.items():
-        if name not in allowed:
-            raise Failure(f"theme color {name!r} is not a shell setting")
-        if not isinstance(value, str) or not COLOR_RE.match(value):
-            raise Failure(f"theme color {name!r} is not #rrggbb or #aarrggbb")
+    for section, entries in tables.items():
+        for name, value in entries.items():
+            if name not in allowed:
+                raise Failure(f"theme color {section}.{name} is not a shell setting")
+            if not isinstance(value, str) or not COLOR_RE.match(value):
+                raise Failure(f"theme color {section}.{name} is not #rrggbb or #aarrggbb")
 
 
 def check_hypr(plugin_dir, data):
