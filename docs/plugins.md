@@ -77,7 +77,7 @@ One adapter per kind in yudaemond. Plugins never touch the loader.
 
 ### theme
 
-- `provides` has `theme.toml`. It may use the same sections as `shell/config.toml` (`[colors]`, `[weather]`, `[calendar]`, ...), so a key replaces the base value in its own section. Every key must be a color setting from `shell/services/Config.qml`; values are `#rrggbb` or `#aarrggbb`.
+- `provides` has `theme.toml`. It may use the same sections as `shell/config.toml` (`[colors]`, `[weather]`, `[calendar]`, ...), so a key replaces the base value in its own section. Color keys must be color settings from `shell/services/Config.qml`; values are `#rrggbb` or `#aarrggbb`. Boolean switches such as `mono` and `barStatMono` are allowed too.
 - yudaemond merges themes in load order into `$XDG_STATE_HOME/yudae/theme.toml`.
 - `providers/config.zig` reads that file after `shell/config.toml`, so `Yudae.settings` retints live without a shell restart.
 

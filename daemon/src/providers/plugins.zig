@@ -85,6 +85,7 @@ const Candidate = struct {
 const Color = struct {
 	key: []const u8,
 	value: []const u8,
+	flag: ?bool = null,
 };
 
 const Section = struct {
@@ -525,6 +526,9 @@ pub const Plugins = struct {
 			for (table.entries.items) |item| {
 				switch (item.value) {
 					.string => |value| colors.append(arena, .{ .key = item.key, .value = value }) catch return error.BadTheme,
+					.boolean => |flag| {
+						colors.append(arena, .{ .key = item.key, .value = "", .flag = flag }) catch return error.BadTheme;
+					},
 					else => return error.BadTheme,
 				}
 			}
@@ -611,6 +615,7 @@ pub const Plugins = struct {
 					for (target.entries.items) |*existing| {
 						if (!std.mem.eql(u8, existing.key, color.key)) continue;
 						existing.value = color.value;
+						existing.flag = color.flag;
 						replaced = true;
 						break;
 					}
@@ -624,7 +629,11 @@ pub const Plugins = struct {
 			out.writer.print("[{s}]\n", .{section.name}) catch return;
 			for (section.entries.items) |color| {
 				out.writer.print("{s} = ", .{color.key}) catch return;
-				writeTomlString(&out.writer, color.value) catch return;
+				if (color.flag) |flag| {
+					out.writer.writeAll(if (flag) "true" else "false") catch return;
+				} else {
+					writeTomlString(&out.writer, color.value) catch return;
+				}
 				out.writer.writeAll("\n") catch return;
 			}
 			out.writer.writeAll("\n") catch return;

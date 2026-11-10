@@ -189,6 +189,8 @@ def check_theme(plugin_dir, data, out):
     allowed = color_keys()
     for section, entries in tables.items():
         for name, value in entries.items():
+            if isinstance(value, bool):
+                continue
             if name not in allowed:
                 raise Failure(f"theme color {section}.{name} is not a shell setting")
             if not isinstance(value, str) or not COLOR_RE.match(value):
