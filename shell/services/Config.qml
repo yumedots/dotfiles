@@ -1,12 +1,33 @@
 pragma Singleton
 
 import QtQuick
+import Quickshell
+import Quickshell.Io
 import qs.services
 
 QtObject {
 	id: root
 
-	readonly property var settings: Yudae.settings || ({})
+	property var local: ({})
+	readonly property var settings: {
+		const live = Yudae.settings || ({});
+
+		return Object.keys(live).length > 0 ? live : root.local;
+	}
+
+	property FileView settingsFile: FileView {
+		path: Quickshell.shellDir + "/cache/settings.json"
+		watchChanges: true
+		printErrors: false
+
+		onLoaded: {
+			try {
+				root.local = JSON.parse(text());
+			} catch (error) {
+				root.local = ({});
+			}
+		}
+	}
 
 	// base surface, ink and the mono ink that replaces the hue when mono is on
 	readonly property var surface: settings.surface !== undefined ? settings.surface : "#101010"
@@ -363,6 +384,13 @@ QtObject {
 	readonly property var calendarDialMoonLift: settings.calendarDialMoonLift !== undefined ? settings.calendarDialMoonLift : 5
 	readonly property var calendarDialDayStart: settings.calendarDialDayStart !== undefined ? settings.calendarDialDayStart : 6
 	readonly property var calendarDialDayEnd: settings.calendarDialDayEnd !== undefined ? settings.calendarDialDayEnd : 18
+	readonly property var calendarDialNight: settings.calendarDialNight !== undefined ? settings.calendarDialNight : "#2b4a94"
+	readonly property var calendarDialRed: settings.calendarDialRed !== undefined ? settings.calendarDialRed : "#d14a3c"
+	readonly property var calendarDialOrange: settings.calendarDialOrange !== undefined ? settings.calendarDialOrange : "#e8873a"
+	readonly property var calendarDialYellow: settings.calendarDialYellow !== undefined ? settings.calendarDialYellow : "#f2c14e"
+	readonly property var calendarDialCream: settings.calendarDialCream !== undefined ? settings.calendarDialCream : "#f7e3a1"
+	readonly property var calendarDialNoon: settings.calendarDialNoon !== undefined ? settings.calendarDialNoon : "#fdf3cf"
+	readonly property var calendarDialDay: settings.calendarDialDay !== undefined ? settings.calendarDialDay : "#7cc4f0"
 	readonly property var calendarBirthYear: settings.calendarBirthYear !== undefined ? settings.calendarBirthYear : 0
 	readonly property var calendarLifeExpectancy: settings.calendarLifeExpectancy !== undefined ? settings.calendarLifeExpectancy : 90
 	readonly property var calendarOutside: settings.calendarOutside !== undefined ? settings.calendarOutside : "#ffffff"

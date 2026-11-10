@@ -50,6 +50,10 @@ pub const Config = struct {
 		return std.fmt.allocPrint(allocator, "{s}/yudae/theme.toml", .{proc.stateHome(self.io, allocator)}) catch "/nonexistent";
 	}
 
+	fn cachePath(self: *Config, allocator: Allocator) []const u8 {
+		return std.fmt.allocPrint(allocator, "{s}/shell/cache/settings.json", .{proc.repo(self.io, allocator)}) catch "/nonexistent";
+	}
+
 	fn watchLoop(self: *Config) void {
 		self.reload();
 
@@ -92,8 +96,23 @@ pub const Config = struct {
 		self.mutex.unlock(self.io);
 
 		previous.deinit();
+		self.writeCache();
 
 		self.hub.publish();
+	}
+
+	fn writeCache(self: *Config) void {
+		var out: Writer.Allocating = .init(self.allocator);
+		defer out.deinit();
+
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+
+		self.state.render(&out.writer) catch return;
+
+		const cache = self.cachePath(self.allocator);
+		defer self.allocator.free(cache);
+		proc.writeFileAtomic(self.io, self.allocator, cache, out.written()) catch {};
 	}
 
 	fn render(self: *Config, writer: *Writer) !void {
