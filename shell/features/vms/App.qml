@@ -11,13 +11,13 @@ AppWindow {
 	readonly property var vms: Yudae.vms.list || []
 	readonly property string root: Quickshell.env("YUDAE_VM_ROOT") || "/home/gabriel/dotfiles/vm/runs"
 	readonly property color ink: Config.foreground
-	readonly property color secondary: "#b4b4b4"
-	readonly property color faint: "#949494"
-	readonly property color rule: "#1f1f1f"
-	readonly property color sidebar: "#0a0a0a"
+	readonly property color secondary: Config.muted
+	readonly property color faint: Config.dim
+	readonly property color rule: Config.dim
+	readonly property color sidebar: Config.surface
 	readonly property string vmGlyph: "\uDB80\uDF79"
-	readonly property color active: "#181818"
-	readonly property color hover: "#141414"
+	readonly property color active: Config.launcherHighlight
+	readonly property color hover: Config.launcherSearchBox
 
 	property string selectedName: ""
 	property string live: Quickshell.env("YUDAE_VM") || ""
@@ -625,7 +625,7 @@ AppWindow {
 								anchors.verticalCenter: parent.verticalCenter
 								width: controlLabel.implicitWidth + 28
 								height: 32
-								color: controlMouse.containsMouse ? "#e6e6e6" : win.ink
+								color: controlMouse.containsMouse ? Config.foreground : win.ink
 								visible: win.live.length === 0 && win.current.name !== undefined
 
 								Text {
@@ -653,7 +653,7 @@ AppWindow {
 								anchors.verticalCenter: parent.verticalCenter
 								width: releaseLabel.implicitWidth + 28
 								height: 32
-								color: releaseMouse.containsMouse ? "#e6e6e6" : win.ink
+								color: releaseMouse.containsMouse ? Config.foreground : win.ink
 								visible: win.live.length > 0
 
 								Text {
@@ -693,7 +693,7 @@ AppWindow {
 
 							width: win.focusMode ? stageArea.width : Math.min(stageArea.width, Math.round(stageArea.height * 16 / 9))
 							height: win.focusMode ? stageArea.height : Math.round(width * 9 / 16)
-							color: "#000000"
+							color: Config.surface
 							clip: true
 							visible: win.live.length > 0 || win.running
 

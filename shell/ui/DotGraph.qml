@@ -1,11 +1,12 @@
 import QtQuick
+import qs
 
 Item {
 	id: root
 
 	property var levels: []
 	property bool flip: false
-	property color ink: "#ffffff"
+	property color ink: Config.foreground
 
 	readonly property real pitch: root.height / 4
 	readonly property real dot: root.pitch * 0.6

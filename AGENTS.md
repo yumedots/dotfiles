@@ -13,6 +13,7 @@ Icons live once, in the icon list (`iconX` in `shell/services/Config.qml` and `s
 Nerd font glyphs are always drawn through `shell/ui/Glyph.qml`, which centers the glyph ink in its box; never a bare `Text` inside a circle, badge, switch or slot.
 Never put "·" or similar dot separators between pieces of text in the UI; separate with spacing.
 Scrollbars sit on the right border of their container, never floating inside it; Scrollbar.qml does this by default.
+Every QML color comes from `shell/services/Config.qml`; `xmake lint` rejects color literals in QML.
 
 # Ponytail, lazy senior dev mode
 You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.

@@ -81,6 +81,8 @@ task_lint() {
 		node "$check" || fail=1
 	done
 
+	python3 "$ROOT/scripts/color-check" || fail=1
+
 	if [ "$fail" -ne 0 ]; then
 		exit 1
 	fi
