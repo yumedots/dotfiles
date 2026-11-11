@@ -157,7 +157,8 @@ QtObject {
 	readonly property var cpuBlockGap: settings.cpuBlockGap !== undefined ? settings.cpuBlockGap : 4
 	readonly property var cpuBlockColumns: settings.cpuBlockColumns !== undefined ? settings.cpuBlockColumns : 16
 	readonly property var topProcessTitle: settings.topProcessTitle !== undefined ? settings.topProcessTitle : "Top processes"
-	readonly property var procsGap: settings.procsGap !== undefined ? settings.procsGap : 6
+	readonly property var procRowHeight: settings.procRowHeight !== undefined ? settings.procRowHeight : 22
+	readonly property var procsGap: settings.procsGap !== undefined ? settings.procsGap : 2
 	readonly property var psIgnore: settings.psIgnore !== undefined ? settings.psIgnore : ["ps", "ps <defunct>"]
 	readonly property var procSearchHint: settings.procSearchHint !== undefined ? settings.procSearchHint : "f to type"
 	readonly property var procSearchPadding: settings.procSearchPadding !== undefined ? settings.procSearchPadding : 4
