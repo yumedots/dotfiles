@@ -40,7 +40,7 @@ PanelWindow {
 	property real contentFade: bar.fullscreen && !bar.slideMode ? 0 : 1
 	readonly property bool slidAway: bar.fullscreen && (bar.slideMode ? bar.slide <= bar.slideTarget + 0.5 : bar.contentFade <= 0.01)
 	property bool hidden: false
-	visible: !bar.hidden && !bar.locked
+	visible: (!bar.hidden || !bar.slideMode) && !bar.locked
 
 	onSlidAwayChanged: if (bar.slidAway)
 		bar.hidden = true
