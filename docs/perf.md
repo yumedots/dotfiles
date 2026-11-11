@@ -113,6 +113,7 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 | fast | 54.8s | 0.09s | 54.8s |
 | base | 53.9s | 0.09s | 53.9s |
 | restore | 0.05s | 0.04s | 0.09s |
+| final | 0.35s | 0.04s | 1.55s |
 
 The thin cut also drops KDE and GNOME file managers and their dependency trees, Noto/CJK and extra fonts, printing and network daemons, and the desktop portals. It keeps the shell font, Meslo, DejaVu, emoji, Qt, Hyprland, audio, NetworkManager and the plugin toolchain. Result: 735MB download, 2.97G layer, 719 packages, shell screenshot and an in-guest `agent-cursor` build verified. `golden_setup` now runs `passwd -d root`; the guest reports `root NP`.
 
@@ -137,6 +138,8 @@ With a warmed package cache and the multi-mirror prefetcher, a forced packages b
 The parallel extraction variant was tried and rejected: `pacman -Syuw` plus `bsdtar` and `pacman -U --dbonly` produced a 64MB image without the package files, not a bootable build. It is disabled; the base is built with normal pacman.
 
 The cloud image, package store and the built packages image persist in `~/.cache/dotfiles/vm-base`. A forced build with an empty `XDG_CACHE_HOME` restores the packages image by reflink in **0.047s** and creates the golden in **0.043s**, total **0.09s**. The restored image booted to D-Bus and the login prompt. The base itself is built in **53.9s** with normal pacman; a machine without the base pays that once.
+
+The bench harness, with its own cache, reports `fetch 1.16s, packages 0.35s, golden 0.04s, total 1.55s` (`xmake vm bench final`). The fetch step is the base cloud checksum.
 
 ### Clock
 
