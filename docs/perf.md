@@ -113,7 +113,7 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 | fast | 54.8s | 0.09s | 54.8s |
 | base | 53.9s | 0.09s | 53.9s |
 | restore | 0.05s | 0.04s | 0.09s |
-| materialized | 8.15s | 0.02s | 8.18s |
+| materialized | 8.05s | 0.04s | 8.10s |
 
 The thin cut also drops KDE and GNOME file managers and their dependency trees, Noto/CJK and extra fonts, printing and network daemons, and the desktop portals. It keeps the shell font, Meslo, DejaVu, emoji, Qt, Hyprland, audio, NetworkManager and the plugin toolchain. Result: 735MB download, 2.97G layer, 719 packages, shell screenshot and an in-guest `agent-cursor` build verified. `golden_setup` now runs `passwd -d root`; the guest reports `root NP`.
 
@@ -125,7 +125,7 @@ The trimmed run excludes firmware, QEMU, virtiofsd, VLC, tesseract, Firefox, qBi
 
 The second optimized run took 4m54s, so network variance is about 20s. Changes: one `pacman -Syu --needed` transaction instead of upgrade then install, `ParallelDownloads = 12`, `cache=unsafe`, `lazy_refcounts=on`, and `pacman -Scc` before poweroff. The 16G host package cache stays on 9p; virtiofs failed on the system QEMU with `vhost_set_vring_kick`.
 
-`packages` and `golden` skip when their stamp still matches the host package list and user data (`packages.sha`, `golden.sha` in the cache); `--force` rebuilds. A cached `packages` is 0.3s, a cached `golden` is 0.01s. Both refuse to rebuild while any `vm/runs/*/disk.qcow2` exists, because that disk chain backs onto the layer being replaced; destroy those VMs first.
+`packages` and `golden` skip when their stamp still matches the host package list and user data (`packages.sha`, `golden.sha` in the cache); `--force` materializes the disk from the persisted rootfs; a changed package list falls back to the pacman delta. A cached `packages` is 0.01s, a cached `golden` is 0.01s. Both refuse to rebuild while any `vm/runs/*/disk.qcow2` exists, because that disk chain backs onto the layer being replaced; destroy those VMs first.
 
 When the list changed, `packages` boots the existing layer and applies only the delta: installs the new explicit packages, removes packages dropped from the list, prunes orphans, clears the cache and runs `fstrim`. A qcow2 snapshot rolls back a failed or interrupted delta; the VM has a 20 minute watchdog. Above `DOTFILES_VM_PACKAGES_CAP_MB` (default 8192) the layer is rewritten with `qemu-img convert`. Measured on the isolated cache: full 2m44s, add one package 58s, remove it 57s, compaction 1m01s, golden 0.09s. `DOTFILES_VM_PACKAGES` points at a package list file instead of `pacman -Qqen`, for tests.
 
@@ -139,7 +139,7 @@ The parallel extraction variant was tried and rejected: `pacman -Syuw` plus `bsd
 
 The fast base build is a persisted-rootfs materializer. `~/.cache/dotfiles/vm-base` holds the cloud image, the compiled rootfs tree, the 7G GPT disk head and the package store. A forced build prefetches the rootfs tree, runs `mkfs.btrfs -r` on it inside a user namespace (real ownership, no fakeroot, `-m single -d single --nodesize 4096 --csum xxhash -O ^free-space-tree,^block-group-tree`), then `vm/dcopy` copies only the allocated extents into the disk head at sector 618496 with `copy_file_range`, which reflinks them on btrfs. A 193K qcow2 overlay points at the raw disk, so no `qemu-img convert` is needed.
 
-Measured `xmake vm bench final` with an empty bench cache and the rootfs page cache dropped: `fetch 0.008s, packages 8.149s, golden 0.021s, total 8.178s`. The resulting chain boots to D-Bus and the login prompt; the guest has user 1000, `sudo` 4755, `root NP`, and `yudaemond`/`yudae-desktop` enabled. `packages.qcow2` is an overlay, so the bench reports the size of the raw disk it backs (about 3.3G).
+Measured `xmake vm bench final` with an empty bench cache and the rootfs page cache dropped: `fetch 0.008s, packages 8.050s, golden 0.038s, total 8.096s`. The resulting chain boots to D-Bus and the login prompt; the guest has user 1000, `sudo` 4755, `root NP`, and `yudaemond`/`yudae-desktop` enabled. `packages.qcow2` is an overlay, so the bench reports the size of the raw disk it backs (about 3.3G).
 
 The one-time base is still a normal pacman build at 53.9s. When the rootfs is missing, that build also exports the compiled tree by booting the image and tarring `/` to the base (about 29s, automatic). The materializer needs `mkfs.btrfs`, Go and `unshare --map-users` with `/etc/subuid`; when those are missing it falls back to the pacman build. A machine with no persisted base pays the one-time 53.9s + 29s and is under 9s on the next build. The rootfs tree is owned by subordinate IDs from `/etc/subuid`; remove it with `chmod -R u+w` first or from a matching `unshare --map-users` shell.
 

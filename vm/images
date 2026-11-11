@@ -203,7 +203,7 @@ userns_run() {
 	gid=$(id -g)
 	read -r ustart ucount < <(awk -F: -v u="$(id -un)" '$1 == u { print $2, $3; exit }' /etc/subuid)
 	read -r gstart gcount < <(awk -F: -v g="$(id -gn)" '$1 == g { print $2, $3; exit }' /etc/subgid)
-	[ -n "$ustart" ] && [ -n "$gstart" ] || return 1
+	[ -n "$ustart" ] && [ -n "$gstart" ] && [ "$ucount" -gt 1 ] && [ "$gcount" -gt 1 ] || return 1
 	unshare --user \
 		--map-users=0:$uid:1 --map-users=1:$ustart:$((ucount - 1)) \
 		--map-groups=0:$gid:1 --map-groups=1:$gstart:$((gcount - 1)) -- "$@"
@@ -302,9 +302,10 @@ materialize_packages() {
 	cp --reflink=auto "$DISK_HEAD" "$raw"
 	rm -f "$image"
 	truncate -s "$ROOT_IMG" "$image"
-	prefetch_rootfs || true
+	prefetch_rootfs &
 	userns_run mkfs.btrfs -q -m single -d single -K --nodesize 4096 --csum xxhash \
 		-O ^free-space-tree,^block-group-tree -r "$ROOTFS" -U "$ROOT_UUID" -L root "$image" || return 1
+	wait || true
 	build_dcopy || return 1
 	"$BASE/dcopy" "$image" "$raw" $((302 * 1024 * 1024)) || return 1
 	rm -f "$image" "$PACKAGES"
