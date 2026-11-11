@@ -39,6 +39,7 @@ xmake orchestrates, it does not replace the real builders.
 | task | does |
 | --- | --- |
 | `xmake build` | daemon (wraps `zig build`), cursor plugin, `Yudae.Native` QML module, `yudae-pump` (native C++ targets) |
+| `xmake plugin` | rebuild every `plugins/*/Makefile` into `~/.local/state/yudae/build/<id>` |
 | `xmake link` | symlink `config/*` and `hypr/` into `~/.config` |
 | `xmake lint` | qmllint on `shell/`, `node shell/lib/check.js` |
 | `xmake test` | daemon parsers/protocol tests, plugin conformance, qml fixtures, idle-spawn test |
@@ -48,4 +49,4 @@ xmake orchestrates, it does not replace the real builders.
 
 `zig build` stays underneath: the build budgets are measured on it and `scripts/yubuild` reports them. `zig build -Dheadless=true` builds `yudaemond-headless`, the minimal control-plane daemon that carries the performance gates.
 
-`scripts/xmake` is linked to `~/.local/bin/xmake`. Inside the repo it dispatches `link`, `lint`, `bench`, `hypr`, `vm` and `doctor` to `scripts/tasks.sh`; every other xmake command goes to the system xmake. `shell/native` builds the Quickshell app window and the VM display; the daemon prefers `~/qemu-linux/install/bin/qemu-system-x86_64` and `YUDAE_QEMU` overrides it.
+`scripts/xmake` is linked to `~/.local/bin/xmake`. Inside the repo it dispatches `build`, `plugin`, `link`, `lint`, `bench`, `hypr`, `vm` and `doctor` to `scripts/tasks.sh`; every other xmake command goes to the system xmake. `shell/native` builds the Quickshell app window and the VM display; the daemon prefers `~/qemu-linux/install/bin/qemu-system-x86_64` and `YUDAE_QEMU` overrides it.

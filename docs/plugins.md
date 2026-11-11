@@ -118,6 +118,7 @@ yudae plugin reload
 - `add` clones into `$XDG_DATA_HOME/yudae/plugins/<manifest id>`, records the commit in `$XDG_STATE_HOME/yudae/commits/<id>`, adds it to `load` and reloads. It prints kind, version, commit and path.
 - `update` pulls an installed plugin, records the commit and reloads. Repository plugins are not pulled.
 - `reload` re-reads the list, rebuilds stale plugins, rewrites `loaded.lua`, merges themes and applies shell/app plugins.
+- `xmake plugin` rebuilds every repository plugin's Makefile into `$XDG_STATE_HOME/yudae/build/<id>`; it does not touch the load list.
 
 ## Tests
 

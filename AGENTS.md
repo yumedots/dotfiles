@@ -54,7 +54,7 @@ hypr/              hyprland conf + plugins; the one non-config symlinked into ~/
 shell/             quickshell; run with `quickshell -p shell/shell.qml`, never symlinked
 daemon/            yudaemond (Zig); providers pair with shell/features/<name>
 systemd/ scripts/ vm/ docs/ .agents/skills/
-xmake.lua          the single entry point: build link lint test bench hypr vm doctor
+xmake.lua          the single entry point: build plugin link lint test bench hypr vm doctor
 ```
 
 `xmake` is `scripts/xmake`, linked into `~/.local/bin`. It runs the repo tasks through `scripts/tasks.sh` and passes everything else to the system xmake. `plans.md` is the source of truth for the shape and the order of work.

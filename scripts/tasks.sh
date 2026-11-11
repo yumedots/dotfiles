@@ -51,16 +51,24 @@ task_link() {
 	fi
 }
 
-task_build() {
-	"$ROOT/scripts/yubuild"
-
+build_plugins() {
 	local state=${XDG_STATE_HOME:-$HOME/.local/state}/yudae/build makefile id
 	for makefile in "$ROOT"/plugins/*/Makefile; do
 		[ -e "$makefile" ] || continue
 		id=$(basename "$(dirname "$makefile")")
 		case "$id" in _template-*) continue ;; esac
 		make -C "$(dirname "$makefile")" OUT="$state/$id" >/dev/null
+		echo "built $id"
 	done
+}
+
+task_build() {
+	"$ROOT/scripts/yubuild"
+	build_plugins
+}
+
+task_plugin() {
+	build_plugins
 }
 
 task_lint() {
@@ -95,7 +103,12 @@ task_bench() {
 }
 
 task_vm() {
-	"$ROOT/scripts/vm" "$@"
+	if [ $# -eq 0 ]; then
+		echo "usage: xmake vm fetch|packages|golden|ensure|overlay|snapshot|restore|list (running VMs: yudae vm)" >&2
+		exit 2
+	fi
+
+	exec "$ROOT/vm/images" "$@"
 }
 
 task_doctor() {
@@ -137,7 +150,7 @@ task_doctor() {
 }
 
 usage() {
-	echo "usage: xmake build|link|lint|bench|vm|doctor" >&2
+	echo "usage: xmake build|plugin|link|lint|bench|vm|doctor" >&2
 	exit 2
 }
 
@@ -146,6 +159,7 @@ shift || true
 
 case "$command" in
 	build) task_build ;;
+	plugin) task_plugin ;;
 	link) task_link ;;
 	lint) task_lint ;;
 	bench) task_bench "$@" ;;
