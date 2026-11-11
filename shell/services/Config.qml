@@ -204,7 +204,7 @@ QtObject {
 	readonly property var mixerMaxVolume: settings.mixerMaxVolume !== undefined ? settings.mixerMaxVolume : 1
 	readonly property var mixerStepCount: settings.mixerStepCount !== undefined ? settings.mixerStepCount : 10
 	readonly property var mixerStep: settings.mixerStep !== undefined ? settings.mixerStep : 0.1
-	readonly property var mixerShiftStep: settings.mixerShiftStep !== undefined ? settings.mixerShiftStep : 0.05
+	readonly property var mixerShiftStep: settings.mixerShiftStep !== undefined ? settings.mixerShiftStep : 0.1
 	readonly property var mixerOnlyPlaying: settings.mixerOnlyPlaying !== undefined ? settings.mixerOnlyPlaying : true
 	readonly property var mixerHoldMs: settings.mixerHoldMs !== undefined ? settings.mixerHoldMs : 2000
 	readonly property var mixerPendingMs: settings.mixerPendingMs !== undefined ? settings.mixerPendingMs : 500
