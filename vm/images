@@ -12,6 +12,7 @@ PACKAGES=$CACHE/packages.qcow2
 GOLDEN=$CACHE/golden.qcow2
 ARCH_SNAPSHOT=""
 FORCE=0
+VM_EXCLUDE='^(cachyos-|linux-cachyos|linux-firmware|qemu-|virtiofsd|firefox|qbittorrent|prismlauncher|vlc|tesseract|rust|zig|clang|llvm|cmake|ninja|intel-ucode|amd-ucode|sof-firmware|alsa-firmware|openstarbound|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl|libvirt|docker|podman)|nvidia'
 SEED=$CACHE/seed.img
 LOG=$CACHE/provision.log
 QEMU=$(command -v qemu-system-x86_64)
@@ -76,7 +77,7 @@ for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
 done
 rm -f /var/cache/pacman/pkg/limine-* /var/cache/pacman/pkg/plymouth-*
 pacman -Sy --noconfirm >/dev/null 2>&1
-vm_exclude='^(cachyos-|linux-cachyos|linux-firmware|qemu-|virtiofsd|firefox|qbittorrent|prismlauncher|vlc|tesseract|rust|zig|clang|llvm|cmake|ninja|intel-ucode|amd-ucode|sof-firmware|alsa-firmware|openstarbound|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl|libvirt|docker|podman)|nvidia'
+vm_exclude='@EXCLUDE@'
 grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
 pacman -Syu --needed --noconfirm $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
@@ -87,8 +88,55 @@ if grep -q 'failed to commit transaction' /tmp/pacman.log; then
 	pacman -Syu --needed --noconfirm $(cat /tmp/install.txt)
 fi
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
+cp /tmp/install.txt /opt/packages.installed
+fstrim -av >/dev/null 2>&1 || true
 touch /var/lib/dotfiles-provisioned
 echo "dotfiles: provision done"
+poweroff
+SCRIPT
+}
+
+delta_script() {
+	cat <<'SCRIPT'
+#!/bin/bash
+set -u
+exec > >(tee /dev/console) 2>&1
+echo "dotfiles: delta start"
+@SNAPSHOT@
+sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 12/' /etc/pacman.conf
+mkdir -p /mnt/hostpkg
+mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L,ro hostpkg /mnt/hostpkg
+mkdir -p /var/cache/pacman/pkg
+for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
+	[ -e "$pkg" ] || continue
+	ln -sf "$pkg" "/var/cache/pacman/pkg/$(basename "$pkg")"
+done
+rm -f /var/cache/pacman/pkg/limine-* /var/cache/pacman/pkg/plymouth-*
+pacman -Sy --noconfirm >/dev/null 2>&1
+vm_exclude='@EXCLUDE@'
+grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
+pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
+if [ -f /opt/packages.installed ]; then
+	sort -u /opt/packages.installed > /tmp/old.txt
+	sort -u /tmp/install.txt > /tmp/new.txt
+	comm -23 /tmp/old.txt /tmp/new.txt > /tmp/remove.txt
+	if [ -s /tmp/remove.txt ]; then
+		pacman -Rns --noconfirm $(cat /tmp/remove.txt) 2>&1 | tee /tmp/pacman-remove.log || pacman -R --noconfirm $(cat /tmp/remove.txt) 2>&1 | tee -a /tmp/pacman-remove.log || true
+	fi
+fi
+pacman -Syu --needed --noconfirm $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
+if grep -q 'failed to commit transaction' /tmp/pacman.log; then
+	grep 'signature from' /tmp/pacman.log | sed 's/^error: //; s/:.*//' | while read -r name; do
+		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
+	done
+	pacman -Syu --needed --noconfirm $(cat /tmp/install.txt)
+fi
+orphans=$(pacman -Qtdq)
+[ -z "$orphans" ] || pacman -Rns --noconfirm $orphans >/dev/null 2>&1 || true
+cp /tmp/install.txt /opt/packages.installed
+pacman -Scc --noconfirm >/dev/null 2>&1 || true
+fstrim -av >/dev/null 2>&1 || true
+echo "dotfiles: delta done"
 poweroff
 SCRIPT
 }
@@ -100,10 +148,15 @@ vms_exist() {
 
 cmd_packages() {
 	mkdir -p "$CACHE/seed"
-	pacman -Qqen > "$CACHE/seed/packages.txt"
+	local source=${DOTFILES_VM_PACKAGES:-}
+	if [ -n "$source" ]; then
+		cp "$source" "$CACHE/seed/packages.txt"
+	else
+		pacman -Qqen > "$CACHE/seed/packages.txt"
+	fi
 
-	local stamp=$CACHE/packages.sha current
-	current=$( { cat "$CACHE/seed/packages.txt"; printf '%s\n' "$ARCH_SNAPSHOT" "$CLOUD_NAME"; provision_script; } | sha256sum | cut -d' ' -f1)
+	local stamp=$CACHE/packages.sha current delta=0
+	current=$( { cat "$CACHE/seed/packages.txt"; printf '%s\n' "$ARCH_SNAPSHOT" "$CLOUD_NAME"; provision_script; delta_script; } | sha256sum | cut -d' ' -f1)
 
 	if [ "$FORCE" -eq 0 ] && [ -f "$PACKAGES" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$current" ]; then
 		echo "packages layer cached $PACKAGES"
@@ -116,18 +169,62 @@ cmd_packages() {
 	fi
 
 	cmd_fetch
-	mkdir -p "$CACHE"
-	rm -f "$PACKAGES"
-	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F qcow2 -b "$CLOUD" "$PACKAGES" 32G
 
-	mkdir -p "$CACHE/seed"
+	if [ -f "$PACKAGES" ] && [ "$FORCE" -eq 0 ]; then
+		delta=1
+	else
+		mkdir -p "$CACHE"
+		rm -f "$PACKAGES"
+		"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F qcow2 -b "$CLOUD" "$PACKAGES" 32G
+	fi
+
 	local snapshot_line=""
 	if [ -n "$ARCH_SNAPSHOT" ]; then
 		snapshot_line="echo 'Server = https://archive.archlinux.org/repos/${ARCH_SNAPSHOT}/\$repo/os/\$arch' > /etc/pacman.d/mirrorlist"
 	fi
-	provision_script | sed "s|@SNAPSHOT@|$snapshot_line|" > "$CACHE/seed/provision.sh"
+
+	if [ "$delta" -eq 1 ]; then
+		delta_script | sed "s|@SNAPSHOT@|$snapshot_line|; s#@EXCLUDE@#$VM_EXCLUDE#" > "$CACHE/seed/provision.sh"
+		if "$QEMU_IMG" snapshot -l "$PACKAGES" 2>/dev/null | grep -q delta-backup; then
+			"$QEMU_IMG" snapshot -a delta-backup "$PACKAGES" >/dev/null 2>&1 || true
+			"$QEMU_IMG" snapshot -d delta-backup "$PACKAGES" >/dev/null 2>&1 || true
+		fi
+		"$QEMU_IMG" snapshot -c delta-backup "$PACKAGES" >/dev/null
+	else
+		provision_script | sed "s|@SNAPSHOT@|$snapshot_line|; s#@EXCLUDE@#$VM_EXCLUDE#" > "$CACHE/seed/provision.sh"
+	fi
+
+	packages_seed
+	run_packages_vm
+
+	if [ "$delta" -eq 1 ]; then
+		if ! grep -q 'dotfiles: delta done' "$LOG"; then
+			"$QEMU_IMG" snapshot -a delta-backup "$PACKAGES" >/dev/null 2>&1 || true
+			"$QEMU_IMG" snapshot -d delta-backup "$PACKAGES" >/dev/null 2>&1 || true
+			echo "delta failed, packages rolled back, see $LOG" >&2
+			exit 1
+		fi
+		"$QEMU_IMG" snapshot -d delta-backup "$PACKAGES" >/dev/null 2>&1 || true
+	else
+		if ! grep -q 'dotfiles: provision done' "$LOG"; then
+			rm -f "$PACKAGES"
+			echo "provision failed, see $LOG" >&2
+			exit 1
+		fi
+	fi
+
+	rm -f "$GOLDEN" "$CACHE/golden.sha"
+	printf '%s\n' "$current" > "$stamp"
+	echo "packages layer ready $PACKAGES"
+
+	if [ "$delta" -eq 1 ]; then
+		compact_packages
+	fi
+}
+
+packages_seed() {
 	cat > "$CACHE/seed/meta-data" <<EOF
-instance-id: dotfiles-packages
+instance-id: dotfiles-packages-$(date +%s%N)
 local-hostname: yudae-guest
 EOF
 	{
@@ -160,16 +257,18 @@ EOF
 	mkfs.vfat -n cidata "$SEED" >/dev/null
 	mcopy -i "$SEED" "$CACHE/seed/user-data" ::user-data
 	mcopy -i "$SEED" "$CACHE/seed/meta-data" ::meta-data
+}
 
+run_packages_vm() {
 	echo "provision $PACKAGES (log $LOG)"
 	: > "$LOG"
-	"$QEMU" \
+	timeout 1200 "$QEMU" \
 		-name dotfiles-packages \
 		-machine q35,accel=kvm \
 		-cpu host \
 		-smp "$(nproc)" \
 		-m 8G \
-		-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe" \
+		-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe,discard=unmap" \
 		-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
 		-virtfs "local,path=/var/cache/pacman/pkg,mount_tag=hostpkg,security_model=none,readonly=on" \
 		-device virtio-rng-pci \
@@ -178,13 +277,20 @@ EOF
 		-display none \
 		-serial "file:$LOG" \
 		-no-reboot
+}
 
-	if ! "$QEMU_IMG" info "$PACKAGES" | grep -q '^file format: qcow2'; then
-		echo "provision failed, see $LOG" >&2
-		exit 1
+compact_packages() {
+	local cap=${DOTFILES_VM_PACKAGES_CAP_MB:-8192} mb tmp
+	mb=$(du -sm "$PACKAGES" | cut -f1)
+	[ "$mb" -le "$cap" ] && return
+	tmp=$PACKAGES.compact
+	rm -f "$tmp"
+	if "$QEMU_IMG" convert -O qcow2 -o lazy_refcounts=on -b "$CLOUD" -F qcow2 "$PACKAGES" "$tmp"; then
+		mv "$tmp" "$PACKAGES"
+		echo "compacted packages layer to $(du -sm "$PACKAGES" | cut -f1)MB"
+	else
+		rm -f "$tmp"
 	fi
-	printf '%s\n' "$current" > "$stamp"
-	echo "packages layer ready $PACKAGES"
 }
 
 golden_user_data() {
@@ -305,7 +411,7 @@ EOF
 	for _ in $(seq 1 50); do [ -S "$vfs" ] && break; sleep 0.1; done
 
 	: > "$CACHE/golden.log"
-	"$QEMU" \
+	timeout 600 "$QEMU" \
 		-name dotfiles-golden \
 		-machine q35,accel=kvm \
 		-cpu host \

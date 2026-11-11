@@ -115,6 +115,8 @@ The second optimized run took 4m54s, so network variance is about 20s. Changes: 
 
 `packages` and `golden` skip when their stamp still matches the host package list and user data (`packages.sha`, `golden.sha` in the cache); `--force` rebuilds. A cached `packages` is 0.3s, a cached `golden` is 0.01s. Both refuse to rebuild while any `vm/runs/*/disk.qcow2` exists, because that disk chain backs onto the layer being replaced; destroy those VMs first.
 
+When the list changed, `packages` boots the existing layer and applies only the delta: installs the new explicit packages, removes packages dropped from the list, prunes orphans, clears the cache and runs `fstrim`. A qcow2 snapshot rolls back a failed or interrupted delta; the VM has a 20 minute watchdog. Above `DOTFILES_VM_PACKAGES_CAP_MB` (default 8192) the layer is rewritten with `qemu-img convert`. Measured on the isolated cache: full 2m54s, add one package 58s, remove it 57s, compaction 1m01s, golden 49s. `DOTFILES_VM_PACKAGES` points at a package list file instead of `pacman -Qqen`, for tests.
+
 ### Clock
 
 QEMU uses `-rtc base=utc,clock=host`, so the guest RTC is the host wall clock. `vm/desktop` runs `hwclock -s` at Hyprland start, applies the host timezone from `vm/hoststate/timezone`, then disables NTP. `setGuestMode` disables NTP too. Guest `NTP=no`, `systemd-timesyncd` inactive/disabled; guest and host wall clocks stay within the vsock measurement margin.
