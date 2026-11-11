@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import qs
 import qs.services
 import qs.ui
@@ -24,9 +25,11 @@ PanelWindow {
 	property int themeIndex: 0
 	property int lookIndex: 0
 	property int row: 0
-	property string previewSource: ""
-	property string previewPrevious: ""
-	property real previewOpacity: 1
+	property bool previewing: false
+	property bool previewed: false
+	property string returnWorkspace: ""
+	property string originTheme: ""
+	property string originWallpaper: ""
 
 	readonly property var held: root.currentIndex >= 0 && root.currentIndex < root.wallpapers.length ? root.wallpapers[root.currentIndex] : null
 	readonly property real tileHeight: Config.wallpaperRowHeight
@@ -36,8 +39,10 @@ PanelWindow {
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
 
 	onRowChanged: {
-		if (root.row === 0)
-			root.setPreview();
+		if (root.row === 0 && root.shown)
+			root.hideWindows();
+		else
+			root.showWindows();
 	}
 
 	anchors.top: true
@@ -92,7 +97,7 @@ PanelWindow {
 	function move(step) {
 		if (root.row === 0) {
 			root.lookIndex = Calc.clamp(root.lookIndex + step, 0, root.looks.length - 1);
-			root.setPreview();
+			lookTimer.restart();
 		}
 		else if (root.row === 2)
 			root.themeIndex = Calc.clamp(root.themeIndex + step, 0, root.themes.length - 1);
@@ -106,29 +111,40 @@ PanelWindow {
 		root.row = root.rows[(at + step + root.rows.length) % root.rows.length];
 	}
 
-	function setPreview() {
-		if (root.row !== 0 || root.looks.length === 0)
+	function hideWindows() {
+		if (root.previewing)
 			return;
 
-		const next = root.looks[root.lookIndex].background;
-		if (next === root.previewSource)
-			return;
+		const focused = Hyprland.focusedWorkspace;
 
-		root.previewPrevious = root.previewSource;
-		root.previewSource = next;
-		root.previewOpacity = 0;
-		previewFade.restart();
+
+		root.returnWorkspace = focused ? focused.name : "";
+		root.previewing = true;
+		Quickshell.execDetached(["/usr/bin/hyprctl", "dispatch", 'hl.dsp.focus({workspace = 99})']);
+		lookTimer.restart();
 	}
 
-	NumberAnimation {
-		id: previewFade
+	function showWindows() {
+		if (!root.previewing)
+			return;
 
-		target: root
-		property: "previewOpacity"
-		from: 0
-		to: 1
-		duration: Config.wallpaperTransitionMs
-		easing.type: Easing.OutCubic
+		root.previewing = false;
+
+		if (root.returnWorkspace !== "")
+			Quickshell.execDetached(["/usr/bin/hyprctl", "dispatch", 'hl.dsp.focus({workspace = "' + root.returnWorkspace + '"})']);
+	}
+
+	Timer {
+		id: lookTimer
+
+		interval: 120
+		onTriggered: {
+			if (!root.shown || root.row !== 0 || root.looks.length === 0)
+				return;
+
+			root.applyLook(root.looks[root.lookIndex]);
+			root.previewed = true;
+		}
 	}
 
 	function open() {
@@ -136,8 +152,11 @@ PanelWindow {
 		root.row = root.rows[0];
 		root.selectActive();
 		root.themeIndex = Math.max(0, root.themes.findIndex(function (entry) { return entry.id === root.activeTheme; }));
+		root.originTheme = root.activeTheme;
+		root.originWallpaper = root.activeWallpaper;
+		root.previewed = false;
 		root.lookIndex = Math.max(0, root.looks.findIndex(function (entry) { return entry.id === root.activeTheme; }));
-		root.setPreview();
+		root.hideWindows();
 
 		if (root.wallpapers.length === 0)
 			root.reload();
@@ -146,6 +165,16 @@ PanelWindow {
 	}
 
 	function close() {
+		if (root.previewed) {
+			if (root.originTheme !== "")
+				Yudae.setTheme(root.originTheme);
+
+			if (root.originWallpaper !== "")
+				Yudae.cmd("wallpaper", { apply: { path: root.originWallpaper, band: BarInk.bandPx() } });
+		}
+
+		root.previewed = false;
+		root.showWindows();
 		root.shown = false;
 	}
 
@@ -163,7 +192,7 @@ PanelWindow {
 
 	function applyCurrent() {
 		if (root.row === 0) {
-			root.applyLook(root.looks[root.lookIndex]);
+			root.previewed = false;
 			root.close();
 			return;
 		}
@@ -200,29 +229,6 @@ PanelWindow {
 				easing.type: Easing.OutCubic
 			}
 		}
-	}
-
-	Image {
-		anchors.fill: parent
-		visible: root.shown && root.row === 0
-		fillMode: Image.PreserveAspectCrop
-		asynchronous: true
-		cache: true
-		sourceSize.width: 2560
-		sourceSize.height: 2560
-		source: root.previewPrevious === "" ? "" : "file://" + root.previewPrevious
-	}
-
-	Image {
-		anchors.fill: parent
-		visible: root.shown && root.row === 0
-		fillMode: Image.PreserveAspectCrop
-		asynchronous: true
-		cache: true
-		sourceSize.width: 2560
-		sourceSize.height: 2560
-		opacity: root.previewOpacity
-		source: root.previewSource === "" ? "" : "file://" + root.previewSource
 	}
 
 	MouseArea {
@@ -336,8 +342,8 @@ PanelWindow {
 							asynchronous: true
 							retainWhileLoading: true
 							source: look.modelData.cover === "" ? "" : "file://" + look.modelData.cover
-							sourceSize.width: 2560
-							sourceSize.height: 2560
+							sourceSize.width: 1024
+							sourceSize.height: 1024
 							mipmap: true
 						}
 					}
@@ -379,7 +385,8 @@ PanelWindow {
 						onClicked: {
 							root.row = 0;
 							root.lookIndex = look.index;
-							root.setPreview();
+							root.applyLook(root.looks[look.index]);
+							root.previewed = true;
 							root.applyCurrent();
 						}
 					}

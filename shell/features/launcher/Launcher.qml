@@ -13,6 +13,8 @@ PanelWindow {
 	signal wallpaperRequested()
 
 	property bool shown: false
+	property bool instant: false
+	property bool keepQuery: false
 	property string query: ""
 	property string group: ""
 	property string forced: ""
@@ -348,11 +350,17 @@ PanelWindow {
 	}
 
 	function open(mode) {
+		root.instant = false;
+
 		if (mode !== undefined)
 			root.windows = false;
 
 		root.setWindowDrag(true);
-		root.query = "";
+
+		if (root.keepQuery)
+			root.keepQuery = false;
+		else
+			root.query = "";
 		root.group = "";
 		root.forced = mode || "";
 		root.pointer = null;
@@ -395,6 +403,12 @@ PanelWindow {
 
 	function openClipboard() {
 		root.open("clipboard");
+	}
+
+	function hideInstant() {
+		root.instant = true;
+		root.keepQuery = true;
+		root.close();
 	}
 
 	function close() {
@@ -597,7 +611,7 @@ PanelWindow {
 	}
 
 	function openWallpaper() {
-		root.close();
+		root.hideInstant();
 		root.wallpaperRequested();
 	}
 
@@ -873,12 +887,14 @@ PanelWindow {
 		onHeightChanged: root.clampPlace()
 
 		Behavior on opacity {
+			enabled: !root.instant
+
 			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.OutCubic }
 		}
 		focus: true
 
 		onOpacityChanged: {
-			if (opacity !== 0)
+			if (opacity !== 0 || root.instant)
 				return;
 
 			root.settle();

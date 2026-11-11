@@ -54,7 +54,7 @@ ShellRoot {
 	}
 
 	function closeWidgets() {
-		if (wallpaperWindow.shown)
+		if (wallpaperWindow.shown && !wallpaperWindow.previewing)
 			wallpaperWindow.close();
 
 		shellRoot.closeBarPopups();
@@ -90,9 +90,11 @@ ShellRoot {
 		if (wallpaperWindow.shown)
 			return;
 
-		wallpaperWindow.open();
-		shellRoot.closeBarPopups();
-		Handoff.run(shellRoot.closeLauncherUnderWidget);
+		launcherWindow.hideInstant();
+		Qt.callLater(function () {
+			wallpaperWindow.open();
+			shellRoot.closeBarPopups();
+		});
 	}
 
 	function powerMenu() {
@@ -387,6 +389,7 @@ ShellRoot {
 
 	WallpaperPicker {
 		id: wallpaperWindow
+		alwaysMapped: true
 	}
 
 	PluginHost {

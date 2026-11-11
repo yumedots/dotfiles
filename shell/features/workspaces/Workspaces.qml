@@ -10,7 +10,7 @@ Row {
 
 	readonly property real baselineLift: Math.ceil(Config.barThickness)
 	readonly property var source: Yudae.workspaces
-	readonly property var ids: root.source.ids || []
+	readonly property var ids: (root.source.ids || []).filter(function (id) { return id !== 99; })
 	readonly property int pool: root.ids.length > 0 ? root.ids[root.ids.length - 1] : 0
 	readonly property int focusedSlot: root.source.focusedSlot === undefined ? -1 : root.source.focusedSlot
 	readonly property var slotVersions: root.source.versions || []
