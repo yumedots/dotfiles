@@ -43,7 +43,6 @@ xmake orchestrates, it does not replace the real builders.
 | `xmake lint` | qmllint on `shell/`, `node shell/lib/check.js` |
 | `xmake test` | daemon parsers/protocol tests, plugin conformance, qml fixtures, idle-spawn test |
 | `xmake bench` | headless daemon cold build, size, start, idle RSS and spawns, then `yudaemond bench` against `bench/baseline.json` |
-| `scripts/vm-test` | VM UI loop (start, restart, shot, run) |
 | `xmake vm ...` | VM images; running VMs are `yudae vm` |
 | `xmake doctor` | what is missing and why |
 

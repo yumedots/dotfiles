@@ -47,7 +47,7 @@ or `general:border_size` changes the preview immediately.
 ## Test harness
 
 `test/harness.cpp` is a test-only plugin. Never load it in a real session. It performs
-synthetic drags inside the `vm-test` guest and compares `predictDrop()`
+synthetic drags inside a test VM guest and compares `predictDrop()`
 with where Hyprland actually places the window; it also holds a drag open for screenshots
 and reports the resolved rounding/border values. Results go to `/tmp/dp-results.txt`.
 
