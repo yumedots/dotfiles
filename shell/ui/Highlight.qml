@@ -10,7 +10,7 @@ Rectangle {
 	readonly property color ink: root.active ? Config.launcherHighlightText : Config.foreground
 
 	anchors.fill: root.fillParent ? parent : undefined
-	radius: Math.min(root.height / 2, Config.rowHeight / 2)
+	radius: Config.mixerRowRadius
 	color: Config.launcherHighlight
 	opacity: root.active ? 1 : 0
 
