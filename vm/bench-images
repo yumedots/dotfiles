@@ -6,6 +6,7 @@ TAG=${1:-local}
 TAG=$(printf '%s' "$TAG" | tr -d '"')
 BENCH=${DOTFILES_VM_BENCH:-$HOME/.cache/yudae-vm-bench}
 export XDG_CACHE_HOME=${DOTFILES_VM_BENCH_CACHE:-$BENCH/cache}
+export DOTFILES_VM_RUNS=${DOTFILES_VM_RUNS:-$BENCH/runs}
 CACHE=$XDG_CACHE_HOME/dotfiles/vm
 LOG=$BENCH/logs
 mkdir -p "$CACHE" "$LOG" "$ROOT/bench"
@@ -31,8 +32,8 @@ show() {
 }
 
 fetch=$(phase fetch "$ROOT/vm/images" fetch)
-packages=$(phase packages "$ROOT/vm/images" packages)
-golden=$(phase golden "$ROOT/vm/images" golden)
+packages=$(phase packages "$ROOT/vm/images" packages --force)
+golden=$(phase golden "$ROOT/vm/images" golden --force)
 total=$((fetch + packages + golden))
 packages_mb=$(du -sm "$CACHE/packages.qcow2" 2>/dev/null | cut -f1)
 golden_mb=$(du -sm "$CACHE/golden.qcow2" 2>/dev/null | cut -f1)

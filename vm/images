@@ -11,6 +11,7 @@ CLOUD=$CACHE/$CLOUD_NAME
 PACKAGES=$CACHE/packages.qcow2
 GOLDEN=$CACHE/golden.qcow2
 ARCH_SNAPSHOT=""
+FORCE=0
 SEED=$CACHE/seed.img
 LOG=$CACHE/provision.log
 QEMU=$(command -v qemu-system-x86_64)
@@ -25,7 +26,7 @@ mirrors=(
 )
 
 usage() {
-	echo "usage: vm/images fetch|packages [--snapshot YYYY/MM/DD]|golden [--snapshot YYYY/MM/DD]|ensure|overlay <name> [golden-tag]|snapshot <name> <tag>|restore <name> <tag>|list" >&2
+	echo "usage: vm/images fetch|packages [--snapshot YYYY/MM/DD] [--force]|golden [--snapshot YYYY/MM/DD] [--force]|ensure|overlay <name> [golden-tag]|snapshot <name> <tag>|restore <name> <tag>|list" >&2
 	exit 2
 }
 
@@ -66,9 +67,8 @@ exec > >(tee /dev/console) 2>&1
 echo "dotfiles: provision start"
 @SNAPSHOT@
 sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 12/' /etc/pacman.conf
-grep -q '^DisableDownloadTimeout' /etc/pacman.conf || sed -i '/^\[options\]/a DisableDownloadTimeout' /etc/pacman.conf
 mkdir -p /mnt/hostpkg
-mountpoint -q /mnt/hostpkg || mount -t virtiofs hostpkg /mnt/hostpkg 2>/dev/null || mount -t 9p -o trans=virtio,version=9p2000.L,ro hostpkg /mnt/hostpkg
+mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L,ro hostpkg /mnt/hostpkg
 mkdir -p /var/cache/pacman/pkg
 for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
 	[ -e "$pkg" ] || continue
@@ -76,7 +76,8 @@ for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
 done
 rm -f /var/cache/pacman/pkg/limine-* /var/cache/pacman/pkg/plymouth-*
 pacman -Sy --noconfirm >/dev/null 2>&1
-grep -vE '^(cachyos-|linux-cachyos|openstarbound-bin|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl)|nvidia' /opt/packages.txt > /tmp/candidates.txt
+vm_exclude='^(cachyos-|linux-cachyos|linux-firmware|qemu-|virtiofsd|firefox|qbittorrent|prismlauncher|vlc|tesseract|rust|zig|clang|llvm|cmake|ninja|intel-ucode|amd-ucode|sof-firmware|alsa-firmware|openstarbound|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl|libvirt|docker|podman)|nvidia'
+grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
 pacman -Syu --needed --noconfirm $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
 if grep -q 'failed to commit transaction' /tmp/pacman.log; then
@@ -92,7 +93,28 @@ poweroff
 SCRIPT
 }
 
+vms_exist() {
+	[ -d "$RUNS" ] || return 1
+	find "$RUNS" -mindepth 2 -maxdepth 2 -name disk.qcow2 -print -quit 2>/dev/null | grep -q .
+}
+
 cmd_packages() {
+	mkdir -p "$CACHE/seed"
+	pacman -Qqen > "$CACHE/seed/packages.txt"
+
+	local stamp=$CACHE/packages.sha current
+	current=$( { cat "$CACHE/seed/packages.txt"; printf '%s\n' "$ARCH_SNAPSHOT" "$CLOUD_NAME"; provision_script; } | sha256sum | cut -d' ' -f1)
+
+	if [ "$FORCE" -eq 0 ] && [ -f "$PACKAGES" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$current" ]; then
+		echo "packages layer cached $PACKAGES"
+		return
+	fi
+
+	if vms_exist; then
+		echo "refused: VMs exist under $RUNS; destroy them first (yudae vm list)" >&2
+		exit 1
+	fi
+
 	cmd_fetch
 	mkdir -p "$CACHE"
 	rm -f "$PACKAGES"
@@ -104,7 +126,6 @@ cmd_packages() {
 		snapshot_line="echo 'Server = https://archive.archlinux.org/repos/${ARCH_SNAPSHOT}/\$repo/os/\$arch' > /etc/pacman.d/mirrorlist"
 	fi
 	provision_script | sed "s|@SNAPSHOT@|$snapshot_line|" > "$CACHE/seed/provision.sh"
-	pacman -Qqen > "$CACHE/seed/packages.txt"
 	cat > "$CACHE/seed/meta-data" <<EOF
 instance-id: dotfiles-packages
 local-hostname: yudae-guest
@@ -122,12 +143,6 @@ EOF
 		echo "    lock_passwd: true"
 		echo "ssh_pwauth: false"
 		echo "write_files:"
-		if [ -f /etc/pacman.d/mirrorlist ]; then
-			echo "  - path: /etc/pacman.d/mirrorlist"
-			echo "    permissions: '0644'"
-			echo "    content: |"
-			sed 's/^/      /' /etc/pacman.d/mirrorlist
-		fi
 		echo "  - path: /opt/packages.txt"
 		echo "    permissions: '0644'"
 		echo "    content: |"
@@ -148,14 +163,6 @@ EOF
 
 	echo "provision $PACKAGES (log $LOG)"
 	: > "$LOG"
-
-	local pkg_sock=$CACHE/pkg.sock
-	rm -f "$pkg_sock"
-	/usr/lib/virtiofsd --socket-path="$pkg_sock" --shared-dir=/var/cache/pacman/pkg --readonly --cache=auto &
-	local pkg_pid=$!
-	trap 'kill "$pkg_pid" 2>/dev/null || true' EXIT
-	for _ in $(seq 1 50); do [ -S "$pkg_sock" ] && break; sleep 0.1; done
-
 	"$QEMU" \
 		-name dotfiles-packages \
 		-machine q35,accel=kvm \
@@ -165,8 +172,6 @@ EOF
 		-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe" \
 		-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
 		-virtfs "local,path=/var/cache/pacman/pkg,mount_tag=hostpkg,security_model=none,readonly=on" \
-		-chardev "socket,id=pkg,path=$pkg_sock" \
-		-device "vhost-user-fs-pci,chardev=pkg,tag=hostpkg" \
 		-device virtio-rng-pci \
 		-netdev user,id=net0 \
 		-device virtio-net-pci,netdev=net0 \
@@ -174,13 +179,11 @@ EOF
 		-serial "file:$LOG" \
 		-no-reboot
 
-	kill "$pkg_pid" 2>/dev/null || true
-	trap - EXIT
-
 	if ! "$QEMU_IMG" info "$PACKAGES" | grep -q '^file format: qcow2'; then
 		echo "provision failed, see $LOG" >&2
 		exit 1
 	fi
+	printf '%s\n' "$current" > "$stamp"
 	echo "packages layer ready $PACKAGES"
 }
 
@@ -265,6 +268,20 @@ CLOUD
 cmd_golden() {
 	[ -f "$PACKAGES" ] || cmd_packages
 	mkdir -p "$CACHE"
+
+	local stamp=$CACHE/golden.sha current
+	current=$( { cat "$CACHE/packages.sha" 2>/dev/null; golden_user_data; } | sha256sum | cut -d' ' -f1)
+
+	if [ "$FORCE" -eq 0 ] && [ -f "$GOLDEN" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$current" ]; then
+		echo "golden layer cached $GOLDEN"
+		return
+	fi
+
+	if vms_exist; then
+		echo "refused: VMs exist under $RUNS; destroy them first (yudae vm list)" >&2
+		exit 1
+	fi
+
 	rm -f "$GOLDEN"
 	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F qcow2 -b "$PACKAGES" "$GOLDEN" 32G
 
@@ -314,6 +331,7 @@ EOF
 		exit 1
 	fi
 
+	printf '%s\n' "$current" > "$stamp"
 	echo "golden layer ready $GOLDEN"
 }
 
@@ -376,6 +394,9 @@ case "$command" in
 					shift
 					[ $# -gt 0 ] || usage
 					ARCH_SNAPSHOT=$1
+					;;
+				--force)
+					FORCE=1
 					;;
 				*) usage ;;
 			esac

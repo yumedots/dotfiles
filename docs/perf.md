@@ -99,6 +99,22 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 - P4: 676 host font families against 642 guest; the missing ones are CachyOS extras (Arabic/Syriac PCF), no guest-only families. The shell font `GoogleSansCode Nerd Font` resolves in both. Icon themes are the same 8; host has one extra `cachyos.svg` icon, not a theme. `breeze_cursors` is present in both.
 - P5: fixed by the Hyprland non-KMS quirk; see the proof above.
 
+### VM image build
+
+`xmake vm bench [tag]` times `fetch`, `packages`, `golden` and appends one JSON line to `bench/images.jsonl` (gitignored). It uses `~/.cache/yudae-vm-bench`; `DOTFILES_VM_BENCH` moves the logs, `DOTFILES_VM_BENCH_CACHE` the cache.
+
+| run | packages | golden | total |
+| --- | --- | --- | --- |
+| before | 4m29s | 49s | 5m18s |
+| after | 3m41s | 49s | 4m32s |
+| trimmed | 2m58s | 49s | 3m47s |
+
+The trimmed run excludes firmware, QEMU, virtiofsd, VLC, tesseract, Firefox, qBittorrent, Prism Launcher, Rust, Zig, Clang, LLVM, CMake, Ninja, Docker, Podman, libvirt and the existing CachyOS/NVIDIA/Steam-only packages. It keeps gcc, make and pkg-config for plugin builds. The package layer drops from 6.5G to 4.2G and the guest has 946 packages instead of 1011; the shell, Hyprland and a scenario screenshot were verified on it. Its 1m20s fetch was a one-time cloud image download and is not in the total.
+
+The second optimized run took 4m54s, so network variance is about 20s. Changes: one `pacman -Syu --needed` transaction instead of upgrade then install, `ParallelDownloads = 12`, `cache=unsafe`, `lazy_refcounts=on`, and `pacman -Scc` before poweroff. The 16G host package cache stays on 9p; virtiofs failed on the system QEMU with `vhost_set_vring_kick`.
+
+`packages` and `golden` skip when their stamp still matches the host package list and user data (`packages.sha`, `golden.sha` in the cache); `--force` rebuilds. A cached `packages` is 0.3s, a cached `golden` is 0.01s. Both refuse to rebuild while any `vm/runs/*/disk.qcow2` exists, because that disk chain backs onto the layer being replaced; destroy those VMs first.
+
 ### Clock
 
 QEMU uses `-rtc base=utc,clock=host`, so the guest RTC is the host wall clock. `vm/desktop` runs `hwclock -s` at Hyprland start, applies the host timezone from `vm/hoststate/timezone`, then disables NTP. `setGuestMode` disables NTP too. Guest `NTP=no`, `systemd-timesyncd` inactive/disabled; guest and host wall clocks stay within the vsock measurement margin.
