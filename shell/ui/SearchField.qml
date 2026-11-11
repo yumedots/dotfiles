@@ -27,7 +27,7 @@ Rectangle {
 	readonly property bool hint: !root.typing && root.hintKey !== "" && input.text === ""
 	readonly property string hintLabel: root.hintText.length > root.hintKey.length ? root.hintText.slice(root.hintKey.length).trim() : ""
 	readonly property real slot: root.slotWidth
-	readonly property real slotWidth: root.glyphSlot > 0 ? root.glyphSlot : root.glyphSize
+	readonly property real slotWidth: root.glyphSlot > 0 ? root.glyphSlot : (root.glyph === "" ? 0 : root.glyphSize)
 	readonly property real lineHeight: Math.round(root.size * 1.6)
 
 	implicitWidth: 2 * root.padding + root.slot + root.gap + (root.hintKey !== "" ? keycap.implicitWidth : Config.procSearchMinWidth)
