@@ -29,7 +29,7 @@ Item {
 		x: -root.bleed
 		width: root.width + 2 * root.bleed
 		height: root.height
-		radius: Math.min(height / 2, Config.mixerRowRadius + root.bleed)
+		radius: Math.min(height / 2, Config.rowRadius + root.bleed)
 		color: root.color
 	}
 

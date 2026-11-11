@@ -197,7 +197,7 @@ QtObject {
 	readonly property var mixerIconSize: settings.mixerIconSize !== undefined ? settings.mixerIconSize : 22
 	readonly property var mixerDeviceIconSize: settings.mixerDeviceIconSize !== undefined ? settings.mixerDeviceIconSize : 26
 	readonly property var mixerListGap: settings.mixerListGap !== undefined ? settings.mixerListGap : 8
-	readonly property var mixerRowRadius: settings.mixerRowRadius !== undefined ? settings.mixerRowRadius : 4
+	readonly property var rowRadius: settings.rowRadius !== undefined ? settings.rowRadius : 4
 	readonly property var mixerMaxVolume: settings.mixerMaxVolume !== undefined ? settings.mixerMaxVolume : 1
 	readonly property var mixerStepCount: settings.mixerStepCount !== undefined ? settings.mixerStepCount : 10
 	readonly property var mixerStep: settings.mixerStep !== undefined ? settings.mixerStep : 0.1
