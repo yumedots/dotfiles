@@ -35,7 +35,7 @@ fetch=$(phase fetch "$ROOT/vm/images" fetch)
 packages=$(phase packages "$ROOT/vm/images" packages --force)
 golden=$(phase golden "$ROOT/vm/images" golden --force)
 total=$((fetch + packages + golden))
-packages_mb=$(du -sm "$CACHE/packages.qcow2" 2>/dev/null | cut -f1)
+packages_mb=$(du -sm "$CACHE/packages.qcow2" "$CACHE/packages.raw" 2>/dev/null | awk '{ s += $1 } END { print s }')
 golden_mb=$(du -sm "$CACHE/golden.qcow2" 2>/dev/null | cut -f1)
 
 mkdir -p "$ROOT/bench"

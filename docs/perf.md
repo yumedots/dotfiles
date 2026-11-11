@@ -113,7 +113,7 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 | fast | 54.8s | 0.09s | 54.8s |
 | base | 53.9s | 0.09s | 53.9s |
 | restore | 0.05s | 0.04s | 0.09s |
-| final | 0.35s | 0.04s | 1.55s |
+| materialized | 8.15s | 0.02s | 8.18s |
 
 The thin cut also drops KDE and GNOME file managers and their dependency trees, Noto/CJK and extra fonts, printing and network daemons, and the desktop portals. It keeps the shell font, Meslo, DejaVu, emoji, Qt, Hyprland, audio, NetworkManager and the plugin toolchain. Result: 735MB download, 2.97G layer, 719 packages, shell screenshot and an in-guest `agent-cursor` build verified. `golden_setup` now runs `passwd -d root`; the guest reports `root NP`.
 
@@ -137,9 +137,11 @@ With a warmed package cache and the multi-mirror prefetcher, a forced packages b
 
 The parallel extraction variant was tried and rejected: `pacman -Syuw` plus `bsdtar` and `pacman -U --dbonly` produced a 64MB image without the package files, not a bootable build. It is disabled; the base is built with normal pacman.
 
-The cloud image, package store and the built packages image persist in `~/.cache/dotfiles/vm-base`. A forced build with an empty `XDG_CACHE_HOME` restores the packages image by reflink in **0.047s** and creates the golden in **0.043s**, total **0.09s**. The restored image booted to D-Bus and the login prompt. The base itself is built in **53.9s** with normal pacman; a machine without the base pays that once.
+The fast base build is a persisted-rootfs materializer. `~/.cache/dotfiles/vm-base` holds the cloud image, the compiled rootfs tree, the 7G GPT disk head and the package store. A forced build prefetches the rootfs tree, runs `mkfs.btrfs -r` on it inside a user namespace (real ownership, no fakeroot, `-m single -d single --nodesize 4096 --csum xxhash -O ^free-space-tree,^block-group-tree`), then `vm/dcopy` copies only the allocated extents into the disk head at sector 618496 with `copy_file_range`, which reflinks them on btrfs. A 193K qcow2 overlay points at the raw disk, so no `qemu-img convert` is needed.
 
-The bench harness, with its own cache, reports `fetch 1.16s, packages 0.35s, golden 0.04s, total 1.55s` (`xmake vm bench final`). The fetch step is the base cloud checksum.
+Measured `xmake vm bench final` with an empty bench cache and the rootfs page cache dropped: `fetch 0.008s, packages 8.149s, golden 0.021s, total 8.178s`. The resulting chain boots to D-Bus and the login prompt; the guest has user 1000, `sudo` 4755, `root NP`, and `yudaemond`/`yudae-desktop` enabled. `packages.qcow2` is an overlay, so the bench reports the size of the raw disk it backs (about 3.3G).
+
+The one-time base is still a normal pacman build at 53.9s. When the rootfs is missing, that build also exports the compiled tree by booting the image and tarring `/` to the base (about 29s, automatic). The materializer needs `mkfs.btrfs`, Go and `unshare --map-users` with `/etc/subuid`; when those are missing it falls back to the pacman build. A machine with no persisted base pays the one-time 53.9s + 29s and is under 9s on the next build. The rootfs tree is owned by subordinate IDs from `/etc/subuid`; remove it with `chmod -R u+w` first or from a matching `unshare --map-users` shell.
 
 ### Clock
 
