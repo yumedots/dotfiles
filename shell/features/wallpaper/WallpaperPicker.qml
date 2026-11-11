@@ -26,6 +26,9 @@ PanelWindow {
 	property int lookIndex: 0
 	property int row: 0
 	property bool previewing: false
+	property int highlightMs: Config.wallpaperFadeMs
+	property bool instant: false
+	property bool moved: false
 	property bool previewed: false
 	property string returnWorkspace: ""
 	property string originTheme: ""
@@ -38,12 +41,6 @@ PanelWindow {
 	readonly property real contentHeight: root.tileHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
 
-	onRowChanged: {
-		if (root.row === 0 && root.shown)
-			root.hideWindows();
-		else
-			root.showWindows();
-	}
 
 	anchors.top: true
 	anchors.left: true
@@ -72,15 +69,70 @@ PanelWindow {
 
 	mask: root.shown ? null : emptyRegion
 
-	onListingChanged: {
-		root.wallpapers = root.state.list || [];
+	onListingChanged: root.refreshWallpapers()
+	onThemesChanged: root.refreshWallpapers()
+
+	function refreshWallpapers() {
+		const list = (root.state.list || []).slice();
+		const seen = list.map(function (entry) { return entry.path; });
+
+		root.looks.forEach(function (look) {
+			if (seen.indexOf(look.background) >= 0)
+				return;
+
+			seen.push(look.background);
+			list.push({
+				path: look.background,
+				name: look.id,
+				thumb: look.background,
+				preview: look.background
+			});
+		});
+
+		if (root.activeWallpaper !== "" && seen.indexOf(root.activeWallpaper) < 0) {
+			list.unshift({
+				path: root.activeWallpaper,
+				name: root.activeWallpaper.split("/").pop(),
+				thumb: root.activeWallpaper,
+				preview: root.activeWallpaper
+			});
+		}
+
+		root.wallpapers = list;
+
+		if (root.shown && !root.moved) {
+			root.syncSelection();
+			root.positionAll();
+			return;
+		}
+
 		root.selectActive();
 	}
 
 	function selectActive() {
 		const index = root.wallpapers.map(function (entry) { return entry.path; }).indexOf(root.activeWallpaper);
 
+		root.highlightMs = 0;
 		root.currentIndex = index >= 0 ? index : 0;
+		root.positionAll();
+	}
+
+	function syncSelection() {
+		root.highlightMs = 0;
+		root.currentIndex = Math.max(0, root.wallpapers.map(function (entry) { return entry.path; }).indexOf(root.activeWallpaper));
+		root.themeIndex = Math.max(0, root.themes.findIndex(function (entry) { return entry.id === root.activeTheme; }));
+		root.lookIndex = Math.max(0, root.looks.findIndex(function (entry) { return entry.id === root.activeTheme; }));
+	}
+
+	function positionAll() {
+		if (looksStrip.count > 0)
+			looksStrip.positionViewAtIndex(root.lookIndex, ListView.Center);
+
+		if (strip.count > 0)
+			strip.positionViewAtIndex(root.currentIndex, ListView.Center);
+
+		if (themeStrip.count > 0)
+			themeStrip.positionViewAtIndex(root.themeIndex, ListView.Center);
 	}
 
 	readonly property var rows: {
@@ -95,20 +147,24 @@ PanelWindow {
 	}
 
 	function move(step) {
-		if (root.row === 0) {
+		root.moved = true;
+		root.highlightMs = Config.wallpaperFadeMs;
+
+		if (root.row === 0)
 			root.lookIndex = Calc.clamp(root.lookIndex + step, 0, root.looks.length - 1);
-			lookTimer.restart();
-		}
 		else if (root.row === 2)
 			root.themeIndex = Calc.clamp(root.themeIndex + step, 0, root.themes.length - 1);
 		else if (root.wallpapers.length > 0)
 			root.currentIndex = Calc.clamp(root.currentIndex + step, 0, root.wallpapers.length - 1);
+
+		moveTimer.restart();
 	}
 
 	function stepRow(step) {
 		const at = Math.max(0, root.rows.indexOf(root.row));
 
 		root.row = root.rows[(at + step + root.rows.length) % root.rows.length];
+		root.positionAll();
 	}
 
 	function hideWindows() {
@@ -134,14 +190,24 @@ PanelWindow {
 	}
 
 	Timer {
-		id: lookTimer
+		id: moveTimer
 
-		interval: 120
-		onTriggered: {
-			if (!root.shown || root.row !== 0 || root.looks.length === 0)
-				return;
+		interval: 140
+		onTriggered: root.previewCurrent()
+	}
 
+	function previewCurrent() {
+		if (!root.shown)
+			return;
+
+		if (root.row === 0 && root.looks.length > 0) {
 			root.applyLook(root.looks[root.lookIndex]);
+			root.previewed = true;
+			return;
+		}
+
+		if (root.row === 2 && root.themes.length > 0) {
+			Yudae.setTheme(root.themes[root.themeIndex].id);
 			root.previewed = true;
 		}
 	}
@@ -154,8 +220,13 @@ PanelWindow {
 		root.originTheme = root.activeTheme;
 		root.originWallpaper = root.activeWallpaper;
 		root.previewed = false;
-		root.lookIndex = Math.max(0, root.looks.findIndex(function (entry) { return entry.id === root.activeTheme; }));
+		root.moved = false;
+		root.highlightMs = 0;
+		root.instant = true;
+		root.syncSelection();
+		root.positionAll();
 		root.hideWindows();
+		Qt.callLater(function () { root.instant = false; });
 
 		if (root.wallpapers.length === 0)
 			root.reload();
@@ -190,22 +261,12 @@ PanelWindow {
 	}
 
 	function applyCurrent() {
-		if (root.row === 0) {
-			root.previewed = false;
-			root.close();
-			return;
-		}
+		if (root.row === 1 && root.held !== null)
+			Yudae.cmd("wallpaper", { apply: { path: root.held.path, band: BarInk.bandPx() } });
+		else
+			root.previewCurrent();
 
-		if (root.row === 2) {
-			Yudae.setTheme(root.themes[root.themeIndex].id);
-			return;
-		}
-
-		if (root.held === null)
-			return;
-
-		Yudae.cmd("wallpaper", { apply: { path: root.held.path, band: BarInk.bandPx() } });
-		root.close();
+		root.previewed = false;
 	}
 
 	function applyLook(look) {
@@ -213,21 +274,6 @@ PanelWindow {
 
 		if (look.background !== "")
 			Yudae.cmd("wallpaper", { apply: { path: look.background, band: BarInk.bandPx() } });
-	}
-
-	Rectangle {
-		id: scrim
-
-		anchors.fill: parent
-		color: Config.surface
-		opacity: root.shown && root.row !== 0 ? Config.wallpaperScrim : 0
-
-		Behavior on opacity {
-			NumberAnimation {
-				duration: Config.wallpaperScrimMs
-				easing.type: Easing.OutCubic
-			}
-		}
 	}
 
 	MouseArea {
@@ -255,6 +301,8 @@ PanelWindow {
 		focus: true
 
 		Behavior on opacity {
+			enabled: !root.instant
+
 			NumberAnimation {
 				duration: Config.wallpaperScrimMs
 				easing.type: Easing.OutCubic
@@ -285,7 +333,7 @@ PanelWindow {
 				highlightRangeMode: ListView.StrictlyEnforceRange
 				preferredHighlightBegin: (looksStrip.width - root.wideWidth) / 2
 				preferredHighlightEnd: (looksStrip.width + root.wideWidth) / 2
-				highlightMoveDuration: Config.wallpaperFadeMs
+				highlightMoveDuration: root.highlightMs
 				cacheBuffer: root.wideWidth
 				opacity: root.row === 0 ? 1 : 0
 				visible: opacity > 0
@@ -310,6 +358,8 @@ PanelWindow {
 					clip: true
 
 					Behavior on width {
+						enabled: root.moved
+
 						NumberAnimation {
 							duration: Config.wallpaperFadeMs
 							easing.type: Easing.OutCubic
@@ -384,8 +434,6 @@ PanelWindow {
 						onClicked: {
 							root.row = 0;
 							root.lookIndex = look.index;
-							root.applyLook(root.looks[look.index]);
-							root.previewed = true;
 							root.applyCurrent();
 						}
 					}
@@ -426,7 +474,7 @@ PanelWindow {
 				highlightRangeMode: ListView.StrictlyEnforceRange
 				preferredHighlightBegin: (strip.width - root.wideWidth) / 2
 				preferredHighlightEnd: (strip.width + root.wideWidth) / 2
-				highlightMoveDuration: Config.wallpaperFadeMs
+				highlightMoveDuration: root.highlightMs
 				cacheBuffer: root.wideWidth
 				opacity: root.row === 1 ? 1 : 0
 				visible: opacity > 0
@@ -453,6 +501,8 @@ PanelWindow {
 					clip: true
 
 					Behavior on width {
+						enabled: root.moved
+
 						NumberAnimation {
 							duration: Config.wallpaperFadeMs
 							easing.type: Easing.OutCubic
@@ -541,11 +591,8 @@ PanelWindow {
 
 						onClicked: {
 							root.row = 1;
-
-							if (cell.current)
-								root.applyCurrent();
-							else
-								root.currentIndex = cell.index;
+							root.currentIndex = cell.index;
+							root.applyCurrent();
 						}
 					}
 				}
@@ -585,7 +632,7 @@ PanelWindow {
 				highlightRangeMode: ListView.StrictlyEnforceRange
 				preferredHighlightBegin: (themeStrip.width - root.wideWidth) / 2
 				preferredHighlightEnd: (themeStrip.width + root.wideWidth) / 2
-				highlightMoveDuration: Config.wallpaperFadeMs
+				highlightMoveDuration: root.highlightMs
 				cacheBuffer: root.wideWidth
 				opacity: root.row === 2 ? 1 : 0
 				visible: opacity > 0
@@ -610,6 +657,8 @@ PanelWindow {
 					clip: true
 
 					Behavior on width {
+						enabled: root.moved
+
 						NumberAnimation {
 							duration: Config.wallpaperFadeMs
 							easing.type: Easing.OutCubic
