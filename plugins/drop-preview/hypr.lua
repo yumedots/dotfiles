@@ -16,7 +16,7 @@ hl.config({
             border_size = -1,
             rounding    = -1,
 
-            spacing = 8, -- inset from the drop area, logical px
+            spacing = 0, -- inset from the drop area, logical px
 
             blur            = false, -- blur behind the fill
             animation_speed = 0,     -- 0 = snap instantly, higher = smoother slide
