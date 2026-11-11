@@ -15,13 +15,18 @@ PanelWindow {
 	readonly property var state: Yudae.wallpaper
 	readonly property string listing: (root.state.list || []).map(function (entry) { return entry.path; }).join("\n")
 	readonly property string activeWallpaper: root.state.active || ""
-	readonly property string themeListing: JSON.stringify(Yudae.themes.map(function (entry) { return { id: entry.id, surface: entry.surface, foreground: entry.foreground, accents: entry.accents }; }))
+	readonly property string themeListing: JSON.stringify(Yudae.themes.map(function (entry) { return { id: entry.id, surface: entry.surface, foreground: entry.foreground, accents: entry.accents, cover: entry.cover, background: entry.background }; }))
 	readonly property var themes: JSON.parse(root.themeListing)
+	readonly property var looks: root.themes.filter(function (entry) { return entry.background !== ""; })
 	readonly property string activeTheme: (Yudae.themes.filter(function (entry) { return entry.active; })[0] || ({})).id || "gray"
 	property var wallpapers: []
 	property int currentIndex: 0
 	property int themeIndex: 0
+	property int lookIndex: 0
 	property int row: 0
+	property string previewSource: ""
+	property string previewPrevious: ""
+	property real previewOpacity: 1
 
 	readonly property var held: root.currentIndex >= 0 && root.currentIndex < root.wallpapers.length ? root.wallpapers[root.currentIndex] : null
 	readonly property real tileHeight: Config.wallpaperRowHeight
@@ -29,6 +34,11 @@ PanelWindow {
 	readonly property real slimWidth: Math.round(root.tileHeight * Config.wallpaperSlimRatio)
 	readonly property real contentHeight: root.tileHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
+
+	onRowChanged: {
+		if (root.row === 0)
+			root.setPreview();
+	}
 
 	anchors.top: true
 	anchors.left: true
@@ -68,22 +78,66 @@ PanelWindow {
 		root.currentIndex = index >= 0 ? index : 0;
 	}
 
+	readonly property var rows: {
+		const list = [];
+
+		if (root.looks.length > 0)
+			list.push(0);
+		list.push(1);
+		list.push(2);
+
+		return list;
+	}
+
 	function move(step) {
-		if (root.row === 1)
+		if (root.row === 0) {
+			root.lookIndex = Calc.clamp(root.lookIndex + step, 0, root.looks.length - 1);
+			root.setPreview();
+		}
+		else if (root.row === 2)
 			root.themeIndex = Calc.clamp(root.themeIndex + step, 0, root.themes.length - 1);
 		else if (root.wallpapers.length > 0)
 			root.currentIndex = Calc.clamp(root.currentIndex + step, 0, root.wallpapers.length - 1);
 	}
 
-	function setRow(next) {
-		root.row = next === 1 && root.themes.length > 0 ? 1 : 0;
+	function stepRow(step) {
+		const at = Math.max(0, root.rows.indexOf(root.row));
+
+		root.row = root.rows[(at + step + root.rows.length) % root.rows.length];
+	}
+
+	function setPreview() {
+		if (root.row !== 0 || root.looks.length === 0)
+			return;
+
+		const next = root.looks[root.lookIndex].background;
+		if (next === root.previewSource)
+			return;
+
+		root.previewPrevious = root.previewSource;
+		root.previewSource = next;
+		root.previewOpacity = 0;
+		previewFade.restart();
+	}
+
+	NumberAnimation {
+		id: previewFade
+
+		target: root
+		property: "previewOpacity"
+		from: 0
+		to: 1
+		duration: Config.wallpaperTransitionMs
+		easing.type: Easing.OutCubic
 	}
 
 	function open() {
 		root.shown = true;
-		root.row = 0;
+		root.row = root.rows[0];
 		root.selectActive();
 		root.themeIndex = Math.max(0, root.themes.findIndex(function (entry) { return entry.id === root.activeTheme; }));
+		root.lookIndex = Math.max(0, root.looks.findIndex(function (entry) { return entry.id === root.activeTheme; }));
+		root.setPreview();
 
 		if (root.wallpapers.length === 0)
 			root.reload();
@@ -108,7 +162,13 @@ PanelWindow {
 	}
 
 	function applyCurrent() {
-		if (root.row === 1) {
+		if (root.row === 0) {
+			root.applyLook(root.looks[root.lookIndex]);
+			root.close();
+			return;
+		}
+
+		if (root.row === 2) {
 			Yudae.setTheme(root.themes[root.themeIndex].id);
 			return;
 		}
@@ -120,12 +180,19 @@ PanelWindow {
 		root.close();
 	}
 
+	function applyLook(look) {
+		Yudae.setTheme(look.id);
+
+		if (look.background !== "")
+			Yudae.cmd("wallpaper", { apply: { path: look.background, band: BarInk.bandPx() } });
+	}
+
 	Rectangle {
 		id: scrim
 
 		anchors.fill: parent
 		color: Config.surface
-		opacity: root.shown ? Config.wallpaperScrim : 0
+		opacity: root.shown && root.row !== 0 ? Config.wallpaperScrim : 0
 
 		Behavior on opacity {
 			NumberAnimation {
@@ -133,6 +200,29 @@ PanelWindow {
 				easing.type: Easing.OutCubic
 			}
 		}
+	}
+
+	Image {
+		anchors.fill: parent
+		visible: root.shown && root.row === 0
+		fillMode: Image.PreserveAspectCrop
+		asynchronous: true
+		cache: true
+		sourceSize.width: 2560
+		sourceSize.height: 2560
+		source: root.previewPrevious === "" ? "" : "file://" + root.previewPrevious
+	}
+
+	Image {
+		anchors.fill: parent
+		visible: root.shown && root.row === 0
+		fillMode: Image.PreserveAspectCrop
+		asynchronous: true
+		cache: true
+		sourceSize.width: 2560
+		sourceSize.height: 2560
+		opacity: root.previewOpacity
+		source: root.previewSource === "" ? "" : "file://" + root.previewSource
 	}
 
 	MouseArea {
@@ -177,6 +267,146 @@ PanelWindow {
 			height: root.tileHeight
 
 			ListView {
+				id: looksStrip
+
+				anchors.fill: parent
+				orientation: ListView.Horizontal
+				clip: true
+				interactive: false
+				keyNavigationEnabled: false
+				spacing: Config.wallpaperTileGap
+				model: root.looks
+				currentIndex: root.lookIndex
+				highlightRangeMode: ListView.StrictlyEnforceRange
+				preferredHighlightBegin: (looksStrip.width - root.wideWidth) / 2
+				preferredHighlightEnd: (looksStrip.width + root.wideWidth) / 2
+				highlightMoveDuration: Config.wallpaperFadeMs
+				cacheBuffer: root.wideWidth
+				opacity: root.row === 0 ? 1 : 0
+				visible: opacity > 0
+
+				Behavior on opacity {
+					NumberAnimation {
+						duration: Config.wallpaperFadeMs
+						easing.type: Easing.OutCubic
+					}
+				}
+
+				delegate: Item {
+					id: look
+
+					required property var modelData
+					required property int index
+
+					readonly property bool current: look.index === root.lookIndex
+
+					width: look.current ? root.wideWidth : root.slimWidth
+					height: looksStrip.height
+					clip: true
+
+					Behavior on width {
+						NumberAnimation {
+							duration: Config.wallpaperFadeMs
+							easing.type: Easing.OutCubic
+						}
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						color: look.modelData.surface || Config.surface
+					}
+
+					Item {
+						anchors.centerIn: parent
+						width: root.wideWidth
+						height: parent.height
+						opacity: look.current ? 1 : Config.wallpaperTileDim
+
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+								easing.type: Easing.OutCubic
+							}
+						}
+
+						Image {
+							anchors.fill: parent
+							fillMode: Image.PreserveAspectCrop
+							cache: true
+							asynchronous: true
+							retainWhileLoading: true
+							source: look.modelData.cover === "" ? "" : "file://" + look.modelData.cover
+							sourceSize.width: 2560
+							sourceSize.height: 2560
+							mipmap: true
+						}
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						color: "transparent"
+						visible: root.row === 0
+						opacity: look.current ? 1 : 0
+						border.width: Config.wallpaperRingWidth
+						border.color: Config.foreground
+
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+							}
+						}
+					}
+
+					Rectangle {
+						anchors.right: parent.right
+						anchors.bottom: parent.bottom
+						visible: look.modelData.id === root.activeTheme
+						width: Config.wallpaperMarkSize + 8
+						height: Config.wallpaperMarkSize + 8
+						color: look.modelData.surface || Config.surface
+
+						Glyph {
+							anchors.fill: parent
+							size: Config.wallpaperMarkSize
+							color: look.modelData.foreground || Config.foreground
+							glyph: Config.launcherIconActive
+						}
+					}
+
+					MouseArea {
+						anchors.fill: parent
+
+						onClicked: {
+							root.row = 0;
+							root.lookIndex = look.index;
+							root.setPreview();
+							root.applyCurrent();
+						}
+					}
+				}
+
+				Text {
+					anchors.centerIn: parent
+					visible: root.looks.length === 0
+					font.family: Config.fontFamily
+					font.pixelSize: Config.wallpaperNameSize
+					color: Config.muted
+					text: Config.themeEmpty
+				}
+
+				MouseArea {
+					anchors.fill: parent
+					acceptedButtons: Qt.NoButton
+
+					onWheel: function (wheel) {
+						root.row = 0;
+						root.move(wheel.angleDelta.y > 0 ? -1 : 1);
+						wheel.accepted = true;
+					}
+				}
+			}
+
+			ListView {
 				id: strip
 
 				anchors.fill: parent
@@ -192,7 +422,7 @@ PanelWindow {
 				preferredHighlightEnd: (strip.width + root.wideWidth) / 2
 				highlightMoveDuration: Config.wallpaperFadeMs
 				cacheBuffer: root.wideWidth
-				opacity: root.row === 0 ? 1 : 0
+				opacity: root.row === 1 ? 1 : 0
 				visible: opacity > 0
 
 				Behavior on opacity {
@@ -273,7 +503,7 @@ PanelWindow {
 					Rectangle {
 						anchors.fill: parent
 						color: "transparent"
-						visible: root.row === 0
+						visible: root.row === 1
 						opacity: cell.current ? 1 : 0
 						border.width: Config.wallpaperRingWidth
 						border.color: Config.foreground
@@ -304,7 +534,7 @@ PanelWindow {
 						anchors.fill: parent
 
 						onClicked: {
-							root.row = 0;
+							root.row = 1;
 
 							if (cell.current)
 								root.applyCurrent();
@@ -328,7 +558,7 @@ PanelWindow {
 					acceptedButtons: Qt.NoButton
 
 					onWheel: function (wheel) {
-						root.row = 0;
+						root.row = 1;
 						root.move(wheel.angleDelta.y > 0 ? -1 : 1);
 						wheel.accepted = true;
 					}
@@ -351,7 +581,7 @@ PanelWindow {
 				preferredHighlightEnd: (themeStrip.width + root.wideWidth) / 2
 				highlightMoveDuration: Config.wallpaperFadeMs
 				cacheBuffer: root.wideWidth
-				opacity: root.row === 1 ? 1 : 0
+				opacity: root.row === 2 ? 1 : 0
 				visible: opacity > 0
 
 				Behavior on opacity {
@@ -415,7 +645,7 @@ PanelWindow {
 						}
 
 						Row {
-							id: band
+							id: themeBand
 
 							anchors.left: parent.left
 							anchors.right: parent.right
@@ -428,8 +658,8 @@ PanelWindow {
 								Rectangle {
 									required property string modelData
 
-									width: band.width / Math.max(1, chip.modelData.accents.length)
-									height: band.height
+									width: themeBand.width / Math.max(1, chip.modelData.accents.length)
+									height: themeBand.height
 									color: modelData
 								}
 							}
@@ -439,7 +669,7 @@ PanelWindow {
 					Rectangle {
 						anchors.fill: parent
 						color: "transparent"
-						visible: root.row === 1
+						visible: root.row === 2
 						opacity: chip.current ? 1 : 0
 						border.width: Config.wallpaperRingWidth
 						border.color: chip.modelData.foreground || Config.foreground
@@ -471,7 +701,7 @@ PanelWindow {
 						anchors.fill: parent
 
 						onClicked: {
-							root.row = 1;
+							root.row = 2;
 							root.themeIndex = chip.index;
 							root.applyCurrent();
 						}
@@ -492,7 +722,7 @@ PanelWindow {
 					acceptedButtons: Qt.NoButton
 
 					onWheel: function (wheel) {
-						root.row = 1;
+						root.row = 2;
 						root.move(wheel.angleDelta.y > 0 ? -1 : 1);
 						wheel.accepted = true;
 					}
