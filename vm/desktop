@@ -16,11 +16,7 @@ if [ -n "$timezone" ] && [ "$(cat /etc/timezone 2>/dev/null)" != "$timezone" ]; 
 	sudo timedatectl set-timezone "$timezone" >/dev/null 2>&1 || true
 fi
 
-epoch=$(cat "$ROOT/vm/hoststate/epoch" 2>/dev/null || true)
-if [ -n "$epoch" ]; then
-	sudo -n date -s "@$epoch" >/dev/null 2>&1 || true
-fi
-
+sudo -n hwclock -s >/dev/null 2>&1 || true
 sudo -n timedatectl set-ntp false >/dev/null 2>&1 || true
 
 mkdir -p "$HOME/.local/bin" "$HOME/Documents/Wallpaper"

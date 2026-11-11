@@ -101,7 +101,7 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 
 ### Clock
 
-QEMU now uses `-rtc base=utc,clock=host`; guest `timedatectl set-ntp false` is applied by `setGuestMode` and `vm/desktop`. Guest `NTP=no`, `systemd-timesyncd` inactive/disabled; guest and host wall clocks stay within the vsock measurement margin.
+QEMU uses `-rtc base=utc,clock=host`, so the guest RTC is the host wall clock. `vm/desktop` runs `hwclock -s` at Hyprland start, applies the host timezone from `vm/hoststate/timezone`, then disables NTP. `setGuestMode` disables NTP too. Guest `NTP=no`, `systemd-timesyncd` inactive/disabled; guest and host wall clocks stay within the vsock measurement margin.
 
 ### Full daemon budget
 
