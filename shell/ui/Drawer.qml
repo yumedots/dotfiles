@@ -43,6 +43,7 @@ Item {
 		contentHeight: body.implicitHeight
 		clip: true
 		boundsBehavior: Flickable.StopAtBounds
+		flickDeceleration: 100000
 		interactive: view.contentHeight > view.height + 1
 
 		Column {

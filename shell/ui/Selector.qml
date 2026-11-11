@@ -87,6 +87,7 @@ Item {
 		clip: true
 		spacing: root.rowSpacing
 		boundsBehavior: Flickable.StopAtBounds
+		interactive: false
 		keyNavigationEnabled: false
 		highlightFollowsCurrentItem: true
 		highlightMoveDuration: 0
@@ -101,6 +102,9 @@ Item {
 			fillParent: false
 		}
 
+		WheelHandler {
+			onWheel: (event) => root.scroll((event.angleDelta.y > 0 ? -1 : 1) * (root.rowHeight + root.rowSpacing))
+		}
 	}
 
 	Scrollbar {
