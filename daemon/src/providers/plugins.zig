@@ -54,8 +54,19 @@ pub const Row = struct {
 	failure: []const u8,
 };
 
+pub const ThemeRow = struct {
+	id: []const u8,
+	active: bool,
+	surface: []const u8,
+	foreground: []const u8,
+	accents: []const []const u8,
+};
+
+const accent_keys = [_][]const u8{ "borderFallbackColor", "cpuBase", "memoryBase", "weatherBase", "yellow", "red" };
+
 const Out = struct {
 	list: []const Row,
+	themes: []const ThemeRow,
 	hyprland: []const u8,
 	failure: []const u8,
 };
@@ -118,6 +129,7 @@ pub const Plugins = struct {
 	mutex: std.Io.Mutex = .init,
 	scratch: std.heap.ArenaAllocator,
 	rows: []const Row = &.{},
+	themes: []const ThemeRow = &.{},
 	hyprland: []const u8 = &.{},
 	error_text: []const u8 = &.{},
 
@@ -156,7 +168,7 @@ pub const Plugins = struct {
 		self.mutex.lockUncancelable(self.io);
 		defer self.mutex.unlock(self.io);
 
-		const out = Out{ .list = self.rows, .hyprland = self.hyprland, .failure = self.error_text };
+		const out = Out{ .list = self.rows, .themes = self.themes, .hyprland = self.hyprland, .failure = self.error_text };
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 
@@ -218,11 +230,13 @@ pub const Plugins = struct {
 			return allocator.dupe(u8, "{\"ok\":true}");
 		}
 
-		if (std.mem.eql(u8, method, "load") or std.mem.eql(u8, method, "unload")) {
+		const theme = std.mem.eql(u8, method, "theme");
+
+		if (theme or std.mem.eql(u8, method, "load") or std.mem.eql(u8, method, "unload")) {
 			if (id.len == 0) return error.MissingArgs;
 
 			self.mutex.lockUncancelable(self.io);
-			self.editListLocked(id, std.mem.eql(u8, method, "load")) catch |err| {
+			(if (theme) self.setThemeLocked(id) else self.editListLocked(id, std.mem.eql(u8, method, "load"))) catch |err| {
 				self.mutex.unlock(self.io);
 				return err;
 			};
@@ -274,7 +288,7 @@ pub const Plugins = struct {
 	}
 
 	fn listJson(self: *Plugins, allocator: Allocator) ![]u8 {
-		const out = Out{ .list = self.rows, .hyprland = self.hyprland, .failure = self.error_text };
+		const out = Out{ .list = self.rows, .themes = self.themes, .hyprland = self.hyprland, .failure = self.error_text };
 
 		var buffer: Writer.Allocating = .init(allocator);
 		try buffer.writer.print("{f}", .{std.json.fmt(out, .{})});
@@ -305,6 +319,7 @@ pub const Plugins = struct {
 		const arena = self.scratch.allocator();
 		self.error_text = &.{};
 		self.rows = &.{};
+		self.themes = &.{};
 
 		const load = self.readList(arena) catch |err| {
 			self.error_text = std.fmt.allocPrint(arena, "plugins.toml: {s}", .{@errorName(err)}) catch "plugins.toml is invalid";
@@ -409,6 +424,84 @@ pub const Plugins = struct {
 		self.writeThemeOwned(arena, themes.items);
 		if (self.live) self.liveLoad(loaded.items);
 		self.rows = rows.items;
+		self.themes = self.scanThemes(arena, load.ids);
+	}
+
+	fn kindOf(self: *Plugins, arena: Allocator, id: []const u8) ?Kind {
+		const dir = self.findDir(arena, id) orelse return null;
+		const path = std.fmt.allocPrint(arena, "{s}/plugin.toml", .{dir}) catch return null;
+		const body = proc.readFile(self.io, self.allocator, path) catch return null;
+		defer self.allocator.free(body);
+
+		const manifest = parseManifest(arena, id, body) catch return null;
+		return manifest.kind;
+	}
+
+	fn scanThemes(self: *Plugins, arena: Allocator, loaded: []const []const u8) []const ThemeRow {
+		var found: std.ArrayListUnmanaged(ThemeRow) = .empty;
+
+		for ([_][]const u8{ self.paths.repo, self.paths.data }) |base| {
+			var handle = std.Io.Dir.cwd().openDir(self.io, base, .{ .iterate = true }) catch continue;
+			defer handle.close(self.io);
+
+			var it = handle.iterate();
+			next: while (it.next(self.io) catch null) |entry| {
+				if (!validId(entry.name) or entry.name[0] == '_') continue;
+				for (found.items) |row| {
+					if (std.mem.eql(u8, row.id, entry.name)) continue :next;
+				}
+
+				const id = arena.dupe(u8, entry.name) catch continue;
+				if (self.kindOf(arena, id) != .theme) continue;
+
+				const dir = self.findDir(arena, id) orelse continue;
+				const path = std.fmt.allocPrint(arena, "{s}/theme.toml", .{dir}) catch continue;
+				const body = proc.readFile(self.io, self.allocator, path) catch continue;
+				defer self.allocator.free(body);
+				const cfg = configmod.Config.parse(arena, body) catch continue;
+
+				var accents: std.ArrayListUnmanaged([]const u8) = .empty;
+				for (accent_keys) |key| {
+					const value = themeColor(cfg, key);
+					if (value.len > 0) accents.append(arena, value) catch {};
+				}
+
+				var active = false;
+				for (loaded) |other| {
+					if (std.mem.eql(u8, other, id)) active = true;
+				}
+
+				found.append(arena, .{
+					.id = id,
+					.active = active,
+					.surface = themeColor(cfg, "surface"),
+					.foreground = themeColor(cfg, "foreground"),
+					.accents = accents.items,
+				}) catch {};
+			}
+		}
+
+		std.mem.sort(ThemeRow, found.items, {}, themeBefore);
+		return found.items;
+	}
+
+	fn setThemeLocked(self: *Plugins, id: []const u8) !void {
+		if (!validId(id)) return error.BadId;
+
+		const arena = self.scratch.allocator();
+		if (self.kindOf(arena, id) != .theme) return error.NotATheme;
+
+		const state = self.readList(arena) catch return error.BadConfig;
+		if (state.error_text.len > 0) return error.BadConfig;
+
+		var ids: std.ArrayListUnmanaged([]const u8) = .empty;
+		for (state.ids) |existing| {
+			if (self.kindOf(arena, existing) == .theme) continue;
+			ids.append(arena, existing) catch return error.OutOfMemory;
+		}
+		ids.append(arena, id) catch return error.OutOfMemory;
+
+		try self.writeList(arena, state.config, ids.items);
 	}
 
 	const LoadState = struct {
@@ -1093,6 +1186,29 @@ fn parseManifest(arena: Allocator, folder: []const u8, body: []const u8) !Manife
 	};
 }
 
+fn themeBefore(_: void, a: ThemeRow, b: ThemeRow) bool {
+	return std.mem.lessThan(u8, a.id, b.id);
+}
+
+fn themeColor(cfg: configmod.Config, key: []const u8) []const u8 {
+	for (cfg.root.entries.items) |entry| {
+		const table = switch (entry.value) {
+			.table => |inner| inner,
+			else => continue,
+		};
+
+		for (table.entries.items) |item| {
+			if (!std.mem.eql(u8, item.key, key)) continue;
+			switch (item.value) {
+				.string => |value| return value,
+				else => {},
+			}
+		}
+	}
+
+	return "";
+}
+
 fn validId(id: []const u8) bool {
 	if (id.len == 0 or id.len > 80) return false;
 	var at: usize = 0;
@@ -1554,6 +1670,37 @@ test "themes layer in load order" {
 	try std.testing.expect(std.mem.indexOf(u8, body, "surface = \"#202020\"") != null);
 	try std.testing.expect(std.mem.indexOf(u8, body, "red = \"#ff0000\"") != null);
 	try std.testing.expect(std.mem.indexOf(u8, body, "yellow = \"#ffff00\"") != null);
+}
+
+test "the theme verb swaps the loaded theme and keeps the rest" {
+	var tmp = std.testing.tmpDir(.{});
+	defer tmp.cleanup();
+
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const a = arena.allocator();
+
+	const loader = try testLoader(&tmp, a);
+	defer loader.deinit();
+
+	try testTheme(a, loader.paths, "base", "surface", "#101010", "red", "#ff0000");
+	try testTheme(a, loader.paths, "over", "surface", "#202020", "yellow", "#ffff00");
+	try proc.writeFile(std.testing.io, loader.paths.load, "load = [\"base\", \"missing\"]\n");
+
+	try loader.setThemeLocked("over");
+	try std.testing.expectError(error.NotATheme, loader.setThemeLocked("missing"));
+	loader.reloadLocked();
+
+	try std.testing.expectEqual(@as(usize, 2), loader.rows.len);
+	try std.testing.expectEqualStrings("missing", loader.rows[0].id);
+	try std.testing.expectEqualStrings("over", loader.rows[1].id);
+
+	try std.testing.expectEqual(@as(usize, 2), loader.themes.len);
+	try std.testing.expectEqualStrings("base", loader.themes[0].id);
+	try std.testing.expect(!loader.themes[0].active);
+	try std.testing.expect(loader.themes[1].active);
+	try std.testing.expectEqualStrings("#202020", loader.themes[1].surface);
+	try std.testing.expectEqualStrings("#ffff00", loader.themes[1].accents[0]);
 }
 
 fn testTheme(arena: Allocator, paths: Paths, id: []const u8, key_a: []const u8, value_a: []const u8, key_b: []const u8, value_b: []const u8) !void {

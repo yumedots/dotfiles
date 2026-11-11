@@ -128,14 +128,14 @@ pub fn mcp(io: Io, args: []const []const u8) !void {
 
 pub fn plugin(io: Io, args: []const []const u8) !void {
 	if (args.len < 3) {
-		std.debug.print("usage: yudae plugin <list|build|load|unload|add|update|reload> [id|url]\n", .{});
+		std.debug.print("usage: yudae plugin <list|build|load|unload|theme|add|update|reload> [id|url]\n", .{});
 		std.process.exit(2);
 	}
 
 	const method = args[2];
 	const rest = args[3..];
 	const needs_id = std.mem.eql(u8, method, "build") or std.mem.eql(u8, method, "load") or
-		std.mem.eql(u8, method, "unload") or std.mem.eql(u8, method, "update");
+		std.mem.eql(u8, method, "unload") or std.mem.eql(u8, method, "update") or std.mem.eql(u8, method, "theme");
 
 	if (needs_id and rest.len == 0) {
 		std.debug.print("usage: yudae plugin {s} <id>\n", .{method});
@@ -389,6 +389,9 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 			try writeRawField(writer, &wrote, "gl", "true");
 		} else if (std.mem.eql(u8, arg, "--human")) {
 			try writeRawField(writer, &wrote, "human", "true");
+		} else if (std.mem.eql(u8, arg, "--hold") and index + 1 < rest.len) {
+			index += 1;
+			try writeRawField(writer, &wrote, "hold", rest[index]);
 		} else if (name.len == 0) {
 			name = arg;
 		} else {
