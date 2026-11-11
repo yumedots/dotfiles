@@ -5,6 +5,12 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/vm
 BASE=${DOTFILES_VM_BASE:-$HOME/.cache/dotfiles/vm-base}
 PKGSTORE=${DOTFILES_VM_PKGS:-$BASE/packages}
+ROOTFS=${DOTFILES_VM_ROOTFS:-$BASE/rootfs}
+ROOTFS_SHA=$BASE/rootfs.sha
+DISK_HEAD=$BASE/disk-head.img
+ROOT_UUID=28605d0a-df51-46ea-bfe7-e9e6d52fe390
+ROOT_IMG=${DOTFILES_VM_ROOT_IMG:-6G}
+DISK_SIZE=${DOTFILES_VM_DISK_SIZE:-7G}
 RUNS=${DOTFILES_VM_RUNS:-$ROOT/vm/runs}
 
 CLOUD_NAME=Arch-Linux-x86_64-cloudimg-20261101.620452.qcow2
@@ -48,14 +54,27 @@ speed_pick() {
 	echo "$best"
 }
 
+cloud_mark() {
+	{ stat -c '%s %Y' "$CLOUD"; printf '%s\n' "$CLOUD_SHA"; } > "$BASE/cloud.stamp"
+}
+
 cmd_fetch() {
 	mkdir -p "$BASE"
+	local mark=$BASE/cloud.stamp
+	if [ -f "$CLOUD" ] && [ -f "$mark" ] &&
+		[ "$(head -1 "$mark")" = "$(stat -c '%s %Y' "$CLOUD")" ] &&
+		[ "$(tail -1 "$mark")" = "$CLOUD_SHA" ]; then
+		echo "cloud image cached $CLOUD"
+		return
+	fi
 	if [ -f "$CLOUD" ] && [ "$(sha256sum "$CLOUD" | cut -d' ' -f1)" = "$CLOUD_SHA" ]; then
+		cloud_mark
 		echo "cloud image cached $CLOUD"
 		return
 	fi
 	if [ -f "$CACHE/$CLOUD_NAME" ] && [ "$(sha256sum "$CACHE/$CLOUD_NAME" | cut -d' ' -f1)" = "$CLOUD_SHA" ]; then
 		cp --reflink=auto "$CACHE/$CLOUD_NAME" "$CLOUD"
+		cloud_mark
 		echo "cloud image promoted $CLOUD"
 		return
 	fi
@@ -65,6 +84,7 @@ cmd_fetch() {
 	curl -fL --retry 3 --progress-bar -o "$CLOUD.part" "$url"
 	echo "$CLOUD_SHA  $CLOUD.part" | sha256sum -c -
 	mv "$CLOUD.part" "$CLOUD"
+	cloud_mark
 }
 
 provision_script() {
@@ -177,6 +197,120 @@ packages_want() {
 	{ cat "$CACHE/seed/packages.txt" 2>/dev/null; printf '%s\n' "$ARCH_SNAPSHOT" "$CLOUD_NAME"; provision_script; delta_script; } | sha256sum | cut -d' ' -f1
 }
 
+userns_run() {
+	local uid gid ustart ucount gstart gcount
+	uid=$(id -u)
+	gid=$(id -g)
+	read -r ustart ucount < <(awk -F: -v u="$(id -un)" '$1 == u { print $2, $3; exit }' /etc/subuid)
+	read -r gstart gcount < <(awk -F: -v g="$(id -gn)" '$1 == g { print $2, $3; exit }' /etc/subgid)
+	[ -n "$ustart" ] && [ -n "$gstart" ] || return 1
+	unshare --user \
+		--map-users=0:$uid:1 --map-users=1:$ustart:$((ucount - 1)) \
+		--map-groups=0:$gid:1 --map-groups=1:$gstart:$((gcount - 1)) -- "$@"
+}
+
+build_dcopy() {
+	local bin=$BASE/dcopy
+	mkdir -p "$BASE"
+	if [ ! -x "$bin" ] || [ "$ROOT/vm/dcopy/main.go" -nt "$bin" ]; then
+		(cd "$ROOT/vm/dcopy" && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o "$bin" .) || return 1
+	fi
+}
+
+prefetch_rootfs() {
+	userns_run bash -c 'find "$1" -type f -print0 2>/dev/null | xargs -0 -P 8 cat >/dev/null 2>&1' _ "$ROOTFS"
+}
+
+make_disk_head() {
+	[ -f "$DISK_HEAD" ] && return 0
+	command -v sfdisk >/dev/null 2>&1 || return 1
+	[ -f "$CLOUD" ] || return 1
+	mkdir -p "$BASE"
+	local raw=$CACHE/cloud.raw
+	"$QEMU_IMG" convert -f qcow2 -O raw "$CLOUD" "$raw" || return 1
+	dd if="$raw" of="$DISK_HEAD" bs=512 count=618496 status=none || return 1
+	truncate -s "$DISK_SIZE" "$DISK_HEAD"
+	echo ', +' | sfdisk --force -N 3 "$DISK_HEAD" >/dev/null 2>&1 || return 1
+	rm -f "$raw"
+}
+
+export_rootfs() {
+	[ -d "$ROOTFS" ] && return 0
+	[ -f "$PACKAGES" ] || return 1
+	[ -f "$CACHE/direct/initramfs.img" ] || return 1
+	command -v mkfs.vfat mcopy zstd tar >/dev/null 2>&1 || return 1
+
+	local out=$CACHE/rootfs-export seed=$CACHE/rootfs-seed.img tar=$CACHE/rootfs-export/rootfs.tar.zst src=$CACHE/rootfs-src.qcow2
+	rm -rf "$out"; mkdir -p "$out"
+	rm -f "$seed" "$tar" "$src"
+	truncate -s 16M "$seed"
+	mkfs.vfat -n cidata "$seed" >/dev/null 2>&1
+	cat > "$out/boot.sh" <<'BOOT'
+#!/bin/bash
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+mkdir -p /mnt/hostpkg
+mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
+tar -C / --one-file-system --xattrs --acls --numeric-owner 	--exclude=./proc --exclude=./sys --exclude=./dev --exclude=./run 	--exclude=./tmp --exclude=./mnt --exclude=./swap --exclude=./var/cache/pacman/pkg 	-cpf - . | zstd -q -T0 -3 -o /mnt/hostpkg/rootfs.tar.zst
+poweroff -f
+BOOT
+	cat > "$out/provision.service" <<'UNIT'
+[Unit]
+Description=dotfiles rootfs export
+After=local-fs.target
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /mnt/seed/boot.sh
+StandardOutput=journal+console
+StandardError=journal+console
+[Install]
+WantedBy=provision.target
+UNIT
+	cat > "$out/provision.target" <<'UNIT'
+[Unit]
+Description=dotfiles rootfs export
+Requires=provision.service
+After=provision.service
+UNIT
+	mcopy -i "$seed" "$out/boot.sh" ::boot.sh
+	mcopy -i "$seed" "$out/provision.service" ::provision.service
+	mcopy -i "$seed" "$out/provision.target" ::provision.target
+	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -b "$PACKAGES" -F qcow2 "$src" >/dev/null
+	timeout 600 "$QEMU" -name dotfiles-rootfs -machine q35,accel=kvm -cpu host -smp "$(nproc)" -m 8G \
+		-kernel "$(cat "$CACHE/direct/kernel")" -initrd "$CACHE/direct/initramfs.img" \
+		-append "console=ttyS0 root=/dev/vda3 rw systemd.unit=provision.target" \
+		-drive "file=$src,if=virtio,format=qcow2,cache=unsafe" \
+		-drive "file=$seed,if=virtio,format=raw,readonly=on" \
+		-virtfs "local,path=$out,mount_tag=hostpkg,security_model=none" \
+		-device virtio-rng-pci -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
+		-display none -serial "file:$CACHE/rootfs-export.log" -no-reboot || true
+	[ -f "$tar" ] || return 1
+	mkdir -p "$ROOTFS"
+	userns_run tar --zstd -xpf "$tar" -C "$ROOTFS" --numeric-owner --xattrs --acls || return 1
+	printf '%s\n' "$(packages_want)" > "$ROOTFS_SHA"
+	rm -rf "$out" "$seed" "$tar" "$src"
+}
+
+materialize_packages() {
+	[ -d "$ROOTFS" ] || return 1
+	[ -f "$ROOTFS_SHA" ] || return 1
+	make_disk_head || return 1
+	command -v mkfs.btrfs >/dev/null 2>&1 || return 1
+	command -v go >/dev/null 2>&1 || return 1
+
+	local raw=$CACHE/packages.raw image=$CACHE/root.btrfs
+	mkdir -p "$CACHE"
+	cp --reflink=auto "$DISK_HEAD" "$raw"
+	rm -f "$image"
+	truncate -s "$ROOT_IMG" "$image"
+	prefetch_rootfs || true
+	userns_run mkfs.btrfs -q -m single -d single -K --nodesize 4096 --csum xxhash \
+		-O ^free-space-tree,^block-group-tree -r "$ROOTFS" -U "$ROOT_UUID" -L root "$image" || return 1
+	build_dcopy || return 1
+	"$BASE/dcopy" "$image" "$raw" $((302 * 1024 * 1024)) || return 1
+	rm -f "$image" "$PACKAGES"
+	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$raw" "$PACKAGES" >/dev/null
+}
+
 cmd_packages() {
 	mkdir -p "$CACHE/seed"
 	local source=${DOTFILES_VM_PACKAGES:-}
@@ -199,7 +333,17 @@ cmd_packages() {
 		exit 1
 	fi
 
-	if [ -z "$ARCH_SNAPSHOT" ] && [ -f "$BASE/packages.qcow2" ] && [ -f "$BASE/packages.sha" ] && [ -f "$BASE/cloud.qcow2" ] && [ "$(cat "$BASE/packages.sha")" = "$current" ]; then
+	if [ -z "$ARCH_SNAPSHOT" ] && [ -d "$ROOTFS" ] && [ -f "$ROOTFS_SHA" ] && [ "$(cat "$ROOTFS_SHA")" = "$current" ]; then
+		if materialize_packages; then
+			rm -f "$GOLDEN" "$CACHE/golden.sha"
+			printf '%s\n' "$current" > "$stamp"
+			echo "packages layer materialized $PACKAGES"
+			return
+		fi
+		echo "materialize failed, falling back to pacman" >&2
+	fi
+
+	if [ "$FORCE" -eq 0 ] && [ -z "$ARCH_SNAPSHOT" ] && [ -f "$BASE/packages.qcow2" ] && [ -f "$BASE/packages.sha" ] && [ -f "$BASE/cloud.qcow2" ] && [ "$(cat "$BASE/packages.sha")" = "$current" ]; then
 		mkdir -p "$CACHE"
 		cp --reflink=auto "$BASE/packages.qcow2" "$PACKAGES"
 		rm -f "$GOLDEN" "$CACHE/golden.sha"
@@ -266,6 +410,7 @@ cmd_packages() {
 		mkdir -p "$BASE"
 		cp --reflink=auto "$PACKAGES" "$BASE/packages.qcow2"
 		cp "$stamp" "$BASE/packages.sha"
+		export_rootfs || echo "rootfs export skipped" >&2
 	fi
 }
 
