@@ -482,6 +482,17 @@ pub const Plugins = struct {
 		}
 
 		std.mem.sort(ThemeRow, found.items, {}, themeBefore);
+
+		var any = false;
+		for (found.items) |row| {
+			if (row.active) any = true;
+		}
+		if (!any) {
+			for (found.items) |*row| {
+				if (std.mem.eql(u8, row.id, "gray")) row.active = true;
+			}
+		}
+
 		return found.items;
 	}
 
