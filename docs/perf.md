@@ -88,8 +88,6 @@ The native viewer does receive 150 `UpdateDMABUF` frames/s on the animation, so 
 
 Venus was tried as the virgl alpha fix. QEMU ran with `virtio-gpu-gl-pci,blob=on,hostmem=2G,venus=on`; the guest installed `vulkan-virtio`. `vulkaninfo` sees `Virtio-GPU Venus (NVIDIA GeForce RTX 3070)` and `VK_KHR_wayland_surface`, but windowed use is broken on this host: `vkcube` selects the Wayland WSI and dumps core, and zink fails with `ZINK: failed to choose pdev` on every window surface, falling back to llvmpipe. `eglinfo -p wayland` sees zink only through the EGL device path, not a window. QEMU was reverted to plain `virtio-gpu-gl-pci`. Proof: `vm/runs/demo/proof/venus-vkcube.log`, `venus-gl-zink.txt`, `venus-gl-virgl.txt`.
 
-The virgl GL benchmark (`vm/bench/eglbench.c`, Wayland EGL, 1920x1080 FBO): heavy 240 frames 473-592 fps, draws 120 x 4096 47-51 fps (193k-208k draws/s). Host QEMU 20.9% CPU and 1.94GB RSS over 10s. A zink number is not comparable because windowed zink fell back to llvmpipe.
-
 ### Mesa fork attempt (2026-11-03)
 
 Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out of its dmabuf feedback because the virtio-gpu primary plane is XR24-only. `quirks:skip_non_kms_dmabuf_formats = false` makes Hyprland advertise non-KMS formats too; the system Mesa then exposes 25 ARGB8888 configs with alpha 8, and the guest launcher shows the wallpaper behind it. No Mesa or Hyprland fork is needed. Proof: `vm/runs/demo/proof/launcher-alpha-hyprland-quirk.png`. The local Mesa fork was deleted.
@@ -100,27 +98,6 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 - P3: host and guest both use `/home/gabriel/Documents/Wallpaper/wallhaven-0p2em3_2560x1440.png`; guest `awww query` reports the same image.
 - P4: 676 host font families against 642 guest; the missing ones are CachyOS extras (Arabic/Syriac PCF), no guest-only families. The shell font `GoogleSansCode Nerd Font` resolves in both. Icon themes are the same 8; host has one extra `cachyos.svg` icon, not a theme. `breeze_cursors` is present in both.
 - P5: fixed by the Hyprland non-KMS quirk; see the proof above.
-
-### vm/compare
-
-`vm/compare` captures host and viewer-fullscreen at 2560x1440 for 8 scenes, masks the dynamic bar regions (workspaces, clock, stats) and reports ImageMagick RMSE. Side-by-side PNGs are in `vm/runs/demo/compare/`.
-
-| scene | dimensions | masked RMSE |
-| --- | --- | --- |
-| idle | 2560x1440 | 1043.74 |
-| bar | 2560x1440 | 4852.83 |
-| launcher | 2560x1440 | 5152.76 |
-| launcher-fire | 2560x1440 | 7992.21 |
-| calendar | 2560x1440 | 5205.03 |
-| power | 2560x1440 | 1446.53 |
-| tiled | 2560x1440 | 6711.25 |
-| fullscreen | 2560x1440 | 3804.78 |
-
-Expected differences: `launcher-fire` shows host-only games in the guest query; calendar meters and the guest cursor differ; the tiled/fullscreen terminals are at different window positions. The images were inspected; these are not pixel-identical.
-
-### Input latency
-
-Key input measured with a guest evdev marker written to `/dev/ttyS0` and timestamped on the host: 20 samples, p50 **5.49ms**, p95 **16.00ms** (min 4.59, max 16.00). The marker path is viewer key -> guest evdev -> serial; it does not use guest wall-clock compared with host. Mouse latency was not captured because the virtio-tablet marker produced no samples in this run; mouse position mapping is proven separately.
 
 ### Clock
 
