@@ -151,8 +151,8 @@ QtObject {
 			space: () => target.applyCurrent(),
 			left: () => target.move(-1),
 			right: () => target.move(1),
-			up: () => target.move(-target.columns),
-			down: () => target.move(target.columns)
+			up: () => target.setRow(0),
+			down: () => target.setRow(1)
 		});
 	}
 

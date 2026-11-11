@@ -220,6 +220,11 @@ QtObject {
 
 	readonly property var notifications: root.snapshot.notifications || ({})
 	readonly property var plugins: root.snapshot.plugins ? (root.snapshot.plugins.list || []) : []
+	readonly property var themes: root.snapshot.plugins ? (root.snapshot.plugins.themes || []) : []
+
+	function setTheme(id) {
+		root.send({ call: { target: "plugins", method: "theme", args: { id: id } } });
+	}
 	readonly property var workspaces: root.snapshot.workspaces || ({})
 	readonly property var tray: root.snapshot.tray || []
 	readonly property var github: root.snapshot.github || ({})
