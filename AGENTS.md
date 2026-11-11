@@ -1,5 +1,7 @@
 # Rules
 
+- Every agent uses its own VM. `vm_create` with no name names it after the session; pass that name to every `vm_*` call. Never start, reuse, stop or destroy another agent's VM, including `ui`.
+
 Do not write comments in code
 Talk in an TLDR mode and explain in an simple TLDR with the less amount of words possible
 NEVER commit or run any git write command until the user explicitly says commit or anything similar, no commits on your own ever

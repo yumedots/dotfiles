@@ -40,7 +40,7 @@ Structured state first, pixels last:
 3. `vm_screenshot` - visuals only.
 4. `vm_wait` - QMP events, Hyprland events and the guest socket. No sleep loops, no screenshot spam.
 
-`vm_create` with no name uses the caller's session id as the VM name, so each agent session gets its own VM and a second create reuses it. Idle VMs step down hot to warm at 5 minutes, warm to parked at 15, parked to off at 60 with the disk kept. A VM idle past `YUDAE_VM_IDLE_DESTROY_MS` (default 24h, `0` disables) is destroyed with its disk; `destroyIdleMs` on create overrides it per VM. A scenario destroys its VM when it passes and keeps screenshots in `vm/runs/shots/<name>/`; `"keep": true` in the scenario context keeps the VM for debugging.
+`vm_create` with no name uses the caller's session id as the VM name, so each agent session gets its own VM and a second create reuses it. Never pass another agent's name or a shared name such as `ui`. Idle VMs step down hot to warm at 5 minutes, warm to parked at 15, parked to off at 60 with the disk kept. A VM idle past `YUDAE_VM_IDLE_DESTROY_MS` (default 24h, `0` disables) is destroyed with its disk; `destroyIdleMs` on create overrides it per VM. A scenario destroys its VM when it passes and keeps screenshots in `vm/runs/shots/<name>/`; `"keep": true` in the scenario context keeps the VM for debugging.
 
 `yudae vm scenario shell-ready` is the UI smoke: boot, Hyprland, Quickshell, screenshot.
 
