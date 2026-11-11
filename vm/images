@@ -90,6 +90,7 @@ fi
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
 cp /tmp/install.txt /opt/packages.installed
 fstrim -av >/dev/null 2>&1 || true
+bash /opt/golden-setup.sh
 touch /var/lib/dotfiles-provisioned
 echo "dotfiles: provision done"
 poweroff
@@ -134,6 +135,7 @@ fi
 orphans=$(pacman -Qtdq)
 [ -z "$orphans" ] || pacman -Rns --noconfirm $orphans >/dev/null 2>&1 || true
 cp /tmp/install.txt /opt/packages.installed
+bash /opt/golden-setup.sh
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
 fstrim -av >/dev/null 2>&1 || true
 echo "dotfiles: delta done"
@@ -146,6 +148,10 @@ vms_exist() {
 	find "$RUNS" -mindepth 2 -maxdepth 2 -name disk.qcow2 -print -quit 2>/dev/null | grep -q .
 }
 
+packages_want() {
+	{ cat "$CACHE/seed/packages.txt" 2>/dev/null; printf '%s\n' "$ARCH_SNAPSHOT" "$CLOUD_NAME"; provision_script; delta_script; } | sha256sum | cut -d' ' -f1
+}
+
 cmd_packages() {
 	mkdir -p "$CACHE/seed"
 	local source=${DOTFILES_VM_PACKAGES:-}
@@ -156,7 +162,7 @@ cmd_packages() {
 	fi
 
 	local stamp=$CACHE/packages.sha current delta=0
-	current=$( { cat "$CACHE/seed/packages.txt"; printf '%s\n' "$ARCH_SNAPSHOT" "$CLOUD_NAME"; provision_script; delta_script; } | sha256sum | cut -d' ' -f1)
+	current=$(packages_want)
 
 	if [ "$FORCE" -eq 0 ] && [ -f "$PACKAGES" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$current" ]; then
 		echo "packages layer cached $PACKAGES"
@@ -198,7 +204,7 @@ cmd_packages() {
 	run_packages_vm
 
 	if [ "$delta" -eq 1 ]; then
-		if ! grep -q 'dotfiles: delta done' "$LOG"; then
+		if ! grep -q 'dotfiles: delta done' "$LOG" || ! grep -q 'dotfiles-golden-ok' "$LOG"; then
 			"$QEMU_IMG" snapshot -a delta-backup "$PACKAGES" >/dev/null 2>&1 || true
 			"$QEMU_IMG" snapshot -d delta-backup "$PACKAGES" >/dev/null 2>&1 || true
 			echo "delta failed, packages rolled back, see $LOG" >&2
@@ -206,7 +212,7 @@ cmd_packages() {
 		fi
 		"$QEMU_IMG" snapshot -d delta-backup "$PACKAGES" >/dev/null 2>&1 || true
 	else
-		if ! grep -q 'dotfiles: provision done' "$LOG"; then
+		if ! grep -q 'dotfiles: provision done' "$LOG" || ! grep -q 'dotfiles-golden-ok' "$LOG"; then
 			rm -f "$PACKAGES"
 			echo "provision failed, see $LOG" >&2
 			exit 1
@@ -248,6 +254,18 @@ EOF
 		echo "    permissions: '0755'"
 		echo "    content: |"
 		sed 's/^/      /' "$CACHE/seed/provision.sh"
+		echo "  - path: /etc/systemd/system/yudae-desktop.service"
+		echo "    permissions: '0644'"
+		echo "    content: |"
+		desktop_unit | sed 's/^/      /'
+		echo "  - path: /etc/systemd/system/yudaemond.service"
+		echo "    permissions: '0644'"
+		echo "    content: |"
+		daemon_unit | sed 's/^/      /'
+		echo "  - path: /opt/golden-setup.sh"
+		echo "    permissions: '0755'"
+		echo "    content: |"
+		golden_setup | sed 's/^/      /'
 		echo "runcmd:"
 		echo "  - [ bash, /opt/provision.sh ]"
 	} > "$CACHE/seed/user-data"
@@ -293,90 +311,87 @@ compact_packages() {
 	fi
 }
 
-golden_user_data() {
-	cat <<'CLOUD'
-#cloud-config
-hostname: yudae-guest
-users:
-  - default
-  - name: gabriel
-    uid: 1000
-    groups: wheel,video,render,input
-    shell: /bin/bash
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    lock_passwd: true
-ssh_pwauth: false
-write_files:
-  - path: /etc/systemd/system/yudae-desktop.service
-    permissions: '0644'
-    content: |
-      [Unit]
-      Description=Hyprland desktop
-      After=yudaemond.service systemd-user-sessions.service
-      RequiresMountsFor=/home/gabriel/dotfiles
-      Conflicts=getty@tty1.service
+desktop_unit() {
+	cat <<'UNIT'
+[Unit]
+Description=Hyprland desktop
+After=yudaemond.service systemd-user-sessions.service
+RequiresMountsFor=/home/gabriel/dotfiles
+Conflicts=getty@tty1.service
 
-      [Service]
-      User=gabriel
-      PAMName=login
-      TTYPath=/dev/tty1
-      StandardInput=tty
-      StandardOutput=journal+console
-      Environment=HOME=/home/gabriel
-      Environment=XDG_RUNTIME_DIR=/run/user/1000
-      Environment=XDG_CONFIG_HOME=/home/gabriel/.config
-      Environment=XDG_SESSION_TYPE=wayland
-      Environment=XDG_CURRENT_DESKTOP=Hyprland
-      Environment=XDG_SESSION_DESKTOP=Hyprland
-      ExecStart=/usr/bin/start-hyprland
-      Restart=no
+[Service]
+User=gabriel
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=journal+console
+Environment=HOME=/home/gabriel
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=XDG_CONFIG_HOME=/home/gabriel/.config
+Environment=XDG_SESSION_TYPE=wayland
+Environment=XDG_CURRENT_DESKTOP=Hyprland
+Environment=XDG_SESSION_DESKTOP=Hyprland
+ExecStart=/usr/bin/start-hyprland
+Restart=no
 
-      [Install]
-      WantedBy=graphical.target
-  - path: /etc/systemd/system/yudaemond.service
-    permissions: '0644'
-    content: |
-      [Unit]
-      Description=yudaemond guest
-      After=local-fs.target user-runtime-dir@1000.service
-      Requires=user-runtime-dir@1000.service
-      RequiresMountsFor=/home/gabriel/dotfiles
+[Install]
+WantedBy=graphical.target
+UNIT
+}
 
-      [Service]
-      User=gabriel
-      Group=gabriel
-      Environment=HOME=/home/gabriel
-      Environment=XDG_RUNTIME_DIR=/run/user/1000
-      ExecStartPre=+/bin/sh -c "echo yudaemond-start > /dev/ttyS0"
-      ExecStart=/home/gabriel/dotfiles/daemon/zig-out/bin/yudaemond run
-      StandardOutput=journal+console
-      StandardError=journal+console
-      Restart=on-failure
-      RestartSec=2
+daemon_unit() {
+	cat <<'UNIT'
+[Unit]
+Description=yudaemond guest
+After=local-fs.target user-runtime-dir@1000.service
+Requires=user-runtime-dir@1000.service
+RequiresMountsFor=/home/gabriel/dotfiles
 
-      [Install]
-      WantedBy=multi-user.target
-runcmd:
-  - mkdir -p /home/gabriel/dotfiles /run/user/1000
-  - chown gabriel:gabriel /run/user/1000
-  - grep -q 'dotfiles /home/gabriel/dotfiles virtiofs' /etc/fstab || echo 'dotfiles /home/gabriel/dotfiles virtiofs ro,nofail,defaults 0 0' >> /etc/fstab
-  - mkdir -p /home/gabriel/.config
-  - ln -sfn /home/gabriel/dotfiles/hypr /home/gabriel/.config/hypr
-  - systemctl daemon-reload
-  - systemctl enable yudaemond yudae-desktop
-  - systemctl set-default graphical.target
-  - touch /var/lib/dotfiles-golden
-  - echo dotfiles-golden-ok > /dev/ttyS0
-  - poweroff
-CLOUD
+[Service]
+User=gabriel
+Group=gabriel
+Environment=HOME=/home/gabriel
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStartPre=+/bin/sh -c "echo yudaemond-start > /dev/ttyS0"
+ExecStart=/home/gabriel/dotfiles/daemon/zig-out/bin/yudaemond run
+StandardOutput=journal+console
+StandardError=journal+console
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+}
+
+golden_setup() {
+	cat <<'SETUP'
+#!/bin/bash
+mkdir -p /home/gabriel/dotfiles /run/user/1000
+chown gabriel:gabriel /run/user/1000
+grep -q 'dotfiles /home/gabriel/dotfiles virtiofs' /etc/fstab || echo 'dotfiles /home/gabriel/dotfiles virtiofs ro,nofail,defaults 0 0' >> /etc/fstab
+mkdir -p /home/gabriel/.config
+ln -sfn /home/gabriel/dotfiles/hypr /home/gabriel/.config/hypr
+systemctl daemon-reload
+systemctl enable yudaemond yudae-desktop
+systemctl set-default graphical.target
+touch /var/lib/dotfiles-golden
+echo dotfiles-golden-ok > /dev/ttyS0
+SETUP
 }
 
 cmd_golden() {
-	[ -f "$PACKAGES" ] || cmd_packages
-	mkdir -p "$CACHE"
+	if [ ! -f "$PACKAGES" ] || [ ! -f "$CACHE/packages.sha" ]; then
+		cmd_packages
+	fi
 
-	local stamp=$CACHE/golden.sha current
-	current=$( { cat "$CACHE/packages.sha" 2>/dev/null; golden_user_data; } | sha256sum | cut -d' ' -f1)
+	mkdir -p "$CACHE"
+	local stamp=$CACHE/golden.sha current want
+	want=$(packages_want)
+	if [ "$(cat "$CACHE/packages.sha" 2>/dev/null)" != "$want" ]; then
+		cmd_packages
+	fi
+	current=$(cat "$CACHE/packages.sha")
 
 	if [ "$FORCE" -eq 0 ] && [ -f "$GOLDEN" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$current" ]; then
 		echo "golden layer cached $GOLDEN"
@@ -390,53 +405,6 @@ cmd_golden() {
 
 	rm -f "$GOLDEN"
 	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F qcow2 -b "$PACKAGES" "$GOLDEN" 32G
-
-	mkdir -p "$CACHE/golden"
-	golden_user_data > "$CACHE/golden/user-data"
-	cat > "$CACHE/golden/meta-data" <<EOF
-instance-id: dotfiles-golden
-local-hostname: yudae-guest
-EOF
-	rm -f "$CACHE/golden.seed"
-	truncate -s 16M "$CACHE/golden.seed"
-	mkfs.vfat -n cidata "$CACHE/golden.seed" >/dev/null
-	mcopy -i "$CACHE/golden.seed" "$CACHE/golden/user-data" ::user-data
-	mcopy -i "$CACHE/golden.seed" "$CACHE/golden/meta-data" ::meta-data
-
-	local vfs=$CACHE/virtiofsd.sock
-	rm -f "$vfs"
-	/usr/lib/virtiofsd --socket-path="$vfs" --shared-dir="$ROOT" --readonly --cache=never &
-	local vfs_pid=$!
-	trap 'kill "$vfs_pid" 2>/dev/null || true' EXIT
-	for _ in $(seq 1 50); do [ -S "$vfs" ] && break; sleep 0.1; done
-
-	: > "$CACHE/golden.log"
-	timeout 600 "$QEMU" \
-		-name dotfiles-golden \
-		-machine q35,accel=kvm \
-		-cpu host \
-		-smp "$(nproc)" \
-		-m 8G \
-		-drive "file=$GOLDEN,if=virtio,format=qcow2,cache=unsafe" \
-		-drive "file=$CACHE/golden.seed,if=virtio,format=raw,readonly=on" \
-		-object "memory-backend-memfd,id=mem,size=8G,share=on" \
-		-numa "node,memdev=mem" \
-		-device virtio-rng-pci \
-		-netdev user,id=net0 \
-		-device virtio-net-pci,netdev=net0 \
-		-display none \
-		-serial "file:$CACHE/golden.log" \
-		-no-reboot
-
-	kill "$vfs_pid" 2>/dev/null || true
-	trap - EXIT
-
-	if ! grep -q "dotfiles-golden-ok" "$CACHE/golden.log"; then
-		rm -f "$GOLDEN"
-		echo "golden boot failed, see $CACHE/golden.log" >&2
-		exit 1
-	fi
-
 	printf '%s\n' "$current" > "$stamp"
 	echo "golden layer ready $GOLDEN"
 }

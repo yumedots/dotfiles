@@ -108,6 +108,9 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 | before | 4m29s | 49s | 5m18s |
 | after | 3m41s | 49s | 4m32s |
 | trimmed | 2m58s | 49s | 3m47s |
+| folded | 2m44s | 0.09s | 2m44s |
+
+The folded run makes the packages image bootable: the same provisioning boot writes the user units, fstab, enables them and sets the graphical target. `golden` is now an empty qcow2 overlay on packages, so it costs 0.09s instead of a second boot.
 
 The trimmed run excludes firmware, QEMU, virtiofsd, VLC, tesseract, Firefox, qBittorrent, Prism Launcher, Rust, Zig, Clang, LLVM, CMake, Ninja, Docker, Podman, libvirt and the existing CachyOS/NVIDIA/Steam-only packages. It keeps gcc, make and pkg-config for plugin builds. The package layer drops from 6.5G to 4.2G and the guest has 946 packages instead of 1011; the shell, Hyprland and a scenario screenshot were verified on it. Its 1m20s fetch was a one-time cloud image download and is not in the total.
 
@@ -115,7 +118,7 @@ The second optimized run took 4m54s, so network variance is about 20s. Changes: 
 
 `packages` and `golden` skip when their stamp still matches the host package list and user data (`packages.sha`, `golden.sha` in the cache); `--force` rebuilds. A cached `packages` is 0.3s, a cached `golden` is 0.01s. Both refuse to rebuild while any `vm/runs/*/disk.qcow2` exists, because that disk chain backs onto the layer being replaced; destroy those VMs first.
 
-When the list changed, `packages` boots the existing layer and applies only the delta: installs the new explicit packages, removes packages dropped from the list, prunes orphans, clears the cache and runs `fstrim`. A qcow2 snapshot rolls back a failed or interrupted delta; the VM has a 20 minute watchdog. Above `DOTFILES_VM_PACKAGES_CAP_MB` (default 8192) the layer is rewritten with `qemu-img convert`. Measured on the isolated cache: full 2m54s, add one package 58s, remove it 57s, compaction 1m01s, golden 49s. `DOTFILES_VM_PACKAGES` points at a package list file instead of `pacman -Qqen`, for tests.
+When the list changed, `packages` boots the existing layer and applies only the delta: installs the new explicit packages, removes packages dropped from the list, prunes orphans, clears the cache and runs `fstrim`. A qcow2 snapshot rolls back a failed or interrupted delta; the VM has a 20 minute watchdog. Above `DOTFILES_VM_PACKAGES_CAP_MB` (default 8192) the layer is rewritten with `qemu-img convert`. Measured on the isolated cache: full 2m44s, add one package 58s, remove it 57s, compaction 1m01s, golden 0.09s. `DOTFILES_VM_PACKAGES` points at a package list file instead of `pacman -Qqen`, for tests.
 
 ### Clock
 
