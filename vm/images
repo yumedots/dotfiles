@@ -82,9 +82,30 @@ pacman -Sy --noconfirm >/dev/null 2>&1
 vm_exclude='@EXCLUDE@'
 grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
-pacman -Spu --needed --noconfirm $(cat /tmp/install.txt) 2>/dev/null | grep '^http' > /tmp/urls.txt || true
+{ pacman -Sp --needed --noconfirm $(cat /tmp/install.txt); pacman -Spu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt); } 2>/dev/null | grep '^http' | sort -u > /tmp/urls.txt || true
 cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
-pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
+if command -v bsdtar >/dev/null 2>&1 && pacman -Syuw --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) > /tmp/pacman-fetch.log 2>&1; then
+	grep '^http' /tmp/urls.txt | sed 's#.*/##' | sort -u > /tmp/files.txt
+	if [ -s /tmp/files.txt ]; then
+		cat /tmp/files.txt | xargs -P 16 -I{} sh -c 'bsdtar --zstd -xpf "/var/cache/pacman/pkg/$1" -C / --exclude=".PKGINFO" --exclude=".MTREE" --exclude=".INSTALL"' _ {} 2>/tmp/extract.log
+		sed 's#^#/var/cache/pacman/pkg/#' /tmp/files.txt | xargs pacman -U --dbonly --needed --noconfirm 2>&1 | tee /tmp/pacman.log
+		ldconfig >/dev/null 2>&1 || true
+		systemctl daemon-reload >/dev/null 2>&1 || true
+		systemd-sysusers >/dev/null 2>&1 || true
+		systemd-tmpfiles --create >/dev/null 2>&1 || true
+		fc-cache -f >/dev/null 2>&1 || true
+		glib-compile-schemas /usr/share/glib-2.0/schemas >/dev/null 2>&1 || true
+		update-desktop-database -q >/dev/null 2>&1 || true
+	else
+		echo "dotfiles: fast unavailable"
+		cat /tmp/pacman-fetch.log 2>/dev/null | tail -3
+		pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
+	fi
+else
+	echo "dotfiles: fast unavailable"
+	cat /tmp/pacman-fetch.log 2>/dev/null | tail -3
+	pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
+fi
 if grep -q 'failed to commit transaction' /tmp/pacman.log; then
 	grep 'signature from' /tmp/pacman.log | sed 's/^error: //; s/:.*//' | while read -r name; do
 		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
@@ -128,7 +149,7 @@ pacman -Sy --noconfirm >/dev/null 2>&1
 vm_exclude='@EXCLUDE@'
 grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
-pacman -Spu --needed --noconfirm $(cat /tmp/install.txt) 2>/dev/null | grep '^http' > /tmp/urls.txt || true
+{ pacman -Sp --needed --noconfirm $(cat /tmp/install.txt); pacman -Spu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt); } 2>/dev/null | grep '^http' | sort -u > /tmp/urls.txt || true
 cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
 if [ -f /opt/packages.installed ]; then
 	sort -u /opt/packages.installed > /tmp/old.txt
@@ -322,9 +343,6 @@ partx -u /dev/vda >/dev/null 2>&1 || true
 btrfs filesystem resize max / >/dev/null 2>&1 || true
 hostname yudae-guest 2>/dev/null || true
 printf 'yudae-guest\n' > /etc/hostname
-id -u gabriel >/dev/null 2>&1 || useradd -m -u 1000 -G wheel,video,render,input -s /bin/bash gabriel
-printf 'gabriel ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/gabriel
-chmod 440 /etc/sudoers.d/gabriel
 if [ -d /mnt/hostpkg/gnupg ]; then
 	mkdir -p /etc/pacman.d/gnupg
 	cp -a /mnt/hostpkg/gnupg/. /etc/pacman.d/gnupg/ 2>/dev/null || true
@@ -525,6 +543,10 @@ UNIT
 golden_setup() {
 	cat <<'SETUP'
 #!/bin/bash
+id -u gabriel >/dev/null 2>&1 || useradd -m -u 1000 -G wheel,video,render,input -s /bin/bash gabriel
+mkdir -p /etc/sudoers.d
+printf 'gabriel ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/gabriel
+chmod 440 /etc/sudoers.d/gabriel
 mkdir -p /home/gabriel/dotfiles /run/user/1000
 chown gabriel:gabriel /run/user/1000
 grep -q 'dotfiles /home/gabriel/dotfiles virtiofs' /etc/fstab || echo 'dotfiles /home/gabriel/dotfiles virtiofs ro,nofail,defaults 0 0' >> /etc/fstab
