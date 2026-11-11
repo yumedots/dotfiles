@@ -60,6 +60,8 @@ pub const ThemeRow = struct {
 	surface: []const u8,
 	foreground: []const u8,
 	accents: []const []const u8,
+	cover: []const u8,
+	background: []const u8,
 };
 
 const accent_keys = [_][]const u8{ "borderFallbackColor", "cpuBase", "memoryBase", "weatherBase", "yellow", "red" };
@@ -477,6 +479,8 @@ pub const Plugins = struct {
 					.surface = themeColor(cfg, "surface"),
 					.foreground = themeColor(cfg, "foreground"),
 					.accents = accents.items,
+					.cover = self.themeFile(arena, dir, "cover"),
+					.background = self.themeFile(arena, dir, "wallpaper"),
 				}) catch {};
 			}
 		}
@@ -494,6 +498,39 @@ pub const Plugins = struct {
 		}
 
 		return found.items;
+	}
+
+	fn themeFile(self: *Plugins, arena: Allocator, dir: []const u8, stem: []const u8) []const u8 {
+		for ([_][]const u8{ ".webp", ".jpg", ".jpeg", ".png" }) |suffix| {
+			const name = std.fmt.allocPrint(arena, "{s}{s}", .{ stem, suffix }) catch continue;
+			const path = std.fmt.allocPrint(arena, "{s}/{s}", .{ dir, name }) catch continue;
+			if (pathExists(self.io, path)) return path;
+		}
+
+		if (!std.mem.eql(u8, stem, "cover")) return self.themeFile(arena, dir, "cover");
+
+		const root = std.fmt.allocPrint(arena, "{s}/backgrounds", .{dir}) catch return "";
+
+		if (std.Io.Dir.cwd().openDir(self.io, root, .{ .iterate = true })) |handle| {
+			var it = handle.iterate();
+			var best: []const u8 = "";
+
+			while (it.next(self.io) catch null) |entry| {
+				if (entry.kind != .file or !imageFile(entry.name)) continue;
+				if (best.len > 0 and std.mem.lessThan(u8, best, entry.name)) continue;
+				best = arena.dupe(u8, entry.name) catch continue;
+			}
+
+			handle.close(self.io);
+			if (best.len > 0) return std.fmt.allocPrint(arena, "{s}/{s}", .{ root, best }) catch "";
+		} else |_| {}
+
+		for ([_][]const u8{ "preview.png", "preview.jpg", "preview.webp" }) |name| {
+			const path = std.fmt.allocPrint(arena, "{s}/{s}", .{ dir, name }) catch continue;
+			if (pathExists(self.io, path)) return path;
+		}
+
+		return "";
 	}
 
 	fn setThemeLocked(self: *Plugins, id: []const u8) !void {
@@ -1195,6 +1232,11 @@ fn parseManifest(arena: Allocator, folder: []const u8, body: []const u8) !Manife
 		.provides = provides,
 		.hyprland = hyprland,
 	};
+}
+
+fn imageFile(name: []const u8) bool {
+	return std.mem.endsWith(u8, name, ".png") or std.mem.endsWith(u8, name, ".jpg") or
+		std.mem.endsWith(u8, name, ".jpeg") or std.mem.endsWith(u8, name, ".webp");
 }
 
 fn themeBefore(_: void, a: ThemeRow, b: ThemeRow) bool {
