@@ -387,6 +387,7 @@ ShellRoot {
 
 	WallpaperPicker {
 		id: wallpaperWindow
+		alwaysMapped: true
 	}
 
 	PluginHost {
