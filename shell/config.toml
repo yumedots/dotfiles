@@ -239,6 +239,7 @@ wallpaperPickerWidth = 1100
 wallpaperWatchMs = 300
 wallpaperPreviewRatio = 1.78
 wallpaperRowHeight = 230
+wallpaperRowMin = 115
 wallpaperSlimRatio = 0.42
 wallpaperNameSize = 13
 themeEmpty = "No themes installed"

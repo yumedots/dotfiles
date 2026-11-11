@@ -38,7 +38,8 @@ PanelWindow {
 	readonly property real tileHeight: Config.wallpaperRowHeight
 	readonly property real wideWidth: Math.round(root.tileHeight * Config.wallpaperPreviewRatio)
 	readonly property real slimWidth: Math.round(root.tileHeight * Config.wallpaperSlimRatio)
-	readonly property real contentHeight: root.tileHeight
+	readonly property real rowMin: Config.wallpaperRowMin
+	readonly property real contentHeight: stage.implicitHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
 
 
@@ -223,6 +224,7 @@ PanelWindow {
 		root.moved = false;
 		root.highlightMs = 0;
 		root.instant = true;
+		root.refreshWallpapers();
 		root.syncSelection();
 		root.positionAll();
 		root.hideWindows();
@@ -313,21 +315,32 @@ PanelWindow {
 			Input.wallpaper(event, root);
 		}
 
-		Item {
+		Column {
 			id: stage
 
 			width: parent.width
-			height: root.tileHeight
+			spacing: 0
 
 			ListView {
 				id: looksStrip
 
-				anchors.fill: parent
+				width: parent.width
+				height: root.row === 0 ? root.tileHeight : root.rowMin
+				Behavior on height {
+					enabled: !root.instant
+
+					NumberAnimation {
+						duration: Config.wallpaperFadeMs
+						easing.type: Easing.OutCubic
+					}
+				}
+
+
 				orientation: ListView.Horizontal
 				clip: true
 				interactive: false
 				keyNavigationEnabled: false
-				spacing: Config.wallpaperTileGap
+				spacing: 0
 				model: root.looks
 				currentIndex: root.lookIndex
 				highlightRangeMode: ListView.StrictlyEnforceRange
@@ -335,8 +348,16 @@ PanelWindow {
 				preferredHighlightEnd: (looksStrip.width + root.wideWidth) / 2
 				highlightMoveDuration: root.highlightMs
 				cacheBuffer: root.wideWidth
-				opacity: root.row === 0 ? 1 : 0
-				visible: opacity > 0
+
+				header: Item {
+					width: Math.round((looksStrip.width - root.wideWidth) / 2)
+					height: 1
+				}
+
+				footer: Item {
+					width: Math.round((looksStrip.width - root.wideWidth) / 2)
+					height: 1
+				}
 
 				delegate: Item {
 					id: look
@@ -349,15 +370,6 @@ PanelWindow {
 					width: look.current ? root.wideWidth : root.slimWidth
 					height: looksStrip.height
 					clip: true
-
-					Behavior on width {
-						enabled: root.moved
-
-						NumberAnimation {
-							duration: Config.wallpaperFadeMs
-							easing.type: Easing.OutCubic
-						}
-					}
 
 					Rectangle {
 						anchors.fill: parent
@@ -393,6 +405,11 @@ PanelWindow {
 					Rectangle {
 						anchors.fill: parent
 						color: "transparent"
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						color: "transparent"
 						visible: root.row === 0
 						opacity: look.current ? 1 : 0
 						border.width: Config.wallpaperRingWidth
@@ -408,7 +425,7 @@ PanelWindow {
 					Rectangle {
 						anchors.right: parent.right
 						anchors.bottom: parent.bottom
-						visible: look.modelData.id === root.activeTheme
+						visible: look.modelData.id === (root.previewed ? root.originTheme : root.activeTheme)
 						width: Config.wallpaperMarkSize + 8
 						height: Config.wallpaperMarkSize + 8
 						color: look.modelData.surface || Config.surface
@@ -425,7 +442,11 @@ PanelWindow {
 						anchors.fill: parent
 
 						onClicked: {
-							root.row = 0;
+							if (root.row !== 0) {
+								root.row = 0;
+								return;
+							}
+
 							root.lookIndex = look.index;
 							root.applyCurrent();
 						}
@@ -456,12 +477,23 @@ PanelWindow {
 			ListView {
 				id: strip
 
-				anchors.fill: parent
+				width: parent.width
+				height: root.row === 1 ? root.tileHeight : root.rowMin
+				Behavior on height {
+					enabled: !root.instant
+
+					NumberAnimation {
+						duration: Config.wallpaperFadeMs
+						easing.type: Easing.OutCubic
+					}
+				}
+
+
 				orientation: ListView.Horizontal
 				clip: true
 				interactive: false
 				keyNavigationEnabled: false
-				spacing: Config.wallpaperTileGap
+				spacing: 0
 				model: root.wallpapers
 				currentIndex: root.currentIndex
 				highlightRangeMode: ListView.StrictlyEnforceRange
@@ -469,8 +501,16 @@ PanelWindow {
 				preferredHighlightEnd: (strip.width + root.wideWidth) / 2
 				highlightMoveDuration: root.highlightMs
 				cacheBuffer: root.wideWidth
-				opacity: root.row === 1 ? 1 : 0
-				visible: opacity > 0
+
+				header: Item {
+					width: Math.round((strip.width - root.wideWidth) / 2)
+					height: 1
+				}
+
+				footer: Item {
+					width: Math.round((strip.width - root.wideWidth) / 2)
+					height: 1
+				}
 
 				delegate: Item {
 					id: cell
@@ -480,20 +520,11 @@ PanelWindow {
 
 					readonly property bool current: cell.index === root.currentIndex
 					readonly property bool near: Math.abs(cell.index - root.currentIndex) <= 2
-					readonly property bool applied: cell.modelData.path === root.activeWallpaper
+					readonly property bool applied: cell.modelData.path === (root.previewed ? root.originWallpaper : root.activeWallpaper)
 
 					width: cell.current ? root.wideWidth : root.slimWidth
 					height: strip.height
 					clip: true
-
-					Behavior on width {
-						enabled: root.moved
-
-						NumberAnimation {
-							duration: Config.wallpaperFadeMs
-							easing.type: Easing.OutCubic
-						}
-					}
 
 					Rectangle {
 						anchors.fill: parent
@@ -545,6 +576,11 @@ PanelWindow {
 					Rectangle {
 						anchors.fill: parent
 						color: "transparent"
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						color: "transparent"
 						visible: root.row === 1
 						opacity: cell.current ? 1 : 0
 						border.width: Config.wallpaperRingWidth
@@ -576,7 +612,11 @@ PanelWindow {
 						anchors.fill: parent
 
 						onClicked: {
-							root.row = 1;
+							if (root.row !== 1) {
+								root.row = 1;
+								return;
+							}
+
 							root.currentIndex = cell.index;
 							root.applyCurrent();
 						}
@@ -607,12 +647,23 @@ PanelWindow {
 			ListView {
 				id: themeStrip
 
-				anchors.fill: parent
+				width: parent.width
+				height: root.row === 2 ? root.tileHeight : root.rowMin
+				Behavior on height {
+					enabled: !root.instant
+
+					NumberAnimation {
+						duration: Config.wallpaperFadeMs
+						easing.type: Easing.OutCubic
+					}
+				}
+
+
 				orientation: ListView.Horizontal
 				clip: true
 				interactive: false
 				keyNavigationEnabled: false
-				spacing: Config.wallpaperTileGap
+				spacing: 0
 				model: root.themes
 				currentIndex: root.themeIndex
 				highlightRangeMode: ListView.StrictlyEnforceRange
@@ -620,8 +671,16 @@ PanelWindow {
 				preferredHighlightEnd: (themeStrip.width + root.wideWidth) / 2
 				highlightMoveDuration: root.highlightMs
 				cacheBuffer: root.wideWidth
-				opacity: root.row === 2 ? 1 : 0
-				visible: opacity > 0
+
+				header: Item {
+					width: Math.round((themeStrip.width - root.wideWidth) / 2)
+					height: 1
+				}
+
+				footer: Item {
+					width: Math.round((themeStrip.width - root.wideWidth) / 2)
+					height: 1
+				}
 
 				delegate: Item {
 					id: chip
@@ -634,15 +693,6 @@ PanelWindow {
 					width: chip.current ? root.wideWidth : root.slimWidth
 					height: themeStrip.height
 					clip: true
-
-					Behavior on width {
-						enabled: root.moved
-
-						NumberAnimation {
-							duration: Config.wallpaperFadeMs
-							easing.type: Easing.OutCubic
-						}
-					}
 
 					Rectangle {
 						anchors.fill: parent
@@ -669,7 +719,7 @@ PanelWindow {
 							font.pixelSize: Config.themeNameSize
 							color: chip.modelData.foreground || Config.foreground
 							text: chip.modelData.id
-							opacity: chip.current ? 1 : 0
+							opacity: chip.current && root.row === 2 ? 1 : 0
 
 							Behavior on opacity {
 								NumberAnimation {
@@ -703,6 +753,11 @@ PanelWindow {
 					Rectangle {
 						anchors.fill: parent
 						color: "transparent"
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						color: "transparent"
 						visible: root.row === 2
 						opacity: chip.current ? 1 : 0
 						border.width: Config.wallpaperRingWidth
@@ -718,7 +773,7 @@ PanelWindow {
 					Rectangle {
 						anchors.right: parent.right
 						anchors.bottom: parent.bottom
-						visible: chip.modelData.id === root.activeTheme
+						visible: chip.modelData.id === (root.previewed ? root.originTheme : root.activeTheme)
 						width: Config.wallpaperMarkSize + 8
 						height: Config.wallpaperMarkSize + 8
 						color: chip.modelData.foreground || Config.foreground
@@ -735,7 +790,11 @@ PanelWindow {
 						anchors.fill: parent
 
 						onClicked: {
-							root.row = 2;
+							if (root.row !== 2) {
+								root.row = 2;
+								return;
+							}
+
 							root.themeIndex = chip.index;
 							root.applyCurrent();
 						}

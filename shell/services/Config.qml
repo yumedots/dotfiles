@@ -256,6 +256,7 @@ QtObject {
 	readonly property var wallpaperPickerWidth: settings.wallpaperPickerWidth !== undefined ? settings.wallpaperPickerWidth : 1100
 	readonly property var wallpaperPreviewRatio: settings.wallpaperPreviewRatio !== undefined ? settings.wallpaperPreviewRatio : 1.78
 	readonly property var wallpaperRowHeight: settings.wallpaperRowHeight !== undefined ? settings.wallpaperRowHeight : 230
+	readonly property var wallpaperRowMin: settings.wallpaperRowMin !== undefined ? settings.wallpaperRowMin : 115
 	readonly property var wallpaperSlimRatio: settings.wallpaperSlimRatio !== undefined ? settings.wallpaperSlimRatio : 0.42
 	readonly property var wallpaperNameSize: settings.wallpaperNameSize !== undefined ? settings.wallpaperNameSize : 13
 	readonly property var themeNameSize: settings.themeNameSize !== undefined ? settings.themeNameSize : 24
