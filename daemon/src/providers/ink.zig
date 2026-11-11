@@ -184,7 +184,7 @@ pub const Ink = struct {
 		}
 	}
 
-	pub fn apply(self: *Ink, path: []const u8, band: i64) void {
+	pub fn apply(self: *Ink, path: []const u8, band: i64, fade: bool) void {
 		if (path.len == 0) return;
 
 		self.mutex.lockUncancelable(self.io);
@@ -194,7 +194,7 @@ pub const Ink = struct {
 
 		if (changed) self.persist();
 
-		self.sync(path);
+		self.sync(path, fade);
 	}
 
 	fn reapply(self: *Ink) void {
@@ -204,15 +204,15 @@ pub const Ink = struct {
 		defer arena.deinit();
 
 		const path = source.activePath(arena.allocator()) orelse return;
-		self.sync(path);
+		self.sync(path, true);
 	}
 
-	fn sync(self: *Ink, path: []const u8) void {
+	fn sync(self: *Ink, path: []const u8, fade: bool) void {
 		const expected = self.switchColour(path);
 		const copy = self.allocator.dupe(u8, path) catch return;
 		const generation = self.generation.fetchAdd(1, .monotonic) + 1;
 
-		const thread = std.Thread.spawn(.{}, show, .{ self, copy, expected, generation }) catch {
+		const thread = std.Thread.spawn(.{}, show, .{ self, copy, expected, generation, fade }) catch {
 			self.allocator.free(copy);
 			return;
 		};
@@ -220,7 +220,7 @@ pub const Ink = struct {
 		thread.detach();
 	}
 
-	fn show(self: *Ink, path: []u8, expected: []const u8, generation: u64) void {
+	fn show(self: *Ink, path: []u8, expected: []const u8, generation: u64, fade: bool) void {
 		defer self.allocator.free(path);
 
 		// one wallpaper transition at a time: overlapping `awww img` runs finish out of order
@@ -241,7 +241,11 @@ pub const Ink = struct {
 
 		var argv: std.ArrayListUnmanaged([]const u8) = .empty;
 
-		argv.appendSlice(allocator, &.{ "awww", "img", "--transition-type", "fade", "--transition-duration", "0.4", "--transition-fps", "60" }) catch return;
+		if (fade) {
+			argv.appendSlice(allocator, &.{ "awww", "img", "--transition-type", "fade", "--transition-duration", "0.4", "--transition-fps", "60" }) catch return;
+		} else {
+			argv.appendSlice(allocator, &.{ "awww", "img", "--transition-type", "none" }) catch return;
+		}
 
 		if (band > 0) {
 			const rows = std.fmt.allocPrint(allocator, "{d}", .{band}) catch return;

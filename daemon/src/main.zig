@@ -300,8 +300,9 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 			const band = json.integer(json.field(target, "band"));
 
 			if (path.len > 0) {
+				const fade = if (json.field(target, "fade")) |_| json.flag(target, "fade") else true;
 				context.wallpaper.save(path);
-				context.ink.apply(path, band);
+				context.ink.apply(path, band, fade);
 			}
 		}
 
