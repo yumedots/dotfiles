@@ -127,6 +127,8 @@ When the list changed, `packages` boots the existing layer and applies only the 
 
 A host-side build was measured and rejected: pacman inside `unshare -r` installed 150 host packages (953MB) in 2m24s, slower than the guest, and unprivileged `/proc` and `/dev` mounts are denied. A from-scratch build under 60s is not reachable with pacman; the 58s delta is the practical floor, and the 2m44s figure is only for `--force` or a cold cache.
 
+Direct kernel boot with a custom initramfs was also tried. It reaches the installer in 0.1s and completes the transaction, but pacman's scriptlets and first-boot setup assume systemd is PID 1; the resulting guest fails D-Bus, logind and the user session. It was reverted. Keeping systemd as PID 1 restores the boot cost; a Go or Zig init does not change that.
+
 ### Clock
 
 QEMU uses `-rtc base=utc,clock=host`, so the guest RTC is the host wall clock. `vm/desktop` runs `hwclock -s` at Hyprland start, applies the host timezone from `vm/hoststate/timezone`, then disables NTP. `setGuestMode` disables NTP too. Guest `NTP=no`, `systemd-timesyncd` inactive/disabled; guest and host wall clocks stay within the vsock measurement margin.
