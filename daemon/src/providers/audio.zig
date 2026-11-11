@@ -102,6 +102,7 @@ pub const Audio = struct {
 	watch: std.atomic.Value(bool) = .init(false),
 	tick: std.atomic.Value(u64) = .init(0),
 	dirty: std.atomic.Value(bool) = .init(true),
+	publish_wanted: std.atomic.Value(bool) = .init(false),
 	write_mutex: std.Io.Mutex = .init,
 	write_ready: std.Io.Condition = .init,
 	writes: [16]Write = undefined,
@@ -143,6 +144,23 @@ pub const Audio = struct {
 
 		const writer = try std.Thread.spawn(.{}, writeLoop, .{self});
 		writer.detach();
+
+		const publisher = try std.Thread.spawn(.{}, publishLoop, .{self});
+		publisher.detach();
+	}
+
+	fn publishLoop(self: *Audio) void {
+		while (true) {
+			sleep.ms(20);
+
+			if (!self.publish_wanted.swap(false, .monotonic)) continue;
+
+			self.hub.publish();
+		}
+	}
+
+	fn wakePublish(self: *Audio) void {
+		self.publish_wanted.store(true, .monotonic);
 	}
 
 	fn writeLoop(self: *Audio) void {
@@ -180,8 +198,6 @@ pub const Audio = struct {
 		if (exec.run(self.io, self.allocator, argv.items)) |result| {
 			result.deinit(self.allocator);
 		} else |_| {}
-
-		self.sampleSerial();
 	}
 
 	fn takeWrite(self: *Audio) ?Write {
@@ -569,18 +585,27 @@ pub const Audio = struct {
 	pub fn step(self: *Audio, delta: f64) void {
 		_ = self.tick.fetchAdd(1, .monotonic);
 
-		self.mutex.lockUncancelable(self.io);
+		const until = std.Io.Clock.real.now(self.io).toMilliseconds() + pending_ms;
+
 		var id: i64 = 0;
 		var level: f64 = 0;
-		for (self.nodes.items) |node| {
+
+		self.mutex.lockUncancelable(self.io);
+		for (self.nodes.items) |*node| {
 			if (node.id != self.sink) continue;
 
+			node.volume = std.math.clamp(node.volume + delta, 0, 1);
+			node.pending = node.volume;
+			node.pending_until = until;
 			id = node.id;
 			level = node.volume;
 		}
 		self.mutex.unlock(self.io);
 
-		if (id > 0) self.setVolume(id, std.math.clamp(level + delta, 0, 1));
+		if (id <= 0) return;
+
+		self.wakePublish();
+		self.queueWrite(.{ .id = id, .level = level, .kind = .volume });
 	}
 
 	pub fn setVolume(self: *Audio, id: i64, fraction: f64) void {
@@ -597,7 +622,7 @@ pub const Audio = struct {
 		}
 		self.mutex.unlock(self.io);
 
-		self.hub.publish();
+		self.wakePublish();
 		self.queueWrite(.{ .id = id, .level = level, .kind = .volume });
 	}
 

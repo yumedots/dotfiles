@@ -8,7 +8,7 @@ hl.config({ binds = { scroll_event_delay = 0 } })
 
 local function switcherOpen()
     for _, layer in ipairs(hl.get_layers({ namespace = "launcher" })) do
-        if layer.interactivity == 1 then return true end
+        if layer.keyboard_interactivity == 1 then return true end
     end
 
     return false
@@ -250,7 +250,7 @@ hl.bind(mainMod .. " + mouse_up", function()
     end
 end)
 
-hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
+local windowDrag = hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 hl.bind("PRINT",         hl.dsp.exec_cmd("~/.local/bin/snap"))
@@ -264,3 +264,9 @@ hl.bind("XF86AudioNext",  hl.dsp.global("quickshell:mediaNext"),      { locked =
 hl.bind("XF86AudioPause", hl.dsp.global("quickshell:mediaPlayPause"), { locked = true })
 hl.bind("XF86AudioPlay",  hl.dsp.global("quickshell:mediaPlayPause"), { locked = true })
 hl.bind("XF86AudioPrev",  hl.dsp.global("quickshell:mediaPrevious"),  { locked = true })
+
+return {
+    launcherDrag = function (open)
+        windowDrag:set_enabled(not open)
+    end,
+}
