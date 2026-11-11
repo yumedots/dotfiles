@@ -80,14 +80,22 @@ PanelWindow {
 	}
 
 	function place(x, y) {
-		root.placeX = Calc.clamp(x, 0, Math.max(0, root.width - card.width));
-		root.placeY = Calc.clamp(y, 0, Math.max(0, root.height - card.height));
+		if (root.configured && root.width > 1 && root.height > 1 && card.width > 0 && card.height > 0) {
+			root.placeX = Calc.clamp(x, 0, Math.max(0, root.width - card.width));
+			root.placeY = Calc.clamp(y, 0, Math.max(0, root.height - card.height));
+		} else {
+			root.placeX = x;
+			root.placeY = y;
+		}
+
 		root.placed = true;
 	}
 
 	function clampPlace() {
-		if (root.placed)
-			root.place(root.placeX, root.placeY);
+		if (!root.placed || root.width <= 1 || root.height <= 1 || card.width <= 0 || card.height <= 0)
+			return;
+
+		root.place(root.placeX, root.placeY);
 	}
 
 	function loadPlace(body) {
@@ -226,6 +234,10 @@ PanelWindow {
 		if (root.alwaysMapped)
 			root.push();
 	}
+
+	onWidthChanged: root.clampPlace()
+	onHeightChanged: root.clampPlace()
+	onConfiguredChanged: root.clampPlace()
 
 	Timer {
 		id: grabTimer
