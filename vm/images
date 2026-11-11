@@ -12,7 +12,7 @@ PACKAGES=$CACHE/packages.qcow2
 GOLDEN=$CACHE/golden.qcow2
 ARCH_SNAPSHOT=""
 FORCE=0
-VM_EXCLUDE='^(cachyos-|linux-cachyos|linux-firmware|qemu-|virtiofsd|firefox|qbittorrent|prismlauncher|vlc|tesseract|rust|zig|clang|llvm|cmake|ninja|intel-ucode|amd-ucode|sof-firmware|alsa-firmware|openstarbound|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl|libvirt|docker|podman|noto-fonts$|noto-fonts-cjk|awesome-terminal-fonts|cantarell-fonts|ttf-bitstream-vera|ttf-liberation|ttf-opensans|dolphin|nautilus|pavucontrol|bind$|dnsmasq|iwd|modemmanager|usb_modeswitch|xl2tpd|nfs-utils|ufw|layer-shell-qt|graphicsmagick|xdg-desktop-portal-gtk|xdg-desktop-portal-kde|polkit-kde-agent|polkit-gnome)|nvidia'
+VM_EXCLUDE='^(cachyos-|linux-cachyos|linux-firmware|qemu-|virtiofsd|firefox|qbittorrent|prismlauncher|vlc|tesseract|rust|zig|clang|llvm|cmake|ninja|intel-ucode|amd-ucode|sof-firmware|alsa-firmware|openstarbound|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl|libvirt|docker|podman|noto-fonts$|noto-fonts-cjk|awesome-terminal-fonts|cantarell-fonts|ttf-bitstream-vera|ttf-liberation|ttf-opensans|dolphin|nautilus|pavucontrol|bind$|dnsmasq|iwd|modemmanager|usb_modeswitch|xl2tpd|nfs-utils|ufw|layer-shell-qt|graphicsmagick|xdg-desktop-portal-gtk|xdg-desktop-portal-kde|polkit-kde-agent|polkit-gnome|gst-|ffmpeg|bluez|pipewire|wireplumber|alsa-|libpulse|networkmanager|wpa_supplicant|upower|power-profiles|flatpak|nodejs|npm|bun|python|texinfo|groff|man-db|man-pages|limine|plymouth|greetd|mesa-utils|vulkan|spice|usbredir|snapper|btrfs-assistant|mdadm|lvm2|dmraid|nfs-utils|xfsprogs|nilfs|jfs|f2fs|exfat|os-prober|efibootmgr|reflector|pkgfile|plocate|profile-sync|realtime-privileges|stress-ng|strace|smartmontools|sg3_utils|hdparm|dmidecode|cpupower|hwdetect|lsb-release|logrotate|which|wget|micro|lazygit|onefetch|fastfetch|btop|fd|ripgrep|fzf|zoxide|less|nano|vim|neovim|tmux|screen|htop|git|linux$|linux-headers|gdb|gtest|protobuf|abseil|re2|glib2-devel|autoconf|automake|libtool|m4|bison|flex|perl|texinfo|groff|man-db|man-pages|noto-fonts-emoji|mesa-utils|vulkan|qt6-translations)|nvidia'
 SEED=$CACHE/seed.img
 LOG=$CACHE/provision.log
 QEMU=$(command -v qemu-system-x86_64)
@@ -68,8 +68,10 @@ exec > >(tee /dev/console) 2>&1
 echo "dotfiles: provision start"
 @SNAPSHOT@
 sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 12/' /etc/pacman.conf
+sed -i 's|^#\?CacheDir.*|CacheDir = /var/cache/pacman/pkg /mnt/hostpkg|' /etc/pacman.conf
+grep -q '^CacheDir' /etc/pacman.conf || echo 'CacheDir = /var/cache/pacman/pkg /mnt/hostpkg' >> /etc/pacman.conf
 mkdir -p /mnt/hostpkg
-mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L,ro hostpkg /mnt/hostpkg
+mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
 mkdir -p /var/cache/pacman/pkg
 for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
 	[ -e "$pkg" ] || continue
@@ -80,13 +82,20 @@ pacman -Sy --noconfirm >/dev/null 2>&1
 vm_exclude='@EXCLUDE@'
 grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
-pacman -Syu --needed --noconfirm $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
+pacman -Spu --needed --noconfirm $(cat /tmp/install.txt) 2>/dev/null | grep '^http' > /tmp/urls.txt || true
+cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
+pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
 if grep -q 'failed to commit transaction' /tmp/pacman.log; then
 	grep 'signature from' /tmp/pacman.log | sed 's/^error: //; s/:.*//' | while read -r name; do
 		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
 	done
-	pacman -Syu --needed --noconfirm $(cat /tmp/install.txt)
+	pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt)
 fi
+for pkg in /var/cache/pacman/pkg/*.pkg.tar.zst; do
+	[ -f "$pkg" ] || continue
+	name=$(basename "$pkg")
+	[ -e "/mnt/hostpkg/$name" ] || cp "$pkg" "/mnt/hostpkg/$name" 2>/dev/null || true
+done
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
 cp /tmp/install.txt /opt/packages.installed
 fstrim -av >/dev/null 2>&1 || true
@@ -105,8 +114,10 @@ exec > >(tee /dev/console) 2>&1
 echo "dotfiles: delta start"
 @SNAPSHOT@
 sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 12/' /etc/pacman.conf
+sed -i 's|^#\?CacheDir.*|CacheDir = /var/cache/pacman/pkg /mnt/hostpkg|' /etc/pacman.conf
+grep -q '^CacheDir' /etc/pacman.conf || echo 'CacheDir = /var/cache/pacman/pkg /mnt/hostpkg' >> /etc/pacman.conf
 mkdir -p /mnt/hostpkg
-mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L,ro hostpkg /mnt/hostpkg
+mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
 mkdir -p /var/cache/pacman/pkg
 for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
 	[ -e "$pkg" ] || continue
@@ -117,6 +128,8 @@ pacman -Sy --noconfirm >/dev/null 2>&1
 vm_exclude='@EXCLUDE@'
 grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
+pacman -Spu --needed --noconfirm $(cat /tmp/install.txt) 2>/dev/null | grep '^http' > /tmp/urls.txt || true
+cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
 if [ -f /opt/packages.installed ]; then
 	sort -u /opt/packages.installed > /tmp/old.txt
 	sort -u /tmp/install.txt > /tmp/new.txt
@@ -125,17 +138,22 @@ if [ -f /opt/packages.installed ]; then
 		pacman -Rns --noconfirm $(cat /tmp/remove.txt) 2>&1 | tee /tmp/pacman-remove.log || pacman -R --noconfirm $(cat /tmp/remove.txt) 2>&1 | tee -a /tmp/pacman-remove.log || true
 	fi
 fi
-pacman -Syu --needed --noconfirm $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
+pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
 if grep -q 'failed to commit transaction' /tmp/pacman.log; then
 	grep 'signature from' /tmp/pacman.log | sed 's/^error: //; s/:.*//' | while read -r name; do
 		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
 	done
-	pacman -Syu --needed --noconfirm $(cat /tmp/install.txt)
+	pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt)
 fi
 orphans=$(pacman -Qtdq)
 [ -z "$orphans" ] || pacman -Rns --noconfirm $orphans >/dev/null 2>&1 || true
 cp /tmp/install.txt /opt/packages.installed
 bash /opt/golden-setup.sh
+for pkg in /var/cache/pacman/pkg/*.pkg.tar.zst; do
+	[ -f "$pkg" ] || continue
+	name=$(basename "$pkg")
+	[ -e "/mnt/hostpkg/$name" ] || cp "$pkg" "/mnt/hostpkg/$name" 2>/dev/null || true
+done
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
 fstrim -av >/dev/null 2>&1 || true
 echo "dotfiles: delta done"
@@ -201,6 +219,7 @@ cmd_packages() {
 	fi
 
 	packages_seed
+	direct_initramfs || true
 	run_packages_vm
 
 	if [ "$delta" -eq 1 ]; then
@@ -275,26 +294,165 @@ EOF
 	mkfs.vfat -n cidata "$SEED" >/dev/null
 	mcopy -i "$SEED" "$CACHE/seed/user-data" ::user-data
 	mcopy -i "$SEED" "$CACHE/seed/meta-data" ::meta-data
+	mcopy -i "$SEED" "$CACHE/seed/provision.sh" ::provision.sh
+	mcopy -i "$SEED" "$CACHE/seed/packages.txt" ::packages.txt
+	desktop_unit > "$CACHE/seed/yudae-desktop.service"
+	daemon_unit > "$CACHE/seed/yudaemond.service"
+	golden_setup > "$CACHE/seed/golden-setup.sh"
+	cat > "$CACHE/seed/boot.sh" <<'BOOT'
+#!/bin/bash
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+mkdir -p /mnt/seed
+mountpoint -q /mnt/seed || mount -t vfat /dev/vdb /mnt/seed 2>/dev/null || true
+mkdir -p /opt /etc/systemd/system
+cp /mnt/seed/packages.txt /opt/packages.txt
+cp /mnt/seed/golden-setup.sh /opt/golden-setup.sh
+cp /mnt/seed/yudae-desktop.service /etc/systemd/system/yudae-desktop.service
+cp /mnt/seed/yudaemond.service /etc/systemd/system/yudaemond.service
+systemctl stop systemd-resolved systemd-networkd NetworkManager 2>/dev/null || true
+iface=$(ip -o link show | awk -F': ' '$2 != "lo" {print $2; exit}')
+[ -n "$iface" ] || iface=eth0
+ip link set "$iface" up 2>/dev/null || true
+ip addr replace 10.0.2.15/24 dev "$iface" 2>/dev/null || true
+ip route replace default via 10.0.2.2 2>/dev/null || true
+rm -f /etc/resolv.conf
+printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf
+growpart /dev/vda 3 >/dev/null 2>&1 || parted -s /dev/vda resizepart 3 100% >/dev/null 2>&1 || true
+partx -u /dev/vda >/dev/null 2>&1 || true
+btrfs filesystem resize max / >/dev/null 2>&1 || true
+hostname yudae-guest 2>/dev/null || true
+printf 'yudae-guest\n' > /etc/hostname
+id -u gabriel >/dev/null 2>&1 || useradd -m -u 1000 -G wheel,video,render,input -s /bin/bash gabriel
+printf 'gabriel ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/gabriel
+chmod 440 /etc/sudoers.d/gabriel
+if [ -d /mnt/hostpkg/gnupg ]; then
+	mkdir -p /etc/pacman.d/gnupg
+	cp -a /mnt/hostpkg/gnupg/. /etc/pacman.d/gnupg/ 2>/dev/null || true
+fi
+if [ ! -e /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -e /etc/pacman.d/gnupg/pubring.kbx ]; then
+	pacman-key --init >/dev/null 2>&1 || true
+	pacman-key --populate archlinux >/dev/null 2>&1 || true
+fi
+mkdir -p /mnt/hostpkg/gnupg
+cp -a /etc/pacman.d/gnupg/. /mnt/hostpkg/gnupg/ 2>/dev/null || true
+bash /mnt/seed/provision.sh
+poweroff -f
+BOOT
+	cat > "$CACHE/seed/provision.service" <<'UNIT'
+[Unit]
+Description=dotfiles provision
+After=local-fs.target
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /mnt/seed/boot.sh
+StandardOutput=journal+console
+StandardError=journal+console
+[Install]
+WantedBy=provision.target
+UNIT
+	cat > "$CACHE/seed/provision.target" <<'UNIT'
+[Unit]
+Description=dotfiles provision
+Requires=provision.service
+After=provision.service
+UNIT
+	mcopy -i "$SEED" "$CACHE/seed/yudae-desktop.service" ::yudae-desktop.service
+	mcopy -i "$SEED" "$CACHE/seed/yudaemond.service" ::yudaemond.service
+	mcopy -i "$SEED" "$CACHE/seed/golden-setup.sh" ::golden-setup.sh
+	mcopy -i "$SEED" "$CACHE/seed/boot.sh" ::boot.sh
+	mcopy -i "$SEED" "$CACHE/seed/provision.service" ::provision.service
+	mcopy -i "$SEED" "$CACHE/seed/provision.target" ::provision.target
+}
+
+direct_initramfs() {
+	local dir=$CACHE/direct kver kernel module file
+	kver=$(uname -r)
+	kernel=/usr/lib/modules/$kver/vmlinuz
+	[ -f "$kernel" ] || return 1
+	command -v go >/dev/null 2>&1 || return 1
+
+	mkdir -p "$dir/initramfs/modules"
+	if [ ! -x "$dir/init" ] || [ "$ROOT/vm/direct-init/main.go" -nt "$dir/init" ]; then
+		(cd "$ROOT/vm/direct-init" && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o "$dir/init" .) || return 1
+	fi
+	cp -f "$dir/init" "$dir/initramfs/init"
+	chmod 755 "$dir/initramfs/init"
+
+	for module in fat vfat failover net_failover virtio_net netfs 9pnet 9p 9pnet_virtio; do
+		file=$(find "/usr/lib/modules/$kver/kernel" -name "$module.ko.zst" -print -quit)
+		[ -n "$file" ] || return 1
+		zstd -q -d -f "$file" -o "$dir/initramfs/modules/$module.ko" || return 1
+	done
+
+	(cd "$dir/initramfs" && find . -print0 | cpio --null -o -H newc 2>/dev/null | gzip -9) > "$dir/initramfs.img" || return 1
+	printf '%s\n' "$kernel" > "$dir/kernel"
+}
+
+prefetch_packages() {
+	local urls=$CACHE/pkgcache/urls.txt
+	[ -f "$urls" ] || return 0
+	export CACHE
+	export MIRRORS="https://geo.mirror.pkgbuild.com https://mirror.rackspace.com/archlinux https://mirrors.kernel.org/archlinux https://archlinux.mirror.wearetriple.com"
+	awk 'NF && $0 !~ /^#/' "$urls" | xargs -P 12 -I{} sh -c '
+		url=$1
+		name=$(basename "$url")
+		[ -f "$CACHE/pkgcache/$name" ] && [ ! -L "$CACHE/pkgcache/$name" ] && exit 0
+		path=$(printf "%s" "$url" | sed -E "s#^https?://[^/]+##")
+		mirror=$(printf "%s\n" $MIRRORS | shuf -n1)
+		curl -fsSL --retry 1 -o "$CACHE/pkgcache/$name.part" "$mirror$path" && mv "$CACHE/pkgcache/$name.part" "$CACHE/pkgcache/$name"
+	' _ {}
 }
 
 run_packages_vm() {
 	echo "provision $PACKAGES (log $LOG)"
 	: > "$LOG"
-	timeout 1200 "$QEMU" \
-		-name dotfiles-packages \
-		-machine q35,accel=kvm \
-		-cpu host \
-		-smp "$(nproc)" \
-		-m 8G \
-		-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe,discard=unmap" \
-		-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
-		-virtfs "local,path=/var/cache/pacman/pkg,mount_tag=hostpkg,security_model=none,readonly=on" \
-		-device virtio-rng-pci \
-		-netdev user,id=net0 \
-		-device virtio-net-pci,netdev=net0 \
-		-display none \
-		-serial "file:$LOG" \
-		-no-reboot
+
+	mkdir -p "$CACHE/pkgcache"
+	for pkg in /var/cache/pacman/pkg/*.pkg.tar.zst; do
+		[ -e "$pkg" ] && ln -sf "$pkg" "$CACHE/pkgcache/" 2>/dev/null
+	done
+
+	(prefetch_packages) &
+
+	local direct=0
+	[ -f "$CACHE/direct/initramfs.img" ] && [ -f "$CACHE/direct/kernel" ] && direct=1
+
+	if [ "$direct" -eq 1 ]; then
+		timeout 1200 "$QEMU" \
+			-name dotfiles-packages \
+			-machine q35,accel=kvm \
+			-cpu host \
+			-smp "$(nproc)" \
+			-m 8G \
+			-kernel "$(cat "$CACHE/direct/kernel")" \
+			-initrd "$CACHE/direct/initramfs.img" \
+			-append "console=ttyS0 root=/dev/vda3 rw systemd.unit=provision.target" \
+			-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe,discard=unmap" \
+			-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
+			-virtfs "local,path=$CACHE/pkgcache,mount_tag=hostpkg,security_model=none" \
+			-device virtio-rng-pci \
+			-netdev user,id=net0 \
+			-device virtio-net-pci,netdev=net0 \
+			-display none \
+			-serial "file:$LOG" \
+			-no-reboot
+	else
+		timeout 1200 "$QEMU" \
+			-name dotfiles-packages \
+			-machine q35,accel=kvm \
+			-cpu host \
+			-smp "$(nproc)" \
+			-m 8G \
+			-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe,discard=unmap" \
+			-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
+			-virtfs "local,path=$CACHE/pkgcache,mount_tag=hostpkg,security_model=none" \
+			-device virtio-rng-pci \
+			-netdev user,id=net0 \
+			-device virtio-net-pci,netdev=net0 \
+			-display none \
+			-serial "file:$LOG" \
+			-no-reboot
+	fi
 }
 
 compact_packages() {

@@ -110,6 +110,7 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 | trimmed | 2m58s | 49s | 3m47s |
 | folded | 2m44s | 0.09s | 2m44s |
 | thin | 2m21s | 0.09s | 2m21s |
+| fast | 54.8s | 0.09s | 54.8s |
 
 The thin cut also drops KDE and GNOME file managers and their dependency trees, Noto/CJK and extra fonts, printing and network daemons, and the desktop portals. It keeps the shell font, Meslo, DejaVu, emoji, Qt, Hyprland, audio, NetworkManager and the plugin toolchain. Result: 735MB download, 2.97G layer, 719 packages, shell screenshot and an in-guest `agent-cursor` build verified. `golden_setup` now runs `passwd -d root`; the guest reports `root NP`.
 
@@ -127,7 +128,9 @@ When the list changed, `packages` boots the existing layer and applies only the 
 
 A host-side build was measured and rejected: pacman inside `unshare -r` installed 150 host packages (953MB) in 2m24s, slower than the guest, and unprivileged `/proc` and `/dev` mounts are denied. A from-scratch build under 60s is not reachable with pacman; the 58s delta is the practical floor, and the 2m44s figure is only for `--force` or a cold cache.
 
-Direct kernel boot with a custom initramfs was also tried. It reaches the installer in 0.1s and completes the transaction, but pacman's scriptlets and first-boot setup assume systemd is PID 1; the resulting guest fails D-Bus, logind and the user session. It was reverted. Keeping systemd as PID 1 restores the boot cost; a Go or Zig init does not change that.
+Direct kernel boot with a custom initramfs was also tried. The bash-init version reaches the installer in 0.1s and completes the transaction, but pacman's scriptlets and first-boot setup assume systemd is PID 1; the resulting guest fails D-Bus, logind and the user session. The systemd-target variant fixes that: the initramfs mounts the root, seed and 9p cache, installs `provision.target` and execs systemd, so scriptlets and first boot run normally.
+
+With a warmed package cache and the multi-mirror prefetcher, a forced packages build is **54.8s** (54.1s on the previous run) with 13-19MB left to download. The prefetcher reads `urls.txt` from the previous build, takes the missing packages across four mirrors, and the guest copies new packages back into the cache. The kernel upgrade is ignored so the cloud kernel stays. A cold first build is 1m38s; the 54s figure is a rebuild with the cache present.
 
 ### Clock
 
