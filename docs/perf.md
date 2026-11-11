@@ -120,6 +120,8 @@ The second optimized run took 4m54s, so network variance is about 20s. Changes: 
 
 When the list changed, `packages` boots the existing layer and applies only the delta: installs the new explicit packages, removes packages dropped from the list, prunes orphans, clears the cache and runs `fstrim`. A qcow2 snapshot rolls back a failed or interrupted delta; the VM has a 20 minute watchdog. Above `DOTFILES_VM_PACKAGES_CAP_MB` (default 8192) the layer is rewritten with `qemu-img convert`. Measured on the isolated cache: full 2m44s, add one package 58s, remove it 57s, compaction 1m01s, golden 0.09s. `DOTFILES_VM_PACKAGES` points at a package list file instead of `pacman -Qqen`, for tests.
 
+A host-side build was measured and rejected: pacman inside `unshare -r` installed 150 host packages (953MB) in 2m24s, slower than the guest, and unprivileged `/proc` and `/dev` mounts are denied. A from-scratch build under 60s is not reachable with pacman; the 58s delta is the practical floor, and the 2m44s figure is only for `--force` or a cold cache.
+
 ### Clock
 
 QEMU uses `-rtc base=utc,clock=host`, so the guest RTC is the host wall clock. `vm/desktop` runs `hwclock -s` at Hyprland start, applies the host timezone from `vm/hoststate/timezone`, then disables NTP. `setGuestMode` disables NTP too. Guest `NTP=no`, `systemd-timesyncd` inactive/disabled; guest and host wall clocks stay within the vsock measurement margin.
