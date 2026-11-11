@@ -112,6 +112,7 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 | thin | 2m21s | 0.09s | 2m21s |
 | fast | 54.8s | 0.09s | 54.8s |
 | parallel | 28.0s | 0.09s | 28.0s |
+| cold | 28.9s | 0.09s | 28.9s |
 
 The thin cut also drops KDE and GNOME file managers and their dependency trees, Noto/CJK and extra fonts, printing and network daemons, and the desktop portals. It keeps the shell font, Meslo, DejaVu, emoji, Qt, Hyprland, audio, NetworkManager and the plugin toolchain. Result: 735MB download, 2.97G layer, 719 packages, shell screenshot and an in-guest `agent-cursor` build verified. `golden_setup` now runs `passwd -d root`; the guest reports `root NP`.
 
@@ -134,6 +135,8 @@ Direct kernel boot with a custom initramfs was also tried. The bash-init version
 With a warmed package cache and the multi-mirror prefetcher, a forced packages build is **54.8s** (54.1s on the previous run) with 13-19MB left to download. The prefetcher reads `urls.txt` from the previous build, takes the missing packages across four mirrors, and the guest copies new packages back into the cache. The kernel upgrade is ignored so the cloud kernel stays. A cold first build is 1m38s; the 54s figure is a rebuild with the cache present.
 
 The parallel path replaces the pacman install: `pacman -Syuw` fetches only, 16 workers extract the package archives with `bsdtar`, then `pacman -U --dbonly` updates the local DB and `ldconfig`, sysusers and tmpfiles repair the runtime state. Measured forced builds: **29.72s** and **28.02s**, with zero `installing` lines. A normal boot of that image reaches D-Bus and the login prompt; the only failed unit is `yudaemond` when the manual test does not attach the dotfiles virtiofs. The user is created after extraction so the parallel overwrite cannot remove it.
+
+The cloud image and package store are persisted outside the build cache in `~/.cache/dotfiles/vm-base` (`DOTFILES_VM_BASE`, `DOTFILES_VM_PKGS`). A forced build with an empty `XDG_CACHE_HOME` (`~/.cache/yudae-cold`) used that base and completed in **28.856s** without downloading the cloud image or packages; the resulting image booted to D-Bus and the login prompt. A machine with no persisted base still pays the 1m38s first build to create it.
 
 ### Clock
 

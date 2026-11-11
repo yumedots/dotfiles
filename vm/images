@@ -3,11 +3,13 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/vm
+BASE=${DOTFILES_VM_BASE:-$HOME/.cache/dotfiles/vm-base}
+PKGSTORE=${DOTFILES_VM_PKGS:-$BASE/packages}
 RUNS=${DOTFILES_VM_RUNS:-$ROOT/vm/runs}
 
 CLOUD_NAME=Arch-Linux-x86_64-cloudimg-20261101.620452.qcow2
 CLOUD_SHA=794eb4889b39e1f0ed7d5ae998b2a1ed2137db8cf8c3476cf2962c7437ecb003
-CLOUD=$CACHE/$CLOUD_NAME
+CLOUD=$BASE/cloud.qcow2
 PACKAGES=$CACHE/packages.qcow2
 GOLDEN=$CACHE/golden.qcow2
 ARCH_SNAPSHOT=""
@@ -47,9 +49,14 @@ speed_pick() {
 }
 
 cmd_fetch() {
-	mkdir -p "$CACHE"
+	mkdir -p "$BASE"
 	if [ -f "$CLOUD" ] && [ "$(sha256sum "$CLOUD" | cut -d' ' -f1)" = "$CLOUD_SHA" ]; then
 		echo "cloud image cached $CLOUD"
+		return
+	fi
+	if [ -f "$CACHE/$CLOUD_NAME" ] && [ "$(sha256sum "$CACHE/$CLOUD_NAME" | cut -d' ' -f1)" = "$CLOUD_SHA" ]; then
+		cp --reflink=auto "$CACHE/$CLOUD_NAME" "$CLOUD"
+		echo "cloud image promoted $CLOUD"
 		return
 	fi
 	local url
@@ -407,17 +414,17 @@ direct_initramfs() {
 }
 
 prefetch_packages() {
-	local urls=$CACHE/pkgcache/urls.txt
+	local urls=$PKGSTORE/urls.txt
 	[ -f "$urls" ] || return 0
-	export CACHE
+	export PKGSTORE
 	export MIRRORS="https://geo.mirror.pkgbuild.com https://mirror.rackspace.com/archlinux https://mirrors.kernel.org/archlinux https://archlinux.mirror.wearetriple.com"
 	awk 'NF && $0 !~ /^#/' "$urls" | xargs -P 12 -I{} sh -c '
 		url=$1
 		name=$(basename "$url")
-		[ -f "$CACHE/pkgcache/$name" ] && [ ! -L "$CACHE/pkgcache/$name" ] && exit 0
+		[ -f "$PKGSTORE/$name" ] && exit 0
 		path=$(printf "%s" "$url" | sed -E "s#^https?://[^/]+##")
 		mirror=$(printf "%s\n" $MIRRORS | shuf -n1)
-		curl -fsSL --retry 1 -o "$CACHE/pkgcache/$name.part" "$mirror$path" && mv "$CACHE/pkgcache/$name.part" "$CACHE/pkgcache/$name"
+		curl -fsSL --retry 1 -o "$PKGSTORE/$name.part" "$mirror$path" && mv "$PKGSTORE/$name.part" "$PKGSTORE/$name"
 	' _ {}
 }
 
@@ -425,10 +432,12 @@ run_packages_vm() {
 	echo "provision $PACKAGES (log $LOG)"
 	: > "$LOG"
 
-	mkdir -p "$CACHE/pkgcache"
-	for pkg in /var/cache/pacman/pkg/*.pkg.tar.zst; do
-		[ -e "$pkg" ] && ln -sf "$pkg" "$CACHE/pkgcache/" 2>/dev/null
-	done
+	mkdir -p "$PKGSTORE"
+	if [ -z "$(find "$PKGSTORE" -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)" ]; then
+		find "$CACHE/pkgcache" -maxdepth 1 -type f -exec cp -n {} "$PKGSTORE/" \; 2>/dev/null || true
+	fi
+	[ -f "$PKGSTORE/urls.txt" ] || cp "$CACHE/pkgcache/urls.txt" "$PKGSTORE/" 2>/dev/null || true
+	[ -d "$PKGSTORE/gnupg" ] || cp -a "$CACHE/pkgcache/gnupg" "$PKGSTORE/" 2>/dev/null || true
 
 	(prefetch_packages) &
 
@@ -447,7 +456,7 @@ run_packages_vm() {
 			-append "console=ttyS0 root=/dev/vda3 rw systemd.unit=provision.target" \
 			-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe,discard=unmap" \
 			-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
-			-virtfs "local,path=$CACHE/pkgcache,mount_tag=hostpkg,security_model=none" \
+			-virtfs "local,path=$PKGSTORE,mount_tag=hostpkg,security_model=none" \
 			-device virtio-rng-pci \
 			-netdev user,id=net0 \
 			-device virtio-net-pci,netdev=net0 \
@@ -463,7 +472,7 @@ run_packages_vm() {
 			-m 8G \
 			-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe,discard=unmap" \
 			-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
-			-virtfs "local,path=$CACHE/pkgcache,mount_tag=hostpkg,security_model=none" \
+			-virtfs "local,path=$PKGSTORE,mount_tag=hostpkg,security_model=none" \
 			-device virtio-rng-pci \
 			-netdev user,id=net0 \
 			-device virtio-net-pci,netdev=net0 \
