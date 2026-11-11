@@ -104,8 +104,13 @@ task_bench() {
 
 task_vm() {
 	if [ $# -eq 0 ]; then
-		echo "usage: xmake vm fetch|packages|golden|ensure|overlay|snapshot|restore|list (running VMs: yudae vm)" >&2
+		echo "usage: xmake vm fetch|packages|golden|ensure|overlay|snapshot|restore|list|bench [tag] (running VMs: yudae vm)" >&2
 		exit 2
+	fi
+
+	if [ "$1" = bench ]; then
+		shift
+		exec "$ROOT/vm/bench-images" "$@"
 	fi
 
 	exec "$ROOT/vm/images" "$@"

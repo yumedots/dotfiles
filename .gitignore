@@ -14,3 +14,4 @@ shell/native/qml
 /build/
 config/zsh/.zcompdump-*
 config/zsh/.zsh_history
+/bench/images.jsonl

@@ -65,36 +65,27 @@ set -u
 exec > >(tee /dev/console) 2>&1
 echo "dotfiles: provision start"
 @SNAPSHOT@
+sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 12/' /etc/pacman.conf
+grep -q '^DisableDownloadTimeout' /etc/pacman.conf || sed -i '/^\[options\]/a DisableDownloadTimeout' /etc/pacman.conf
 mkdir -p /mnt/hostpkg
-mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L,ro hostpkg /mnt/hostpkg
+mountpoint -q /mnt/hostpkg || mount -t virtiofs hostpkg /mnt/hostpkg 2>/dev/null || mount -t 9p -o trans=virtio,version=9p2000.L,ro hostpkg /mnt/hostpkg
 mkdir -p /var/cache/pacman/pkg
 for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
 	[ -e "$pkg" ] || continue
 	ln -sf "$pkg" "/var/cache/pacman/pkg/$(basename "$pkg")"
 done
 rm -f /var/cache/pacman/pkg/limine-* /var/cache/pacman/pkg/plymouth-*
-pacman -Syu --noconfirm 2>&1 | tee /tmp/pacman-syu.log
-if grep -q 'failed to commit transaction' /tmp/pacman-syu.log; then
-	grep 'signature from' /tmp/pacman-syu.log | sed 's/^error: //; s/:.*//' | while read -r name; do
+pacman -Sy --noconfirm >/dev/null 2>&1
+grep -vE '^(cachyos-|linux-cachyos|openstarbound-bin|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl)|nvidia' /opt/packages.txt > /tmp/candidates.txt
+pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
+pacman -Syu --needed --noconfirm $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
+if grep -q 'failed to commit transaction' /tmp/pacman.log; then
+	grep 'signature from' /tmp/pacman.log | sed 's/^error: //; s/:.*//' | while read -r name; do
 		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
 	done
-	pacman -Syu --noconfirm
+	pacman -Syu --needed --noconfirm $(cat /tmp/install.txt)
 fi
-: > /tmp/install.txt
-while IFS= read -r name; do
-	[ -n "$name" ] || continue
-	case "$name" in
-		cachyos-*|linux-cachyos*|*nvidia*|openstarbound-bin|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl) continue ;;
-	esac
-	pacman -Si "$name" >/dev/null 2>&1 && echo "$name" >> /tmp/install.txt
-done < /opt/packages.txt
-pacman -S --needed --noconfirm $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman-packages.log
-if grep -q 'failed to commit transaction' /tmp/pacman-packages.log; then
-	grep 'signature from' /tmp/pacman-packages.log | sed 's/^error: //; s/:.*//' | while read -r name; do
-		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
-	done
-	pacman -S --needed --noconfirm $(cat /tmp/install.txt)
-fi
+pacman -Scc --noconfirm >/dev/null 2>&1 || true
 touch /var/lib/dotfiles-provisioned
 echo "dotfiles: provision done"
 poweroff
@@ -105,7 +96,7 @@ cmd_packages() {
 	cmd_fetch
 	mkdir -p "$CACHE"
 	rm -f "$PACKAGES"
-	"$QEMU_IMG" create -f qcow2 -F qcow2 -b "$CLOUD" "$PACKAGES" 32G
+	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F qcow2 -b "$CLOUD" "$PACKAGES" 32G
 
 	mkdir -p "$CACHE/seed"
 	local snapshot_line=""
@@ -131,6 +122,12 @@ EOF
 		echo "    lock_passwd: true"
 		echo "ssh_pwauth: false"
 		echo "write_files:"
+		if [ -f /etc/pacman.d/mirrorlist ]; then
+			echo "  - path: /etc/pacman.d/mirrorlist"
+			echo "    permissions: '0644'"
+			echo "    content: |"
+			sed 's/^/      /' /etc/pacman.d/mirrorlist
+		fi
 		echo "  - path: /opt/packages.txt"
 		echo "    permissions: '0644'"
 		echo "    content: |"
@@ -151,21 +148,34 @@ EOF
 
 	echo "provision $PACKAGES (log $LOG)"
 	: > "$LOG"
+
+	local pkg_sock=$CACHE/pkg.sock
+	rm -f "$pkg_sock"
+	/usr/lib/virtiofsd --socket-path="$pkg_sock" --shared-dir=/var/cache/pacman/pkg --readonly --cache=auto &
+	local pkg_pid=$!
+	trap 'kill "$pkg_pid" 2>/dev/null || true' EXIT
+	for _ in $(seq 1 50); do [ -S "$pkg_sock" ] && break; sleep 0.1; done
+
 	"$QEMU" \
 		-name dotfiles-packages \
 		-machine q35,accel=kvm \
 		-cpu host \
 		-smp "$(nproc)" \
 		-m 8G \
-		-drive "file=$PACKAGES,if=virtio,format=qcow2" \
+		-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe" \
 		-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
 		-virtfs "local,path=/var/cache/pacman/pkg,mount_tag=hostpkg,security_model=none,readonly=on" \
+		-chardev "socket,id=pkg,path=$pkg_sock" \
+		-device "vhost-user-fs-pci,chardev=pkg,tag=hostpkg" \
 		-device virtio-rng-pci \
 		-netdev user,id=net0 \
 		-device virtio-net-pci,netdev=net0 \
 		-display none \
 		-serial "file:$LOG" \
 		-no-reboot
+
+	kill "$pkg_pid" 2>/dev/null || true
+	trap - EXIT
 
 	if ! "$QEMU_IMG" info "$PACKAGES" | grep -q '^file format: qcow2'; then
 		echo "provision failed, see $LOG" >&2
@@ -256,7 +266,7 @@ cmd_golden() {
 	[ -f "$PACKAGES" ] || cmd_packages
 	mkdir -p "$CACHE"
 	rm -f "$GOLDEN"
-	"$QEMU_IMG" create -f qcow2 -F qcow2 -b "$PACKAGES" "$GOLDEN" 32G
+	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F qcow2 -b "$PACKAGES" "$GOLDEN" 32G
 
 	mkdir -p "$CACHE/golden"
 	golden_user_data > "$CACHE/golden/user-data"
@@ -284,7 +294,7 @@ EOF
 		-cpu host \
 		-smp "$(nproc)" \
 		-m 8G \
-		-drive "file=$GOLDEN,if=virtio,format=qcow2" \
+		-drive "file=$GOLDEN,if=virtio,format=qcow2,cache=unsafe" \
 		-drive "file=$CACHE/golden.seed,if=virtio,format=raw,readonly=on" \
 		-object "memory-backend-memfd,id=mem,size=8G,share=on" \
 		-numa "node,memdev=mem" \
