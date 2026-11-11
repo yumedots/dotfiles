@@ -91,28 +91,7 @@ grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
 { pacman -Sp --needed --noconfirm $(cat /tmp/install.txt); pacman -Spu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt); } 2>/dev/null | grep '^http' | sort -u > /tmp/urls.txt || true
 cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
-if command -v bsdtar >/dev/null 2>&1 && pacman -Syuw --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) > /tmp/pacman-fetch.log 2>&1; then
-	grep '^http' /tmp/urls.txt | sed 's#.*/##' | sort -u > /tmp/files.txt
-	if [ -s /tmp/files.txt ]; then
-		cat /tmp/files.txt | xargs -P 16 -I{} sh -c 'bsdtar --zstd -xpf "/var/cache/pacman/pkg/$1" -C / --exclude=".PKGINFO" --exclude=".MTREE" --exclude=".INSTALL"' _ {} 2>/tmp/extract.log
-		sed 's#^#/var/cache/pacman/pkg/#' /tmp/files.txt | xargs pacman -U --dbonly --needed --noconfirm 2>&1 | tee /tmp/pacman.log
-		ldconfig >/dev/null 2>&1 || true
-		systemctl daemon-reload >/dev/null 2>&1 || true
-		systemd-sysusers >/dev/null 2>&1 || true
-		systemd-tmpfiles --create >/dev/null 2>&1 || true
-		fc-cache -f >/dev/null 2>&1 || true
-		glib-compile-schemas /usr/share/glib-2.0/schemas >/dev/null 2>&1 || true
-		update-desktop-database -q >/dev/null 2>&1 || true
-	else
-		echo "dotfiles: fast unavailable"
-		cat /tmp/pacman-fetch.log 2>/dev/null | tail -3
-		pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
-	fi
-else
-	echo "dotfiles: fast unavailable"
-	cat /tmp/pacman-fetch.log 2>/dev/null | tail -3
-	pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
-fi
+pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
 if grep -q 'failed to commit transaction' /tmp/pacman.log; then
 	grep 'signature from' /tmp/pacman.log | sed 's/^error: //; s/:.*//' | while read -r name; do
 		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
@@ -220,6 +199,15 @@ cmd_packages() {
 		exit 1
 	fi
 
+	if [ -z "$ARCH_SNAPSHOT" ] && [ -f "$BASE/packages.qcow2" ] && [ -f "$BASE/packages.sha" ] && [ -f "$BASE/cloud.qcow2" ] && [ "$(cat "$BASE/packages.sha")" = "$current" ]; then
+		mkdir -p "$CACHE"
+		cp --reflink=auto "$BASE/packages.qcow2" "$PACKAGES"
+		rm -f "$GOLDEN" "$CACHE/golden.sha"
+		printf '%s\n' "$current" > "$stamp"
+		echo "packages layer restored $PACKAGES"
+		return
+	fi
+
 	cmd_fetch
 
 	if [ -f "$PACKAGES" ] && [ "$FORCE" -eq 0 ]; then
@@ -272,6 +260,12 @@ cmd_packages() {
 
 	if [ "$delta" -eq 1 ]; then
 		compact_packages
+	fi
+
+	if [ -z "$ARCH_SNAPSHOT" ]; then
+		mkdir -p "$BASE"
+		cp --reflink=auto "$PACKAGES" "$BASE/packages.qcow2"
+		cp "$stamp" "$BASE/packages.sha"
 	fi
 }
 
