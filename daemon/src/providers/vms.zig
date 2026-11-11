@@ -1721,7 +1721,8 @@ pub const Vms = struct {
 		for (keys, 0..) |item, index| {
 			if (index > 0) try writer.writeAll(",");
 			try writer.writeAll("{\"type\":\"qcode\",\"data\":");
-			try std.json.Stringify.encodeJsonString(json.text(item), .{}, writer);
+			const lower = try std.ascii.allocLowerString(allocator, json.text(item));
+			try std.json.Stringify.encodeJsonString(lower, .{}, writer);
 			try writer.writeAll("}");
 		}
 
