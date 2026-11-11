@@ -338,13 +338,6 @@ PanelWindow {
 				opacity: root.row === 0 ? 1 : 0
 				visible: opacity > 0
 
-				Behavior on opacity {
-					NumberAnimation {
-						duration: Config.wallpaperFadeMs
-						easing.type: Easing.OutCubic
-					}
-				}
-
 				delegate: Item {
 					id: look
 
@@ -375,7 +368,7 @@ PanelWindow {
 						anchors.centerIn: parent
 						width: root.wideWidth
 						height: parent.height
-						opacity: look.current ? 1 : Config.wallpaperTileDim
+						opacity: 1
 
 						Behavior on opacity {
 							NumberAnimation {
@@ -479,13 +472,6 @@ PanelWindow {
 				opacity: root.row === 1 ? 1 : 0
 				visible: opacity > 0
 
-				Behavior on opacity {
-					NumberAnimation {
-						duration: Config.wallpaperFadeMs
-						easing.type: Easing.OutCubic
-					}
-				}
-
 				delegate: Item {
 					id: cell
 
@@ -518,7 +504,7 @@ PanelWindow {
 						anchors.centerIn: parent
 						width: root.wideWidth
 						height: parent.height
-						opacity: cell.current ? 1 : Config.wallpaperTileDim
+						opacity: 1
 
 						Behavior on opacity {
 							NumberAnimation {
@@ -637,13 +623,6 @@ PanelWindow {
 				opacity: root.row === 2 ? 1 : 0
 				visible: opacity > 0
 
-				Behavior on opacity {
-					NumberAnimation {
-						duration: Config.wallpaperFadeMs
-						easing.type: Easing.OutCubic
-					}
-				}
-
 				delegate: Item {
 					id: chip
 
@@ -674,7 +653,7 @@ PanelWindow {
 						anchors.centerIn: parent
 						width: root.wideWidth
 						height: parent.height
-						opacity: chip.current ? 1 : Config.wallpaperTileDim
+						opacity: 1
 
 						Behavior on opacity {
 							NumberAnimation {
