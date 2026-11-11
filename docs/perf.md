@@ -109,6 +109,11 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 | after | 3m41s | 49s | 4m32s |
 | trimmed | 2m58s | 49s | 3m47s |
 | folded | 2m44s | 0.09s | 2m44s |
+| thin | 2m21s | 0.09s | 2m21s |
+
+The thin cut also drops KDE and GNOME file managers and their dependency trees, Noto/CJK and extra fonts, printing and network daemons, and the desktop portals. It keeps the shell font, Meslo, DejaVu, emoji, Qt, Hyprland, audio, NetworkManager and the plugin toolchain. Result: 735MB download, 2.97G layer, 719 packages, shell screenshot and an in-guest `agent-cursor` build verified. `golden_setup` now runs `passwd -d root`; the guest reports `root NP`.
+
+Cloud Hypervisor is not installed and is not a drop-in: it needs a direct kernel and initrd and has no dbus/GL path for the viewer. Installing it needs host root, which is unavailable by design.
 
 The folded run makes the packages image bootable: the same provisioning boot writes the user units, fstab, enables them and sets the graphical target. `golden` is now an empty qcow2 overlay on packages, so it costs 0.09s instead of a second boot.
 

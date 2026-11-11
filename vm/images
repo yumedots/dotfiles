@@ -12,7 +12,7 @@ PACKAGES=$CACHE/packages.qcow2
 GOLDEN=$CACHE/golden.qcow2
 ARCH_SNAPSHOT=""
 FORCE=0
-VM_EXCLUDE='^(cachyos-|linux-cachyos|linux-firmware|qemu-|virtiofsd|firefox|qbittorrent|prismlauncher|vlc|tesseract|rust|zig|clang|llvm|cmake|ninja|intel-ucode|amd-ucode|sof-firmware|alsa-firmware|openstarbound|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl|libvirt|docker|podman)|nvidia'
+VM_EXCLUDE='^(cachyos-|linux-cachyos|linux-firmware|qemu-|virtiofsd|firefox|qbittorrent|prismlauncher|vlc|tesseract|rust|zig|clang|llvm|cmake|ninja|intel-ucode|amd-ucode|sof-firmware|alsa-firmware|openstarbound|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl|libvirt|docker|podman|noto-fonts$|noto-fonts-cjk|awesome-terminal-fonts|cantarell-fonts|ttf-bitstream-vera|ttf-liberation|ttf-opensans|dolphin|nautilus|pavucontrol|bind$|dnsmasq|iwd|modemmanager|usb_modeswitch|xl2tpd|nfs-utils|ufw|layer-shell-qt|graphicsmagick|xdg-desktop-portal-gtk|xdg-desktop-portal-kde|polkit-kde-agent|polkit-gnome)|nvidia'
 SEED=$CACHE/seed.img
 LOG=$CACHE/provision.log
 QEMU=$(command -v qemu-system-x86_64)
@@ -375,6 +375,7 @@ ln -sfn /home/gabriel/dotfiles/hypr /home/gabriel/.config/hypr
 systemctl daemon-reload
 systemctl enable yudaemond yudae-desktop
 systemctl set-default graphical.target
+passwd -d root >/dev/null 2>&1 || true
 touch /var/lib/dotfiles-golden
 echo dotfiles-golden-ok > /dev/ttyS0
 SETUP
