@@ -91,10 +91,8 @@ ShellRoot {
 			return;
 
 		launcherWindow.hideInstant();
-		Qt.callLater(function () {
-			wallpaperWindow.open();
-			shellRoot.closeBarPopups();
-		});
+		wallpaperWindow.open();
+		shellRoot.closeBarPopups();
 	}
 
 	function powerMenu() {
