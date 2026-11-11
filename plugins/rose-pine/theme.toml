@@ -18,6 +18,7 @@ barStatMono = true
 
 [cpu]
 cpuBase = "#c4a7e7"
+cpuCore = "#ebbcba"
 cpuBaseMono = "#e0def4"
 cpuPeak = "#eb6f92"
 cpuPeakMono = "#e0def4"
