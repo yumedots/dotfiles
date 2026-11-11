@@ -19,6 +19,7 @@ Item {
 	property real iconLift: 0
 	property var iconComponent: null
 	property real iconWidth: 0
+	property real iconMinWidth: 0
 	property real iconHeight: 0
 	property string value: ""
 	property real gap: 0
@@ -67,7 +68,7 @@ Item {
 	}
 
 	readonly property bool iconMode: root.mode === "icon"
-	readonly property real iconBreadth: root.iconComponent ? root.iconWidth : iconMetrics.width
+	readonly property real iconBreadth: root.iconComponent ? root.iconWidth : Math.max(iconMetrics.width, root.iconMinWidth)
 	readonly property color inkColor: BarInk.pick(root.bar, root.inkId, root.dim ? root.dimColor : (root.mono ? Config.foreground : root.textColor))
 	readonly property color fillColor: root.mono ? Config.foreground : root.barColor
 	readonly property int filled: Math.min(Config.barCells, Math.max(0, Math.round(root.pct / 100 * Config.barCells)))

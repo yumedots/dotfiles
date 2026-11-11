@@ -129,6 +129,15 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 			context.audio.setWatch(json.flag(target, "on"));
 		}
 
+		if (json.field(audio_cmd, "step")) |target| {
+			const delta = switch (target) {
+				.integer, .float, .number_string => json.number(target),
+				else => json.numberAt(target, "delta"),
+			};
+
+			context.audio.step(delta);
+		}
+
 		return;
 	}
 
