@@ -15,11 +15,11 @@ PanelWindow {
 	readonly property var state: Yudae.wallpaper
 	readonly property string listing: (root.state.list || []).map(function (entry) { return entry.path; }).join("\n")
 	readonly property string activeWallpaper: root.state.active || ""
-	readonly property string themeListing: JSON.stringify(Yudae.themes)
+	readonly property string themeListing: JSON.stringify(Yudae.themes.map(function (entry) { return { id: entry.id, surface: entry.surface, foreground: entry.foreground, accents: entry.accents }; }))
 	readonly property var themes: JSON.parse(root.themeListing)
+	readonly property string activeTheme: (Yudae.themes.filter(function (entry) { return entry.active; })[0] || ({})).id || "gray"
 	property var wallpapers: []
 	property int currentIndex: 0
-	property int settledIndex: -1
 	property int themeIndex: 0
 	property int row: 0
 
@@ -27,8 +27,7 @@ PanelWindow {
 	readonly property real tileHeight: Config.wallpaperRowHeight
 	readonly property real wideWidth: Math.round(root.tileHeight * Config.wallpaperPreviewRatio)
 	readonly property real slimWidth: Math.round(root.tileHeight * Config.wallpaperSlimRatio)
-	readonly property bool themed: root.themes.length > 0
-	readonly property real contentHeight: root.tileHeight + (root.themed ? Config.wallpaperSectionGap + Config.themeCardHeight : 0)
+	readonly property real contentHeight: root.tileHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
 
 	anchors.top: true
@@ -63,20 +62,10 @@ PanelWindow {
 		root.selectActive();
 	}
 
-	onCurrentIndexChanged: settle.restart()
-
-	Timer {
-		id: settle
-
-		interval: 140
-		onTriggered: root.settledIndex = root.currentIndex
-	}
-
 	function selectActive() {
 		const index = root.wallpapers.map(function (entry) { return entry.path; }).indexOf(root.activeWallpaper);
 
 		root.currentIndex = index >= 0 ? index : 0;
-		root.settledIndex = root.currentIndex;
 	}
 
 	function move(step) {
@@ -87,14 +76,14 @@ PanelWindow {
 	}
 
 	function setRow(next) {
-		root.row = next === 1 && root.themed ? 1 : 0;
+		root.row = next === 1 && root.themes.length > 0 ? 1 : 0;
 	}
 
 	function open() {
 		root.shown = true;
 		root.row = 0;
 		root.selectActive();
-		root.themeIndex = Math.max(0, root.themes.findIndex(function (entry) { return entry.active; }));
+		root.themeIndex = Math.max(0, root.themes.findIndex(function (entry) { return entry.id === root.activeTheme; }));
 
 		if (root.wallpapers.length === 0)
 			root.reload();
@@ -181,17 +170,16 @@ PanelWindow {
 			Input.wallpaper(event, root);
 		}
 
-		Column {
-			id: layout
+		Item {
+			id: stage
 
 			width: parent.width
-			spacing: Config.wallpaperSectionGap
+			height: root.tileHeight
 
 			ListView {
 				id: strip
 
-				width: parent.width
-				height: root.tileHeight
+				anchors.fill: parent
 				orientation: ListView.Horizontal
 				clip: true
 				interactive: false
@@ -204,6 +192,15 @@ PanelWindow {
 				preferredHighlightEnd: (strip.width + root.wideWidth) / 2
 				highlightMoveDuration: Config.wallpaperFadeMs
 				cacheBuffer: root.wideWidth
+				opacity: root.row === 0 ? 1 : 0
+				visible: opacity > 0
+
+				Behavior on opacity {
+					NumberAnimation {
+						duration: Config.wallpaperFadeMs
+						easing.type: Easing.OutCubic
+					}
+				}
 
 				delegate: Item {
 					id: cell
@@ -212,6 +209,7 @@ PanelWindow {
 					required property int index
 
 					readonly property bool current: cell.index === root.currentIndex
+					readonly property bool near: Math.abs(cell.index - root.currentIndex) <= 2
 					readonly property bool applied: cell.modelData.path === root.activeWallpaper
 
 					width: cell.current ? root.wideWidth : root.slimWidth
@@ -257,9 +255,12 @@ PanelWindow {
 							fillMode: Image.PreserveAspectCrop
 							cache: true
 							asynchronous: true
-							visible: cell.current
+							visible: cell.near
 							opacity: status === Image.Ready ? 1 : 0
-							source: cell.index === root.settledIndex ? "file://" + (cell.modelData.preview || cell.modelData.path) : ""
+							source: cell.near ? "file://" + cell.modelData.path : ""
+							sourceSize.width: 1280
+							sourceSize.height: 1280
+							mipmap: true
 
 							Behavior on opacity {
 								NumberAnimation {
@@ -272,9 +273,16 @@ PanelWindow {
 					Rectangle {
 						anchors.fill: parent
 						color: "transparent"
-						visible: cell.current && root.row === 0
+						visible: root.row === 0
+						opacity: cell.current ? 1 : 0
 						border.width: Config.wallpaperRingWidth
 						border.color: Config.foreground
+
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+							}
+						}
 					}
 
 					Rectangle {
@@ -328,12 +336,9 @@ PanelWindow {
 			}
 
 			ListView {
-				id: shelf
+				id: themeStrip
 
-				anchors.horizontalCenter: parent.horizontalCenter
-				width: Math.min(parent.width, shelf.contentWidth)
-				height: Config.themeCardHeight
-				visible: root.themed
+				anchors.fill: parent
 				orientation: ListView.Horizontal
 				clip: true
 				interactive: false
@@ -341,8 +346,13 @@ PanelWindow {
 				spacing: Config.wallpaperTileGap
 				model: root.themes
 				currentIndex: root.themeIndex
+				highlightRangeMode: ListView.StrictlyEnforceRange
+				preferredHighlightBegin: (themeStrip.width - root.wideWidth) / 2
+				preferredHighlightEnd: (themeStrip.width + root.wideWidth) / 2
 				highlightMoveDuration: Config.wallpaperFadeMs
-				opacity: root.row === 1 ? 1 : Config.wallpaperTileDim
+				cacheBuffer: root.wideWidth
+				opacity: root.row === 1 ? 1 : 0
+				visible: opacity > 0
 
 				Behavior on opacity {
 					NumberAnimation {
@@ -351,42 +361,77 @@ PanelWindow {
 					}
 				}
 
-				delegate: Rectangle {
+				delegate: Item {
 					id: chip
 
 					required property var modelData
 					required property int index
 
-					width: Config.themeCardWidth
-					height: shelf.height
-					color: chip.modelData.surface || Config.surface
+					readonly property bool current: chip.index === root.themeIndex
 
-					Text {
-						x: Config.themeCardPadding
-						y: Config.themeCardPadding
-						width: parent.width - Config.themeCardPadding * 2
-						elide: Text.ElideRight
-						font.family: Config.fontFamily
-						font.pixelSize: Config.wallpaperNameSize
-						color: chip.modelData.foreground || Config.foreground
-						text: chip.modelData.id
+					width: chip.current ? root.wideWidth : root.slimWidth
+					height: themeStrip.height
+					clip: true
+
+					Behavior on width {
+						NumberAnimation {
+							duration: Config.wallpaperFadeMs
+							easing.type: Easing.OutCubic
+						}
 					}
 
-					Row {
-						x: Config.themeCardPadding
-						anchors.bottom: parent.bottom
-						anchors.bottomMargin: Config.themeCardPadding
-						spacing: Config.themeSwatchGap
+					Rectangle {
+						anchors.fill: parent
+						color: chip.modelData.surface || Config.surface
+					}
 
-						Repeater {
-							model: chip.modelData.accents
+					Item {
+						anchors.centerIn: parent
+						width: root.wideWidth
+						height: parent.height
+						opacity: chip.current ? 1 : Config.wallpaperTileDim
 
-							Rectangle {
-								required property string modelData
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+								easing.type: Easing.OutCubic
+							}
+						}
 
-								width: Config.themeSwatchSize
-								height: Config.themeSwatchSize
-								color: modelData
+						Text {
+							anchors.centerIn: parent
+							anchors.verticalCenterOffset: -Math.round(parent.height * 0.21)
+							font.family: Config.fontFamily
+							font.pixelSize: Config.themeNameSize
+							color: chip.modelData.foreground || Config.foreground
+							text: chip.modelData.id
+							opacity: chip.current ? 1 : 0
+
+							Behavior on opacity {
+								NumberAnimation {
+									duration: Config.wallpaperFadeMs
+								}
+							}
+						}
+
+						Row {
+							id: band
+
+							anchors.left: parent.left
+							anchors.right: parent.right
+							anchors.bottom: parent.bottom
+							height: Math.round(parent.height * 0.42)
+
+							Repeater {
+								model: chip.modelData.accents
+
+								Rectangle {
+									required property string modelData
+
+									width: band.width / Math.max(1, chip.modelData.accents.length)
+									height: band.height
+									color: modelData
+								}
 							}
 						}
 					}
@@ -394,15 +439,22 @@ PanelWindow {
 					Rectangle {
 						anchors.fill: parent
 						color: "transparent"
-						visible: root.row === 1 && chip.index === root.themeIndex
+						visible: root.row === 1
+						opacity: chip.current ? 1 : 0
 						border.width: Config.wallpaperRingWidth
 						border.color: chip.modelData.foreground || Config.foreground
+
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+							}
+						}
 					}
 
 					Rectangle {
 						anchors.right: parent.right
 						anchors.bottom: parent.bottom
-						visible: chip.modelData.active
+						visible: chip.modelData.id === root.activeTheme
 						width: Config.wallpaperMarkSize + 8
 						height: Config.wallpaperMarkSize + 8
 						color: chip.modelData.foreground || Config.foreground
@@ -424,6 +476,15 @@ PanelWindow {
 							root.applyCurrent();
 						}
 					}
+				}
+
+				Text {
+					anchors.centerIn: parent
+					visible: root.themes.length === 0
+					font.family: Config.fontFamily
+					font.pixelSize: Config.wallpaperNameSize
+					color: Config.muted
+					text: Config.themeEmpty
 				}
 
 				MouseArea {

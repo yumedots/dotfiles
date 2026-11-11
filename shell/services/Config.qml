@@ -257,13 +257,9 @@ QtObject {
 	readonly property var wallpaperRowHeight: settings.wallpaperRowHeight !== undefined ? settings.wallpaperRowHeight : 230
 	readonly property var wallpaperSlimRatio: settings.wallpaperSlimRatio !== undefined ? settings.wallpaperSlimRatio : 0.42
 	readonly property var wallpaperNameSize: settings.wallpaperNameSize !== undefined ? settings.wallpaperNameSize : 13
-	readonly property var themeCardWidth: settings.themeCardWidth !== undefined ? settings.themeCardWidth : 130
-	readonly property var themeCardHeight: settings.themeCardHeight !== undefined ? settings.themeCardHeight : 64
-	readonly property var themeCardPadding: settings.themeCardPadding !== undefined ? settings.themeCardPadding : 10
-	readonly property var themeSwatchSize: settings.themeSwatchSize !== undefined ? settings.themeSwatchSize : 10
-	readonly property var themeSwatchGap: settings.themeSwatchGap !== undefined ? settings.themeSwatchGap : 4
+	readonly property var themeNameSize: settings.themeNameSize !== undefined ? settings.themeNameSize : 24
+	readonly property var themeEmpty: settings.themeEmpty !== undefined ? settings.themeEmpty : "No themes installed"
 	readonly property var wallpaperPickerPadding: settings.wallpaperPickerPadding !== undefined ? settings.wallpaperPickerPadding : 16
-	readonly property var wallpaperSectionGap: settings.wallpaperSectionGap !== undefined ? settings.wallpaperSectionGap : 16
 	readonly property var wallpaperTileGap: settings.wallpaperTileGap !== undefined ? settings.wallpaperTileGap : 8
 	readonly property var wallpaperTileDim: settings.wallpaperTileDim !== undefined ? settings.wallpaperTileDim : 0.6
 	readonly property var wallpaperRingWidth: settings.wallpaperRingWidth !== undefined ? settings.wallpaperRingWidth : 2
