@@ -60,6 +60,7 @@ Item {
 		}
 
 		procList.currentIndex = -1;
+		procList.reset();
 
 		if (panel.source && panel.source.refresh)
 			panel.source.refresh();

@@ -19,6 +19,10 @@ Item {
 	implicitHeight: root.visibleRows * root.rowHeight + Config.procsGap * Math.max(0, root.visibleRows - 1)
 	height: root.implicitHeight
 
+	function reset() {
+		list.reset();
+	}
+
 	function move(step) {
 		list.move(step);
 	}

@@ -28,12 +28,19 @@ Item {
 			list.currentIndex = root.currentIndex;
 	}
 
+	property real offset: 0
+
+	function place(y) {
+		root.offset = Calc.clamp(y, 0, Math.max(0, list.contentHeight - list.height));
+		list.contentY = root.offset;
+	}
+
 	function scroll(step) {
-		list.contentY = Calc.clamp(list.contentY + step, 0, Math.max(0, list.contentHeight - list.height));
+		root.place(root.offset + step);
 	}
 
 	function reset() {
-		list.contentY = 0;
+		root.place(0);
 	}
 
 	function move(step) {
@@ -66,7 +73,7 @@ Item {
 		const step = root.rowHeight + root.rowSpacing;
 		const top = index * step;
 
-		list.contentY = Math.min(Math.max(top < list.contentY ? top : (top + root.rowHeight > list.contentY + list.height ? top + root.rowHeight - list.height : list.contentY), 0), Math.max(0, list.contentHeight - list.height));
+		root.place(top < root.offset ? top : (top + root.rowHeight > root.offset + list.height ? top + root.rowHeight - list.height : root.offset));
 	}
 
 	onCountChanged: {
@@ -94,6 +101,7 @@ Item {
 		highlightResizeDuration: 0
 
 		onModelChanged: {
+			Qt.callLater(root.place, root.offset);
 			root.applyIndex();
 			Qt.callLater(root.applyIndex);
 		}
@@ -101,14 +109,21 @@ Item {
 		highlight: Highlight {
 			fillParent: false
 		}
-
-		WheelHandler {
-			onWheel: (event) => root.scroll((event.angleDelta.y > 0 ? -1 : 1) * (root.rowHeight + root.rowSpacing))
-		}
 	}
 
 	Scrollbar {
 		visible: root.scrollWidth > 0 && list.contentHeight > list.height + 1
 		view: list
 	}
+
+	MouseArea {
+		anchors.fill: list
+		acceptedButtons: Qt.NoButton
+
+		onWheel: function (wheel) {
+			root.scroll((wheel.angleDelta.y > 0 ? -1 : 1) * (root.rowHeight + root.rowSpacing));
+			wheel.accepted = true;
+		}
+	}
+
 }
