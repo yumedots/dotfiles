@@ -1103,8 +1103,9 @@ PanelWindow {
 					id: listPane
 
 					anchors.left: parent.left
+					anchors.leftMargin: -Config.launcherPadding
 					anchors.right: root.isClipboard ? previewPane.left : parent.right
-					anchors.rightMargin: root.isClipboard ? Config.launcherGap : 0
+					anchors.rightMargin: root.isClipboard ? Config.launcherGap : -Config.launcherPadding
 					anchors.top: parent.top
 					anchors.bottom: parent.bottom
 
@@ -1115,6 +1116,7 @@ PanelWindow {
 						visible: root.results.length > 0
 						visibleRows: root.rows
 						scrollWidth: root.spotlight ? 0 : Config.scrollbarWidth
+						highlightRadius: 0
 						rowHeight: root.rowHeight
 						rowSpacing: Config.launcherGap
 						model: root.results
@@ -1136,6 +1138,7 @@ PanelWindow {
 								id: rowIcon
 
 								anchors.left: parent.left
+								anchors.leftMargin: Config.launcherPadding
 								anchors.verticalCenter: parent.verticalCenter
 								width: row.wide ? root.kaomojiSlot : root.iconSlot
 								height: root.iconSlot
@@ -1216,7 +1219,7 @@ PanelWindow {
 								id: rowUsage
 
 								anchors.right: parent.right
-								anchors.rightMargin: Config.launcherPadding
+								anchors.rightMargin: Config.launcherPadding * 2
 								anchors.verticalCenter: parent.verticalCenter
 								width: visible ? implicitWidth : 0
 								visible: row.modelData.kind === "proc" || row.modelData.kind === "vm"

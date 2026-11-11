@@ -12,6 +12,7 @@ Item {
 	property real rowHeight: 0
 	property real rowSpacing: Config.procsGap
 	property real scrollWidth: Config.scrollbarWidth
+	property real highlightRadius: Config.rowRadius
 
 	readonly property int count: list.count
 	readonly property var current: list.currentItem ? list.currentItem.modelData : null
@@ -108,6 +109,7 @@ Item {
 
 		highlight: Highlight {
 			fillParent: false
+			radius: root.highlightRadius
 		}
 	}
 
