@@ -8,9 +8,11 @@ PKGSTORE=${DOTFILES_VM_PKGS:-$BASE/packages}
 ROOTFS=${DOTFILES_VM_ROOTFS:-$BASE/rootfs}
 ROOTFS_SHA=$BASE/rootfs.sha
 DISK_HEAD=$BASE/disk-head.img
+ROOT_IMG_CACHE=$BASE/root.btrfs
+ROOT_IMG_SHA=$BASE/root.btrfs.sha
 ROOT_UUID=28605d0a-df51-46ea-bfe7-e9e6d52fe390
 ROOT_IMG=${DOTFILES_VM_ROOT_IMG:-6G}
-DISK_SIZE=${DOTFILES_VM_DISK_SIZE:-7G}
+DISK_SIZE=${DOTFILES_VM_DISK_SIZE:-32G}
 RUNS=${DOTFILES_VM_RUNS:-$ROOT/vm/runs}
 
 CLOUD_NAME=Arch-Linux-x86_64-cloudimg-20261101.620452.qcow2
@@ -222,7 +224,15 @@ prefetch_rootfs() {
 }
 
 make_disk_head() {
-	[ -f "$DISK_HEAD" ] && return 0
+	local want=""
+	case $DISK_SIZE in
+		32G) want=$((32 * 1024 * 1024 * 1024)) ;;
+		7G) want=$((7 * 1024 * 1024 * 1024)) ;;
+		6G) want=$((6 * 1024 * 1024 * 1024)) ;;
+	esac
+	if [ -f "$DISK_HEAD" ] && { [ -z "$want" ] || [ "$(stat -c %s "$DISK_HEAD")" = "$want" ]; }; then
+		return 0
+	fi
 	command -v sfdisk >/dev/null 2>&1 || return 1
 	[ -f "$CLOUD" ] || return 1
 	mkdir -p "$BASE"
@@ -234,79 +244,52 @@ make_disk_head() {
 	rm -f "$raw"
 }
 
-export_rootfs() {
-	[ -d "$ROOTFS" ] && return 0
+slice_root_image() {
 	[ -f "$PACKAGES" ] || return 1
-	[ -f "$CACHE/direct/initramfs.img" ] || return 1
-	command -v mkfs.vfat mcopy zstd tar >/dev/null 2>&1 || return 1
+	[ "$DISK_SIZE" = 32G ] || return 1
+	command -v qemu-img numfmt >/dev/null 2>&1 || return 1
+	local raw=$CACHE/packages.disk bytes
+	bytes=$(numfmt --from=iec "$DISK_SIZE") || return 1
+	"$QEMU_IMG" convert -f qcow2 -O raw "$PACKAGES" "$raw" || return 1
+	build_dcopy || return 1
+	rm -f "$ROOT_IMG_CACHE"
+	"$BASE/dcopy" "$raw" "$ROOT_IMG_CACHE" 0 $((302 * 1024 * 1024)) || return 1
+	truncate -s $((bytes - 302 * 1024 * 1024)) "$ROOT_IMG_CACHE"
+	rm -f "$raw"
+	printf '%s\n' "$(packages_want)" > "$ROOT_IMG_SHA"
+}
 
-	local out=$CACHE/rootfs-export seed=$CACHE/rootfs-seed.img tar=$CACHE/rootfs-export/rootfs.tar.zst src=$CACHE/rootfs-src.qcow2
-	rm -rf "$out"; mkdir -p "$out"
-	rm -f "$seed" "$tar" "$src"
-	truncate -s 16M "$seed"
-	mkfs.vfat -n cidata "$seed" >/dev/null 2>&1
-	cat > "$out/boot.sh" <<'BOOT'
-#!/bin/bash
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-mkdir -p /mnt/hostpkg
-mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
-tar -C / --one-file-system --xattrs --acls --numeric-owner 	--exclude=./proc --exclude=./sys --exclude=./dev --exclude=./run 	--exclude=./tmp --exclude=./mnt --exclude=./swap --exclude=./var/cache/pacman/pkg 	-cpf - . | zstd -q -T0 -3 -o /mnt/hostpkg/rootfs.tar.zst
-poweroff -f
-BOOT
-	cat > "$out/provision.service" <<'UNIT'
-[Unit]
-Description=dotfiles rootfs export
-After=local-fs.target
-[Service]
-Type=oneshot
-ExecStart=/bin/bash /mnt/seed/boot.sh
-StandardOutput=journal+console
-StandardError=journal+console
-[Install]
-WantedBy=provision.target
-UNIT
-	cat > "$out/provision.target" <<'UNIT'
-[Unit]
-Description=dotfiles rootfs export
-Requires=provision.service
-After=provision.service
-UNIT
-	mcopy -i "$seed" "$out/boot.sh" ::boot.sh
-	mcopy -i "$seed" "$out/provision.service" ::provision.service
-	mcopy -i "$seed" "$out/provision.target" ::provision.target
-	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -b "$PACKAGES" -F qcow2 "$src" >/dev/null
-	timeout 600 "$QEMU" -name dotfiles-rootfs -machine q35,accel=kvm -cpu host -smp "$(nproc)" -m 8G \
-		-kernel "$(cat "$CACHE/direct/kernel")" -initrd "$CACHE/direct/initramfs.img" \
-		-append "console=ttyS0 root=/dev/vda3 rw systemd.unit=provision.target" \
-		-drive "file=$src,if=virtio,format=qcow2,cache=unsafe" \
-		-drive "file=$seed,if=virtio,format=raw,readonly=on" \
-		-virtfs "local,path=$out,mount_tag=hostpkg,security_model=none" \
-		-device virtio-rng-pci -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
-		-display none -serial "file:$CACHE/rootfs-export.log" -no-reboot || true
-	[ -f "$tar" ] || return 1
-	mkdir -p "$ROOTFS"
-	userns_run tar --zstd -xpf "$tar" -C "$ROOTFS" --numeric-owner --xattrs --acls || return 1
-	printf '%s\n' "$(packages_want)" > "$ROOTFS_SHA"
-	rm -rf "$out" "$seed" "$tar" "$src"
+root_source_ready() {
+	[ -f "$ROOT_IMG_CACHE" ] && [ -f "$ROOT_IMG_SHA" ] && [ "$(cat "$ROOT_IMG_SHA")" = "$(packages_want)" ] && return 0
+	[ -d "$ROOTFS" ] && [ -f "$ROOTFS_SHA" ] && [ "$(cat "$ROOTFS_SHA")" = "$(packages_want)" ] && return 0
+	return 1
 }
 
 materialize_packages() {
-	[ -d "$ROOTFS" ] || return 1
-	[ -f "$ROOTFS_SHA" ] || return 1
 	make_disk_head || return 1
-	command -v mkfs.btrfs >/dev/null 2>&1 || return 1
 	command -v go >/dev/null 2>&1 || return 1
 
-	local raw=$CACHE/packages.raw image=$CACHE/root.btrfs
+	local raw=$CACHE/packages.raw image=$CACHE/root.btrfs current
+	current=$(packages_want)
 	mkdir -p "$CACHE"
 	cp --reflink=auto "$DISK_HEAD" "$raw"
+	build_dcopy || return 1
+	if [ -f "$ROOT_IMG_CACHE" ] && [ -f "$ROOT_IMG_SHA" ] && [ "$(cat "$ROOT_IMG_SHA")" = "$current" ]; then
+		"$BASE/dcopy" "$ROOT_IMG_CACHE" "$raw" $((302 * 1024 * 1024)) || return 1
+		rm -f "$PACKAGES"
+		"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$raw" "$PACKAGES" >/dev/null
+		echo "packages layer cached"
+		return 0
+	fi
+
+	[ -d "$ROOTFS" ] && [ -f "$ROOTFS_SHA" ] && [ "$(cat "$ROOTFS_SHA")" = "$current" ] || return 1
+	command -v mkfs.btrfs >/dev/null 2>&1 || return 1
 	rm -f "$image"
 	truncate -s "$ROOT_IMG" "$image"
 	prefetch_rootfs &
 	userns_run mkfs.btrfs -q -m single -d single -K --nodesize 4096 --csum xxhash \
 		-O ^free-space-tree,^block-group-tree -r "$ROOTFS" -U "$ROOT_UUID" -L root "$image" || return 1
 	wait || true
-	build_dcopy || return 1
 	"$BASE/dcopy" "$image" "$raw" $((302 * 1024 * 1024)) || return 1
 	rm -f "$image" "$PACKAGES"
 	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$raw" "$PACKAGES" >/dev/null
@@ -334,7 +317,7 @@ cmd_packages() {
 		exit 1
 	fi
 
-	if [ -z "$ARCH_SNAPSHOT" ] && [ -d "$ROOTFS" ] && [ -f "$ROOTFS_SHA" ] && [ "$(cat "$ROOTFS_SHA")" = "$current" ]; then
+	if [ -z "$ARCH_SNAPSHOT" ] && root_source_ready; then
 		if materialize_packages; then
 			rm -f "$GOLDEN" "$CACHE/golden.sha"
 			printf '%s\n' "$current" > "$stamp"
@@ -411,7 +394,7 @@ cmd_packages() {
 		mkdir -p "$BASE"
 		cp --reflink=auto "$PACKAGES" "$BASE/packages.qcow2"
 		cp "$stamp" "$BASE/packages.sha"
-		export_rootfs || echo "rootfs export skipped" >&2
+		slice_root_image || echo "root image cache skipped" >&2
 	fi
 }
 

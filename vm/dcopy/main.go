@@ -8,13 +8,18 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "usage: dcopy src dst offset")
+	if len(os.Args) < 4 {
+		fmt.Fprintln(os.Stderr, "usage: dcopy src dst dst_offset [src_offset] [length]")
 		os.Exit(2)
 	}
-	offset := int64(0)
-	if len(os.Args) > 3 {
-		offset, _ = strconv.ParseInt(os.Args[3], 10, 64)
+	dstOffset, err := strconv.ParseInt(os.Args[3], 10, 64)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	srcOffset := int64(0)
+	if len(os.Args) > 4 {
+		srcOffset, _ = strconv.ParseInt(os.Args[4], 10, 64)
 	}
 	src, err := os.Open(os.Args[1])
 	if err != nil {
@@ -22,7 +27,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer src.Close()
-	dst, err := os.OpenFile(os.Args[2], os.O_WRONLY, 0)
+	dst, err := os.OpenFile(os.Args[2], os.O_WRONLY|os.O_CREATE, 0o644)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -33,8 +38,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	size := info.Size()
-	for off := int64(0); off < size; {
+	end := info.Size()
+	if len(os.Args) > 5 {
+		length, _ := strconv.ParseInt(os.Args[5], 10, 64)
+		if length > 0 && srcOffset+length < end {
+			end = srcOffset + length
+		}
+	}
+	for off := srcOffset; off < end; {
 		data, err := src.Seek(off, 3)
 		if err != nil {
 			if err == io.EOF {
@@ -43,19 +54,22 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+		if data >= end {
+			break
+		}
 		hole, err := src.Seek(data, 4)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		if hole > size {
-			hole = size
+		if hole > end {
+			hole = end
 		}
 		if _, err := src.Seek(data, 0); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		if _, err := dst.Seek(offset+data, 0); err != nil {
+		if _, err := dst.Seek(dstOffset+data-srcOffset, 0); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
