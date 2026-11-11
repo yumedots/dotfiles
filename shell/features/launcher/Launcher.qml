@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.ui
 import qs
@@ -24,6 +25,16 @@ PanelWindow {
 	property bool following: false
 	property bool freshAnchor: false
 
+	property bool placed: false
+	property real placeX: 0
+	property real placeY: 0
+	property real savedX: 0
+	property real savedY: 0
+	property bool savedPlace: false
+	property real dragX: 0
+	property real dragY: 0
+	property bool dragHold: false
+
 	property bool windows: false
 	property int winIndex: 0
 
@@ -40,7 +51,71 @@ PanelWindow {
 		onTriggered: root.settled = true
 	}
 
+	Timer {
+		id: windowDragTimer
+
+		interval: 50
+
+		onTriggered: root.applyWindowDrag()
+	}
+
 	readonly property var state: Yudae.launcher
+
+	FileView {
+		id: placement
+
+		path: Quickshell.stateDir + "/launcher-position.json"
+		preload: true
+		printErrors: false
+
+		onLoaded: root.loadPlace(text())
+	}
+
+	function defaultX() {
+		return Math.round((root.width - card.width) / 2);
+	}
+
+	function defaultY() {
+		return root.spotlight ? Math.round(root.height * Config.launcherSpotlightTop) : Math.round((root.height - card.height) / 2);
+	}
+
+	function place(x, y) {
+		root.placeX = Calc.clamp(x, 0, Math.max(0, root.width - card.width));
+		root.placeY = Calc.clamp(y, 0, Math.max(0, root.height - card.height));
+		root.placed = true;
+	}
+
+	function clampPlace() {
+		if (root.placed)
+			root.place(root.placeX, root.placeY);
+	}
+
+	function loadPlace(body) {
+		try {
+			const at = JSON.parse(body);
+
+			if (typeof at.x !== "number" || typeof at.y !== "number")
+				return;
+
+			root.savedX = at.x;
+			root.savedY = at.y;
+			root.savedPlace = true;
+
+			if (root.shown && !root.placed && Config.launcherMove !== "forget")
+				root.place(root.savedX, root.savedY);
+		} catch (error) {
+		}
+	}
+
+	function savePlace() {
+		if (!root.placed || Config.launcherMove === "forget")
+			return;
+
+		root.savedX = root.placeX;
+		root.savedY = root.placeY;
+		root.savedPlace = true;
+		placement.setText(JSON.stringify({ x: Math.round(root.placeX), y: Math.round(root.placeY) }));
+	}
 
 	// A card on its way out keeps the screen it was showing. The snapshot goes
 	// back to the first screen once the launcher lets go of it, and following
@@ -146,6 +221,8 @@ PanelWindow {
 	visible: alwaysMapped || root.shown || card.opacity > 0
 
 	Component.onCompleted: {
+		root.setWindowDrag(false);
+
 		if (root.alwaysMapped)
 			root.push();
 	}
@@ -249,10 +326,20 @@ PanelWindow {
 		Yudae.cmd("launcher", { query: root.query, forced: root.forced, group: root.group });
 	}
 
+	function setWindowDrag(hold) {
+		root.dragHold = hold;
+		windowDragTimer.restart();
+	}
+
+	function applyWindowDrag() {
+		Quickshell.execDetached(["hyprctl", "eval", "require('binds').launcherDrag(" + (root.dragHold ? "true" : "false") + ")"]);
+	}
+
 	function open(mode) {
 		if (mode !== undefined)
 			root.windows = false;
 
+		root.setWindowDrag(true);
 		root.query = "";
 		root.group = "";
 		root.forced = mode || "";
@@ -268,6 +355,14 @@ PanelWindow {
 		// snapshot, so it has nothing to wait for.
 		root.settled = root.windows;
 		settleGuard.restart();
+
+		root.placed = Config.launcherMove !== "forget" && root.savedPlace;
+
+		if (root.placed) {
+			root.placeX = root.savedX;
+			root.placeY = root.savedY;
+			root.clampPlace();
+		}
 
 		root.shown = true;
 		root.winIndex = root.windows ? 1 : 0;
@@ -291,6 +386,7 @@ PanelWindow {
 	}
 
 	function close() {
+		root.setWindowDrag(false);
 		root.heldMode = root.mode;
 		root.heldResults = root.results;
 		root.shown = false;
@@ -748,8 +844,8 @@ PanelWindow {
 	HyprBorder {
 		id: card
 
-		x: Math.round((root.width - card.width) / 2)
-		y: root.spotlight ? Math.round(root.height * Config.launcherSpotlightTop) : Math.round((root.height - card.height) / 2)
+		x: root.placed ? root.placeX : root.defaultX()
+		y: root.placed ? root.placeY : root.defaultY()
 
 		width: root.windows ? windowsGrid.implicitWidth + card.inset * 2
 		      : root.spotlight ? Config.launcherSpotlightWidth
@@ -760,6 +856,9 @@ PanelWindow {
 		backgroundColor: Config.surfaceTranslucent
 		opacity: root.shown && root.settled ? 1 : 0
 		visible: root.configured && (root.shown || opacity > 0)
+
+		onWidthChanged: root.clampPlace()
+		onHeightChanged: root.clampPlace()
 
 		Behavior on opacity {
 			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.OutCubic }
@@ -1189,6 +1288,29 @@ PanelWindow {
 			title: root.winName
 			emptyMessage: root.empty
 			available: root.screen ? root.screen.width : root.width
+		}
+
+		DragHandler {
+			target: null
+			acceptedButtons: Qt.LeftButton
+			acceptedModifiers: Qt.MetaModifier
+			grabPermissions: PointerHandler.CanTakeOverFromAnything
+
+			onActiveChanged: {
+				if (active) {
+					root.dragX = card.x;
+					root.dragY = card.y;
+					root.place(root.dragX, root.dragY);
+					return;
+				}
+
+				root.savePlace();
+			}
+
+			onActiveTranslationChanged: {
+				if (active)
+					root.place(root.dragX + activeTranslation.x, root.dragY + activeTranslation.y);
+			}
 		}
 	}
 }

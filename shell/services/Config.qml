@@ -247,6 +247,7 @@ QtObject {
 	readonly property var launcherSpotlightFontSize: settings.launcherSpotlightFontSize !== undefined ? settings.launcherSpotlightFontSize : 20
 	readonly property var launcherSpotlightMaxRows: settings.launcherSpotlightMaxRows !== undefined ? settings.launcherSpotlightMaxRows : 8
 	readonly property var launcherSpotlightTop: settings.launcherSpotlightTop !== undefined ? settings.launcherSpotlightTop : 0.25
+	readonly property var launcherMove: settings.launcherMove !== undefined ? settings.launcherMove : "remember"
 	readonly property var launcherIconActive: settings.launcherIconActive !== undefined ? settings.launcherIconActive : "\uf00c"
 
 	// wallpaper picker
