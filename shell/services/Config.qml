@@ -150,6 +150,8 @@ QtObject {
 	readonly property var cpuBaseMono: settings.cpuBaseMono !== undefined ? settings.cpuBaseMono : "#ffffff"
 	readonly property var cpuPeak: settings.cpuPeak !== undefined ? settings.cpuPeak : "#e05252"
 	readonly property var cpuPeakMono: settings.cpuPeakMono !== undefined ? settings.cpuPeakMono : "#ffffff"
+	readonly property var cpuCore: settings.cpuCore !== undefined ? settings.cpuCore : "#7aa2f7"
+	readonly property var cpuCoreFloor: settings.cpuCoreFloor !== undefined ? settings.cpuCoreFloor : 0.18
 	readonly property var cpuIdle: settings.cpuIdle !== undefined ? settings.cpuIdle : "#2f2f2f"
 	readonly property var cpuTopCount: settings.cpuTopCount !== undefined ? settings.cpuTopCount : 5
 	readonly property var cpuTooltipWidth: settings.cpuTooltipWidth !== undefined ? settings.cpuTooltipWidth : 240

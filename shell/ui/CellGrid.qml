@@ -8,6 +8,7 @@ Item {
 	property int columns: 16
 	property real cellSize: 12
 	property real gap: 4
+	property real corner: 0
 	property var colorFor: null
 
 	readonly property int step: root.cellSize + root.gap
@@ -28,7 +29,7 @@ Item {
 			width: root.cellSize
 			height: root.cellSize
 			visible: modelData !== null
-			radius: 0
+			radius: root.corner
 			color: root.colorFor ? root.colorFor(modelData, index) : Config.cpuIdle
 		}
 	}
