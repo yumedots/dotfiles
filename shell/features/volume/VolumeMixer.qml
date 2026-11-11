@@ -225,7 +225,6 @@ Item {
 		readonly property bool muted: !!row.node && row.node.muted === true
 		readonly property bool selected: row.rowIndex === root.targetIndex
 		readonly property real volume: root.volumeOf(row.node)
-		readonly property string percentText: Math.round(row.volume * 100) + "%"
 		readonly property string iconSource: row.stream ? root.iconFor(row.node) : ""
 		readonly property string glyph: row.stream ? Config.iconApp : Config.iconVolumeHigh
 		readonly property real level: Calc.clamp(row.volume / Config.mixerMaxVolume, 0, 1)
@@ -235,10 +234,14 @@ Item {
 		height: Math.max(Config.mixerDeviceIconSize, Settings.fontSize)
 		implicitHeight: height
 
+		HoverHandler {
+			id: hover
+		}
+
 		Highlight {
 			id: hl
 
-			active: row.selected && root.keyboard
+			active: (row.selected && root.keyboard) || hover.hovered
 		}
 
 		MouseArea {
@@ -249,14 +252,6 @@ Item {
 				root.targetIndex = row.rowIndex;
 				root.activateNode(row.node);
 			}
-		}
-
-		TextMetrics {
-			id: sample
-
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			text: "100%"
 		}
 
 		Item {
@@ -284,25 +279,12 @@ Item {
 			}
 		}
 
-		Text {
-			id: percent
-
-			anchors.right: parent.right
-			anchors.verticalCenter: parent.verticalCenter
-			width: sample.width
-			horizontalAlignment: Text.AlignRight
-			font.family: Config.fontFamily
-			font.pixelSize: Settings.fontSize
-			color: row.muted && !hl.active ? Config.muted : hl.ink
-			text: row.percentText
-		}
-
 		Item {
 			id: fader
 
 			anchors.left: iconSlot.right
 			anchors.leftMargin: Config.mixerListGap
-			anchors.right: percent.left
+			anchors.right: parent.right
 			anchors.rightMargin: Config.mixerListGap
 			anchors.verticalCenter: parent.verticalCenter
 			height: parent.height
@@ -319,7 +301,8 @@ Item {
 				hitPad: row.hoverPad
 				selected: row.step
 				level: root.shift ? row.level : -1
-				ink: row.muted ? Config.dim : Config.foreground
+				lens: false
+				ink: row.muted && !hl.active ? Config.dim : hl.ink
 			}
 
 			MouseArea {
