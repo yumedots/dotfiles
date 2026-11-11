@@ -158,6 +158,7 @@ Item {
 			height: searchField.implicitHeight
 			visible: panel.showList
 			color: Config.launcherSearchBox
+			radius: Config.rowRadius
 
 			Text {
 				id: listTitle
@@ -218,7 +219,10 @@ Item {
 				Text {
 					id: process
 
-					width: parent.width - amount.width - 8
+					anchors.left: parent.left
+					anchors.leftMargin: Config.rowInset
+					anchors.verticalCenter: parent.verticalCenter
+					width: parent.width - amount.width - 2 * Config.rowInset - 8
 					elide: Text.ElideRight
 
 					font.family: Config.fontFamily
@@ -231,6 +235,8 @@ Item {
 					id: amount
 
 					anchors.right: parent.right
+					anchors.rightMargin: Config.rowInset
+					anchors.verticalCenter: parent.verticalCenter
 
 					font.family: Config.fontFamily
 					font.pixelSize: Settings.fontSize
