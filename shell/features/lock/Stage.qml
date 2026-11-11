@@ -293,7 +293,7 @@ PanelWindow {
 			y: card.y + (card.height - powerButton.height) / 2
 			width: 40
 			height: 40
-			radius: 2
+			radius: Config.rowRadius
 			color: powerHit.containsMouse ? Config.launcherHighlight : Config.surfaceTranslucent
 			opacity: root.intro * root.veil
 
@@ -359,7 +359,7 @@ PanelWindow {
 
 						width: actionLabel.implicitWidth + 58
 						height: 34
-						radius: 2
+						radius: Config.rowRadius
 						color: actionHit.containsMouse || (root.menuOpen && root.menuIndex === actionRow.index) ? Config.launcherHighlight : "transparent"
 
 						Text {

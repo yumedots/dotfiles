@@ -1036,7 +1036,7 @@ PanelWindow {
 								anchors.centerIn: parent
 								width: root.iconSize
 								height: root.iconSize
-								radius: 3
+								radius: Config.rowRadius
 								color: Config.surface
 								visible: row.modelData.kind === "app" && (rowIcon.icon === "" || rowIconImage.status === Image.Error)
 							}

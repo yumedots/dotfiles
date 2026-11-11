@@ -52,6 +52,7 @@ Rectangle {
 
 				Rectangle {
 					anchors.fill: parent
+					radius: Config.rowRadius
 					color: rowMouse.containsMouse && rowMouse.enabled ? Config.launcherHighlight : "transparent"
 				}
 
