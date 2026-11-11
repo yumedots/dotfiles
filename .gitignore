@@ -15,3 +15,4 @@ shell/native/qml
 config/zsh/.zcompdump-*
 config/zsh/.zsh_history
 /bench/images.jsonl
+/config/kconf_updaterc
