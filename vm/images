@@ -10,6 +10,8 @@ ROOTFS_SHA=$ROOTFS.sha
 DISK_HEAD=$BASE/disk-head.img
 ROOT_IMG_CACHE=$BASE/root.btrfs
 ROOT_IMG_SHA=$BASE/root.btrfs.sha
+ROOT_IMG_ZST=${DOTFILES_VM_ROOT_IMG_ZST:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-rootfs.img.zst}
+ROOT_IMG_ZST_SHA=$ROOT_IMG_ZST.sha
 ROOT_UUID=28605d0a-df51-46ea-bfe7-e9e6d52fe390
 ROOT_IMG=${DOTFILES_VM_ROOT_IMG:-6G}
 DISK_SIZE=${DOTFILES_VM_DISK_SIZE:-32G}
@@ -37,7 +39,7 @@ mirrors=(
 )
 
 usage() {
-	echo "usage: vm/images fetch|packages [--snapshot YYYY/MM/DD] [--force]|golden [--snapshot YYYY/MM/DD] [--force]|ensure|overlay <name> [golden-tag]|snapshot <name> <tag>|restore <name> <tag>|list" >&2
+	echo "usage: vm/images fetch|packages|backup [--snapshot YYYY/MM/DD] [--force]|golden [--snapshot YYYY/MM/DD] [--force]|ensure|overlay <name> [golden-tag]|snapshot <name> <tag>|restore <name> <tag>|list" >&2
 	exit 2
 }
 
@@ -383,6 +385,15 @@ materialize_packages() {
 	local raw=$CACHE/packages.raw image=$CACHE/root.btrfs current
 	current=$(packages_want)
 	mkdir -p "$CACHE"
+	if [ ! -f "$ROOT_IMG_CACHE" ] && [ -f "$ROOT_IMG_ZST" ] && [ -f "$ROOT_IMG_ZST_SHA" ] && [ "$(cat "$ROOT_IMG_ZST_SHA")" = "$current" ]; then
+		if command -v zstd >/dev/null 2>&1 && zstd -q -d --sparse -T0 -o "$ROOT_IMG_CACHE.tmp" "$ROOT_IMG_ZST"; then
+			mv "$ROOT_IMG_CACHE.tmp" "$ROOT_IMG_CACHE"
+			printf '%s\n' "$current" > "$ROOT_IMG_SHA"
+			echo "root image restored"
+		else
+			rm -f "$ROOT_IMG_CACHE.tmp"
+		fi
+	fi
 	cp --reflink=auto "$DISK_HEAD" "$raw"
 	build_dcopy || return 1
 	if [ -f "$ROOT_IMG_CACHE" ] && [ -f "$ROOT_IMG_SHA" ] && [ "$(cat "$ROOT_IMG_SHA")" = "$current" ]; then
@@ -922,6 +933,15 @@ cmd_golden() {
 	echo "golden layer ready $GOLDEN"
 }
 
+cmd_backup() {
+	[ -f "$ROOT_IMG_CACHE" ] || { echo "no compiled root image" >&2; exit 1; }
+	command -v zstd >/dev/null 2>&1 || { echo "zstd missing" >&2; exit 1; }
+	zstd -q -T0 -3 -o "$ROOT_IMG_ZST.tmp" "$ROOT_IMG_CACHE" || exit 1
+	mv "$ROOT_IMG_ZST.tmp" "$ROOT_IMG_ZST"
+	if [ -f "$ROOT_IMG_SHA" ]; then cat "$ROOT_IMG_SHA" > "$ROOT_IMG_ZST_SHA"; fi
+	echo "root image backup $ROOT_IMG_ZST"
+}
+
 cmd_ensure() {
 	[ -f "$GOLDEN" ] && return
 	cmd_golden
@@ -996,6 +1016,7 @@ case "$command" in
 		fi
 		if [ "$command" = packages ]; then cmd_packages; else cmd_golden; fi
 		;;
+	backup) cmd_backup ;;
 	ensure) cmd_ensure ;;
 	overlay) cmd_overlay "$@" ;;
 	snapshot) cmd_snapshot "$@" ;;
