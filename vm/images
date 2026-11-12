@@ -431,8 +431,8 @@ UNIT
 		-virtfs "local,path=$PKGSTORE,mount_tag=hostpkg,security_model=none" \
 		-device virtio-rng-pci -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
 		-display none -serial "file:$log" -no-reboot || true
-	grep -q 'dotfiles: parallel done' "$log" || return 1
-	cp --reflink=auto "$target" "$PACKAGES" || return 1
+	grep -q 'dotfiles: parallel done' "$log" || { rm -f "$target" "$builder" "$seed"; return 1; }
+	cp --reflink=auto "$target" "$PACKAGES" || { rm -f "$target" "$builder" "$seed"; return 1; }
 	rm -f "$target" "$builder" "$seed"
 	slice_root_image || true
 	echo "parallel build ready"
