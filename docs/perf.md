@@ -136,15 +136,19 @@ Direct kernel boot with a custom initramfs is used for provisioning. The pacman 
 
 With a warmed package cache and the multi-mirror prefetcher, a forced packages build is **54.8s** (54.1s on the previous run) with 13-19MB left to download. The prefetcher reads `urls.txt` from the previous build, takes the missing packages across four mirrors, and the guest copies new packages back into the cache. The kernel upgrade is ignored so the cloud kernel stays. A cold first build is 1m38s; the 54s figure is a rebuild with the cache present.
 
-The one-time base is now a parallel install into a separate target disk. A builder VM takes the precomputed package list and pacman DB from the store, extracts 341 packages directly from the 9p store with 16 `bsdtar` workers into the target partition, installs the DB from the precomputed tar, and runs sysusers, tmpfiles, ldconfig and the golden setup in a chroot. The font cache, schemas, ca-trust and depmod run in a one-shot first-boot unit. The target is unmounted and `btrfs check --readonly` must pass. Measured from a clean base and cache: **30.4s total** (about 21.5s in the guest), down from 53.9s. The result has 493 packages, `pacman -Dk` clean, user 1000, `sudo` 4755, units enabled, and a normal graphical boot to D-Bus and the login prompt. The earlier `bsdtar` attempt failed because it extracted over the live root; the separate target fixes that. The parallel path uses precomputed package and pacman-DB artifacts written by the full pacman build; an empty store falls back to the normal pacman build, which fills the store for the next run. The expensive font, schema, ca-trust and depmod work is deferred to a one-shot first-boot unit.
+The one-time base is a parallel install into a separate raw target disk. Inputs live in `~/.local/share/dotfiles/vm-inputs`: the cloud image, the package store, a btrfs package-store image, a pre-grown 32G raw target base, the 32G GPT disk head, the direct initramfs and a compressed copy of the compiled root image. The builder boots under the bash init (`dotfiles.parallel=1`), mounts the package image on virtio, extracts 341 packages with 16 `bsdtar` workers into the target, installs the pacman DB from the precomputed tar, and writes the user, units and fstab with direct symlinks. Font cache, schemas, ca-trust and depmod run in a one-shot first-boot unit. The target is unmounted and the host slices partition 3 into `root.btrfs` with `vm/dcopy`. With the input compiled image also removed this extraction path measures **10.4s total**.
 
-The fast base build uses a cached compiled filesystem. `~/.local/share/dotfiles/vm-base` holds the cloud image, a 32G GPT disk head, `root.btrfs` (the compiled root filesystem, 6G sparse, about 3G on disk) and the package store. A build reflinks the disk head, copies only the allocated extents of `root.btrfs` into partition 3 with `vm/dcopy` (`copy_file_range`, so it reflinks on btrfs), and writes a 193K qcow2 overlay. `xmake vm bench final` on an empty bench cache measures **0.44s** (`fetch 0.009s, packages 0.396s, golden 0.037s`). The resulting chain boots to D-Bus and the login prompt; the guest has user 1000, `sudo` 4755, `root NP`, and `yudaemond`/`yudae-desktop` enabled.
+The no-artifact path removes `vm-base`, `vm-rootfs` and the output `vm-rootfs.img.zst`, keeping the compiled-image input `~/.local/share/dotfiles/vm-inputs/rootfs.img.zst` (1.3G). It restores the image in **8.57s total** (`root image restored`), and the next build is **0.133s**:
 
-`root.btrfs` is sliced from the target in **2.9s**: `qemu-img convert` the 32G image to raw, then `vm/dcopy` extracts partition 3's allocated extents. With the parallel install and the disk head, the one-time base is about **35.6s** (30.4s build + 2.9s slice + 2.3s head) instead of 83s. The compiled rootfs lives in `~/.local/share/dotfiles/vm-rootfs`, the image cache in `~/.local/share/dotfiles/vm-base`, and a compressed copy of the compiled image in `~/.local/share/dotfiles/vm-rootfs.img.zst` (1.1G), not the disposable build cache. Clearing `XDG_CACHE_HOME` no longer triggers the install; `xmake vm bench final` from an empty bench cache is **0.44s**. If the image cache is deleted, the compressed image restores in **4.13s** and the next build is **0.076s**. If the compressed image is also deleted, `mkfs.btrfs -r` from the durable rootfs takes **6.37s**. The 30.4s parallel install is only paid when the rootfs, image cache and compressed image are all deleted. `vm/images backup` refreshes the compressed image after a package change. A from-scratch machine that also downloads the cloud image pays that download once.
+```
+noartifact total=8568ms
+root image restored
+next=133ms
+```
 
-When `root.btrfs` is missing but the rootfs directory exists, the materializer falls back to `mkfs.btrfs -r` inside a user namespace (`-m single -d single --nodesize 4096 --csum xxhash -O ^free-space-tree,^block-group-tree`), about **8s**. The cached image is the normal path. When both are missing, the parallel install runs and `slice_root_image` caches the result; if the transaction cannot be resolved or a store package is missing, it falls back to the normal pacman build. `btrfs restore` was tried as a host-side export and rejected: it loses setuid/setgid bits. The image slice preserves them because it copies the compiled filesystem itself.
+`xmake vm bench final` from an empty bench cache is **0.45s** (`fetch 0.008s, packages 0.405s, golden 0.037s`). The boot check reports 493 packages, `pacman -Dk` clean, 2 users, `sudo 4755`, and `yudaemond`/`yudae-desktop`/`dotfiles-firstboot` enabled.
 
-The rootfs directory is optional and is owned by subordinate IDs from `/etc/subuid`; remove it with `chmod -R u+w` first or from a matching `unshare --map-users` shell. The cached-image path needs `qemu-img`, `sfdisk`, Go and `vm/dcopy`; when those are unavailable it falls back to the pacman build.
+`vm/images backup` refreshes both the output and input compressed images after a package change. The rootfs directory and `mkfs.btrfs -r` remain as a 6.37s fallback when the input image is missing but the rootfs is present; the pacman build remains the final fallback when the store has no transaction/DB artifacts. `btrfs restore` was rejected because it loses setuid/setgid bits; the image slice and restore preserve them.
 
 ### Clock
 
@@ -160,6 +164,23 @@ The headless daemon still passes 3.6MB idle RSS and 9.1s cold build against 8MB/
 - C6 `egl-headless` on the same guest sizes for the agent comparison.
 - Mouse input latency still needs a tablet marker capture.
 - Per-delivered-frame CPU/GPU, not just totals.
+
+## Disk scanner, measured 2026-11-11
+
+`xmake bench disk` builds a seeded synthetic tree, runs the sequential and threaded scanners at 1/2/4/8/16/nproc, keeps the fastest exact version, and writes one row to `daemon/bench/disk.jsonl`. The first accurate run seeds the `disk` block in `daemon/bench/baseline.json`; later runs fail when throughput drops under 80% of that baseline, when the cache grows past twice its baseline, or when any total stops being exact. `--files=N` changes the tiny-file count and `--real` adds `$HOME`.
+
+Measured on CachyOS, kernel 7.3.3, Zig 0.17.1, 50k tiny files:
+
+| metric | first run |
+| --- | --- |
+| winner | v1 threaded, 4 threads |
+| throughput | 277k entries/s |
+| syscalls | 1.02 per entry |
+| cache | 5.7kB, sub-millisecond `mmap` load |
+| views | p50 0.8us, p99 1.1us |
+| accuracy | exact against `statx` block totals |
+
+Reference scanners ncdu, gdu, dua and hyperfine are reported when present. Installing them needs root and is asked for at bench time, never done automatically. Cold-cache runs need `yudae-fsd` and `org.yudae.fs.bench`; without it the bench reports the warm numbers only.
 
 ## Rules
 

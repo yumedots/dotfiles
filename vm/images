@@ -4,14 +4,23 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/vm
 BASE=${DOTFILES_VM_BASE:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-base}
-PKGSTORE=${DOTFILES_VM_PKGS:-$BASE/packages}
+INPUTS=${DOTFILES_VM_INPUTS:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-inputs}
+PKGSTORE=${DOTFILES_VM_PKGS:-$INPUTS/packages}
+PKG_IMG=$INPUTS/packages.btrfs
+PKG_IMG_SHA=$PKG_IMG.sha
+TARGET_BASE=$INPUTS/target-base.img
+TARGET_SIZE=${DOTFILES_VM_TARGET_SIZE:-32G}
+DCOPY=$INPUTS/dcopy
+DIRECT=$INPUTS/direct
 ROOTFS=${DOTFILES_VM_ROOTFS:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-rootfs}
 ROOTFS_SHA=$ROOTFS.sha
-DISK_HEAD=$BASE/disk-head.img
+DISK_HEAD=$INPUTS/disk-head.img
 ROOT_IMG_CACHE=$BASE/root.btrfs
 ROOT_IMG_SHA=$BASE/root.btrfs.sha
 ROOT_IMG_ZST=${DOTFILES_VM_ROOT_IMG_ZST:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-rootfs.img.zst}
 ROOT_IMG_ZST_SHA=$ROOT_IMG_ZST.sha
+ROOT_IMG_INPUT=$INPUTS/rootfs.img.zst
+ROOT_IMG_INPUT_SHA=$ROOT_IMG_INPUT.sha
 ROOT_UUID=28605d0a-df51-46ea-bfe7-e9e6d52fe390
 ROOT_IMG=${DOTFILES_VM_ROOT_IMG:-6G}
 DISK_SIZE=${DOTFILES_VM_DISK_SIZE:-32G}
@@ -19,7 +28,8 @@ RUNS=${DOTFILES_VM_RUNS:-$ROOT/vm/runs}
 
 CLOUD_NAME=Arch-Linux-x86_64-cloudimg-20261101.620452.qcow2
 CLOUD_SHA=794eb4889b39e1f0ed7d5ae998b2a1ed2137db8cf8c3476cf2962c7437ecb003
-CLOUD=$BASE/cloud.qcow2
+CLOUD=$INPUTS/cloud.qcow2
+CLOUD_STAMP=$INPUTS/cloud.stamp
 PACKAGES=$CACHE/packages.qcow2
 GOLDEN=$CACHE/golden.qcow2
 ARCH_SNAPSHOT=""
@@ -59,12 +69,13 @@ speed_pick() {
 }
 
 cloud_mark() {
-	{ stat -c '%s %Y' "$CLOUD"; printf '%s\n' "$CLOUD_SHA"; } > "$BASE/cloud.stamp"
+	mkdir -p "$INPUTS"
+	{ stat -c '%s %Y' "$CLOUD"; printf '%s\n' "$CLOUD_SHA"; } > "$CLOUD_STAMP"
 }
 
 cmd_fetch() {
-	mkdir -p "$BASE"
-	local mark=$BASE/cloud.stamp
+	mkdir -p "$INPUTS"
+	local mark=$CLOUD_STAMP
 	if [ -f "$CLOUD" ] && [ -f "$mark" ] &&
 		[ "$(head -1 "$mark")" = "$(stat -c '%s %Y' "$CLOUD")" ] &&
 		[ "$(tail -1 "$mark")" = "$CLOUD_SHA" ]; then
@@ -95,13 +106,13 @@ parallel_script() {
 	cat <<'SCRIPT'
 #!/bin/bash
 set -u
-echo "dotfiles: parallel start"
+echo "dotfiles: parallel start $(date +%s)"
 vm_exclude='@EXCLUDE@'
-mkdir -p /mnt/seed /mnt/hostpkg /target
+mkdir -p /mnt/seed /mnt/pkg /target
 mountpoint -q /mnt/seed || mount -t vfat /dev/vdb /mnt/seed
-mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
-if [ -f /mnt/seed/fast ] && [ -s /mnt/hostpkg/files.txt ] && [ -f /mnt/hostpkg/pacman-local.tar ]; then
-	sed 's#^#/mnt/hostpkg/#' /mnt/hostpkg/files.txt > /tmp/files.txt
+mountpoint -q /mnt/pkg || mount -t btrfs -o ro /dev/vdd /mnt/pkg || { echo "dotfiles: parallel pkg mount failed"; poweroff -f; exit 1; }
+if [ -f /mnt/seed/fast ] && [ -s /mnt/pkg/files.txt ] && [ -f /mnt/pkg/pacman-local.tar ]; then
+	sed 's#^#/mnt/pkg/#' /mnt/pkg/files.txt > /tmp/files.txt
 	echo "dotfiles: parallel fast list $(wc -l < /tmp/files.txt)"
 else
 	systemctl stop systemd-resolved systemd-networkd NetworkManager 2>/dev/null || true
@@ -121,21 +132,19 @@ else
 	[ -s /tmp/names.txt ] || { echo "dotfiles: parallel resolve failed"; tail -3 /tmp/txn.err; poweroff -f; exit 1; }
 	: > /tmp/files.txt
 	while read -r name; do
-		f=$(ls /mnt/hostpkg/"$name"-*.pkg.tar.zst 2>/dev/null | head -1)
+		f=$(ls /mnt/pkg/"$name"-*.pkg.tar.zst 2>/dev/null | head -1)
 		[ -n "$f" ] || { echo "dotfiles: parallel missing $name"; poweroff -f; exit 1; }
 		echo "$f" >> /tmp/files.txt
 	done < /tmp/names.txt
 fi
-growpart /dev/vdc 3 >/dev/null 2>&1 || true
-partx -u /dev/vdc >/dev/null 2>&1 || true
 mount /dev/vdc3 /target || { echo "dotfiles: parallel mount failed"; poweroff -f; exit 1; }
 btrfs filesystem resize max /target >/dev/null 2>&1 || true
-echo "dotfiles: parallel files $(wc -l < /tmp/files.txt)"
+echo "dotfiles: parallel files $(wc -l < /tmp/files.txt) $(date +%s)"
 xargs -a /tmp/files.txt -P 16 -I{} bsdtar -xpf {} -C /target --exclude=.PKGINFO --exclude=.MTREE --exclude=.INSTALL --exclude=.BUILDINFO 2>/tmp/extract.err
-echo "dotfiles: parallel extracted $(wc -l < /tmp/extract.err)"
-if [ -f /mnt/seed/fast ] && [ -f /mnt/hostpkg/pacman-local.tar ]; then
+echo "dotfiles: parallel extracted $(wc -l < /tmp/extract.err) $(date +%s)"
+if [ -f /mnt/seed/fast ] && [ -f /mnt/pkg/pacman-local.tar ]; then
 	rm -rf /target/var/lib/pacman/local
-	tar -C /target/var/lib/pacman -xf /mnt/hostpkg/pacman-local.tar || { echo "dotfiles: parallel db tar failed"; poweroff -f; exit 1; }
+	tar -C /target/var/lib/pacman -xf /mnt/pkg/pacman-local.tar || { echo "dotfiles: parallel db tar failed"; poweroff -f; exit 1; }
 else
 	pacman -U --dbonly --nodeps --overwrite '*' --noconfirm --root /target $(cat /tmp/files.txt) >/tmp/db.log 2>&1 || { echo "dotfiles: parallel db failed"; tail -5 /tmp/db.log; poweroff -f; exit 1; }
 fi
@@ -146,9 +155,6 @@ mount --bind /proc /target/proc
 mount --bind /sys /target/sys
 mount --bind /dev /target/dev
 chroot /target /bin/bash -c '
-systemd-sysusers 2>/dev/null || true
-systemd-tmpfiles --create 2>/dev/null || true
-ldconfig 2>/dev/null || true
 id -u gabriel >/dev/null 2>&1 || useradd -m -u 1000 -G wheel,video,render,input -s /bin/bash gabriel
 mkdir -p /etc/sudoers.d
 printf "gabriel ALL=(ALL) NOPASSWD:ALL\n" > /etc/sudoers.d/gabriel
@@ -165,6 +171,7 @@ touch /var/lib/dotfiles-golden
 cat > /target/usr/local/bin/dotfiles-firstboot.sh <<'FIX'
 #!/bin/bash
 [ -e /var/lib/dotfiles-fixups ] && exit 0
+ldconfig 2>/dev/null || true
 fc-cache -f 2>/dev/null || true
 glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
 update-desktop-database -q /usr/share/applications 2>/dev/null || true
@@ -184,14 +191,17 @@ ExecStart=/usr/local/bin/dotfiles-firstboot.sh
 [Install]
 WantedBy=multi-user.target
 UNIT
-systemctl --root=/target enable yudaemond yudae-desktop dotfiles-firstboot.service >/dev/null 2>&1 || true
-systemctl --root=/target set-default graphical.target >/dev/null 2>&1 || true
+mkdir -p /target/etc/systemd/system/multi-user.target.wants /target/etc/systemd/system/graphical.target.wants
+ln -sfn /etc/systemd/system/yudaemond.service /target/etc/systemd/system/multi-user.target.wants/yudaemond.service
+ln -sfn /etc/systemd/system/dotfiles-firstboot.service /target/etc/systemd/system/multi-user.target.wants/dotfiles-firstboot.service
+ln -sfn /etc/systemd/system/yudae-desktop.service /target/etc/systemd/system/graphical.target.wants/yudae-desktop.service
+ln -sfn /usr/lib/systemd/system/graphical.target /target/etc/systemd/system/default.target
+echo "dotfiles: parallel golden $(date +%s)"
 echo dotfiles-golden-ok > /dev/ttyS0
 umount /target/proc /target/sys /target/dev 2>/dev/null || true
 sync
 umount /target 2>/dev/null || true
-btrfs check --readonly /dev/vdc3 >/dev/null 2>&1 || { echo "dotfiles: parallel check failed"; poweroff -f; exit 1; }
-echo "dotfiles: parallel done"
+echo "dotfiles: parallel done $(date +%s)"
 poweroff -f
 SCRIPT
 }
@@ -209,7 +219,7 @@ grep -q '^CacheDir' /etc/pacman.conf || echo 'CacheDir = /var/cache/pacman/pkg /
 mkdir -p /mnt/hostpkg
 mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
 mkdir -p /var/cache/pacman/pkg
-for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
+for pkg in /mnt/pkg/*.pkg.tar.zst /mnt/pkg/*.pkg.tar.xz; do
 	[ -e "$pkg" ] || continue
 	ln -sf "$pkg" "/var/cache/pacman/pkg/$(basename "$pkg")"
 done
@@ -219,7 +229,7 @@ vm_exclude='@EXCLUDE@'
 grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
 { pacman -Sp --needed --noconfirm $(cat /tmp/install.txt); pacman -Spu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt); } 2>/dev/null | grep '^http' | sort -u > /tmp/urls.txt || true
-cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
+cp /tmp/urls.txt /mnt/pkg/urls.txt 2>/dev/null || true
 pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
 if grep -q 'failed to commit transaction' /tmp/pacman.log; then
 	grep 'signature from' /tmp/pacman.log | sed 's/^error: //; s/:.*//' | while read -r name; do
@@ -230,14 +240,14 @@ fi
 for pkg in /var/cache/pacman/pkg/*.pkg.tar.zst; do
 	[ -f "$pkg" ] || continue
 	name=$(basename "$pkg")
-	[ -e "/mnt/hostpkg/$name" ] || cp "$pkg" "/mnt/hostpkg/$name" 2>/dev/null || true
+	[ -e "/mnt/pkg/$name" ] || cp "$pkg" "/mnt/pkg/$name" 2>/dev/null || true
 done
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
 cp /tmp/install.txt /opt/packages.installed
 fstrim -av >/dev/null 2>&1 || true
 bash /opt/golden-setup.sh
-tar -C /var/lib/pacman -cf /mnt/hostpkg/pacman-local.tar local 2>/dev/null || true
-grep -a 'Packages (' /tmp/pacman.log | head -1 | sed 's/.*Packages ([0-9]*) //' | tr ' ' '\n' > /mnt/hostpkg/transaction.txt 2>/dev/null || true
+tar -C /var/lib/pacman -cf /mnt/pkg/pacman-local.tar local 2>/dev/null || true
+grep -a 'Packages (' /tmp/pacman.log | head -1 | sed 's/.*Packages ([0-9]*) //' | tr ' ' '\n' > /mnt/pkg/transaction.txt 2>/dev/null || true
 touch /var/lib/dotfiles-provisioned
 echo "dotfiles: provision done"
 poweroff
@@ -257,7 +267,7 @@ grep -q '^CacheDir' /etc/pacman.conf || echo 'CacheDir = /var/cache/pacman/pkg /
 mkdir -p /mnt/hostpkg
 mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
 mkdir -p /var/cache/pacman/pkg
-for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
+for pkg in /mnt/pkg/*.pkg.tar.zst /mnt/pkg/*.pkg.tar.xz; do
 	[ -e "$pkg" ] || continue
 	ln -sf "$pkg" "/var/cache/pacman/pkg/$(basename "$pkg")"
 done
@@ -267,7 +277,7 @@ vm_exclude='@EXCLUDE@'
 grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
 { pacman -Sp --needed --noconfirm $(cat /tmp/install.txt); pacman -Spu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt); } 2>/dev/null | grep '^http' | sort -u > /tmp/urls.txt || true
-cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
+cp /tmp/urls.txt /mnt/pkg/urls.txt 2>/dev/null || true
 if [ -f /opt/packages.installed ]; then
 	sort -u /opt/packages.installed > /tmp/old.txt
 	sort -u /tmp/install.txt > /tmp/new.txt
@@ -290,7 +300,7 @@ bash /opt/golden-setup.sh
 for pkg in /var/cache/pacman/pkg/*.pkg.tar.zst; do
 	[ -f "$pkg" ] || continue
 	name=$(basename "$pkg")
-	[ -e "/mnt/hostpkg/$name" ] || cp "$pkg" "/mnt/hostpkg/$name" 2>/dev/null || true
+	[ -e "/mnt/pkg/$name" ] || cp "$pkg" "/mnt/pkg/$name" 2>/dev/null || true
 done
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
 fstrim -av >/dev/null 2>&1 || true
@@ -321,8 +331,8 @@ userns_run() {
 }
 
 build_dcopy() {
-	local bin=$BASE/dcopy
-	mkdir -p "$BASE"
+	local bin=$DCOPY
+	mkdir -p "$INPUTS"
 	if [ ! -x "$bin" ] || [ "$ROOT/vm/dcopy/main.go" -nt "$bin" ]; then
 		(cd "$ROOT/vm/dcopy" && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o "$bin" .) || return 1
 	fi
@@ -344,7 +354,7 @@ make_disk_head() {
 	fi
 	command -v sfdisk >/dev/null 2>&1 || return 1
 	[ -f "$CLOUD" ] || return 1
-	mkdir -p "$BASE"
+	mkdir -p "$INPUTS"
 	local raw=$CACHE/cloud.raw
 	"$QEMU_IMG" convert -f qcow2 -O raw "$CLOUD" "$raw" || return 1
 	dd if="$raw" of="$DISK_HEAD" bs=512 count=618496 status=none || return 1
@@ -361,8 +371,9 @@ slice_root_image() {
 	bytes=$(numfmt --from=iec "$DISK_SIZE") || return 1
 	"$QEMU_IMG" convert -f qcow2 -O raw "$PACKAGES" "$raw" || return 1
 	build_dcopy || return 1
+	mkdir -p "$BASE"
 	rm -f "$ROOT_IMG_CACHE"
-	"$BASE/dcopy" "$raw" "$ROOT_IMG_CACHE" 0 $((302 * 1024 * 1024)) || return 1
+	"$DCOPY" "$raw" "$ROOT_IMG_CACHE" 0 $((302 * 1024 * 1024)) || return 1
 	truncate -s $((bytes - 302 * 1024 * 1024)) "$ROOT_IMG_CACHE"
 	rm -f "$raw"
 	if command -v btrfs >/dev/null 2>&1 && ! btrfs check --readonly "$ROOT_IMG_CACHE" >/dev/null 2>&1; then
@@ -374,19 +385,61 @@ slice_root_image() {
 
 root_source_ready() {
 	[ -f "$ROOT_IMG_CACHE" ] && [ -f "$ROOT_IMG_SHA" ] && [ "$(cat "$ROOT_IMG_SHA")" = "$(packages_want)" ] && return 0
+	[ -f "$ROOT_IMG_INPUT" ] && [ -f "$ROOT_IMG_INPUT_SHA" ] && [ "$(cat "$ROOT_IMG_INPUT_SHA")" = "$(packages_want)" ] && return 0
 	[ -d "$ROOTFS" ] && [ -f "$ROOTFS_SHA" ] && [ "$(cat "$ROOTFS_SHA")" = "$(packages_want)" ] && return 0
 	return 1
 }
 
+pkg_digest() {
+	find "$PKGSTORE" -maxdepth 1 -type f -printf '%f %s %T@\n' 2>/dev/null | sort | sha256sum | cut -d' ' -f1
+}
+
+make_pkg_image() {
+	[ -d "$PKGSTORE" ] || return 1
+	[ -f "$PKG_IMG" ] && [ -f "$PKG_IMG_SHA" ] && [ "$(cat "$PKG_IMG_SHA")" = "$(pkg_digest)" ] && return 0
+	command -v mkfs.btrfs >/dev/null 2>&1 || return 1
+	mkdir -p "$INPUTS"
+	rm -f "$PKG_IMG.tmp"
+	truncate -s 1536M "$PKG_IMG.tmp"
+	mkfs.btrfs -q -m single -d single -K --nodesize 4096 --csum xxhash -r "$PKGSTORE" -L pkg "$PKG_IMG.tmp" || { rm -f "$PKG_IMG.tmp"; return 1; }
+	mv "$PKG_IMG.tmp" "$PKG_IMG"
+	pkg_digest > "$PKG_IMG_SHA"
+}
+
+make_target_base() {
+	[ -f "$TARGET_BASE" ] && return 0
+	[ -f "$CLOUD" ] || return 1
+	command -v sfdisk >/dev/null 2>&1 || return 1
+	mkdir -p "$INPUTS"
+	"$QEMU_IMG" convert -f qcow2 -O raw "$CLOUD" "$TARGET_BASE" || return 1
+	truncate -s "$TARGET_SIZE" "$TARGET_BASE"
+	echo ', +' | sfdisk --force -N 3 "$TARGET_BASE" >/dev/null 2>&1 || return 1
+}
+
+slice_raw_image() {
+	local src=$1 bytes
+	[ -f "$src" ] || return 1
+	bytes=$(stat -c %s "$src") || return 1
+	[ "$bytes" -gt $((302 * 1024 * 1024)) ] || return 1
+	mkdir -p "$BASE"
+	rm -f "$ROOT_IMG_CACHE"
+	"$DCOPY" "$src" "$ROOT_IMG_CACHE" 0 $((302 * 1024 * 1024)) || return 1
+	truncate -s $((bytes - 302 * 1024 * 1024)) "$ROOT_IMG_CACHE"
+	printf '%s\n' "$(packages_want)" > "$ROOT_IMG_SHA"
+}
+
 materialize_packages() {
 	make_disk_head || return 1
+	mkdir -p "$BASE"
 	command -v go >/dev/null 2>&1 || return 1
 
 	local raw=$CACHE/packages.raw image=$CACHE/root.btrfs current
 	current=$(packages_want)
 	mkdir -p "$CACHE"
-	if [ ! -f "$ROOT_IMG_CACHE" ] && [ -f "$ROOT_IMG_ZST" ] && [ -f "$ROOT_IMG_ZST_SHA" ] && [ "$(cat "$ROOT_IMG_ZST_SHA")" = "$current" ]; then
-		if command -v zstd >/dev/null 2>&1 && zstd -q -d --sparse -T0 -o "$ROOT_IMG_CACHE.tmp" "$ROOT_IMG_ZST"; then
+	local zst=$ROOT_IMG_ZST zst_sha=$ROOT_IMG_ZST_SHA
+	[ -f "$zst" ] && [ -f "$zst_sha" ] || { zst=$ROOT_IMG_INPUT; zst_sha=$ROOT_IMG_INPUT_SHA; }
+	if [ ! -f "$ROOT_IMG_CACHE" ] && [ -f "$zst" ] && [ -f "$zst_sha" ] && [ "$(cat "$zst_sha")" = "$current" ]; then
+		if command -v zstd >/dev/null 2>&1 && zstd -q -d --sparse -T0 -o "$ROOT_IMG_CACHE.tmp" "$zst"; then
 			mv "$ROOT_IMG_CACHE.tmp" "$ROOT_IMG_CACHE"
 			printf '%s\n' "$current" > "$ROOT_IMG_SHA"
 			echo "root image restored"
@@ -397,7 +450,7 @@ materialize_packages() {
 	cp --reflink=auto "$DISK_HEAD" "$raw"
 	build_dcopy || return 1
 	if [ -f "$ROOT_IMG_CACHE" ] && [ -f "$ROOT_IMG_SHA" ] && [ "$(cat "$ROOT_IMG_SHA")" = "$current" ]; then
-		"$BASE/dcopy" "$ROOT_IMG_CACHE" "$raw" $((302 * 1024 * 1024)) || return 1
+		"$DCOPY" "$ROOT_IMG_CACHE" "$raw" $((302 * 1024 * 1024)) || return 1
 		rm -f "$PACKAGES"
 		"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$raw" "$PACKAGES" >/dev/null
 		echo "packages layer cached"
@@ -412,7 +465,7 @@ materialize_packages() {
 	userns_run mkfs.btrfs -q -m single -d single -K --nodesize 4096 --csum xxhash \
 		-O ^free-space-tree,^block-group-tree -r "$ROOTFS" -U "$ROOT_UUID" -L root "$image" || return 1
 	wait || true
-	"$BASE/dcopy" "$image" "$raw" $((302 * 1024 * 1024)) || return 1
+	"$DCOPY" "$image" "$raw" $((302 * 1024 * 1024)) || return 1
 	if [ -z "$ARCH_SNAPSHOT" ] && cp --reflink=auto "$image" "$ROOT_IMG_CACHE.tmp"; then
 		mv "$ROOT_IMG_CACHE.tmp" "$ROOT_IMG_CACHE"
 		printf '%s\n' "$current" > "$ROOT_IMG_SHA"
@@ -423,12 +476,12 @@ materialize_packages() {
 
 build_parallel() {
 	[ -z "$ARCH_SNAPSHOT" ] || return 1
-	[ -f "$CACHE/direct/initramfs.img" ] || return 1
+	[ -f "$DIRECT/initramfs.img" ] || return 1
 	[ -f "$CACHE/seed/packages.txt" ] || return 1
 	[ -d "$PKGSTORE" ] || return 1
 	command -v qemu-img sfdisk mcopy mkfs.vfat >/dev/null 2>&1 || return 1
 
-	local target=$CACHE/parallel-target.qcow2 builder=$CACHE/parallel-builder.qcow2 seed=$CACHE/parallel-seed.img log=$CACHE/parallel.log
+	local target=$CACHE/parallel-target.img builder=$CACHE/parallel-builder.qcow2 seed=$CACHE/parallel-seed.img log=$CACHE/parallel.log
 	rm -f "$target" "$builder" "$seed" "$log"
 	parallel_script | sed "s#@EXCLUDE@#$VM_EXCLUDE#" > "$CACHE/seed/parallel.sh"
 	truncate -s 32M "$seed"
@@ -469,22 +522,26 @@ UNIT
 		rm -f "$CACHE/seed/fast"
 	fi
 
+	make_pkg_image || return 1
+	make_target_base || return 1
+	cp --reflink=auto "$TARGET_BASE" "$target" || return 1
 	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -b "$CLOUD" -F qcow2 "$builder" 32G >/dev/null || return 1
-	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -b "$CLOUD" -F qcow2 "$target" 32G >/dev/null || return 1
 	echo "parallel build start"
 	timeout 600 "$QEMU" -name dotfiles-parallel -machine q35,accel=kvm -cpu host -smp "$(nproc)" -m 8G \
-		-kernel "$(cat "$CACHE/direct/kernel")" -initrd "$CACHE/direct/initramfs.img" \
+		-kernel "$(cat "$DIRECT/kernel")" -initrd "$DIRECT/initramfs.img" \
 		-append "console=ttyS0 root=/dev/vda3 rw dotfiles.parallel=1" \
 		-drive "file=$builder,if=virtio,format=qcow2,cache=writeback" \
 		-drive "file=$seed,if=virtio,format=raw,readonly=on" \
-		-drive "file=$target,if=virtio,format=qcow2,cache=writeback" \
-		-virtfs "local,path=$PKGSTORE,mount_tag=hostpkg,security_model=none" \
+		-drive "file=$target,if=virtio,format=raw,cache=writeback" \
+		-drive "file=$PKG_IMG,if=virtio,format=raw,readonly=on" \
 		-device virtio-rng-pci -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
 		-display none -serial "file:$log" -no-reboot || true
 	grep -q 'dotfiles: parallel done' "$log" || { rm -f "$target" "$builder" "$seed"; return 1; }
-	cp --reflink=auto "$target" "$PACKAGES" || { rm -f "$target" "$builder" "$seed"; return 1; }
+	cp --reflink=auto "$target" "$CACHE/packages.raw" || { rm -f "$target" "$builder" "$seed"; return 1; }
+	slice_raw_image "$target" || true
+	rm -f "$PACKAGES"
+	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$CACHE/packages.raw" "$PACKAGES" >/dev/null || return 1
 	rm -f "$target" "$builder" "$seed"
-	slice_root_image || true
 	echo "parallel build ready"
 }
 
@@ -543,7 +600,12 @@ cmd_packages() {
 			echo "packages layer ready $PACKAGES"
 			if [ -z "$ARCH_SNAPSHOT" ]; then
 				mkdir -p "$BASE"
-				cp --reflink=auto "$PACKAGES" "$BASE/packages.qcow2"
+				if [ -f "$CACHE/packages.raw" ]; then
+					cp --reflink=auto "$CACHE/packages.raw" "$BASE/packages.raw"
+					"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$BASE/packages.raw" "$BASE/packages.qcow2" >/dev/null
+				else
+					cp --reflink=auto "$PACKAGES" "$BASE/packages.qcow2"
+				fi
 				cp "$stamp" "$BASE/packages.sha"
 			fi
 			return
@@ -600,7 +662,12 @@ cmd_packages() {
 
 	if [ -z "$ARCH_SNAPSHOT" ]; then
 		mkdir -p "$BASE"
-		cp --reflink=auto "$PACKAGES" "$BASE/packages.qcow2"
+		if [ -f "$CACHE/packages.raw" ]; then
+			cp --reflink=auto "$CACHE/packages.raw" "$BASE/packages.raw"
+			"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$BASE/packages.raw" "$BASE/packages.qcow2" >/dev/null
+		else
+			cp --reflink=auto "$PACKAGES" "$BASE/packages.qcow2"
+		fi
 		cp "$stamp" "$BASE/packages.sha"
 		if [ "$delta" -eq 0 ]; then
 			printf '%s\n' "$current" > "$PKGSTORE/parallel.sha"
@@ -684,16 +751,16 @@ partx -u /dev/vda >/dev/null 2>&1 || true
 btrfs filesystem resize max / >/dev/null 2>&1 || true
 hostname yudae-guest 2>/dev/null || true
 printf 'yudae-guest\n' > /etc/hostname
-if [ -d /mnt/hostpkg/gnupg ]; then
+if [ -d /mnt/pkg/gnupg ]; then
 	mkdir -p /etc/pacman.d/gnupg
-	cp -a /mnt/hostpkg/gnupg/. /etc/pacman.d/gnupg/ 2>/dev/null || true
+	cp -a /mnt/pkg/gnupg/. /etc/pacman.d/gnupg/ 2>/dev/null || true
 fi
 if [ ! -e /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -e /etc/pacman.d/gnupg/pubring.kbx ]; then
 	pacman-key --init >/dev/null 2>&1 || true
 	pacman-key --populate archlinux >/dev/null 2>&1 || true
 fi
-mkdir -p /mnt/hostpkg/gnupg
-cp -a /etc/pacman.d/gnupg/. /mnt/hostpkg/gnupg/ 2>/dev/null || true
+mkdir -p /mnt/pkg/gnupg
+cp -a /etc/pacman.d/gnupg/. /mnt/pkg/gnupg/ 2>/dev/null || true
 bash /mnt/seed/provision.sh
 poweroff -f
 BOOT
@@ -724,11 +791,15 @@ UNIT
 }
 
 direct_initramfs() {
-	local dir=$CACHE/direct kver kernel module file
+	local dir=$DIRECT kver kernel module file
 	kver=$(uname -r)
 	kernel=/usr/lib/modules/$kver/vmlinuz
 	[ -f "$kernel" ] || return 1
 	command -v go >/dev/null 2>&1 || return 1
+	if [ -x "$dir/init" ] && [ -f "$dir/initramfs.img" ] && [ -f "$dir/kernel" ] &&
+		[ "$(cat "$dir/kernel")" = "$kernel" ] && [ "$dir/initramfs.img" -nt "$ROOT/vm/direct-init/main.go" ]; then
+		return 0
+	fi
 
 	mkdir -p "$dir/initramfs/modules"
 	if [ ! -x "$dir/init" ] || [ "$ROOT/vm/direct-init/main.go" -nt "$dir/init" ]; then
@@ -776,7 +847,7 @@ run_packages_vm() {
 	(prefetch_packages) &
 
 	local direct=0
-	[ -f "$CACHE/direct/initramfs.img" ] && [ -f "$CACHE/direct/kernel" ] && direct=1
+	[ -f "$DIRECT/initramfs.img" ] && [ -f "$DIRECT/kernel" ] && direct=1
 
 	if [ "$direct" -eq 1 ]; then
 		timeout 1200 "$QEMU" \
@@ -785,8 +856,8 @@ run_packages_vm() {
 			-cpu host \
 			-smp "$(nproc)" \
 			-m 8G \
-			-kernel "$(cat "$CACHE/direct/kernel")" \
-			-initrd "$CACHE/direct/initramfs.img" \
+			-kernel "$(cat "$DIRECT/kernel")" \
+			-initrd "$DIRECT/initramfs.img" \
 			-append "console=ttyS0 root=/dev/vda3 rw systemd.unit=provision.target" \
 			-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe,discard=unmap" \
 			-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
@@ -900,6 +971,7 @@ systemctl enable yudaemond yudae-desktop
 systemctl set-default graphical.target
 passwd -d root >/dev/null 2>&1 || true
 touch /var/lib/dotfiles-golden
+echo "dotfiles: parallel golden $(date +%s)"
 echo dotfiles-golden-ok > /dev/ttyS0
 SETUP
 }
@@ -939,6 +1011,9 @@ cmd_backup() {
 	zstd -q -T0 -3 -o "$ROOT_IMG_ZST.tmp" "$ROOT_IMG_CACHE" || exit 1
 	mv "$ROOT_IMG_ZST.tmp" "$ROOT_IMG_ZST"
 	if [ -f "$ROOT_IMG_SHA" ]; then cat "$ROOT_IMG_SHA" > "$ROOT_IMG_ZST_SHA"; fi
+	mkdir -p "$INPUTS"
+	cp --reflink=auto "$ROOT_IMG_ZST" "$ROOT_IMG_INPUT" 2>/dev/null || cp "$ROOT_IMG_ZST" "$ROOT_IMG_INPUT"
+	cp "$ROOT_IMG_ZST_SHA" "$ROOT_IMG_INPUT_SHA"
 	echo "root image backup $ROOT_IMG_ZST"
 }
 
