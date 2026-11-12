@@ -971,7 +971,6 @@ systemctl enable yudaemond yudae-desktop
 systemctl set-default graphical.target
 passwd -d root >/dev/null 2>&1 || true
 touch /var/lib/dotfiles-golden
-echo "dotfiles: parallel golden $(date +%s)"
 echo dotfiles-golden-ok > /dev/ttyS0
 SETUP
 }
