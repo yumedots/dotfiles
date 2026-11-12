@@ -148,6 +148,17 @@ if [ -f /mnt/seed/fast ] && [ -f /mnt/pkg/pacman-local.tar ]; then
 else
 	pacman -U --dbonly --nodeps --overwrite '*' --noconfirm --root /target $(cat /tmp/files.txt) >/tmp/db.log 2>&1 || { echo "dotfiles: parallel db failed"; tail -5 /tmp/db.log; poweroff -f; exit 1; }
 fi
+mkdir -p /target/etc/pacman.d/gnupg
+cp -a /mnt/pkg/gnupg/. /target/etc/pacman.d/gnupg/ 2>/dev/null || true
+mkdir -p /target/etc/systemd/network /target/etc/systemd/system/multi-user.target.wants
+cat > /target/etc/systemd/network/20-wired.network <<'NET'
+[Match]
+Name=en* eth0
+[Network]
+DHCP=yes
+NET
+ln -sfn /usr/lib/systemd/system/systemd-networkd.service /target/etc/systemd/system/multi-user.target.wants/systemd-networkd.service
+ln -sfn /usr/lib/systemd/system/systemd-resolved.service /target/etc/systemd/system/multi-user.target.wants/systemd-resolved.service
 cp /mnt/seed/yudae-desktop.service /target/etc/systemd/system/ 2>/dev/null || true
 cp /mnt/seed/yudaemond.service /target/etc/systemd/system/ 2>/dev/null || true
 mkdir -p /target/proc /target/sys /target/dev
@@ -219,7 +230,7 @@ grep -q '^CacheDir' /etc/pacman.conf || echo 'CacheDir = /var/cache/pacman/pkg /
 mkdir -p /mnt/hostpkg
 mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
 mkdir -p /var/cache/pacman/pkg
-for pkg in /mnt/pkg/*.pkg.tar.zst /mnt/pkg/*.pkg.tar.xz; do
+for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
 	[ -e "$pkg" ] || continue
 	ln -sf "$pkg" "/var/cache/pacman/pkg/$(basename "$pkg")"
 done
@@ -229,7 +240,7 @@ vm_exclude='@EXCLUDE@'
 grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
 { pacman -Sp --needed --noconfirm $(cat /tmp/install.txt); pacman -Spu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt); } 2>/dev/null | grep '^http' | sort -u > /tmp/urls.txt || true
-cp /tmp/urls.txt /mnt/pkg/urls.txt 2>/dev/null || true
+cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
 pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
 if grep -q 'failed to commit transaction' /tmp/pacman.log; then
 	grep 'signature from' /tmp/pacman.log | sed 's/^error: //; s/:.*//' | while read -r name; do
@@ -240,14 +251,14 @@ fi
 for pkg in /var/cache/pacman/pkg/*.pkg.tar.zst; do
 	[ -f "$pkg" ] || continue
 	name=$(basename "$pkg")
-	[ -e "/mnt/pkg/$name" ] || cp "$pkg" "/mnt/pkg/$name" 2>/dev/null || true
+	[ -e "/mnt/hostpkg/$name" ] || cp "$pkg" "/mnt/hostpkg/$name" 2>/dev/null || true
 done
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
 cp /tmp/install.txt /opt/packages.installed
 fstrim -av >/dev/null 2>&1 || true
 bash /opt/golden-setup.sh
-tar -C /var/lib/pacman -cf /mnt/pkg/pacman-local.tar local 2>/dev/null || true
-grep -a 'Packages (' /tmp/pacman.log | head -1 | sed 's/.*Packages ([0-9]*) //' | tr ' ' '\n' > /mnt/pkg/transaction.txt 2>/dev/null || true
+tar -C /var/lib/pacman -cf /mnt/hostpkg/pacman-local.tar local 2>/dev/null || true
+grep -a 'Packages (' /tmp/pacman.log | head -1 | sed 's/.*Packages ([0-9]*) //' | tr ' ' '\n' > /mnt/hostpkg/transaction.txt 2>/dev/null || true
 touch /var/lib/dotfiles-provisioned
 echo "dotfiles: provision done"
 poweroff
@@ -267,7 +278,7 @@ grep -q '^CacheDir' /etc/pacman.conf || echo 'CacheDir = /var/cache/pacman/pkg /
 mkdir -p /mnt/hostpkg
 mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
 mkdir -p /var/cache/pacman/pkg
-for pkg in /mnt/pkg/*.pkg.tar.zst /mnt/pkg/*.pkg.tar.xz; do
+for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
 	[ -e "$pkg" ] || continue
 	ln -sf "$pkg" "/var/cache/pacman/pkg/$(basename "$pkg")"
 done
@@ -277,7 +288,7 @@ vm_exclude='@EXCLUDE@'
 grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
 pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
 { pacman -Sp --needed --noconfirm $(cat /tmp/install.txt); pacman -Spu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt); } 2>/dev/null | grep '^http' | sort -u > /tmp/urls.txt || true
-cp /tmp/urls.txt /mnt/pkg/urls.txt 2>/dev/null || true
+cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
 if [ -f /opt/packages.installed ]; then
 	sort -u /opt/packages.installed > /tmp/old.txt
 	sort -u /tmp/install.txt > /tmp/new.txt
@@ -300,7 +311,7 @@ bash /opt/golden-setup.sh
 for pkg in /var/cache/pacman/pkg/*.pkg.tar.zst; do
 	[ -f "$pkg" ] || continue
 	name=$(basename "$pkg")
-	[ -e "/mnt/pkg/$name" ] || cp "$pkg" "/mnt/pkg/$name" 2>/dev/null || true
+	[ -e "/mnt/hostpkg/$name" ] || cp "$pkg" "/mnt/hostpkg/$name" 2>/dev/null || true
 done
 pacman -Scc --noconfirm >/dev/null 2>&1 || true
 fstrim -av >/dev/null 2>&1 || true
@@ -315,7 +326,7 @@ vms_exist() {
 }
 
 packages_want() {
-	{ cat "$CACHE/seed/packages.txt" 2>/dev/null; printf '%s\n' "$ARCH_SNAPSHOT" "$CLOUD_NAME"; provision_script; delta_script; } | sha256sum | cut -d' ' -f1
+	{ cat "$CACHE/seed/packages.txt" 2>/dev/null; printf '%s\n' "$ARCH_SNAPSHOT" "$CLOUD_NAME"; provision_script; delta_script; golden_setup; desktop_unit; daemon_unit; parallel_script; } | sha256sum | cut -d' ' -f1
 }
 
 userns_run() {
@@ -751,16 +762,16 @@ partx -u /dev/vda >/dev/null 2>&1 || true
 btrfs filesystem resize max / >/dev/null 2>&1 || true
 hostname yudae-guest 2>/dev/null || true
 printf 'yudae-guest\n' > /etc/hostname
-if [ -d /mnt/pkg/gnupg ]; then
+if [ -d /mnt/hostpkg/gnupg ]; then
 	mkdir -p /etc/pacman.d/gnupg
-	cp -a /mnt/pkg/gnupg/. /etc/pacman.d/gnupg/ 2>/dev/null || true
+	cp -a /mnt/hostpkg/gnupg/. /etc/pacman.d/gnupg/ 2>/dev/null || true
 fi
 if [ ! -e /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -e /etc/pacman.d/gnupg/pubring.kbx ]; then
 	pacman-key --init >/dev/null 2>&1 || true
 	pacman-key --populate archlinux >/dev/null 2>&1 || true
 fi
-mkdir -p /mnt/pkg/gnupg
-cp -a /etc/pacman.d/gnupg/. /mnt/pkg/gnupg/ 2>/dev/null || true
+mkdir -p /mnt/hostpkg/gnupg
+cp -a /etc/pacman.d/gnupg/. /mnt/hostpkg/gnupg/ 2>/dev/null || true
 bash /mnt/seed/provision.sh
 poweroff -f
 BOOT
@@ -966,6 +977,14 @@ chown gabriel:gabriel /run/user/1000
 grep -q 'dotfiles /home/gabriel/dotfiles virtiofs' /etc/fstab || echo 'dotfiles /home/gabriel/dotfiles virtiofs ro,nofail,defaults 0 0' >> /etc/fstab
 mkdir -p /home/gabriel/.config
 ln -sfn /home/gabriel/dotfiles/hypr /home/gabriel/.config/hypr
+mkdir -p /etc/systemd/network
+cat > /etc/systemd/network/20-wired.network <<'NET'
+[Match]
+Name=en* eth0
+[Network]
+DHCP=yes
+NET
+systemctl enable systemd-networkd systemd-resolved
 systemctl daemon-reload
 systemctl enable yudaemond yudae-desktop
 systemctl set-default graphical.target

@@ -148,6 +148,8 @@ next=133ms
 
 `xmake vm bench final` from an empty bench cache is **0.45s** (`fetch 0.008s, packages 0.405s, golden 0.037s`). The boot check reports 493 packages, `pacman -Dk` clean, 2 users, `sudo 4755`, and `yudaemond`/`yudae-desktop`/`dotfiles-firstboot` enabled.
 
+Agent VM check: `scripts/yudae vm create <session> --from new` booted the parallel image; `vm exec` reports uid 1000, 493 packages, `pacman -Dk` clean, Hyprland and quickshell running, and all three user units enabled. `eth0` is up via DHCP at 10.0.2.15, `/etc/pacman.d/gnupg` is populated, and `pacman -S tree` installs to 494 inside the VM without touching the base or golden. The default `golden.qcow2` remains the old 14:59 cache; the new image is `golden-new.qcow2` (tag `new`) because the existing VM disks block replacing the default chain. `vm create --from new` prints a `yudae: NotFound` warning but creates and boots the VM.
+
 `vm/images backup` refreshes both the output and input compressed images after a package change. The rootfs directory and `mkfs.btrfs -r` remain as a 6.37s fallback when the input image is missing but the rootfs is present; the pacman build remains the final fallback when the store has no transaction/DB artifacts. `btrfs restore` was rejected because it loses setuid/setgid bits; the image slice and restore preserve them.
 
 ### Clock
@@ -169,16 +171,18 @@ The headless daemon still passes 3.6MB idle RSS and 9.1s cold build against 8MB/
 
 `xmake bench disk` builds a seeded synthetic tree, runs the sequential and threaded scanners at 1/2/4/8/16/nproc, keeps the fastest exact version, and writes one row to `daemon/bench/disk.jsonl`. The first accurate run seeds the `disk` block in `daemon/bench/baseline.json`; later runs fail when throughput drops under 80% of that baseline, when the cache grows past twice its baseline, or when any total stops being exact. `--files=N` changes the tiny-file count and `--real` adds `$HOME`.
 
-Measured on CachyOS, kernel 7.3.3, Zig 0.17.1, 50k tiny files:
+Measured on CachyOS, kernel 7.3.3, Zig 0.17.1, 200k tiny files:
 
 | metric | first run |
 | --- | --- |
-| winner | v1 threaded, 4 threads |
-| throughput | 277k entries/s |
-| syscalls | 1.02 per entry |
+| winner | v0 sequential |
+| throughput | 319k entries/s |
+| syscalls | 1.00 per entry |
 | cache | 5.7kB, sub-millisecond `mmap` load |
-| views | p50 0.8us, p99 1.1us |
+| views | p50 0.7us, p99 1.1us |
 | accuracy | exact against `statx` block totals |
+
+The threaded candidate is measured at 1/2/4/8/16/nproc at the same time; at 200k tiny files it loses to the sequential scanner on this host and is not the shipped path.
 
 Reference scanners ncdu, gdu, dua and hyperfine are reported when present. Installing them needs root and is asked for at bench time, never done automatically. Cold-cache runs need `yudae-fsd` and `org.yudae.fs.bench`; without it the bench reports the warm numbers only.
 
