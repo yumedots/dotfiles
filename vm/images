@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/vm
-BASE=${DOTFILES_VM_BASE:-$HOME/.cache/dotfiles/vm-base}
+BASE=${DOTFILES_VM_BASE:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-base}
 PKGSTORE=${DOTFILES_VM_PKGS:-$BASE/packages}
 ROOTFS=${DOTFILES_VM_ROOTFS:-$BASE/rootfs}
 ROOTFS_SHA=$BASE/rootfs.sha
@@ -93,44 +93,50 @@ parallel_script() {
 	cat <<'SCRIPT'
 #!/bin/bash
 set -u
-exec > >(tee /dev/console) 2>&1
 echo "dotfiles: parallel start"
 vm_exclude='@EXCLUDE@'
 mkdir -p /mnt/seed /mnt/hostpkg /target
 mountpoint -q /mnt/seed || mount -t vfat /dev/vdb /mnt/seed
 mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
-systemctl stop systemd-resolved systemd-networkd NetworkManager 2>/dev/null || true
-iface=$(ip -o link show | awk -F': ' '$2 != "lo" {print $2; exit}')
-[ -n "$iface" ] || iface=eth0
-ip link set "$iface" up 2>/dev/null || true
-ip addr replace 10.0.2.15/24 dev "$iface" 2>/dev/null || true
-ip route replace default via 10.0.2.2 2>/dev/null || true
-rm -f /etc/resolv.conf
-printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf
-pacman -Sy --noconfirm >/dev/null 2>&1 || { echo "dotfiles: parallel sync failed"; poweroff -f; exit 1; }
-grep -vE "$vm_exclude" /mnt/seed/packages.txt > /tmp/candidates.txt
-pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
-[ -s /tmp/install.txt ] || { echo "dotfiles: parallel no candidates"; poweroff -f; exit 1; }
-pacman -Syu --print-format '%n-%v' --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) > /tmp/txn.raw 2>/tmp/txn.err || true
-grep -E '^[A-Za-z0-9@._+:-]+-[^-]+-[^-]+$' /tmp/txn.raw | sort -u > /tmp/names.txt
-[ -s /tmp/names.txt ] || { echo "dotfiles: parallel resolve failed"; tail -3 /tmp/txn.err; poweroff -f; exit 1; }
-: > /tmp/files.txt
-while read -r name; do
-	f=$(ls /mnt/hostpkg/"$name"-*.pkg.tar.zst 2>/dev/null | head -1)
-	[ -n "$f" ] || { echo "dotfiles: parallel missing $name"; poweroff -f; exit 1; }
-	echo "$f" >> /tmp/files.txt
-done < /tmp/names.txt
+if [ -f /mnt/seed/fast ] && [ -s /mnt/hostpkg/files.txt ] && [ -f /mnt/hostpkg/pacman-local.tar ]; then
+	sed 's#^#/mnt/hostpkg/#' /mnt/hostpkg/files.txt > /tmp/files.txt
+	echo "dotfiles: parallel fast list $(wc -l < /tmp/files.txt)"
+else
+	systemctl stop systemd-resolved systemd-networkd NetworkManager 2>/dev/null || true
+	iface=$(ip -o link show | awk -F': ' '$2 != "lo" {print $2; exit}')
+	[ -n "$iface" ] || iface=eth0
+	ip link set "$iface" up 2>/dev/null || true
+	ip addr replace 10.0.2.15/24 dev "$iface" 2>/dev/null || true
+	ip route replace default via 10.0.2.2 2>/dev/null || true
+	rm -f /etc/resolv.conf
+	printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf
+	pacman -Sy --noconfirm >/dev/null 2>&1 || { echo "dotfiles: parallel sync failed"; poweroff -f; exit 1; }
+	grep -vE "$vm_exclude" /mnt/seed/packages.txt > /tmp/candidates.txt
+	pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
+	[ -s /tmp/install.txt ] || { echo "dotfiles: parallel no candidates"; poweroff -f; exit 1; }
+	pacman -Syu --print-format '%n-%v' --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) > /tmp/txn.raw 2>/tmp/txn.err || true
+	grep -E '^[A-Za-z0-9@._+:-]+-[^-]+-[^-]+$' /tmp/txn.raw | sort -u > /tmp/names.txt
+	[ -s /tmp/names.txt ] || { echo "dotfiles: parallel resolve failed"; tail -3 /tmp/txn.err; poweroff -f; exit 1; }
+	: > /tmp/files.txt
+	while read -r name; do
+		f=$(ls /mnt/hostpkg/"$name"-*.pkg.tar.zst 2>/dev/null | head -1)
+		[ -n "$f" ] || { echo "dotfiles: parallel missing $name"; poweroff -f; exit 1; }
+		echo "$f" >> /tmp/files.txt
+	done < /tmp/names.txt
+fi
 growpart /dev/vdc 3 >/dev/null 2>&1 || true
 partx -u /dev/vdc >/dev/null 2>&1 || true
 mount /dev/vdc3 /target || { echo "dotfiles: parallel mount failed"; poweroff -f; exit 1; }
 btrfs filesystem resize max /target >/dev/null 2>&1 || true
-mkdir -p /tmp/pkgs
-mount -t tmpfs -o size=2G tmpfs /tmp/pkgs 2>/dev/null || true
-cat /tmp/files.txt | xargs -P 16 -I{} cp -f {} /tmp/pkgs/ 2>/tmp/cp.err
-echo "dotfiles: parallel copied $(ls /tmp/pkgs/*.pkg.tar.zst | wc -l)"
-ls /tmp/pkgs/*.pkg.tar.zst | xargs -P 16 -I{} bsdtar -xpf {} -C /target --exclude=.PKGINFO --exclude=.MTREE --exclude=.INSTALL --exclude=.BUILDINFO 2>/tmp/extract.err
+echo "dotfiles: parallel files $(wc -l < /tmp/files.txt)"
+xargs -a /tmp/files.txt -P 16 -I{} bsdtar -xpf {} -C /target --exclude=.PKGINFO --exclude=.MTREE --exclude=.INSTALL --exclude=.BUILDINFO 2>/tmp/extract.err
 echo "dotfiles: parallel extracted $(wc -l < /tmp/extract.err)"
-pacman -U --dbonly --nodeps --overwrite '*' --noconfirm --root /target /tmp/pkgs/*.pkg.tar.zst >/tmp/db.log 2>&1 || { echo "dotfiles: parallel db failed"; tail -5 /tmp/db.log; poweroff -f; exit 1; }
+if [ -f /mnt/seed/fast ] && [ -f /mnt/hostpkg/pacman-local.tar ]; then
+	rm -rf /target/var/lib/pacman/local
+	tar -C /target/var/lib/pacman -xf /mnt/hostpkg/pacman-local.tar || { echo "dotfiles: parallel db tar failed"; poweroff -f; exit 1; }
+else
+	pacman -U --dbonly --nodeps --overwrite '*' --noconfirm --root /target $(cat /tmp/files.txt) >/tmp/db.log 2>&1 || { echo "dotfiles: parallel db failed"; tail -5 /tmp/db.log; poweroff -f; exit 1; }
+fi
 cp /mnt/seed/yudae-desktop.service /target/etc/systemd/system/ 2>/dev/null || true
 cp /mnt/seed/yudaemond.service /target/etc/systemd/system/ 2>/dev/null || true
 mkdir -p /target/proc /target/sys /target/dev
@@ -141,11 +147,6 @@ chroot /target /bin/bash -c '
 systemd-sysusers 2>/dev/null || true
 systemd-tmpfiles --create 2>/dev/null || true
 ldconfig 2>/dev/null || true
-fc-cache -f 2>/dev/null || true
-glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
-update-desktop-database -q /usr/share/applications 2>/dev/null || true
-update-ca-trust 2>/dev/null || true
-depmod -a $(ls /usr/lib/modules | head -1) 2>/dev/null || true
 id -u gabriel >/dev/null 2>&1 || useradd -m -u 1000 -G wheel,video,render,input -s /bin/bash gabriel
 mkdir -p /etc/sudoers.d
 printf "gabriel ALL=(ALL) NOPASSWD:ALL\n" > /etc/sudoers.d/gabriel
@@ -157,8 +158,31 @@ mkdir -p /home/gabriel/.config
 ln -sfn /home/gabriel/dotfiles/hypr /home/gabriel/.config/hypr
 passwd -d root >/dev/null 2>&1 || true
 touch /var/lib/dotfiles-golden
+
 '
-systemctl --root=/target enable yudaemond yudae-desktop >/dev/null 2>&1 || true
+cat > /target/usr/local/bin/dotfiles-firstboot.sh <<'FIX'
+#!/bin/bash
+[ -e /var/lib/dotfiles-fixups ] && exit 0
+fc-cache -f 2>/dev/null || true
+glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
+update-desktop-database -q /usr/share/applications 2>/dev/null || true
+update-ca-trust 2>/dev/null || true
+depmod -a $(ls /usr/lib/modules | head -1) 2>/dev/null || true
+touch /var/lib/dotfiles-fixups
+FIX
+chmod 755 /target/usr/local/bin/dotfiles-firstboot.sh
+cat > /target/etc/systemd/system/dotfiles-firstboot.service <<'UNIT'
+[Unit]
+Description=dotfiles first boot fixups
+ConditionPathExists=!/var/lib/dotfiles-fixups
+After=local-fs.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/dotfiles-firstboot.sh
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl --root=/target enable yudaemond yudae-desktop dotfiles-firstboot.service >/dev/null 2>&1 || true
 systemctl --root=/target set-default graphical.target >/dev/null 2>&1 || true
 echo dotfiles-golden-ok > /dev/ttyS0
 umount /target/proc /target/sys /target/dev 2>/dev/null || true
@@ -210,6 +234,8 @@ pacman -Scc --noconfirm >/dev/null 2>&1 || true
 cp /tmp/install.txt /opt/packages.installed
 fstrim -av >/dev/null 2>&1 || true
 bash /opt/golden-setup.sh
+tar -C /var/lib/pacman -cf /mnt/hostpkg/pacman-local.tar local 2>/dev/null || true
+grep -a 'Packages (' /tmp/pacman.log | head -1 | sed 's/.*Packages ([0-9]*) //' | tr ' ' '\n' > /mnt/hostpkg/transaction.txt 2>/dev/null || true
 touch /var/lib/dotfiles-provisioned
 echo "dotfiles: provision done"
 poweroff
@@ -418,13 +444,22 @@ After=provision.service
 UNIT
 	mcopy -i "$seed" "$CACHE/seed/parallel.service" ::provision.service || return 1
 	mcopy -i "$seed" "$CACHE/seed/parallel.target" ::provision.target || return 1
+	local current
+	current=$(packages_want)
+	if [ -f "$PKGSTORE/parallel.sha" ] && [ "$(cat "$PKGSTORE/parallel.sha")" = "$current" ] &&
+		[ -f "$PKGSTORE/files.txt" ] && [ -f "$PKGSTORE/pacman-local.tar" ]; then
+		: > "$CACHE/seed/fast"
+		mcopy -i "$seed" "$CACHE/seed/fast" ::fast || return 1
+	else
+		rm -f "$CACHE/seed/fast"
+	fi
 
 	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -b "$CLOUD" -F qcow2 "$builder" 32G >/dev/null || return 1
 	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -b "$CLOUD" -F qcow2 "$target" 32G >/dev/null || return 1
 	echo "parallel build start"
 	timeout 600 "$QEMU" -name dotfiles-parallel -machine q35,accel=kvm -cpu host -smp "$(nproc)" -m 8G \
 		-kernel "$(cat "$CACHE/direct/kernel")" -initrd "$CACHE/direct/initramfs.img" \
-		-append "console=ttyS0 root=/dev/vda3 rw systemd.unit=provision.target" \
+		-append "console=ttyS0 root=/dev/vda3 rw dotfiles.parallel=1" \
 		-drive "file=$builder,if=virtio,format=qcow2,cache=writeback" \
 		-drive "file=$seed,if=virtio,format=raw,readonly=on" \
 		-drive "file=$target,if=virtio,format=qcow2,cache=writeback" \
@@ -552,6 +587,9 @@ cmd_packages() {
 		mkdir -p "$BASE"
 		cp --reflink=auto "$PACKAGES" "$BASE/packages.qcow2"
 		cp "$stamp" "$BASE/packages.sha"
+		if [ "$delta" -eq 0 ]; then
+			printf '%s\n' "$current" > "$PKGSTORE/parallel.sha"
+		fi
 		slice_root_image || echo "root image cache skipped" >&2
 	fi
 }

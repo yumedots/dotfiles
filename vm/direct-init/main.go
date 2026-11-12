@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -88,6 +89,12 @@ func main() {
 		syscall.Exec("/bin/sh", []string{"sh"}, os.Environ())
 	}
 	os.Chdir("/")
+	env := []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME=/root", "TERM=linux"}
+	if data, err := os.ReadFile("/proc/cmdline"); err == nil && strings.Contains(string(data), "dotfiles.parallel=1") {
+		if err := syscall.Exec("/bin/bash", []string{"bash", "/mnt/seed/boot.sh"}, env); err != nil {
+			fmt.Println(err)
+		}
+	}
 	os.MkdirAll("/etc/systemd/system", 0o755)
 	for _, name := range []string{"provision.service", "provision.target"} {
 		data, err := os.ReadFile("/mnt/seed/" + name)
@@ -95,7 +102,6 @@ func main() {
 			os.WriteFile("/etc/systemd/system/"+name, data, 0o644)
 		}
 	}
-	env := []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME=/root", "TERM=linux"}
 	if err := syscall.Exec("/sbin/init", []string{"systemd"}, env); err != nil {
 		fmt.Println(err)
 	}
