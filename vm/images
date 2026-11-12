@@ -5,8 +5,8 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/vm
 BASE=${DOTFILES_VM_BASE:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-base}
 PKGSTORE=${DOTFILES_VM_PKGS:-$BASE/packages}
-ROOTFS=${DOTFILES_VM_ROOTFS:-$BASE/rootfs}
-ROOTFS_SHA=$BASE/rootfs.sha
+ROOTFS=${DOTFILES_VM_ROOTFS:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-rootfs}
+ROOTFS_SHA=$ROOTFS.sha
 DISK_HEAD=$BASE/disk-head.img
 ROOT_IMG_CACHE=$BASE/root.btrfs
 ROOT_IMG_SHA=$BASE/root.btrfs.sha
@@ -402,6 +402,10 @@ materialize_packages() {
 		-O ^free-space-tree,^block-group-tree -r "$ROOTFS" -U "$ROOT_UUID" -L root "$image" || return 1
 	wait || true
 	"$BASE/dcopy" "$image" "$raw" $((302 * 1024 * 1024)) || return 1
+	if [ -z "$ARCH_SNAPSHOT" ] && cp --reflink=auto "$image" "$ROOT_IMG_CACHE.tmp"; then
+		mv "$ROOT_IMG_CACHE.tmp" "$ROOT_IMG_CACHE"
+		printf '%s\n' "$current" > "$ROOT_IMG_SHA"
+	fi
 	rm -f "$image" "$PACKAGES"
 	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$raw" "$PACKAGES" >/dev/null
 }
