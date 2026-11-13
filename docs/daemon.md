@@ -54,7 +54,7 @@ A governor loop every 5s steps idle VMs hot to warm (5 min), warm to parked (15 
 `providers/disk/` owns `disk`. A scan runs only when `disk.scan` is called; nothing scans on open, on a timer or in the background.
 
 - `scan {path}` starts a scan and returns `scanning`. Every scan goes through `/run/yudae/fsd.sock`; without the root helper the scan does not run. There is no unprivileged or partial scan path.
-- `view {path, depth}`, `search {query}`, `stat {path}`, `mark/unmark {path}`, `trash/delete {path}`, `move/copy/rename {from,to}`, `packages`, `uninstall {names,confirm}`, `caches`, `clean {id,confirm}`, `watch {path,seconds}`.
+- `view {path, depth}`, `search {query}`, `stat {path}`, `mark/unmark {path}`, `trash/delete {path}`, `move/copy/rename {from,to}`, `packages`, `uninstall {names,confirm}`, `clean-packages {confirm}`, `caches`, `clean {id,confirm}`, `watch {path,seconds}`.
 - `watch` starts a background fanotify session and places the changed names and sizes in `disk.live` in the snapshot; it does not scan on open or on a timer.
 - Snapshot key `disk` carries status, error, root, focus, real disk used/free, totals and the focused view only. The treemap layout is computed in Quickshell.
 - Cache `~/.cache/yudae/disk.bin` is mode `0600`, written to a temp file and renamed. It is a `mmap` layout: fixed header, flat 32-byte nodes, one name buffer, totals already summed.

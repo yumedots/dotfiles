@@ -10,7 +10,7 @@ yudae state | doctor | bench | parity | ui tree
 yudae plugin list | build <id> | load <id> | unload <id> | theme <id> | add <url> | update <id> | reload
 yudae vm <verb> ...                        # same verbs as the MCP tools
 yudae open <vm> [app]                      # open the viewer, or an app inside the guest
-yudae disk scan|view|search|stat|mark|unmark|trash|remove|move|copy|rename|packages|uninstall|caches|clean|watch [args...]
+yudae disk scan|view|search|stat|mark|unmark|trash|remove|move|copy|rename|packages|uninstall|clean-packages|caches|clean|watch [args...]
 ```
 
 - `yudae disk scan [path]` asks for a scan. `yudae disk view [path]` prints the focused `disk` state. `--yes` confirms `uninstall` and `clean`.
