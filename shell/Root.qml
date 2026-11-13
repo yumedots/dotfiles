@@ -399,7 +399,7 @@ ShellRoot {
 	}
 
 	IdleMonitor {
-		enabled: Config.lockAfterMinutes > 0
+		enabled: Config.lockAfterMinutes > 0 && !Yudae.awakeWanted
 		timeout: Math.max(1, Config.lockAfterMinutes * 60)
 
 		onIsIdleChanged: if (isIdle)

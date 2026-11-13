@@ -123,6 +123,7 @@ const AwakeOut = struct {
 	mode: AwakeMode,
 	held: bool,
 	agents: bool,
+	want: bool,
 };
 
 const Out = struct {
@@ -792,7 +793,7 @@ pub const System = struct {
 
 		self.mutex.lockUncancelable(self.io);
 
-		const want = self.awake_mode == .on or (self.awake_mode == .auto and working);
+		const want = awakeWanted(self.awake_mode, working);
 		const changed = want != self.awake_want or working != self.awake_agents;
 		self.awake_want = want;
 		self.awake_agents = working;
@@ -934,6 +935,7 @@ pub const System = struct {
 				.mode = self.awake_mode,
 				.held = self.awake_held,
 				.agents = self.awake_agents,
+				.want = self.awake_want,
 			},
 			.processes = processes.items,
 			.byCpu = processes.items,
@@ -948,6 +950,10 @@ pub const System = struct {
 		try writer.print("{f}", .{std.json.fmt(out, .{})});
 	}
 };
+
+fn awakeWanted(mode: AwakeMode, working: bool) bool {
+	return mode == .on or (mode == .auto and working);
+}
 
 fn containsIgnoreCase(text: []const u8, needle: []const u8) bool {
 	if (needle.len == 0) return true;
@@ -1147,6 +1153,13 @@ test "cpuinfo names the model and the spec line" {
 
 	const tiny = try System.specLine(allocator, .{ .threads = 4, .cores = 4 });
 	try std.testing.expectEqualStrings("4 threads", tiny);
+}
+
+test "keep awake wants a hold on when set, or an agent working in auto" {
+	try std.testing.expect(awakeWanted(.on, false));
+	try std.testing.expect(awakeWanted(.auto, true));
+	try std.testing.expect(!awakeWanted(.auto, false));
+	try std.testing.expect(!awakeWanted(.off, true));
 }
 
 test "the panel keeps the row order it had" {

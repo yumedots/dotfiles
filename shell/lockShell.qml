@@ -60,7 +60,7 @@ ShellRoot {
 	}
 
 	IdleMonitor {
-		enabled: !lockRoot.preview && Config.lockSleepAfterMinutes > 0
+		enabled: !lockRoot.preview && Config.lockSleepAfterMinutes > 0 && !Yudae.awakeWanted
 		timeout: Math.max(1, Config.lockSleepAfterMinutes * 60)
 
 		onIsIdleChanged: if (isIdle)
