@@ -2,13 +2,14 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs
+import qs.ui
 
 Item {
 	id: root
 
 	property var items: []
 	property var rects: []
-	property string selectedPath: ""
+	property var selected: ({})
 	signal picked(var item)
 	signal activated(var item)
 
@@ -73,32 +74,52 @@ Item {
 			y: modelData.y
 			width: modelData.width
 			height: modelData.height
-			color: modelData.item.kind === "dir" ? Config.cpuCore : (modelData.item.kind === "file" ? Config.memoryBase : Config.yellow)
-			border.color: root.selectedPath === modelData.item.path ? Config.foreground : Config.surface
-			border.width: root.selectedPath === modelData.item.path ? 2 : 1
-			opacity: cellMouse.containsMouse ? 0.82 : 1
+			readonly property bool checked: root.selected[modelData.item.path] === true
+
+			color: modelData.item.kind === "dir" ? Config.diskDir : (modelData.item.kind === "file" ? Config.diskFile : Config.diskOther)
+			border.color: cell.checked ? Config.foreground : Config.surface
+			border.width: cell.checked ? 2 : 1
+			clip: true
+			opacity: cellMouse.containsMouse ? 0.88 : 1
 
 			Behavior on opacity {
 				NumberAnimation { duration: 90 }
+			}
+
+			Rectangle {
+				anchors.top: parent.top
+				anchors.right: parent.right
+				anchors.margins: 4
+				width: 16
+				height: 16
+				visible: cell.checked
+				color: Config.foreground
+				border.color: Config.surface
+				border.width: 1
+
+				Glyph {
+					anchors.centerIn: parent
+					glyph: Config.launcherIconActive
+					size: 9
+					color: Config.surface
+				}
 			}
 
 			Column {
 				anchors.left: parent.left
 				anchors.right: parent.right
 				anchors.top: parent.top
-				anchors.margins: 6
-				spacing: 2
-
-				visible: cell.width > 54 && cell.height > 26
+				anchors.margins: 4
+				spacing: 1
 
 				Text {
 					width: parent.width
 					elide: Text.ElideRight
 
 					font.family: Config.fontFamily
-					font.pixelSize: 11
+					font.pixelSize: 10
 					font.weight: Font.Medium
-					color: Config.surface
+					color: Config.foreground
 					text: cell.modelData.item.name
 				}
 
@@ -107,9 +128,9 @@ Item {
 					elide: Text.ElideRight
 
 					font.family: Config.fontFamily
-					font.pixelSize: 10
-					color: Config.surface
-					opacity: 0.72
+					font.pixelSize: 9
+					color: Config.foreground
+					opacity: 0.75
 					text: cell.modelData.item.sizeText || ""
 				}
 			}

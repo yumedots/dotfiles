@@ -580,3 +580,9 @@ agentIconClose = "\uF00D"
 agentPlanTitle = "Subscription"
 agentPlanName = "OpenCode Go"
 agentPlanIcon = "opencode"
+
+# disk map
+[disk]
+diskDir = "#3f5f7a"
+diskFile = "#4f7a63"
+diskOther = "#7a6547"
