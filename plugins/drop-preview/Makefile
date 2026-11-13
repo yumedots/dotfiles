@@ -1,4 +1,4 @@
-OUT ?= .
+OUT ?= $(or $(XDG_STATE_HOME),$(HOME)/.local/state)/yudae/build/drop-preview
 
 ifeq ($(CXX),g++)
     EXTRA_FLAGS = --no-gnu-unique
