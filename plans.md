@@ -1,84 +1,87 @@
 # Plans
 
-## 1. Plugins
+## 1. Disk & fs
 
-One standard to make, load and share anything that modifies the system: Hyprland plugins, themes, shell features, app configs. Themes are plugins.
+A disk treemap like Omarchy's disktree, built on the VM app primitive: daemon scans, Quickshell draws. The same backend is the file manager's index later; only its front end waits.
 
-### A plugin is a folder
+### Rules
 
-```
-plugins/<id>/
-  plugin.toml     id, kind, version, requires, build, provides
-  Makefile        build instructions: make OUT=<dir> writes the files in provides
-  src/ ...        source
-```
+- A scan runs only when asked. No scan on open, no idle scan, no background walk.
+- Polkit is the only privilege path, for the app and for `yudae` CLI alike. No pkexec, no sudo, no root flag on the user daemon.
+- Denied or no agent means the scan fails and says so. There is no partial scan.
+- Protected paths are never walked and never appear: `/proc /sys /dev /run`, every mount point, `/usr /etc /boot /efi /bin /sbin /lib*`, `/var/lib/pacman`, `/var/lib/systemd`. The free space bar still reads the real disk.
 
-- Source only. No `.so`, `.bin`, `.o` or ELF file inside a plugin folder; the loader and the suite reject them so a Hyprland update can always rebuild.
-- Built files go to `~/.local/state/yudae/build/<id>/`, never into the plugin folder.
-- A plugin may ship anything else, Lua and scripts included. Security is the user's call; nothing else is rejected.
-- `drop-preview.so` is tracked in git today; it needs `git rm --cached` and a `.gitignore` entry when the user says commit.
+### Privilege
 
-### The load list
+`yudae-fsd` is the same binary under a subcommand, run as root by a systemd socket unit at `/run/yudae/fsd.sock`. The user daemon connects, the helper reads peer credentials and a pidfd from the socket, and asks polkit `CheckAuthorization` per action, which raises the session agent's prompt.
 
-`~/.local/state/yudae/plugins.toml`, never shipped. `YUDAE_PLUGINS` overrides the path for tests and VMs.
-
-```toml
-load = ["tokyo", "borders-plus-plus", "drop-preview"]
-
-[tokyo]
-accent = "#7aa2f7"
-```
-
-- A plugin not in `load` is never touched. Order matters; later plugins override earlier ones.
-- A `[id]` table passes options to that plugin.
-- A missing file means no plugins and the built-in defaults.
-
-### Kinds
-
-Each kind has one adapter in yudaemond. A new kind is one adapter; plugins never touch the loader.
-
-| kind | loading does |
+| action | auth |
 | --- | --- |
-| `hypr` | daemon writes `loaded.lua` with `hl.plugin.load` and the plugin's `hypr.lua`; `hypr/hyprland.lua` `dofile`s it, replacing `hypr/plugins.lua` |
-| `theme` | merges its colors into `Yudae.settings`; the shell retints live |
-| `shell` | the shell instantiates its QML feature |
-| `app` | renders a template into the state dir (foot, gtk, ...) |
-| `daemon` | a provider; compile-time list first |
+| `org.yudae.fs.scan` | admin, remember ~5 min |
+| `org.yudae.fs.remove` | admin, every time |
+| `org.yudae.fs.bench` | admin, drop caches for cold runs |
+| `org.yudae.packages.manage` | admin, every time |
 
-### Building on Hyprland updates
+The helper re-checks the protected list and resolves paths with `openat2(RESOLVE_NO_SYMLINKS | RESOLVE_NO_XDEV)`, so a bad caller or a symlink swap cannot escape. Polkit and systemd files are written as root only after asking.
 
-- At start yudaemond reads `pkg-config --modversion hyprland`. Each plugin's stamp holds that version and the source hash. A different version, older or newer, runs `make` for every loaded `hypr` plugin. No package hooks; nothing is installed.
-- Missing compiler or headers: report what is missing.
-- A failed build means that plugin is not loaded, a notification is shown, the others still load.
-- `loaded.lua` only loads binaries with a current stamp and never compiles. A stale plugin is skipped at login, rebuilt by the daemon and loaded live with `hyprctl plugin load`.
-- A running Hyprland older than the installed headers refuses the `.so`; that is non-fatal and the plugin loads after the next login.
+### Scanner
 
-### Commands
+One flat array of nodes, names in one buffer, no full paths: parent, first child and next sibling indexes, size, name offset and length, category and flags. Small files fold into one node per directory; only directories and big files get their own. Hardlinks counted once. btrfs reports a per-subvolume id, so subvolumes of one disk count as one and other filesystems are skipped.
 
-`yudae plugin list | build <id> | load <id> | unload <id> | add <git-url> | update <id> | reload`. `load` and `unload` edit the TOML and reload immediately. `add` clones into `$XDG_DATA_HOME/yudae/plugins/<id>`, prints what it contains (kind, Makefile, Lua, scripts) and installs without a prompt, recording the commit.
+Versions are benchmarked, the fastest that passes exact accuracy ships, the rest is deleted:
 
-### Tests
+| id | how |
+| --- | --- |
+| V0 | one thread, `readdir` + `fstatat` |
+| V1 | thread pool, raw `getdents64`, small `statx` |
+| V2 | V1 with batched `statx` over io_uring |
+| V3 | btrfs `TREE_SEARCH_V2`, only if V1/V2 still fall short |
 
-- Zig unit tests for the loader: empty list, missing folder, bad TOML, unknown kind, duplicate id, `requires` mismatch, order, override conflict, unload.
-- A conformance suite in `xmake test` that discovers every `plugins/*` and checks it by kind: valid manifest, `make` succeeds, `provides` exist, no binaries, theme color keys, `app` templates render, `shell` passes `qmllint`, `hypr` loads.
-- VM scenarios `vm/scenarios/plugin-*.json`: no `plugins.toml`, load and unload a `hypr` plugin, stale stamp, broken source, binary in the folder, missing compiler, theme load, theme layering, theme with Lua, one real `shell` plugin, one real `app` plugin.
-- Extra golden images for a real Hyprland change: `old` built from a dated Arch Linux Archive snapshot (the whole system, since Hyprland needs matching `hyprutils` and `aquamarine`), the current one, and a newer one if needed. Selected by a flag on `xmake vm packages`, started with `yudae vm create --from`. Scenarios: upgrade, downgrade, same version (no-op), stale headers. The faked-stamp scenario stays as the fast smoke test.
+Cache file `~/.cache/yudae/disk.bin`, mode `0600`, laid out for `mmap` with totals already summed so a view loads without walking, written to a temp file and renamed. Old map shows instantly while the fresh scan runs.
 
-### Agents first
+Optional live map: after a scan the helper watches each subvolume with fanotify `FAN_MARK_FILESYSTEM | FAN_REPORT_DFID_NAME` and updates only the changed directories. It never scans on its own.
 
-- Skill in `.agents/skills/plugin/SKILL.md` with frontmatter and a few rules; the reference is `docs/plugins.md`.
-- `plugins/_template-<kind>/`: one minimal working example per kind that passes the suite; an agent copies one.
-- The `yudae plugin` verbs are MCP tools.
-- `docs/plugins.md` comes after, written from the templates; `docs/architecture.md` and `docs/agent-tooling.md` updated.
+### Benchmark
+
+`xmake bench disk` runs `yudaemond bench disk` on the existing harness: `bench/disk.jsonl`, deltas against `bench/baseline.json`, nonzero exit on a missed gate. Why a number moved, not how big it is.
+
+- Versions V0 to V3 at 1/2/4/8/16/nproc threads, warm and cold page cache.
+- Fixtures: a seeded synthetic tree (deep, wide, 1M tiny files, hardlinks, sparse, symlink loop, nested subvolume, bind mount) with exact expected answers, then `~` and the whole disk.
+- Speed: entries/s, syscalls per entry, user and system time, peak RSS, bytes per node, and per phase: `getdents`, `statx`, queue wait, idle threads, merge, size roll-up, cache write.
+- Views: query p50/p99, snapshot bytes. Cache: file size, `mmap` load and verify time.
+- Accuracy: every synthetic directory total exact; every top folder on real data exact against `du -sx --block-size=1`; the gap between disk used and scanned total reported as unaccounted.
+- fanotify: 100k change storm, per-change latency, events/s, overflow handling (rescans only the affected directory), CPU at idle ~0, and the live map must equal a fresh scan byte for byte.
+- Reference scanners ncdu, gdu, dua and hyperfine are installed with root at bench time, after asking. Gates come from the first measured run, then tighten. Accuracy gates are always exact.
+
+### Surface
+
+- fs provider: `scan`, `view{path, depth, topN}`, `search`, `stat`, `mark`, `unmark`, `trash`, `delete`, `move`, `copy`, `rename`. Root-owned paths go through the helper.
+- Snapshot key `disk` carries the focused view only, a few KB at any disk size; the treemap layout is computed in Quickshell.
+- CLI `yudae disk scan|view|mark|remove|clean|uninstall`, the same MCP tools, `docs/daemon.md`, `docs/agent-tooling.md`, `docs/perf.md`.
+
+### Packages and caches
+
+- pacman and paru from `/var/lib/pacman/local/*/desc`, no exec: name, version, size, explicit or dependency, orphan, AUR or repo. flatpak from `flatpak list`, unused runtimes included.
+- Uninstall `pacman -Rns` and system flatpak through the helper; user flatpak direct. Always behind a confirm naming every item and the space returned.
+- Caches table in Zig, each a path plus its tool command when one exists: `paccache` for the 16G pacman cache, paru clones, npm, bun, cargo registry, go modcache, rustup, zig, mesa shaders, thumbnails, pip/uv, journal, coredumps, trash, and our own `~/.cache/yudae-*` and `rootfs-build` VM builds (~45G today). Project build output found by the scan (`target/`, `node_modules/`, `.zig-cache`, `zig-out`, `.venv`) gets the hatch.
+
+### App
+
+`shell/app-disk.qml`, AppId `com.yudae.disk`, on `AppWindow`: Map, Packages, Caches. Colors from `Config.qml`, glyph from the icon list, launcher entry with the same glyph. No key hints on screen.
 
 ### Order of work
 
-1. Manifest spec, conformance suite, the two-file skill, the "no `plugins.toml`" scenario.
-2. `_template-hypr` and `_template-theme`.
-3. The loader in yudaemond.
-4. The `hypr` adapter: replace `hypr/plugins.lua`, move the three plugins to `plugins/<id>/`, move their config (`plugins.lua`, `hypr/drop-preview.lua`) into each `hypr.lua`. Nothing moves before the loader exists.
-5. The `theme` adapter with one real theme.
-6. The extra VM images and the full end-to-end suite.
-7. MCP tools, `docs/plugins.md`, `add` and `update`, then the `shell` and `app` kinds.
+1. Scanner core, benchmarking, pick the winning version.
+2. Cache file.
+3. `yudae-fsd`, polkit and systemd units (ask before writing as root).
+4. fanotify live map and its bench.
+5. fs provider, snapshot key, CLI and MCP.
+6. Packages and caches.
+7. Docs.
+8. Quickshell app.
 
-Settled: state dir is `~/.local/state/yudae`; source only; version check at daemon start, no package hooks; nothing is rejected but binaries; everything tested end to end in the VM; agents first.
+### Tests
+
+One Zig test on a temp tree: totals, hardlinks once, a protected path never appears and refuses removal, a symlink escape refused, cache file round-trip. VM scenario for a scan with polkit denied and no agent.
+
+Settled: fastest measured scanner ships; cache file is the only thing on disk; protected paths invisible in scan and app; polkit for every privileged action; backend first, front end later.
