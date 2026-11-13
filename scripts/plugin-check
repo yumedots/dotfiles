@@ -243,16 +243,19 @@ def check(root):
         finally:
             shutil.rmtree(out, ignore_errors=True)
         print(f"ok {plugin_dir.name} ({data['kind']})")
-    print(f"plugins: {len(plugins)} checked")
+    print(f"{root.name}: {len(plugins)} checked")
     return 0
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("root", nargs="?", type=Path, default=ROOT / "plugins")
+    parser.add_argument("root", nargs="*", type=Path)
     args = parser.parse_args()
+    roots = args.root or [ROOT / "plugins", ROOT / "templates"]
     try:
-        return check(args.root)
+        for root in roots:
+            check(root)
+        return 0
     except Failure as error:
         print(f"plugin check failed: {error}", file=sys.stderr)
         return 1
