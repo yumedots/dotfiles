@@ -169,22 +169,21 @@ The headless daemon still passes 3.6MB idle RSS and 9.1s cold build against 8MB/
 
 ## Disk scanner, measured 2026-11-11
 
-`xmake bench disk` builds a seeded synthetic tree, runs the sequential and threaded scanners at 1/2/4/8/16/nproc, keeps the fastest exact version, and writes one row to `daemon/bench/disk.jsonl`. The first accurate run seeds the `disk` block in `daemon/bench/baseline.json`; later runs fail when throughput drops under 80% of that baseline, when the cache grows past twice its baseline, or when any total stops being exact. `--files=N` changes the tiny-file count and `--real` adds `$HOME`.
+`xmake bench disk` builds a seeded synthetic tree, runs V0 sequential, V1 threaded and V2 io_uring batched statx at 1/2/4/8/16/nproc, plus V3 btrfs `TREE_SEARCH_V2`, keeps only exact versions, and writes every measured variant to `daemon/bench/disk.jsonl`. The first accurate run seeds the `disk` block in `daemon/bench/baseline.json`; later runs fail when the winner drops under 80% of that baseline or the cache grows past twice its baseline. `--files=N` changes the tiny-file count, `--real` adds `$HOME`, and `--cold` drops the page cache through `yudae-fsd` (`org.yudae.fs.bench`) or directly when the benchmark itself runs as root.
 
-Measured on CachyOS, kernel 7.3.3, Zig 0.17.1, 200k tiny files:
+Measured in the VM, kernel 7.2.11, Zig 0.17.1, 20k tiny files:
 
-| metric | first run |
-| --- | --- |
-| winner | v0 sequential |
-| throughput | 319k entries/s |
-| syscalls | 1.00 per entry |
-| cache | 5.7kB, sub-millisecond `mmap` load |
-| views | p50 0.7us, p99 1.1us |
-| accuracy | exact against `statx` block totals |
+| metric | warm | cold |
+| --- | --- | --- |
+| winner | v2 io_uring, 1 thread | v2 io_uring, 1 thread |
+| throughput | 756k entries/s | 545k entries/s |
+| syscalls | 0.01 per entry | 0.01 per entry |
+| cache | 5.7kB, sub-millisecond `mmap` load | same |
+| accuracy | exact against `statx` block totals | exact |
 
-The threaded candidate is measured at 1/2/4/8/16/nproc at the same time; at 200k tiny files it loses to the sequential scanner on this host and is not the shipped path.
+V1 thread counts are measured too; 8 and 16 threads lose to 1-2 because of lock and path allocation overhead. V3 reads the same exact tree on a btrfs subvolume but btrfs inline extents make its `nbytes` total disagree with `st_blocks` for tiny files on this fixture, so it fails the exact gate and is not shipped. The io_uring path is the only scan path; if it is unavailable the scan fails with a clear error.
 
-Reference scanners ncdu, gdu, dua and hyperfine are reported when present. Installing them needs root and is asked for at bench time, never done automatically. Cold-cache runs need `yudae-fsd` and `org.yudae.fs.bench`; without it the bench reports the warm numbers only.
+Reference scanners ncdu, gdu, dua and hyperfine are reported when present. Installing them needs root and is asked for at bench time, never done automatically.
 
 ## Rules
 

@@ -6,6 +6,10 @@ pub const Io = std.Io;
 pub const max_file = 4 * 1024 * 1024;
 
 pub fn readFile(io: Io, allocator: Allocator, path: []const u8) ![]u8 {
+	return readFileLimit(io, allocator, path, max_file);
+}
+
+pub fn readFileLimit(io: Io, allocator: Allocator, path: []const u8, limit: usize) ![]u8 {
 	var file = try std.Io.Dir.cwd().openFile(io, path, .{});
 	defer file.close(io);
 
@@ -20,7 +24,7 @@ pub fn readFile(io: Io, allocator: Allocator, path: []const u8) ![]u8 {
 		const count = try reader.interface.readSliceShort(&chunk);
 
 		if (count == 0) break;
-		if (list.items.len + count > max_file) return error.StreamTooLong;
+		if (list.items.len + count > limit) return error.StreamTooLong;
 
 		try list.appendSlice(allocator, chunk[0..count]);
 	}

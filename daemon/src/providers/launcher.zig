@@ -34,6 +34,7 @@ const glyph_apps = "\u{f0c9}";
 const glyph_wallpaper = "\u{f0e09}";
 const glyph_process = "\u{f0874}";
 const glyph_vm = "\u{f0379}";
+const glyph_disk = "\u{f0a0}";
 const glyph_power = "\u{f011}";
 const glyph_prompt = "\u{ea6d}";
 const glyph_emoji = "\u{f118}";
@@ -51,6 +52,7 @@ const modes = [_]Mode{
 	.{ .mode = "wallpaper", .name = "Wallpaper", .mark = "~", .glyph = glyph_wallpaper, .keywords = &.{ "wallpaper", "background", "desktop" } },
 	.{ .mode = "procs", .name = "Processes", .mark = "%", .glyph = glyph_process, .keywords = &.{ "top", "atop", "cpu", "processes", "monitor", "kill" } },
 	.{ .mode = "vms", .name = "Virtual machines", .mark = "", .glyph = glyph_vm, .keywords = &.{ "vm", "virtual", "machine", "qemu", "guest", "kill" } },
+	.{ .mode = "disk", .name = "Disk", .mark = "", .glyph = glyph_disk, .keywords = &.{ "disk", "space", "storage", "usage", "treemap", "caches", "packages" } },
 	.{ .mode = "emoji", .name = "Emoji & Kaomoji", .mark = ":", .glyph = glyph_emoji, .keywords = &.{ "emoji", "kaomoji", "emote", "smiley", "face", "copy" } },
 };
 
@@ -833,6 +835,11 @@ pub const Launcher = struct {
 			return;
 		}
 
+		if (std.mem.eql(u8, id, "disk:app")) {
+			self.yudaeApp("disk");
+			return;
+		}
+
 		if (std.mem.eql(u8, id, "calc")) self.copyCalc();
 	}
 
@@ -860,6 +867,21 @@ pub const Launcher = struct {
 
 		_ = exec.spawn(self.io, .{
 			.argv = &.{ "setsid", script, "vm", verb, name },
+			.stdin = .ignore,
+			.stdout = .ignore,
+			.stderr = .ignore,
+		}) catch return;
+	}
+
+	fn yudaeApp(self: *Launcher, name: []const u8) void {
+		if (name.len == 0) return;
+
+		const repo = proc.repo(self.io, self.allocator);
+		const script = std.fmt.allocPrint(self.allocator, "{s}/scripts/yudae", .{repo}) catch return;
+		defer self.allocator.free(script);
+
+		_ = exec.spawn(self.io, .{
+			.argv = &.{ "setsid", script, "app", "open", name },
 			.stdin = .ignore,
 			.stdout = .ignore,
 			.stderr = .ignore,
@@ -1067,6 +1089,18 @@ pub const Launcher = struct {
 
 		if (std.mem.eql(u8, mode, "vms")) {
 			try self.vmRows(arena, search, &rows);
+			return rows.items;
+		}
+
+		if (std.mem.eql(u8, mode, "disk")) {
+			try rows.append(arena, .{
+				.id = "disk:app",
+				.kind = "mode",
+				.name = "Disk map",
+				.glyph = glyph_disk,
+				.mode = "disk",
+				.keywords = &.{ "disk", "space", "storage", "usage", "treemap" },
+			});
 			return rows.items;
 		}
 
@@ -2075,6 +2109,8 @@ test "every mode id renders rows of its own kind" {
 				std.mem.eql(u8, row.kind, "proc")
 			else if (std.mem.eql(u8, mode.mode, "emoji"))
 				std.mem.eql(u8, row.kind, "emoji") or std.mem.eql(u8, row.kind, "kaomoji")
+			else if (std.mem.eql(u8, mode.mode, "disk"))
+				std.mem.eql(u8, row.kind, "mode")
 			else
 				false;
 

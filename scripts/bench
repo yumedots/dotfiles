@@ -25,6 +25,9 @@ if build.returncode != 0:
     sys.stderr.write(build.stderr or build.stdout)
     sys.exit(build.returncode)
 
+if args and args[0] == "disk":
+    sys.exit(subprocess.run([full_binary, "bench", "disk"] + args[1:]).returncode)
+
 full_run = subprocess.run([full_binary, "bench", "--json", "--seconds", seconds], capture_output=True, text=True)
 if full_run.returncode != 0:
     sys.stderr.write(full_run.stderr)

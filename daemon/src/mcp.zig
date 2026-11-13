@@ -54,6 +54,23 @@ const tools = [_]Tool{
 	.{ .name = "plugin_add", .description = "Clone a plugin repository and install it.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}" },
 	.{ .name = "plugin_update", .description = "Pull and rebuild an installed plugin.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
 	.{ .name = "plugin_reload", .description = "Rebuild stale plugins and apply the load list.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "disk_scan", .description = "Scan a disk tree on demand. Root scans need yudae-fsd and polkit.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}}}" },
+	.{ .name = "disk_view", .description = "Focus one path in the last disk scan and return its children.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"depth\":{\"type\":\"integer\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_search", .description = "Search names in the last disk scan.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}" },
+	.{ .name = "disk_stat", .description = "Size, kind and child count of one scanned path.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_mark", .description = "Mark a path for the caches and uninstall list.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_unmark", .description = "Remove a mark.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_trash", .description = "Move a user path to the trash.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_delete", .description = "Delete a path. Root-owned paths need yudae-fsd and polkit.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_move", .description = "Move a path.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"from\",\"to\"]}" },
+	.{ .name = "disk_copy", .description = "Copy a file or directory tree.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"from\",\"to\"]}" },
+	.{ .name = "disk_rename", .description = "Rename a path.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"from\",\"to\"]}" },
+	.{ .name = "disk_packages", .description = "Installed pacman, paru and flatpak packages with sizes.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "disk_uninstall", .description = "Uninstall named packages through polkit. Without confirm it returns the items.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"names\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"confirm\":{\"type\":\"boolean\"}},\"required\":[\"names\"]}" },
+	.{ .name = "disk_clean_packages", .description = "Remove orphan pacman packages. Without confirm it returns the items and space.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"confirm\":{\"type\":\"boolean\"}}}" },
+	.{ .name = "disk_caches", .description = "Cache table with sizes and tool commands.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "disk_clean", .description = "Clean one cache id or all. Without confirm it returns the items.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"confirm\":{\"type\":\"boolean\"}}}" },
+	.{ .name = "disk_watch", .description = "Watch a filesystem with fanotify for N seconds and report events. Needs yudae-fsd.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"seconds\":{\"type\":\"integer\"}}}" },
 };
 
 pub fn run(io: Io, args: []const []const u8) !void {
@@ -164,6 +181,8 @@ fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.
 	if (std.mem.eql(u8, name, "parity")) return runSelf(io, allocator, &.{"parity"});
 
 	if (std.mem.eql(u8, name, "qs_log")) return logTail(io, allocator, arguments);
+
+	if (std.mem.startsWith(u8, name, "disk_")) return callDaemon(io, allocator, "disk", name["disk_".len..], arguments);
 
 	if (std.mem.startsWith(u8, name, "plugin_")) return callDaemon(io, allocator, "plugins", name["plugin_".len..], arguments);
 
