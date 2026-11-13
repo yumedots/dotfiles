@@ -22,6 +22,13 @@ AppWindow {
 	readonly property int mapSelectionCount: Object.keys(win.mapSelection).length
 	readonly property int packageSelectionCount: Object.keys(win.packageSelection).length
 	readonly property int cacheSelectionCount: Object.keys(win.cacheSelection).length
+	readonly property int sidebarWidth: 248
+	readonly property var selectedRows: {
+		if (win.tab === "packages") return Object.values(win.packageSelection);
+		if (win.tab === "caches") return Object.values(win.cacheSelection);
+		return Object.values(win.mapSelection);
+	}
+	readonly property real selectedTotal: win.sumSizes(win.selectedRows)
 
 	readonly property var disk: Yudae.diskState || ({})
 	readonly property var view: win.disk.view || null
@@ -169,6 +176,12 @@ AppWindow {
 			size += Number(rows[i].size) || 0;
 
 		return size;
+	}
+
+	function cleanCurrent() {
+		if (win.tab === "packages") win.askCleanPackages();
+		else if (win.tab === "caches") win.askCleanCaches();
+		else win.askCleanFiles();
 	}
 
 	function askCleanFiles() {
@@ -380,9 +393,18 @@ AppWindow {
 			}
 		}
 
-		Item {
+		Row {
 			width: parent.width
 			height: parent.height - header.height
+
+		Item {
+			width: win.sidebarWidth
+			height: parent.height
+		}
+
+		Item {
+			width: parent.width - win.sidebarWidth
+			height: parent.height
 
 			Column {
 				anchors.fill: parent
@@ -418,7 +440,7 @@ AppWindow {
 					}
 
 					Text {
-						width: parent.width - parent.spacing - 34 - usage.width - fileActions.width - (fileActions.visible ? parent.spacing : 0)
+						width: parent.width - parent.spacing - 34 - usage.width
 						height: 26
 						verticalAlignment: Text.AlignVCenter
 						elide: Text.ElideMiddle
@@ -429,31 +451,6 @@ AppWindow {
 						text: win.focus
 					}
 
-						Row {
-							id: fileActions
-
-							height: 26
-							visible: win.mapSelectionCount > 0
-
-							Text {
-								height: 26
-								verticalAlignment: Text.AlignVCenter
-
-								font.family: Config.fontFamily
-								font.pixelSize: 11
-								color: cleanFilesMouse.containsMouse ? Config.red : Config.dim
-								text: "Clean"
-
-								MouseArea {
-									id: cleanFilesMouse
-
-									anchors.fill: parent
-									anchors.margins: -6
-									hoverEnabled: true
-									onClicked: win.askCleanFiles()
-								}
-							}
-						}
 					Column {
 						id: usage
 
@@ -490,11 +487,11 @@ AppWindow {
 					height: parent.height - 26 - 12 - (win.pending ? 44 : 0)
 					clip: true
 
-					Treemap {
+					DirList {
 						anchors.fill: parent
 						items: win.children
 						selected: win.mapSelection
-						onPicked: function (item) { win.toggleMapItem(item); }
+						onToggled: function (item) { win.toggleMapItem(item); }
 						onActivated: function (item) {
 							if (item.kind === "dir")
 								win.openPath(item.path);
@@ -578,44 +575,13 @@ AppWindow {
 				anchors.fill: parent
 				visible: win.tab === "packages"
 
-				Rectangle {
-					anchors.top: parent.top
-					anchors.right: parent.right
-					anchors.topMargin: 14
-					anchors.rightMargin: 22
-					width: cleanPackagesLabel.width + 20
-					height: 26
-					z: 2
-					color: cleanPackagesMouse.containsMouse && win.packageSelectionCount > 0 ? Config.launcherHighlight : Config.launcherSearchBox
-					opacity: win.packageSelectionCount > 0 ? 1 : 0.5
-
-					Text {
-						id: cleanPackagesLabel
-
-						anchors.centerIn: parent
-
-						font.family: Config.fontFamily
-						font.pixelSize: 11
-						color: Config.foreground
-						text: "Clean"
-					}
-
-					MouseArea {
-						id: cleanPackagesMouse
-
-						anchors.fill: parent
-						hoverEnabled: true
-						onClicked: if (win.packageSelectionCount > 0) win.askCleanPackages()
-					}
-				}
-
 				ListView {
 					id: packageList
 
 					anchors.fill: parent
 					anchors.leftMargin: 22
 					anchors.rightMargin: 22
-					anchors.topMargin: 50
+					anchors.topMargin: 22
 					anchors.bottomMargin: 22
 					clip: true
 					model: win.packageRows
@@ -641,7 +607,7 @@ AppWindow {
 							anchors.left: parent.left
 							anchors.leftMargin: 10
 							anchors.verticalCenter: parent.verticalCenter
-							checked: win.packageSelection[packageRow.modelData.name] === true
+							checked: win.packageSelection[packageRow.modelData.name] !== undefined
 							onToggled: win.togglePackage(packageRow.modelData)
 						}
 
@@ -729,44 +695,13 @@ AppWindow {
 				anchors.fill: parent
 				visible: win.tab === "caches"
 
-				Rectangle {
-					anchors.top: parent.top
-					anchors.right: parent.right
-					anchors.topMargin: 14
-					anchors.rightMargin: 22
-					width: cleanCachesLabel.width + 20
-					height: 26
-					z: 2
-					color: cleanCachesMouse.containsMouse && win.cacheSelectionCount > 0 ? Config.launcherHighlight : Config.launcherSearchBox
-					opacity: win.cacheSelectionCount > 0 ? 1 : 0.5
-
-					Text {
-						id: cleanCachesLabel
-
-						anchors.centerIn: parent
-
-						font.family: Config.fontFamily
-						font.pixelSize: 11
-						color: Config.foreground
-						text: "Clean"
-					}
-
-					MouseArea {
-						id: cleanCachesMouse
-
-						anchors.fill: parent
-						hoverEnabled: true
-						onClicked: if (win.cacheSelectionCount > 0) win.askCleanCaches()
-					}
-				}
-
 				ListView {
 					id: cacheList
 
 					anchors.fill: parent
 					anchors.leftMargin: 22
 					anchors.rightMargin: 22
-					anchors.topMargin: 50
+					anchors.topMargin: 22
 					anchors.bottomMargin: 22
 					clip: true
 					model: win.cacheRows
@@ -792,7 +727,7 @@ AppWindow {
 							anchors.left: parent.left
 							anchors.leftMargin: 10
 							anchors.verticalCenter: parent.verticalCenter
-							checked: win.cacheSelection[cacheRow.modelData.id] === true
+							checked: win.cacheSelection[cacheRow.modelData.id] !== undefined
 							onToggled: win.toggleCache(cacheRow.modelData)
 						}
 
@@ -926,5 +861,18 @@ AppWindow {
 				}
 			}
 		}
+		}
+	}
+
+	SelectionSidebar {
+		anchors.top: parent.top
+		anchors.topMargin: header.height
+		anchors.left: parent.left
+		anchors.bottom: parent.bottom
+		width: win.sidebarWidth
+		rows: win.selectedRows
+		total: win.selectedTotal
+		canClean: win.selectedRows.length > 0
+		onClean: win.cleanCurrent()
 	}
 }

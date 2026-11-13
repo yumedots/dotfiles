@@ -272,9 +272,13 @@ QtObject {
 	readonly property var wallpaperScrimMs: settings.wallpaperScrimMs !== undefined ? settings.wallpaperScrimMs : 180
 
 	// disk map
-	readonly property var diskDir: settings.diskDir !== undefined ? settings.diskDir : "#3f5f7a"
-	readonly property var diskFile: settings.diskFile !== undefined ? settings.diskFile : "#4f7a63"
-	readonly property var diskOther: settings.diskOther !== undefined ? settings.diskOther : "#7a6547"
+	readonly property var diskDir: settings.diskDir !== undefined ? settings.diskDir : "#3a6ea5"
+	readonly property var diskFile: settings.diskFile !== undefined ? settings.diskFile : "#557a55"
+	readonly property var diskIconDir: settings.diskIconDir !== undefined ? settings.diskIconDir : "\uf07b"
+	readonly property var diskIconFile: settings.diskIconFile !== undefined ? settings.diskIconFile : "\uf15b"
+	readonly property var diskSidebar: settings.diskSidebar !== undefined ? settings.diskSidebar : "#08080a"
+	readonly property var diskAccent: settings.diskAccent !== undefined ? settings.diskAccent : "#5b9dff"
+	readonly property var diskOther: settings.diskOther !== undefined ? settings.diskOther : "#8a6540"
 
 	// window switcher
 	readonly property var windowsGridCell: settings.windowsGridCell !== undefined ? settings.windowsGridCell : 92

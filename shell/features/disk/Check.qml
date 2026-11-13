@@ -14,17 +14,18 @@ Item {
 
 	Rectangle {
 		anchors.fill: parent
-		color: root.checked ? Config.foreground : Config.launcherSearchBox
-		border.color: Config.dim
-		border.width: 1
+		radius: 5
+		color: root.checked ? Config.diskAccent : "transparent"
+		border.color: root.checked ? Config.diskAccent : Config.dim
+		border.width: 1.5
 	}
 
 	Glyph {
 		anchors.centerIn: parent
 		visible: root.checked
 		glyph: Config.launcherIconActive
-		size: 10
-		color: Config.surface
+		size: 11
+		color: Config.foreground
 	}
 
 	MouseArea {

@@ -583,6 +583,10 @@ agentPlanIcon = "opencode"
 
 # disk map
 [disk]
-diskDir = "#3f5f7a"
-diskFile = "#4f7a63"
-diskOther = "#7a6547"
+diskDir = "#3a6ea5"
+diskFile = "#557a55"
+diskOther = "#8a6540"
+diskIconDir = "\uF07B"
+diskIconFile = "\uF15B"
+diskSidebar = "#08080a"
+diskAccent = "#5b9dff"
