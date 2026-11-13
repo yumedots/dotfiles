@@ -16,6 +16,7 @@ AppWindow {
 	property var packageRows: []
 	property var cacheRows: []
 	property var pending: null
+	property var selectedChild: null
 
 	readonly property var disk: Yudae.diskState || ({})
 	readonly property var view: win.disk.view || null
@@ -129,6 +130,12 @@ AppWindow {
 		win.pending = { kind: "clean", id: row.id, label: row.label, size: row.size, names: [] };
 	}
 
+	function askFileAction(kind) {
+		if (!win.selectedChild)
+			return;
+		win.pending = { kind: kind, id: win.selectedChild.path, label: win.selectedChild.name, size: win.selectedChild.size, names: [win.selectedChild.path] };
+	}
+
 	function askCleanPackages() {
 		Yudae.diskCommand("clean-packages", {}, function (result) {
 			if (!result)
@@ -155,6 +162,14 @@ AppWindow {
 
 		const action = win.pending;
 		win.pending = null;
+
+		if (action.kind === "trash" || action.kind === "delete") {
+			Yudae.diskCommand(action.kind, { path: action.id }, function () {
+				win.selectedChild = null;
+				Yudae.diskCommand("view", { path: win.focus });
+			});
+			return;
+		}
 
 		if (action.kind === "uninstall" || action.kind === "clean-packages") {
 			if (action.kind === "clean-packages") {
@@ -335,7 +350,7 @@ AppWindow {
 					}
 
 					Text {
-						width: parent.width - parent.spacing - 34 - usage.width
+						width: parent.width - parent.spacing - 34 - usage.width - fileActions.width - (fileActions.visible ? parent.spacing : 0)
 						height: 26
 						verticalAlignment: Text.AlignVCenter
 						elide: Text.ElideMiddle
@@ -344,6 +359,52 @@ AppWindow {
 						font.pixelSize: 12
 						color: Config.foreground
 						text: win.focus
+					}
+
+					Row {
+						id: fileActions
+
+						height: 26
+						spacing: 14
+						visible: win.selectedChild !== null
+
+						Text {
+							height: 26
+							verticalAlignment: Text.AlignVCenter
+
+							font.family: Config.fontFamily
+							font.pixelSize: 11
+							color: trashMouse.containsMouse ? Config.yellow : Config.dim
+							text: "Trash"
+
+							MouseArea {
+								id: trashMouse
+
+								anchors.fill: parent
+								anchors.margins: -6
+								hoverEnabled: true
+								onClicked: win.askFileAction("trash")
+							}
+						}
+
+						Text {
+							height: 26
+							verticalAlignment: Text.AlignVCenter
+
+							font.family: Config.fontFamily
+							font.pixelSize: 11
+							color: deleteMouse.containsMouse ? Config.red : Config.dim
+							text: "Delete"
+
+							MouseArea {
+								id: deleteMouse
+
+								anchors.fill: parent
+								anchors.margins: -6
+								hoverEnabled: true
+								onClicked: win.askFileAction("delete")
+							}
+						}
 					}
 
 					Column {
@@ -385,7 +446,9 @@ AppWindow {
 					Treemap {
 						anchors.fill: parent
 						items: win.children
-						onPicked: function (item) {
+						selectedPath: win.selectedChild ? win.selectedChild.path : ""
+						onPicked: function (item) { win.selectedChild = item; }
+						onActivated: function (item) {
 							if (item.kind === "dir")
 								win.openPath(item.path);
 						}
@@ -424,7 +487,7 @@ AppWindow {
 							font.family: Config.fontFamily
 							font.pixelSize: 12
 							color: Config.foreground
-							text: win.pending ? ("Remove " + win.pending.label + "  " + win.formatSize(win.pending.size)) : ""
+							text: win.pending ? ((win.pending.kind === "trash" ? "Trash " : (win.pending.kind === "delete" ? "Delete " : "Remove ")) + win.pending.label + "  " + win.formatSize(win.pending.size)) : ""
 						}
 
 						Text {

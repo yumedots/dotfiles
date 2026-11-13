@@ -8,7 +8,9 @@ Item {
 
 	property var items: []
 	property var rects: []
+	property string selectedPath: ""
 	signal picked(var item)
+	signal activated(var item)
 
 	onWidthChanged: root.recompute()
 	onHeightChanged: root.recompute()
@@ -72,8 +74,8 @@ Item {
 			width: modelData.width
 			height: modelData.height
 			color: modelData.item.kind === "dir" ? Config.cpuCore : (modelData.item.kind === "file" ? Config.memoryBase : Config.yellow)
-			border.color: Config.surface
-			border.width: 1
+			border.color: root.selectedPath === modelData.item.path ? Config.foreground : Config.surface
+			border.width: root.selectedPath === modelData.item.path ? 2 : 1
 			opacity: cellMouse.containsMouse ? 0.82 : 1
 
 			Behavior on opacity {
@@ -118,6 +120,7 @@ Item {
 				anchors.fill: parent
 				hoverEnabled: true
 				onClicked: root.picked(cell.modelData.item)
+				onDoubleClicked: root.activated(cell.modelData.item)
 			}
 		}
 	}

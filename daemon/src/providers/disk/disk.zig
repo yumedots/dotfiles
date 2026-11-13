@@ -33,6 +33,7 @@ pub const Disk = struct {
 	root: []u8 = &.{},
 	focus: []u8 = &.{},
 	marks: std.ArrayList([]u8) = .empty,
+	removed_paths: std.ArrayList([]u8) = .empty,
 	scanning_root: []u8 = &.{},
 	live_path: []u8 = &.{},
 	live_at: i64 = 0,
@@ -190,6 +191,7 @@ pub const Disk = struct {
 
 		if (finished) |loaded| {
 			self.clearLive();
+			self.clearRemoved();
 			if (self.cache) |*old| old.deinit();
 			self.cache = loaded;
 			self.state = .ready;
@@ -290,6 +292,7 @@ pub const Disk = struct {
 			const name = loaded.nameOf(@intCast(index));
 			if (index == 0) continue;
 			if (!containsIgnoreCase(name, query)) continue;
+			if (self.isRemoved(try self.pathOf(alloc, loaded, @intCast(index)))) continue;
 			if (matches.items.len >= 200) break;
 			try matches.append(alloc, index);
 		}
@@ -321,6 +324,7 @@ pub const Disk = struct {
 		const index = loaded.find(path) orelse return error.NoPath;
 		const node = loaded.nodes[index];
 		const full = try self.pathOf(alloc, loaded, index);
+		if (self.isRemoved(full)) return error.NoPath;
 
 		var out: std.Io.Writer.Allocating = .init(alloc);
 		try out.writer.print("{{\"ok\":true,\"path\":{f},\"size\":{d},\"kind\":\"{s}\",\"mtime\":{d},\"children\":{d}}}", .{
@@ -385,6 +389,8 @@ pub const Disk = struct {
 		var out: std.Io.Writer.Allocating = .init(alloc);
 		try out.writer.print("[Trash Info]\nPath={s}\nDeletionDate={d}\n", .{ path, @divTrunc(fmt.nowMs(self.io), 1000) });
 		try proc.writeFileAtomic(self.io, alloc, info_path, out.written());
+		self.markRemoved(path);
+		self.hub.publish();
 
 		return std.fmt.allocPrint(alloc, "{{\"ok\":true,\"path\":{f}}}", .{std.json.fmt(destination, .{})});
 	}
@@ -405,6 +411,8 @@ pub const Disk = struct {
 			else => return err,
 		};
 
+		self.markRemoved(path);
+		self.hub.publish();
 		return std.fmt.allocPrint(alloc, "{{\"ok\":true,\"path\":{f}}}", .{std.json.fmt(path, .{})});
 	}
 
@@ -558,6 +566,22 @@ pub const Disk = struct {
 		self.live_at = 0;
 	}
 
+	fn markRemoved(self: *Disk, path: []const u8) void {
+		self.mutex.lockUncancelable(self.io);
+		defer self.mutex.unlock(self.io);
+		const kept = self.allocator.dupe(u8, path) catch return;
+		self.removed_paths.append(self.allocator, kept) catch self.allocator.free(kept);
+	}
+
+	fn clearRemoved(self: *Disk) void {
+		for (self.removed_paths.items) |path| self.allocator.free(path);
+		self.removed_paths.clearRetainingCapacity();
+	}
+
+	fn isRemoved(self: *const Disk, path: []const u8) bool {
+		return isRemovedPath(self.removed_paths.items, path);
+	}
+
 	fn openApp(self: *Disk, alloc: Allocator) ![]u8 {
 		const repo = proc.repo(self.io, self.allocator);
 		const script = try std.fmt.allocPrint(alloc, "{s}/scripts/yudae", .{repo});
@@ -653,7 +677,7 @@ pub const Disk = struct {
 
 		if (loaded) |value| {
 			const index = value.find(focus_path) orelse 0;
-			try renderView(writer, allocator, value, index, 1, 24);
+			try renderView(writer, allocator, value, index, 1, 24, self.removed_paths.items);
 		} else {
 			try writer.writeAll("null");
 		}
@@ -760,7 +784,7 @@ fn diskUsage(path: []const u8) Usage {
 	};
 }
 
-fn renderView(writer: *Writer, allocator: Allocator, loaded: cache.Cache, index: u32, depth: u32, top_n: u32) !void {
+fn renderView(writer: *Writer, allocator: Allocator, loaded: cache.Cache, index: u32, depth: u32, top_n: u32, removed: []const []const u8) !void {
 	const node = loaded.nodes[index];
 	const path = try pathOfCache(allocator, loaded, index);
 
@@ -789,17 +813,20 @@ fn renderView(writer: *Writer, allocator: Allocator, loaded: cache.Cache, index:
 		kindName(node.kind),
 	});
 
-	for (children.items[0..@min(top_n, children.items.len)], 0..) |entry, position| {
-		if (position > 0) try writer.writeAll(",");
+	var emitted: usize = 0;
+	for (children.items[0..@min(top_n, children.items.len)]) |entry| {
 		const child_node = loaded.nodes[entry.index];
 		const child_path = try pathOfCache(allocator, loaded, entry.index);
+		if (isRemovedPath(removed, child_path)) continue;
+		if (emitted > 0) try writer.writeAll(",");
+		emitted += 1;
 		const child_size = try humanSize(allocator, child_node.size);
 		try writer.print("{{\"name\":{f},\"path\":{f},\"size\":{d},\"sizeText\":{f},\"kind\":\"{s}\",\"children\":{d}",
 			.{ std.json.fmt(loaded.nameOf(entry.index), .{}), std.json.fmt(child_path, .{}), child_node.size, std.json.fmt(child_size, .{}), kindName(child_node.kind), childCount(loaded, entry.index) });
 
 		if (depth > 1 and child_node.kind == .directory and child_node.first_child != scanner.none) {
 			try writer.writeAll(",\"nested\":");
-			try renderView(writer, allocator, loaded, entry.index, depth - 1, top_n);
+			try renderView(writer, allocator, loaded, entry.index, depth - 1, top_n, removed);
 		}
 
 		try writer.writeAll("}");
@@ -839,6 +866,13 @@ fn kindName(kind: scanner.Kind) []const u8 {
 		.file => "file",
 		.other => "other",
 	};
+}
+
+fn isRemovedPath(removed: []const []const u8, path: []const u8) bool {
+	for (removed) |gone| {
+		if (std.mem.eql(u8, path, gone) or guardmod.hasPrefix(path, gone)) return true;
+	}
+	return false;
 }
 
 fn pathOfCache(allocator: Allocator, loaded: cache.Cache, index: u32) ![]const u8 {
