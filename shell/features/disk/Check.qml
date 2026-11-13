@@ -9,27 +9,31 @@ Item {
 
 	signal toggled()
 
-	implicitWidth: 18
-	implicitHeight: 18
+	implicitWidth: 20
+	implicitHeight: 20
 
 	Rectangle {
 		anchors.fill: parent
-		radius: 5
-		color: root.checked ? Config.diskAccent : "transparent"
-		border.color: root.checked ? Config.diskAccent : Config.dim
-		border.width: 1.5
+		radius: width / 2
+		color: Config.foreground
+		opacity: root.checked ? 1 : 0.16
 	}
 
-	Glyph {
+	Rectangle {
 		anchors.centerIn: parent
-		visible: root.checked
-		glyph: Config.launcherIconActive
-		size: 11
-		color: Config.foreground
+		width: root.checked ? 8 : 0
+		height: width
+		radius: width / 2
+		color: Config.surface
+
+		Behavior on width {
+			NumberAnimation { duration: 110; easing.type: Easing.OutCubic }
+		}
 	}
 
 	MouseArea {
 		anchors.fill: parent
+		anchors.margins: -4
 		onClicked: root.toggled()
 	}
 }

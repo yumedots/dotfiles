@@ -272,13 +272,16 @@ QtObject {
 	readonly property var wallpaperScrimMs: settings.wallpaperScrimMs !== undefined ? settings.wallpaperScrimMs : 180
 
 	// disk map
-	readonly property var diskDir: settings.diskDir !== undefined ? settings.diskDir : "#3a6ea5"
-	readonly property var diskFile: settings.diskFile !== undefined ? settings.diskFile : "#557a55"
+	readonly property var diskDir: settings.diskDir !== undefined ? settings.diskDir : memoryBase
+	readonly property var diskFile: settings.diskFile !== undefined ? settings.diskFile : cpuBase
 	readonly property var diskIconDir: settings.diskIconDir !== undefined ? settings.diskIconDir : "\uf07b"
 	readonly property var diskIconFile: settings.diskIconFile !== undefined ? settings.diskIconFile : "\uf15b"
-	readonly property var diskSidebar: settings.diskSidebar !== undefined ? settings.diskSidebar : "#08080a"
-	readonly property var diskAccent: settings.diskAccent !== undefined ? settings.diskAccent : "#5b9dff"
-	readonly property var diskOther: settings.diskOther !== undefined ? settings.diskOther : "#8a6540"
+	readonly property var diskIconPackage: settings.diskIconPackage !== undefined ? settings.diskIconPackage : "\uf487"
+	readonly property var diskIconCache: settings.diskIconCache !== undefined ? settings.diskIconCache : "\uf1b8"
+	readonly property var diskIconSortDesc: settings.diskIconSortDesc !== undefined ? settings.diskIconSortDesc : "\uf0d7"
+	readonly property var diskIconSortAsc: settings.diskIconSortAsc !== undefined ? settings.diskIconSortAsc : "\uf0d8"
+	readonly property var diskAccent: settings.diskAccent !== undefined ? settings.diskAccent : cpuCore
+	readonly property var diskOther: settings.diskOther !== undefined ? settings.diskOther : yellow
 
 	// window switcher
 	readonly property var windowsGridCell: settings.windowsGridCell !== undefined ? settings.windowsGridCell : 92

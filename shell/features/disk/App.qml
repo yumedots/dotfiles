@@ -14,6 +14,12 @@ AppWindow {
 
 	property string tab: "map"
 	property var packageRows: []
+	readonly property var packageItems: win.packageRows.map(function (r) {
+		return { key: r.name, name: r.name, detail: r.version + "  " + r.repo + (r.orphan ? "  orphan" : ""), size: r.size, sizeText: r.sizeText, raw: r };
+	})
+	readonly property var cacheItems: win.cacheRows.map(function (r) {
+		return { key: r.id, name: r.label, detail: r.path, size: r.size, sizeText: r.sizeText, raw: r };
+	})
 	property var cacheRows: []
 	property var pending: null
 	property var mapSelection: ({})
@@ -22,11 +28,12 @@ AppWindow {
 	readonly property int mapSelectionCount: Object.keys(win.mapSelection).length
 	readonly property int packageSelectionCount: Object.keys(win.packageSelection).length
 	readonly property int cacheSelectionCount: Object.keys(win.cacheSelection).length
-	readonly property int sidebarWidth: 248
+	property int sidebarWidth: 248
 	readonly property var selectedRows: {
-		if (win.tab === "packages") return Object.values(win.packageSelection);
-		if (win.tab === "caches") return Object.values(win.cacheSelection);
-		return Object.values(win.mapSelection);
+		const tag = function (rows, group) {
+			return rows.map(function (r) { return Object.assign({ group: group }, r); });
+		};
+		return tag(Object.values(win.mapSelection), "Files").concat(tag(Object.values(win.packageSelection), "Packages"), tag(Object.values(win.cacheSelection), "Caches"));
 	}
 	readonly property real selectedTotal: win.sumSizes(win.selectedRows)
 
@@ -76,7 +83,6 @@ AppWindow {
 	}
 
 	function openPath(child) {
-		win.mapSelection = ({});
 		Yudae.diskCommand("view", { path: child });
 	}
 
@@ -178,45 +184,38 @@ AppWindow {
 		return size;
 	}
 
+	function unselect(row) {
+		const drop = function (map, key) {
+			const next = Object.assign({}, map);
+			delete next[key];
+			return next;
+		};
+
+		if (row.group === "Packages")
+			win.packageSelection = drop(win.packageSelection, row.name);
+		else if (row.group === "Caches")
+			win.cacheSelection = drop(win.cacheSelection, row.id);
+		else
+			win.mapSelection = drop(win.mapSelection, row.path);
+	}
+
 	function cleanCurrent() {
-		if (win.tab === "packages") win.askCleanPackages();
-		else if (win.tab === "caches") win.askCleanCaches();
-		else win.askCleanFiles();
-	}
+		const files = Object.values(win.mapSelection);
+		const pkgs = Object.values(win.packageSelection);
+		const caches = Object.values(win.cacheSelection);
 
-	function askCleanFiles() {
-		const items = Object.values(win.mapSelection);
-
-		if (items.length === 0)
+		if (files.length + pkgs.length + caches.length === 0)
 			return;
 
-		win.pending = { kind: "clean-files", items: items, label: items.length + " files", size: win.sumSizes(items) };
-	}
-
-	function askCleanPackages() {
-		const rows = Object.values(win.packageSelection);
-
-		if (rows.length === 0)
-			return;
-
-		const names = [];
-		for (let i = 0; i < rows.length; i++)
-			names.push(rows[i].name);
-
-		win.pending = { kind: "uninstall", names: names, label: rows.length + " packages", size: win.sumSizes(rows) };
-	}
-
-	function askCleanCaches() {
-		const rows = Object.values(win.cacheSelection);
-
-		if (rows.length === 0)
-			return;
-
-		const ids = [];
-		for (let i = 0; i < rows.length; i++)
-			ids.push(rows[i].id);
-
-		win.pending = { kind: "clean-caches", ids: ids, label: rows.length + " caches", size: win.sumSizes(rows) };
+		win.pending = {
+			kind: "clean-all",
+			items: files,
+			names: pkgs.map(function (r) { return r.name; }),
+			ids: caches.map(function (r) { return r.id; }),
+			count: files.length + pkgs.length + caches.length,
+			label: (files.length + pkgs.length + caches.length) + " items",
+			size: win.selectedTotal
+		};
 	}
 
 	function cleanFileAt(items, index) {
@@ -250,22 +249,18 @@ AppWindow {
 		const action = win.pending;
 		win.pending = null;
 
-		if (action.kind === "clean-files") {
-			win.cleanFileAt(action.items, 0);
-			return;
-		}
-
-		if (action.kind === "uninstall") {
+		if (action.names.length > 0) {
 			Yudae.diskCommand("uninstall", { names: action.names, confirm: true }, function () {
 				win.packageSelection = ({});
 				win.loadPackages();
 			});
-			return;
 		}
 
-		if (action.kind === "clean-caches") {
+		if (action.ids.length > 0)
 			win.cleanCacheAt(action.ids, 0);
-		}
+
+		if (action.items.length > 0)
+			win.cleanFileAt(action.items, 0);
 	}
 
 	Rectangle {
@@ -277,125 +272,9 @@ AppWindow {
 		anchors.fill: parent
 		spacing: 0
 
-		Item {
-			id: header
-
-			width: parent.width
-			height: 58
-
-			Row {
-				anchors.left: parent.left
-				anchors.leftMargin: 22
-				anchors.verticalCenter: parent.verticalCenter
-				spacing: 18
-
-				Text {
-					anchors.verticalCenter: parent.verticalCenter
-
-					font.family: Config.fontFamily
-					font.pixelSize: 21
-					font.weight: Font.DemiBold
-					color: Config.foreground
-					text: "Disk"
-				}
-
-				Row {
-					anchors.verticalCenter: parent.verticalCenter
-					spacing: 20
-
-					Repeater {
-						model: [["Map", "map"], ["Packages", "packages"], ["Caches", "caches"]]
-
-						delegate: Item {
-							required property var modelData
-
-							width: tabText.width
-							height: 30
-
-							Text {
-								id: tabText
-
-								anchors.centerIn: parent
-
-								font.family: Config.fontFamily
-								font.pixelSize: 12
-								color: win.tab === modelData[1] ? Config.foreground : Config.dim
-								text: modelData[0]
-							}
-
-							Rectangle {
-								anchors.left: parent.left
-								anchors.right: parent.right
-								anchors.bottom: parent.bottom
-								height: 1
-								color: win.tab === modelData[1] ? Config.foreground : "transparent"
-							}
-
-							MouseArea {
-								anchors.fill: parent
-								hoverEnabled: true
-								onClicked: win.selectTab(modelData[1])
-							}
-						}
-					}
-				}
-			}
-
-			Row {
-				anchors.right: parent.right
-				anchors.rightMargin: 22
-				anchors.verticalCenter: parent.verticalCenter
-				spacing: 10
-
-				Text {
-					anchors.verticalCenter: parent.verticalCenter
-
-					font.family: Config.fontFamily
-					font.pixelSize: 11
-					color: win.disk.error && win.disk.error.length > 0 ? Config.red : Config.dim
-					text: win.disk.error && win.disk.error.length > 0
-						? win.disk.error
-						: (win.scanning ? "Scanning" : win.formatSize(win.disk.total || 0) + " scanned")
-				}
-
-				Rectangle {
-					width: scanLabel.width + 22
-					height: 28
-					color: scanMouse.containsMouse ? Config.launcherHighlight : Config.launcherSearchBox
-
-					Text {
-						id: scanLabel
-
-						anchors.centerIn: parent
-
-						font.family: Config.fontFamily
-						font.pixelSize: 12
-						color: Config.foreground
-						text: "Scan"
-					}
-
-					MouseArea {
-						id: scanMouse
-
-						anchors.fill: parent
-						hoverEnabled: true
-						onClicked: win.scan()
-					}
-				}
-			}
-
-			Rectangle {
-				anchors.left: parent.left
-				anchors.right: parent.right
-				anchors.bottom: parent.bottom
-				height: 1
-				color: Config.dim
-			}
-		}
-
 		Row {
 			width: parent.width
-			height: parent.height - header.height
+			height: parent.height
 
 		Item {
 			width: win.sidebarWidth
@@ -412,22 +291,24 @@ AppWindow {
 				visible: win.tab === "map"
 				spacing: 12
 
-				Row {
+				Item {
 					width: parent.width
-					height: 26
-					spacing: 12
+					height: 20
 
 					Item {
-						width: 34
-						height: 26
+						id: upButton
 
-						Text {
+						anchors.left: parent.left
+						anchors.verticalCenter: parent.verticalCenter
+						width: 20
+						height: 20
+						opacity: win.focus === (win.disk.root || "/") ? 0.3 : (upMouse.containsMouse ? 1 : 0.7)
+
+						Glyph {
 							anchors.centerIn: parent
-
-							font.family: Config.fontFamily
-							font.pixelSize: 13
-							color: upMouse.containsMouse ? Config.foreground : Config.dim
-							text: "\uf062"
+							glyph: "\uf062"
+							size: 13
+							color: Config.foreground
 						}
 
 						MouseArea {
@@ -440,9 +321,11 @@ AppWindow {
 					}
 
 					Text {
-						width: parent.width - parent.spacing - 34 - usage.width
-						height: 26
-						verticalAlignment: Text.AlignVCenter
+						anchors.left: upButton.right
+						anchors.leftMargin: 10
+						anchors.right: usage.left
+						anchors.rightMargin: 12
+						anchors.verticalCenter: parent.verticalCenter
 						elide: Text.ElideMiddle
 
 						font.family: Config.fontFamily
@@ -454,8 +337,10 @@ AppWindow {
 					Column {
 						id: usage
 
+						anchors.right: parent.right
+						anchors.verticalCenter: parent.verticalCenter
 						width: 200
-						height: 26
+						height: 20
 						spacing: 4
 
 						Rectangle {
@@ -484,10 +369,10 @@ AppWindow {
 
 				Item {
 					width: parent.width
-					height: parent.height - 26 - 12 - (win.pending ? 44 : 0)
+					height: parent.height - 20 - 12 - (win.pending ? 40 : 0)
 					clip: true
 
-					DirList {
+					Bubbles {
 						anchors.fill: parent
 						items: win.children
 						selected: win.mapSelection
@@ -509,169 +394,20 @@ AppWindow {
 					}
 				}
 
-				Item {
-					width: parent.width
-					height: win.pending ? 44 : 0
-					visible: win.pending !== null
-
-					Rectangle {
-						anchors.fill: parent
-						color: Config.launcherSearchBox
-					}
-
-					Row {
-						anchors.left: parent.left
-						anchors.leftMargin: 14
-						anchors.verticalCenter: parent.verticalCenter
-						spacing: 14
-
-						Text {
-							anchors.verticalCenter: parent.verticalCenter
-
-							font.family: Config.fontFamily
-							font.pixelSize: 12
-							color: Config.foreground
-							text: win.pending ? ((win.pending.kind === "clean-files" ? "Clean " : "Remove ") + win.pending.label + "  " + win.formatSize(win.pending.size)) : ""
-						}
-
-						Text {
-							anchors.verticalCenter: parent.verticalCenter
-
-							font.family: Config.fontFamily
-							font.pixelSize: 12
-							color: confirmMouse.containsMouse ? Config.red : Config.yellow
-							text: "Confirm"
-
-							MouseArea {
-								id: confirmMouse
-
-								anchors.fill: parent
-								hoverEnabled: true
-								onClicked: win.confirmPending()
-							}
-						}
-
-						Text {
-							anchors.verticalCenter: parent.verticalCenter
-
-							font.family: Config.fontFamily
-							font.pixelSize: 12
-							color: cancelMouse.containsMouse ? Config.foreground : Config.dim
-							text: "Cancel"
-
-							MouseArea {
-								id: cancelMouse
-
-								anchors.fill: parent
-								hoverEnabled: true
-								onClicked: win.pending = null
-							}
-						}
-					}
-				}
 			}
 
 			Item {
 				anchors.fill: parent
 				visible: win.tab === "packages"
 
-				ListView {
-					id: packageList
-
+				RowList {
 					anchors.fill: parent
-					anchors.leftMargin: 22
-					anchors.rightMargin: 22
-					anchors.topMargin: 22
-					anchors.bottomMargin: 22
-					clip: true
-					model: win.packageRows
-					spacing: 1
-					cacheBuffer: 500
-
-					delegate: Item {
-						id: packageRow
-
-						required property var modelData
-						required property int index
-
-						width: packageList.width
-						height: 30
-
-						Rectangle {
-							anchors.fill: parent
-							color: packageHover.containsMouse ? Config.launcherSearchBox : (packageRow.index % 2 === 0 ? Config.surface : Config.launcherSearchBox)
-							opacity: packageHover.containsMouse ? 1 : 0.72
-						}
-
-						Check {
-							anchors.left: parent.left
-							anchors.leftMargin: 10
-							anchors.verticalCenter: parent.verticalCenter
-							checked: win.packageSelection[packageRow.modelData.name] !== undefined
-							onToggled: win.togglePackage(packageRow.modelData)
-						}
-
-						Text {
-							anchors.left: parent.left
-							anchors.leftMargin: 38
-							anchors.verticalCenter: parent.verticalCenter
-							width: Math.max(100, parent.width * 0.38)
-							elide: Text.ElideRight
-
-							font.family: Config.fontFamily
-							font.pixelSize: 12
-							color: Config.foreground
-							text: packageRow.modelData.name
-						}
-
-						Text {
-							anchors.left: parent.left
-							anchors.leftMargin: parent.width * 0.40
-							anchors.verticalCenter: parent.verticalCenter
-							width: parent.width * 0.20
-							elide: Text.ElideRight
-
-							font.family: Config.fontFamily
-							font.pixelSize: 11
-							color: Config.dim
-							text: packageRow.modelData.version
-						}
-
-						Text {
-							anchors.left: parent.left
-							anchors.leftMargin: parent.width * 0.61
-							anchors.verticalCenter: parent.verticalCenter
-							width: parent.width * 0.12
-							elide: Text.ElideRight
-
-							font.family: Config.fontFamily
-							font.pixelSize: 11
-							color: Config.dim
-							text: packageRow.modelData.repo + (packageRow.modelData.orphan ? "  orphan" : "")
-						}
-
-						Text {
-							anchors.right: parent.right
-							anchors.rightMargin: 14
-							anchors.verticalCenter: parent.verticalCenter
-							width: 90
-							horizontalAlignment: Text.AlignRight
-
-							font.family: Config.fontFamily
-							font.pixelSize: 11
-							color: Config.dim
-							text: packageRow.modelData.sizeText
-						}
-
-
-						MouseArea {
-							id: packageHover
-
-							anchors.fill: parent
-							z: -1
-							hoverEnabled: true
-						}
-					}
+					anchors.margins: 22
+					anchors.bottomMargin: win.pending ? 62 : 22
+					rows: win.packageItems
+					glyph: Config.diskIconPackage
+					selected: win.packageSelection
+					onToggled: function (row) { win.togglePackage(row.raw); }
 				}
 
 				Text {
@@ -695,90 +431,14 @@ AppWindow {
 				anchors.fill: parent
 				visible: win.tab === "caches"
 
-				ListView {
-					id: cacheList
-
+				RowList {
 					anchors.fill: parent
-					anchors.leftMargin: 22
-					anchors.rightMargin: 22
-					anchors.topMargin: 22
-					anchors.bottomMargin: 22
-					clip: true
-					model: win.cacheRows
-					spacing: 1
-					cacheBuffer: 300
-
-					delegate: Item {
-						id: cacheRow
-
-						required property var modelData
-						required property int index
-
-						width: cacheList.width
-						height: 34
-
-						Rectangle {
-							anchors.fill: parent
-							color: cacheHover.containsMouse ? Config.launcherSearchBox : (cacheRow.index % 2 === 0 ? Config.surface : Config.launcherSearchBox)
-							opacity: cacheHover.containsMouse ? 1 : 0.72
-						}
-
-						Check {
-							anchors.left: parent.left
-							anchors.leftMargin: 10
-							anchors.verticalCenter: parent.verticalCenter
-							checked: win.cacheSelection[cacheRow.modelData.id] !== undefined
-							onToggled: win.toggleCache(cacheRow.modelData)
-						}
-
-						Text {
-							anchors.left: parent.left
-							anchors.leftMargin: 38
-							anchors.verticalCenter: parent.verticalCenter
-							width: parent.width * 0.24
-							elide: Text.ElideRight
-
-							font.family: Config.fontFamily
-							font.pixelSize: 12
-							color: Config.foreground
-							text: cacheRow.modelData.label
-						}
-
-						Text {
-							anchors.left: parent.left
-							anchors.leftMargin: parent.width * 0.28
-							anchors.verticalCenter: parent.verticalCenter
-							width: parent.width * 0.48
-							elide: Text.ElideMiddle
-
-							font.family: Config.fontFamily
-							font.pixelSize: 11
-							color: Config.dim
-							text: cacheRow.modelData.path
-						}
-
-						Text {
-							anchors.right: parent.right
-							anchors.rightMargin: 14
-							anchors.verticalCenter: parent.verticalCenter
-							width: 90
-							horizontalAlignment: Text.AlignRight
-
-							font.family: Config.fontFamily
-							font.pixelSize: 11
-							color: Config.dim
-							text: cacheRow.modelData.sizeText
-						}
-
-
-						MouseArea {
-							id: cacheHover
-
-							anchors.fill: parent
-							z: -1
-							hoverEnabled: true
-						}
-					}
+					anchors.margins: 22
+					anchors.bottomMargin: win.pending ? 62 : 22
+					rows: win.cacheItems
+					glyph: Config.diskIconCache
+					selected: win.cacheSelection
+					onToggled: function (row) { win.toggleCache(row.raw); }
 				}
 
 				Text {
@@ -798,81 +458,189 @@ AppWindow {
 				}
 			}
 
-			Item {
-				anchors.left: parent.left
-				anchors.right: parent.right
-				anchors.bottom: parent.bottom
-				height: win.pending !== null && win.tab !== "map" ? 44 : 0
-				visible: win.pending !== null && win.tab !== "map"
+		}
+		}
+	}
 
-				Rectangle {
-					anchors.fill: parent
-					color: Config.launcherSearchBox
-				}
+	Item {
+		id: header
 
-				Row {
-					anchors.left: parent.left
-					anchors.leftMargin: 22
-					anchors.verticalCenter: parent.verticalCenter
-					spacing: 14
+		x: 0
+		y: 0
+		width: win.sidebarWidth
+		height: 84
+		z: 3
+
+		Text {
+			id: titleText
+
+			anchors.left: parent.left
+			anchors.leftMargin: 14
+			anchors.top: parent.top
+			anchors.topMargin: 14
+
+			font.family: Config.fontFamily
+			font.pixelSize: 21
+			font.weight: Font.DemiBold
+			color: Config.foreground
+			text: "Disk"
+		}
+
+		Rectangle {
+			anchors.right: parent.right
+			anchors.rightMargin: 14
+			anchors.verticalCenter: titleText.verticalCenter
+			width: scanLabel.width + 22
+			height: 26
+			color: scanMouse.containsMouse ? Config.launcherHighlight : Config.launcherSearchBox
+
+			Text {
+				id: scanLabel
+
+				anchors.centerIn: parent
+
+				font.family: Config.fontFamily
+				font.pixelSize: 12
+				color: Config.foreground
+				text: "Scan"
+			}
+
+			MouseArea {
+				id: scanMouse
+
+				anchors.fill: parent
+				hoverEnabled: true
+				onClicked: win.scan()
+			}
+		}
+
+		Row {
+			anchors.left: parent.left
+			anchors.leftMargin: 14
+			anchors.top: titleText.bottom
+			anchors.topMargin: 14
+			spacing: 18
+
+			Repeater {
+				model: [["Map", "map"], ["Packages", "packages"], ["Caches", "caches"]]
+
+				delegate: Item {
+					required property var modelData
+
+					width: tabText.width
+					height: 20
 
 					Text {
-						anchors.verticalCenter: parent.verticalCenter
+						id: tabText
+
+						anchors.centerIn: parent
 
 						font.family: Config.fontFamily
 						font.pixelSize: 12
-						color: Config.foreground
-						text: win.pending ? ("Clean " + win.pending.label + "  " + win.formatSize(win.pending.size)) : ""
+						color: win.tab === parent.modelData[1] ? Config.foreground : Config.dim
+						text: parent.modelData[0]
 					}
 
-					Text {
-						anchors.verticalCenter: parent.verticalCenter
-
-						font.family: Config.fontFamily
-						font.pixelSize: 12
-						color: confirmMouse2.containsMouse ? Config.red : Config.yellow
-						text: "Confirm"
-
-						MouseArea {
-							id: confirmMouse2
-
-							anchors.fill: parent
-							hoverEnabled: true
-							onClicked: win.confirmPending()
-						}
-					}
-
-					Text {
-						anchors.verticalCenter: parent.verticalCenter
-
-						font.family: Config.fontFamily
-						font.pixelSize: 12
-						color: cancelMouse2.containsMouse ? Config.foreground : Config.dim
-						text: "Cancel"
-
-						MouseArea {
-							id: cancelMouse2
-
-							anchors.fill: parent
-							hoverEnabled: true
-							onClicked: win.pending = null
-						}
+					MouseArea {
+						anchors.fill: parent
+						hoverEnabled: true
+						onClicked: win.selectTab(parent.modelData[1])
 					}
 				}
 			}
 		}
+	}
+
+	Rectangle {
+		anchors.left: parent.left
+		anchors.leftMargin: win.sidebarWidth
+		anchors.right: parent.right
+		anchors.bottom: parent.bottom
+		height: 40
+		z: 4
+		visible: win.pending !== null
+		color: Config.launcherSearchBox
+
+		Text {
+			anchors.left: parent.left
+			anchors.leftMargin: 22
+			anchors.right: answers.left
+			anchors.rightMargin: 16
+			anchors.verticalCenter: parent.verticalCenter
+			elide: Text.ElideRight
+
+			font.family: Config.fontFamily
+			font.pixelSize: 12
+			color: Config.foreground
+			text: win.pending ? ("Are you sure you want to delete " + (win.pending.count === 1 ? "this item" : "these " + win.pending.count + " items") + "?") : ""
+		}
+
+		Row {
+			id: answers
+
+			anchors.right: parent.right
+			anchors.rightMargin: 22
+			anchors.verticalCenter: parent.verticalCenter
+			spacing: 18
+
+			Text {
+				font.family: Config.fontFamily
+				font.pixelSize: 12
+				font.weight: Font.DemiBold
+				color: yesMouse.containsMouse ? Config.red : Config.yellow
+				text: "Yes"
+
+				MouseArea {
+					id: yesMouse
+
+					anchors.fill: parent
+					anchors.margins: -6
+					hoverEnabled: true
+					onClicked: win.confirmPending()
+				}
+			}
+
+			Text {
+				font.family: Config.fontFamily
+				font.pixelSize: 12
+				color: noMouse.containsMouse ? Config.foreground : Config.dim
+				text: "No"
+
+				MouseArea {
+					id: noMouse
+
+					anchors.fill: parent
+					anchors.margins: -6
+					hoverEnabled: true
+					onClicked: win.pending = null
+				}
+			}
 		}
 	}
 
 	SelectionSidebar {
 		anchors.top: parent.top
-		anchors.topMargin: header.height
 		anchors.left: parent.left
 		anchors.bottom: parent.bottom
+		topInset: header.height
 		width: win.sidebarWidth
 		rows: win.selectedRows
 		total: win.selectedTotal
 		canClean: win.selectedRows.length > 0
 		onClean: win.cleanCurrent()
+		onUnselect: function (row) { win.unselect(row); }
+	}
+
+	MouseArea {
+		x: win.sidebarWidth - 4
+		anchors.top: parent.top
+		anchors.bottom: parent.bottom
+		width: 8
+		cursorShape: Qt.SizeHorCursor
+		acceptedButtons: Qt.LeftButton
+		onPositionChanged: function (mouse) {
+			if (pressed)
+				win.sidebarWidth = Math.round(Math.max(180, Math.min(480, win.sidebarWidth + mouse.x - 4)));
+		}
 	}
 }

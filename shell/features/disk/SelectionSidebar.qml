@@ -8,21 +8,34 @@ Item {
 	property var rows: []
 	property real total: 0
 	property bool canClean: false
+	property real topInset: 0
 
 	signal clean()
+	signal unselect(var row)
+
+	readonly property real hair: 1 / Screen.devicePixelRatio
 
 	Rectangle {
 		anchors.fill: parent
-		color: Config.diskSidebar
+		color: Qt.darker(Config.surface, 1.7)
 	}
 
 	Rectangle {
 		anchors.right: parent.right
 		anchors.top: parent.top
 		anchors.bottom: parent.bottom
-		width: 1
-		color: Config.foreground
-		opacity: 0.18
+		width: root.hair
+		z: 2
+		color: Config.dim
+	}
+
+	Rectangle {
+		anchors.left: parent.left
+		anchors.right: parent.right
+		y: root.topInset - root.hair
+		height: root.hair
+		z: 2
+		color: Config.dim
 	}
 
 	Text {
@@ -31,7 +44,7 @@ Item {
 		anchors.left: parent.left
 		anchors.leftMargin: 14
 		anchors.top: parent.top
-		anchors.topMargin: 14
+		anchors.topMargin: 14 + root.topInset
 
 		font.family: Config.fontFamily
 		font.pixelSize: 12
@@ -71,10 +84,33 @@ Item {
 			required property var modelData
 
 			width: list.width
-			height: 28
+			height: 30
+
+			Check {
+				id: mark
+
+				anchors.left: parent.left
+				anchors.leftMargin: 8
+				anchors.verticalCenter: parent.verticalCenter
+				width: 16
+				height: 16
+				checked: true
+				onToggled: root.unselect(row.modelData)
+			}
+
+			Glyph {
+				id: kind
+
+				anchors.left: mark.right
+				anchors.leftMargin: 10
+				anchors.verticalCenter: parent.verticalCenter
+				glyph: row.modelData.group === "Packages" ? Config.diskIconPackage : (row.modelData.group === "Caches" ? Config.diskIconCache : (row.modelData.kind === "dir" ? Config.diskIconDir : Config.diskIconFile))
+				size: 12
+				color: Config.foreground
+			}
 
 			Text {
-				anchors.left: parent.left
+				anchors.left: kind.right
 				anchors.leftMargin: 8
 				anchors.right: rowSize.left
 				anchors.rightMargin: 8
@@ -93,6 +129,7 @@ Item {
 				anchors.right: parent.right
 				anchors.rightMargin: 8
 				anchors.verticalCenter: parent.verticalCenter
+				width: implicitWidth
 
 				font.family: Config.fontFamily
 				font.pixelSize: 10
@@ -113,14 +150,6 @@ Item {
 		anchors.right: parent.right
 		anchors.bottom: parent.bottom
 		height: 70
-
-		Rectangle {
-			anchors.left: parent.left
-			anchors.right: parent.right
-			anchors.top: parent.top
-			height: 1
-			color: Config.dim
-		}
 
 		Text {
 			anchors.left: parent.left
@@ -150,19 +179,17 @@ Item {
 			anchors.left: parent.left
 			anchors.right: parent.right
 			anchors.bottom: parent.bottom
-			anchors.leftMargin: 12
-			anchors.rightMargin: 12
-			anchors.bottomMargin: 10
-			height: 28
-			color: root.canClean && cleanMouse.containsMouse ? Config.launcherHighlight : Config.launcherSearchBox
-			opacity: root.canClean ? 1 : 0.45
+			height: 40
+			color: root.canClean ? Config.diskAccent : Config.launcherSearchBox
+			opacity: root.canClean ? (cleanMouse.containsMouse ? 0.85 : 1) : 0.5
 
 			Text {
 				anchors.centerIn: parent
 
 				font.family: Config.fontFamily
 				font.pixelSize: 12
-				color: Config.foreground
+				font.weight: Font.DemiBold
+				color: root.canClean ? Config.surface : Config.foreground
 				text: "Clean"
 			}
 
