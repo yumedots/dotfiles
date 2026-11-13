@@ -63,12 +63,13 @@ pub const Hub = struct {
 		self.gap_mutex.lockUncancelable(self.io);
 		defer self.gap_mutex.unlock(self.io);
 
-		self.waitGap();
-
 		self.publish_mutex.lockUncancelable(self.io);
 		defer self.publish_mutex.unlock(self.io);
 
-		while (self.dirty.swap(false, .acq_rel)) self.publishOnce();
+		while (self.dirty.swap(false, .acq_rel)) {
+			self.waitGap();
+			self.publishOnce();
+		}
 	}
 
 	pub fn publishNow(self: *Hub) void {
