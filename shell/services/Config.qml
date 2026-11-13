@@ -124,6 +124,7 @@ QtObject {
 	readonly property var iconPrev: settings.iconPrev !== undefined ? settings.iconPrev : "\udb80\udd41"
 	readonly property var iconNext: settings.iconNext !== undefined ? settings.iconNext : "\udb80\udd42"
 	readonly property var iconDisplay: settings.iconDisplay !== undefined ? settings.iconDisplay : "\udb80\udf79"
+	readonly property var iconDisk: settings.iconDisk !== undefined ? settings.iconDisk : "\uf0a0"
 	readonly property var iconPowerPlug: settings.iconPowerPlug !== undefined ? settings.iconPowerPlug : "\udb81\udea5"
 	readonly property var iconBatteryFull: settings.iconBatteryFull !== undefined ? settings.iconBatteryFull : "\udb80\udc82"
 	readonly property var iconBatteryHigh: settings.iconBatteryHigh !== undefined ? settings.iconBatteryHigh : "\udb80\udc81"
@@ -627,6 +628,7 @@ QtObject {
 		cpu: root.iconCpu,
 		day: root.calendarIconDay,
 		display: root.iconDisplay,
+		disk: root.iconDisk,
 		ethernet: root.iconEthernet,
 		lock: root.iconLock,
 		wifi1: root.iconWifi1,

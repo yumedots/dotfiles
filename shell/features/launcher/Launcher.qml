@@ -746,6 +746,12 @@ PanelWindow {
 				return;
 			}
 
+			if (entry.mode === "disk") {
+				root.close();
+				Yudae.diskCommand("app", {});
+				return;
+			}
+
 			root.group = "";
 			root.forced = entry.mode;
 			root.query = "";
