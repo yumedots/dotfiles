@@ -19,6 +19,7 @@ Rectangle {
 	property real padding: Config.procSearchPadding
 	property real boxHeight: 0
 	property real corner: Config.rowRadius
+	property real textOffset: 0
 
 	signal accepted()
 	signal edited()
@@ -88,6 +89,7 @@ Rectangle {
 		anchors.leftMargin: root.gap
 		anchors.rightMargin: root.padding
 		anchors.verticalCenter: parent.verticalCenter
+		anchors.verticalCenterOffset: root.textOffset
 
 		visible: !root.hint
 		echoMode: root.echoMode
@@ -117,6 +119,7 @@ Rectangle {
 	Text {
 		anchors.left: input.left
 		anchors.verticalCenter: parent.verticalCenter
+		anchors.verticalCenterOffset: root.textOffset
 
 		visible: !root.hint && input.text === "" && root.placeholder !== ""
 		font.family: Config.fontFamily

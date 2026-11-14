@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>yudae</vendor>
+  <vendor_url>https://github.com/yumedots/dotfiles</vendor_url>
+
+  <action id="org.yudae.fs.scan">
+    <description>Scan the disk tree</description>
+    <message>Authentication is required to scan the whole disk for the disk map.</message>
+    <icon_name>drive-harddisk</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/yudae/yudaemond</annotate>
+  </action>
+
+  <action id="org.yudae.fs.remove">
+    <description>Remove a root-owned path</description>
+    <message>Authentication is required to remove this root-owned path.</message>
+    <icon_name>edit-delete</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.yudae.fs.bench">
+    <description>Drop the page cache for a cold disk benchmark</description>
+    <message>Authentication is required to drop the page cache.</message>
+    <icon_name>utilities-system-monitor</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.yudae.packages.manage">
+    <description>Uninstall packages or clean a system cache</description>
+    <message>Authentication is required to change installed packages or system caches.</message>
+    <icon_name>system-software-install</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

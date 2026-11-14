@@ -1,6 +1,7 @@
 .zig-cache
 zig-out
 bench/build.jsonl
+bench/disk.jsonl
 cache
 assets/launcher-index.bin.gz
 bench/widgets/

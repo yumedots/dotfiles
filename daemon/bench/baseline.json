@@ -14,5 +14,30 @@
     "idleRssKb": 36560,
     "idleCpu": 1.67,
     "spawns": 2
+  },
+  "disk": {
+    "cold": false,
+    "at": 1794452725352,
+    "version": "v2-uring",
+    "threads": 1,
+    "fixture": "synthetic",
+    "entries": 20113,
+    "bytes": 84291584,
+    "entriesPerSecond": 803240.5021393322,
+    "syscallsPerEntry": 0.010639884651717795,
+    "hardlinks": 1,
+    "directories": 44,
+    "files": 20069,
+    "elapsedMs": 25,
+    "cacheBytes": 5714,
+    "cacheWriteMs": 5,
+    "cacheLoadMs": 0,
+    "queryP50Us": 0.522,
+    "queryP99Us": 0.89,
+    "accuracy": true,
+    "expectedBytes": 84291584,
+    "reference": "ncdu, gdu, dua, hyperfine",
+    "coldEntriesPerSecond": 544751,
+    "coldVersion": "v2-uring"
   }
 }

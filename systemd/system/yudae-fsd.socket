@@ -1,0 +1,12 @@
+[Unit]
+Description=yudae filesystem helper socket
+Documentation=file:/usr/local/share/doc/yudae/daemon.md
+
+[Socket]
+ListenStream=/run/yudae/fsd.sock
+SocketMode=0666
+DirectoryMode=0755
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target

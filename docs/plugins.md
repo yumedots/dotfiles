@@ -13,7 +13,7 @@ plugins/<id>/
   theme.toml      theme source, rendered by make
 ```
 
-`plugins/_template-hypr/`, `_template-theme/`, `_template-shell/`, `_template-app/` and `_template-daemon/` are working examples. Copy one and rename every `_template-*` name.
+`templates/_template-hypr/`, `_template-theme/`, `_template-shell/`, `_template-app/` and `_template-daemon/` are working examples. Copy one into `plugins/<id>` and rename every `_template-*` name.
 
 ### Manifest
 
@@ -123,7 +123,7 @@ yudae plugin reload
 
 ## Tests
 
-- `scripts/plugin-check` (the `checks/plugins` test in `xmake test`) discovers every `plugins/*`, validates the manifest, rejects binaries, runs `make`, checks `provides`, lints shell QML, parses theme colors and builds app templates.
+- `scripts/plugin-check` (the `checks/plugins` test in `xmake test`) discovers every folder under `plugins/` and `templates/`, validates the manifest, rejects binaries, runs `make`, checks `provides`, lints shell QML, parses theme colors and builds app templates.
 - Zig unit tests cover the load list, missing folder, broken TOML, unknown kind, duplicate id, requires mismatch, order, options, unload, source hash, theme layering and a real Hyprland template build.
 - VM scenarios `vm/scenarios/plugin-*.json` cover no list, load, unload, stale source, broken source, binary in folder, missing compiler, themes, theme layering, Lua themes, shell, app and Hyprland.
 

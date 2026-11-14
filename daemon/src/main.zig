@@ -36,6 +36,8 @@ const windows = @import("providers/windows.zig");
 const media = @import("providers/media.zig");
 const calendar = @import("providers/calendar.zig");
 const vms = @import("providers/vms.zig");
+const fsd = @import("providers/disk/fsd.zig");
+const disk = @import("providers/disk/disk.zig");
 const iconsmod = @import("primitives/icons.zig");
 const cli = @import("cli.zig");
 const json = @import("primitives/json.zig");
@@ -79,6 +81,7 @@ pub const Context = struct {
 	media: *media.Media,
 	calendar: *calendar.Calendar,
 	vms: *vms.Vms,
+	disk: *disk.Disk,
 	socket_path: []const u8,
 };
 
@@ -427,6 +430,7 @@ fn callThunk(ctx: *anyopaque, target: []const u8, method: []const u8, args: json
 	const context: *Context = @ptrCast(@alignCast(ctx));
 
 	if (std.mem.eql(u8, target, "vms")) return context.vms.call(method, args, allocator);
+	if (std.mem.eql(u8, target, "disk")) return context.disk.call(method, args, alloc);
 	if (std.mem.eql(u8, target, "plugins")) return context.plugins.call(method, args, alloc);
 	if (std.mem.eql(u8, target, "state")) return context.hub.syncSnapshot(allocator);
 	if (std.mem.eql(u8, target, "ui")) return context.hub.syncSnapshot(allocator);
@@ -479,6 +483,7 @@ pub fn main() !void {
 	if (std.mem.eql(u8, command, "vm")) return cli.virtualMachines(io, args);
 	if (std.mem.eql(u8, command, "open")) return cli.open(io, args);
 	if (std.mem.eql(u8, command, "app")) return cli.app(io, args);
+	if (std.mem.eql(u8, command, "disk")) return cli.disk(io, args);
 	if (std.mem.eql(u8, command, "ui")) return cli.ui(io, args);
 	if (std.mem.eql(u8, command, "spawn-check")) return cli.spawnCheck(io, args);
 
@@ -487,9 +492,10 @@ pub fn main() !void {
 	if (std.mem.eql(u8, command, "bench")) return cli.bench(io, args);
 	if (std.mem.eql(u8, command, "parity")) return cli.parity(io, args);
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
+	if (std.mem.eql(u8, command, "fsd") or std.mem.eql(u8, command, "yudae-fsd")) return fsd.run(io);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|plugin|vm|open|app|ui|spawn-check|logout]\n", .{});
+		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|plugin|vm|open|app|disk|ui|spawn-check|logout]\n", .{});
 		return;
 	}
 
@@ -619,6 +625,9 @@ fn run(io: std.Io) !void {
 	try hub.add(vms_provider.provider());
 	launcher_provider.attachVms(vms_provider);
 
+	const disk_provider = try disk.Disk.create(allocator, io, hub);
+	try hub.add(disk_provider.provider());
+
 	screen_provider.attachSettings(settings_provider);
 
 	const context = try allocator.create(Context);
@@ -656,6 +665,7 @@ fn run(io: std.Io) !void {
 		.media = media_provider,
 		.calendar = calendar_provider,
 		.vms = vms_provider,
+		.disk = disk_provider,
 		.socket_path = socket_path,
 	};
 

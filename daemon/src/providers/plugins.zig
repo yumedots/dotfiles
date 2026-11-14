@@ -13,7 +13,6 @@ const Writer = std.Io.Writer;
 const Hub = hubmod.Hub;
 
 const manifest_keys = [_][]const u8{ "id", "kind", "version", "requires", "build", "provides" };
-const template_prefix = "_template";
 
 pub const Kind = enum { hypr, theme, shell, app, daemon };
 
@@ -1778,7 +1777,7 @@ test "a real hypr template builds and writes loaded.lua" {
 	const repo = proc.repo(std.testing.io, a);
 	const paths = Paths{
 		.load = loader.paths.load,
-		.repo = try std.fmt.allocPrint(a, "{s}/plugins", .{repo}),
+		.repo = try std.fmt.allocPrint(a, "{s}/templates", .{repo}),
 		.data = loader.paths.data,
 		.state = loader.paths.state,
 	};

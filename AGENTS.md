@@ -13,6 +13,7 @@ If a VM task needs an action the daemon does not expose, do not write a throwawa
 Every surface shows the same icon for the same thing: the VM app, its machines and the launcher entry use one glyph.
 Icons live once, in the icon list (`iconX` in `shell/services/Config.qml` and `shell/config.toml`, plus the `icons` map). Before using an icon, look it up in that list and reuse it everywhere, switches and rows included. Add one only when the list has none, and never invent a second glyph for something that already has one.
 Nerd font glyphs are always drawn through `shell/ui/Glyph.qml`, which centers the glyph ink in its box; never a bare `Text` inside a circle, badge, switch or slot.
+Text never overlaps other text: every `Text` in a row has a bounded width, anchors to its neighbours and elides; never position text by fractions of the parent width.
 Never put "·" or similar dot separators between pieces of text in the UI; separate with spacing.
 Scrollbars sit on the right border of their container, never floating inside it; Scrollbar.qml does this by default.
 Every QML color comes from `shell/services/Config.qml`; `xmake lint` rejects color literals in QML.
@@ -52,6 +53,7 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 ```
 config/            plain app configs, one dir per app, symlinked into ~/.config
 plugins/           source-only plugins, see docs/plugins.md
+templates/         copyable plugin templates, one per kind
 hypr/              hyprland conf + plugins; the one non-config symlinked into ~/.config
 shell/             quickshell; run with `quickshell -p shell/shell.qml`, never symlinked
 daemon/            yudaemond (Zig); providers pair with shell/features/<name>

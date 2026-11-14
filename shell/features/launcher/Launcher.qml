@@ -177,6 +177,7 @@ PanelWindow {
 
 	readonly property bool spotlight: (Config.launcherSpotlight || Config.launcherGrid) && !root.windows
 	readonly property bool grid: Config.launcherGrid && !root.windows && (root.mode === "apps" || root.mode === "group:apps")
+	readonly property real rowGap: root.spotlight ? 0 : Config.launcherGap
 	readonly property bool home: root.forced === "" && root.group === ""
 	readonly property bool revealed: root.grid || !root.spotlight || !root.home || (root.query !== "" && !!root.live.intent && root.live.intent.query !== "")
 	readonly property real fontSize: root.spotlight ? Config.launcherSpotlightFontSize : Config.launcherFontSize
@@ -196,10 +197,10 @@ PanelWindow {
 		const top = Math.round(root.height * Config.launcherSpotlightTop);
 		const room = root.height - top - Config.launcherPadding * 2 - Config.launcherSpotlightInputHeight - Config.launcherGap;
 
-		return Calc.clamp(Math.floor(room / (root.emojiRowHeight + Config.launcherGap)), 1, base);
+		return Calc.clamp(Math.floor(room / (root.emojiRowHeight + root.rowGap)), 1, base);
 	}
 	readonly property int rows: root.spotlight && !root.isClipboard ? Calc.clamp(root.results.length, 1, root.maxRows) : root.maxRows
-	readonly property int listHeight: root.grid ? appGrid.implicitHeight : root.spotlight ? root.rows * root.rowHeight + (root.rows - 1) * Config.launcherGap : Config.launcherMaxRows * root.rowHeight
+	readonly property int listHeight: root.grid ? appGrid.implicitHeight : root.spotlight ? root.rows * root.rowHeight + (root.rows - 1) * root.rowGap : Config.launcherMaxRows * root.rowHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
 
 	anchors.top: true
@@ -469,11 +470,30 @@ PanelWindow {
 		}
 	}
 
+	function altPick(event) {
+		const n = event.key - Qt.Key_0;
+
+		if (!(event.modifiers & Qt.AltModifier) || n < 1 || n > 9 || n > root.rows)
+			return false;
+
+		const at = list.firstVisible + n - 1;
+
+		if (at >= root.results.length)
+			return false;
+
+		root.activate(root.results[at]);
+		event.accepted = true;
+		return true;
+	}
+
 	function handleKeys(event) {
 		if (root.windows) {
 			Input.switcher(event, root);
 			return;
 		}
+
+		if (root.altPick(event))
+			return;
 
 		if ((root.mode === "procs" || root.mode === "vms") && event.text === Config.procKillKey) {
 			root.killProc(root.selectedRow);
@@ -549,6 +569,9 @@ PanelWindow {
 
 	function handleTypingKeys(event) {
 		if (Input.cancel(event))
+			return;
+
+		if (root.altPick(event))
 			return;
 
 		if ((root.mode === "procs" || root.mode === "vms") && event.key === Qt.Key_Delete) {
@@ -770,6 +793,12 @@ PanelWindow {
 				return;
 			}
 
+			if (entry.mode === "disk") {
+				root.close();
+				Yudae.diskCommand("app", {});
+				return;
+			}
+
 			root.group = "";
 			root.forced = entry.mode;
 			root.query = "";
@@ -903,7 +932,7 @@ PanelWindow {
 		      : root.spotlight ? Config.launcherSpotlightWidth
 		      : root.isClipboard ? Config.launcherWidth * 2 + Config.launcherGap + card.inset * 2
 		      : Config.launcherWidth
-		height: root.windows ? windowsGrid.implicitHeight + card.inset * 2 : column.implicitHeight + card.inset * 2
+		height: root.windows ? windowsGrid.implicitHeight + card.inset * 2 : column.implicitHeight + card.inset * 2 - (root.spotlight && root.revealed ? Config.launcherPadding : 0)
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
 		opacity: root.shown && root.settled ? 1 : 0
@@ -1153,13 +1182,15 @@ PanelWindow {
 					Selector {
 						id: list
 
+						readonly property int firstVisible: Math.round(list.offset / (list.rowHeight + list.rowSpacing))
+
 						anchors.fill: parent
 						visible: root.results.length > 0 && !root.grid
 						visibleRows: root.rows
 						scrollWidth: root.spotlight ? 0 : Config.scrollbarWidth
 						highlightRadius: 0
 						rowHeight: root.rowHeight
-						rowSpacing: Config.launcherGap
+						rowSpacing: root.rowGap
 						model: root.grid ? [] : root.results
 
 						delegate: Item {
@@ -1257,10 +1288,39 @@ PanelWindow {
 							}
 
 							Text {
-								id: rowUsage
+								id: rowAlt
+
+								readonly property int slot: row.index - list.firstVisible + 1
 
 								anchors.right: parent.right
 								anchors.rightMargin: Config.launcherPadding * 2
+								anchors.verticalCenter: parent.verticalCenter
+								width: visible ? implicitWidth : 0
+								visible: !row.active && slot >= 1 && slot <= 9 && slot <= root.rows
+								font.family: Config.fontFamily
+								font.pixelSize: Math.round(root.fontSize * 0.8)
+								color: row.active ? Config.launcherHighlightText : Config.muted
+								text: "Alt" + slot
+							}
+
+							Glyph {
+								id: rowSelect
+
+								anchors.right: parent.right
+								anchors.rightMargin: Config.launcherPadding * 2 + (rowAlt.implicitWidth - width) / 2
+								anchors.verticalCenter: parent.verticalCenter
+								width: visible ? implicitWidth : 0
+								visible: row.active
+								size: Math.round(root.iconSize * 0.75)
+								color: Config.launcherHighlightText
+								glyph: Config.launcherIconSelect
+							}
+
+							Text {
+								id: rowUsage
+
+								anchors.right: row.active ? rowSelect.left : rowAlt.left
+								anchors.rightMargin: Config.launcherTextGap
 								anchors.verticalCenter: parent.verticalCenter
 								width: visible ? implicitWidth : 0
 								visible: row.modelData.kind === "proc" || row.modelData.kind === "vm"

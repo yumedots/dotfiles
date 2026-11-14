@@ -42,6 +42,14 @@ test {
 	_ = @import("providers/versions.zig");
 	_ = @import("providers/windows.zig");
 	_ = @import("providers/vms.zig");
+	_ = @import("providers/disk/guard.zig");
+	_ = @import("providers/disk/scanner.zig");
+	_ = @import("providers/disk/cache.zig");
+	_ = @import("providers/disk/fsd.zig");
+	_ = @import("providers/disk/disk.zig");
+	_ = @import("providers/disk/packages.zig");
+	_ = @import("providers/disk/caches.zig");
+	_ = @import("providers/disk/fanotify.zig");
 	_ = @import("providers/vms/qmp.zig");
 	_ = @import("providers/vms/input.zig");
 	_ = @import("providers/vms/budget.zig");
@@ -49,6 +57,7 @@ test {
 	_ = @import("primitives/config.zig");
 	_ = @import("cli.zig");
 	_ = @import("bench.zig");
+	_ = @import("bench_disk.zig");
 	_ = @import("bench_widgets.zig");
 	_ = @import("bench_report.zig");
 	_ = @import("parity.zig");

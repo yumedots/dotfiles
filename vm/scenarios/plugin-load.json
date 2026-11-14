@@ -4,7 +4,7 @@
     { "do": "wait", "until": "guest", "timeout": 60000 },
     { "do": "wait", "until": "exec:pgrep -x yudaemond", "timeout": 60000 },
     { "do": "wait", "until": "exec:pgrep -x quickshell", "timeout": 60000 },
-    { "do": "exec", "cmd": "mkdir -p /home/gabriel/.local/state/yudae && printf 'load = [\"tokyo\", \"_template-shell\", \"foot\", \"_template-hypr\"]\\n' > /home/gabriel/.local/state/yudae/plugins.toml", "code": 0 },
+    { "do": "exec", "cmd": "mkdir -p /home/gabriel/.local/share/yudae/plugins && cp -r /home/gabriel/dotfiles/templates/_template-shell /home/gabriel/.local/share/yudae/plugins/ && cp -r /home/gabriel/dotfiles/templates/_template-hypr /home/gabriel/.local/share/yudae/plugins/ && mkdir -p /home/gabriel/.local/state/yudae && printf 'load = [\"tokyo\", \"_template-shell\", \"foot\", \"_template-hypr\"]\\n' > /home/gabriel/.local/state/yudae/plugins.toml", "code": 0 },
     { "do": "exec", "cmd": "/home/gabriel/dotfiles/scripts/yudae plugin reload", "code": 0 },
     { "do": "wait", "until": "exec:grep -q '1a1b26' /home/gabriel/.local/state/yudae/theme.toml && test -f /home/gabriel/.local/state/yudae/build/foot/theme.ini && grep -q 'template-hypr' /home/gabriel/.local/state/yudae/loaded.lua", "timeout": 30000 },
     { "do": "wait", "until": "exec:export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); hyprctl plugin list | grep -q template-hypr", "timeout": 30000 },

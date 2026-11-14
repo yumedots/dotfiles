@@ -1,0 +1,38 @@
+{
+  "context": {
+    "cores": 4,
+    "mem": 4096,
+    "gl": true
+  },
+  "steps": [
+    {
+      "do": "wait",
+      "until": "guest",
+      "timeout": 180000
+    },
+    {
+      "do": "wait",
+      "until": "exec:pgrep -x yudaemond",
+      "timeout": 180000
+    },
+    {
+      "do": "exec",
+      "cmd": "export XDG_RUNTIME_DIR=/run/user/1000; test ! -S /run/yudae/fsd.sock",
+      "code": 0
+    },
+    {
+      "do": "exec",
+      "cmd": "export XDG_RUNTIME_DIR=/run/user/1000; /home/gabriel/dotfiles/scripts/yudae disk scan / >/dev/null || true",
+      "code": 0
+    },
+    {
+      "do": "wait",
+      "until": "exec:sh -c 'export XDG_RUNTIME_DIR=/run/user/1000; /home/gabriel/dotfiles/scripts/yudae disk view > /tmp/disk-view.json; grep -q \"\\\"status\\\":\\\"failed\\\"\" /tmp/disk-view.json'",
+      "timeout": 60000
+    },
+    {
+      "do": "screenshot"
+    }
+  ],
+  "proof": "without yudae-fsd and without an agent a whole-disk scan fails and says so"
+}

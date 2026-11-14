@@ -56,7 +56,6 @@ build_plugins() {
 	for makefile in "$ROOT"/plugins/*/Makefile; do
 		[ -e "$makefile" ] || continue
 		id=$(basename "$(dirname "$makefile")")
-		case "$id" in _template-*) continue ;; esac
 		make -C "$(dirname "$makefile")" OUT="$state/$id" >/dev/null
 		echo "built $id"
 	done

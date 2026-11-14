@@ -1,4 +1,4 @@
-OUT ?= .
+OUT ?= $(or $(XDG_STATE_HOME),$(HOME)/.local/state)/yudae/build/_template-hypr
 
 CXX ?= g++
 CXXFLAGS ?= -O2

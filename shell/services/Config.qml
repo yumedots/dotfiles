@@ -124,6 +124,7 @@ QtObject {
 	readonly property var iconPrev: settings.iconPrev !== undefined ? settings.iconPrev : "\udb80\udd41"
 	readonly property var iconNext: settings.iconNext !== undefined ? settings.iconNext : "\udb80\udd42"
 	readonly property var iconDisplay: settings.iconDisplay !== undefined ? settings.iconDisplay : "\udb80\udf79"
+	readonly property var iconDisk: settings.iconDisk !== undefined ? settings.iconDisk : "\uf0a0"
 	readonly property var iconPowerPlug: settings.iconPowerPlug !== undefined ? settings.iconPowerPlug : "\udb81\udea5"
 	readonly property var iconBatteryFull: settings.iconBatteryFull !== undefined ? settings.iconBatteryFull : "\udb80\udc82"
 	readonly property var iconBatteryHigh: settings.iconBatteryHigh !== undefined ? settings.iconBatteryHigh : "\udb80\udc81"
@@ -239,6 +240,7 @@ QtObject {
 	readonly property var launcherPrompt: settings.launcherPrompt !== undefined ? settings.launcherPrompt : "\uea6d"
 	readonly property var launcherMaxRows: settings.launcherMaxRows !== undefined ? settings.launcherMaxRows : 12
 	readonly property var launcherIconPin: settings.launcherIconPin !== undefined ? settings.launcherIconPin : "\ueba0"
+	readonly property var launcherIconSelect: settings.launcherIconSelect !== undefined ? settings.launcherIconSelect : "\udb80\udf11"
 	readonly property var launcherClipTimeFormat: settings.launcherClipTimeFormat !== undefined ? settings.launcherClipTimeFormat : "h:mm AP"
 	readonly property var launcherSpotlight: settings.launcherSpotlight !== undefined ? settings.launcherSpotlight : true
 	readonly property var launcherSpotlightWidth: settings.launcherSpotlightWidth !== undefined ? settings.launcherSpotlightWidth : 560
@@ -276,6 +278,18 @@ QtObject {
 	readonly property var wallpaperFadeMs: settings.wallpaperFadeMs !== undefined ? settings.wallpaperFadeMs : 160
 	readonly property var wallpaperScrim: settings.wallpaperScrim !== undefined ? settings.wallpaperScrim : 0.45
 	readonly property var wallpaperScrimMs: settings.wallpaperScrimMs !== undefined ? settings.wallpaperScrimMs : 180
+
+	// disk map
+	readonly property var diskDir: settings.diskDir !== undefined ? settings.diskDir : memoryBase
+	readonly property var diskFile: settings.diskFile !== undefined ? settings.diskFile : cpuBase
+	readonly property var diskIconDir: settings.diskIconDir !== undefined ? settings.diskIconDir : "\uf07b"
+	readonly property var diskIconFile: settings.diskIconFile !== undefined ? settings.diskIconFile : "\uf15b"
+	readonly property var diskIconPackage: settings.diskIconPackage !== undefined ? settings.diskIconPackage : "\uf487"
+	readonly property var diskIconCache: settings.diskIconCache !== undefined ? settings.diskIconCache : "\uf1b8"
+	readonly property var diskIconSortDesc: settings.diskIconSortDesc !== undefined ? settings.diskIconSortDesc : "\uf0d7"
+	readonly property var diskIconSortAsc: settings.diskIconSortAsc !== undefined ? settings.diskIconSortAsc : "\uf0d8"
+	readonly property var diskAccent: settings.diskAccent !== undefined ? settings.diskAccent : cpuCore
+	readonly property var diskOther: settings.diskOther !== undefined ? settings.diskOther : yellow
 
 	// window switcher
 	readonly property var windowsGridCell: settings.windowsGridCell !== undefined ? settings.windowsGridCell : 92
@@ -634,6 +648,7 @@ QtObject {
 		cpu: root.iconCpu,
 		day: root.calendarIconDay,
 		display: root.iconDisplay,
+		disk: root.iconDisk,
 		ethernet: root.iconEthernet,
 		lock: root.iconLock,
 		wifi1: root.iconWifi1,

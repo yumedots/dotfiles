@@ -223,7 +223,7 @@ QtObject {
 	readonly property var themes: root.snapshot.plugins ? (root.snapshot.plugins.themes || []) : []
 
 	function setTheme(id) {
-		root.send({ call: { target: "plugins", method: "theme", args: { id: id } } });
+		root.request("plugins", "theme", { id: id });
 	}
 	readonly property var workspaces: root.snapshot.workspaces || ({})
 	readonly property var tray: root.snapshot.tray || []
@@ -265,14 +265,27 @@ QtObject {
 	readonly property var audio: root.snapshot.audio || ({})
 	readonly property var audioNodes: root.audio.nodes || []
 	readonly property var vms: root.snapshot.vms || ({ budget: {}, list: [] })
+	readonly property var diskState: root.snapshot.disk || ({})
 
 	function vmsCommand(method, args) {
-		root.send({ call: { target: "vms", method: method, args: args || ({}) } });
+		root.request("vms", method, args || ({}));
+	}
+
+	function diskCommand(method, args, callback) {
+		root.request("disk", method, args || ({}), callback);
+	}
+
+	property var pending: []
+
+	function request(target, method, args, callback) {
+		root.pending.push(callback || null);
+		root.send({ call: { target: target, method: method, args: args || ({}) } });
 	}
 
 	readonly property var appsEntries: (root.snapshot.apps && root.snapshot.apps.entries) || ({})
 	readonly property var systemState: root.snapshot.system || ({})
 	readonly property var system: root.systemState
+	readonly property bool awakeWanted: root.system.awake ? root.system.awake.want === true : false
 
 	function cmd(name, body) {
 		root.send({ cmd: { [name]: body } });
@@ -321,8 +334,15 @@ QtObject {
 			return;
 		}
 
-		if (message.ok !== undefined)
+		if (message.ok !== undefined) {
+			if (root.pending.length > 0) {
+				const callback = root.pending.shift();
+				if (callback)
+					callback(message.ok ? message.result : null);
+			}
+
 			return;
+		}
 
 		root.snapshot = message;
 	}

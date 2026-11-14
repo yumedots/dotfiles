@@ -4,6 +4,7 @@ const proc = @import("primitives/proc.zig");
 const sock = @import("primitives/sock.zig");
 const benchmod = @import("bench.zig");
 const bench_widgets = @import("bench_widgets.zig");
+const bench_disk = @import("bench_disk.zig");
 const paritymod = @import("parity.zig");
 const mcpmod = @import("mcp.zig");
 const sleep = @import("primitives/sleep.zig");
@@ -114,6 +115,7 @@ pub fn doctor(io: Io) !void {
 
 pub fn bench(io: Io, args: []const []const u8) !void {
 	if (args.len > 2 and std.mem.eql(u8, args[2], "widgets")) return bench_widgets.run(io, args);
+	if (args.len > 2 and std.mem.eql(u8, args[2], "disk")) return bench_disk.run(io, args[2..]);
 
 	return benchmod.run(io, args);
 }
@@ -536,6 +538,146 @@ fn writeArg(allocator: Allocator, writer: *std.Io.Writer, arg: []const u8) !void
 }
 
 
+pub fn disk(io: Io, args: []const []const u8) !void {
+	if (args.len < 3) {
+		std.debug.print("usage: yudae disk scan|view|search|stat|mark|unmark|trash|remove|move|copy|rename|packages|uninstall|clean-packages|caches|clean [args...]\n", .{});
+		std.process.exit(2);
+	}
+
+	const method = args[2];
+	const rest = args[3..];
+
+	var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+	defer arena.deinit();
+	const allocator = arena.allocator();
+
+	if (std.mem.eql(u8, method, "view") and rest.len == 0) {
+		const body = try fetch(io);
+		defer std.heap.smp_allocator.free(body);
+
+		const parsed = json.parse(allocator, body) catch return error.StateUnreadable;
+		const disk_state = json.field(parsed.value, "disk") orelse return error.NoDisk;
+
+		var out: std.Io.Writer.Allocating = .init(allocator);
+		try out.writer.print("{f}\n", .{std.json.fmt(disk_state, .{})});
+		var buffer: [8192]u8 = undefined;
+		var writer = std.Io.File.stdout().writer(io, &buffer);
+		try writer.interface.writeAll(out.written());
+		try writer.interface.flush();
+		return;
+	}
+
+	const message = try diskMessage(allocator, method, rest);
+	const result = roundTrip(io, allocator, message, false) catch std.process.exit(1);
+
+	if (std.mem.eql(u8, method, "view")) {
+		const body = try fetch(io);
+		defer std.heap.smp_allocator.free(body);
+		const parsed = json.parse(allocator, body) catch return error.StateUnreadable;
+		const disk_state = json.field(parsed.value, "disk") orelse return error.NoDisk;
+		var out: std.Io.Writer.Allocating = .init(allocator);
+		try out.writer.print("{f}\n", .{std.json.fmt(disk_state, .{})});
+
+		var buffer: [8192]u8 = undefined;
+		var writer = std.Io.File.stdout().writer(io, &buffer);
+		try writer.interface.writeAll(out.written());
+		try writer.interface.flush();
+		return;
+	}
+
+	if (result.len > 0 and !std.mem.eql(u8, result, "{}")) printResult(io, result);
+}
+
+fn diskMessage(allocator: Allocator, method: []const u8, rest: []const []const u8) ![]u8 {
+	var out: std.Io.Writer.Allocating = .init(allocator);
+	const w = &out.writer;
+
+	try w.writeAll("{\"call\":{\"target\":\"disk\",\"method\":");
+	try std.json.Stringify.encodeJsonString(method, .{}, w);
+	try w.writeAll(",\"args\":{");
+
+	if (std.mem.eql(u8, method, "scan")) {
+		const path = if (rest.len > 0) rest[0] else "/";
+		try w.writeAll("\"path\":");
+		try std.json.Stringify.encodeJsonString(path, .{}, w);
+	} else if (std.mem.eql(u8, method, "view")) {
+		try w.writeAll("\"path\":");
+		try std.json.Stringify.encodeJsonString(rest[0], .{}, w);
+		if (rest.len > 1) {
+			try w.writeAll(",\"depth\":");
+			try w.writeAll(rest[1]);
+		}
+	} else if (std.mem.eql(u8, method, "search")) {
+		try w.writeAll("\"query\":");
+		try std.json.Stringify.encodeJsonString(if (rest.len > 0) rest[0] else "", .{}, w);
+	} else if (std.mem.eql(u8, method, "stat") or std.mem.eql(u8, method, "mark") or std.mem.eql(u8, method, "unmark") or std.mem.eql(u8, method, "trash") or std.mem.eql(u8, method, "remove")) {
+		const path = if (rest.len > 0) rest[0] else "";
+		try w.writeAll("\"path\":");
+		try std.json.Stringify.encodeJsonString(path, .{}, w);
+	} else if (std.mem.eql(u8, method, "move") or std.mem.eql(u8, method, "copy") or std.mem.eql(u8, method, "rename")) {
+		const from = if (rest.len > 0) rest[0] else "";
+		const to = if (rest.len > 1) rest[1] else "";
+		try w.writeAll("\"from\":");
+		try std.json.Stringify.encodeJsonString(from, .{}, w);
+		try w.writeAll(",\"to\":");
+		try std.json.Stringify.encodeJsonString(to, .{}, w);
+	} else if (std.mem.eql(u8, method, "uninstall")) {
+		var yes = false;
+		var names: std.ArrayList([]const u8) = .empty;
+		for (rest) |arg| {
+			if (std.mem.eql(u8, arg, "--yes")) {
+				yes = true;
+				continue;
+			}
+			try names.append(allocator, arg);
+		}
+		try w.writeAll("\"names\":[");
+		for (names.items, 0..) |name, index| {
+			if (index > 0) try w.writeAll(",");
+			try std.json.Stringify.encodeJsonString(name, .{}, w);
+		}
+		try w.print("],\"confirm\":{s}", .{if (yes) "true" else "false"});
+	} else if (std.mem.eql(u8, method, "clean-packages")) {
+		var yes = false;
+		for (rest) |arg| {
+			if (std.mem.eql(u8, arg, "--yes")) yes = true;
+		}
+		try w.print("\"confirm\":{s}", .{if (yes) "true" else "false"});
+	} else if (std.mem.eql(u8, method, "clean")) {
+		var yes = false;
+		var id: []const u8 = "all";
+		for (rest) |arg| {
+			if (std.mem.eql(u8, arg, "--yes")) {
+				yes = true;
+				continue;
+			}
+			id = arg;
+		}
+		try w.writeAll("\"id\":");
+		try std.json.Stringify.encodeJsonString(id, .{}, w);
+		try w.print(",\"confirm\":{s}", .{if (yes) "true" else "false"});
+	} else if (std.mem.eql(u8, method, "packages") or std.mem.eql(u8, method, "caches")) {
+		// no arguments
+	} else if (std.mem.eql(u8, method, "watch")) {
+		const path = if (rest.len > 0) rest[0] else "/";
+		try w.writeAll("\"path\":");
+		try std.json.Stringify.encodeJsonString(path, .{}, w);
+		if (rest.len > 1) {
+			try w.writeAll(",\"seconds\":");
+			try w.writeAll(rest[1]);
+		}
+	} else if (std.mem.eql(u8, method, "app")) {
+		// no arguments
+	} else if (method.len == 0) {
+		return error.UnknownMethod;
+	} else {
+		return error.UnknownMethod;
+	}
+
+	try w.writeAll("}}}");
+	return out.written();
+}
+
 pub fn app(io: Io, args: []const []const u8) !void {
 	if (args.len < 4 or !std.mem.eql(u8, args[2], "open")) {
 		std.debug.print("usage: yudae app open <name> [--vm <vm>]\n", .{});
@@ -579,6 +721,8 @@ pub fn app(io: Io, args: []const []const u8) !void {
 
 	const entry = if (std.mem.eql(u8, name, "vms"))
 		try std.fmt.allocPrint(allocator, "{s}/shell/app-vms.qml", .{repo})
+	else if (std.mem.eql(u8, name, "disk"))
+		try std.fmt.allocPrint(allocator, "{s}/shell/app-disk.qml", .{repo})
 	else
 		try std.fmt.allocPrint(allocator, "{s}/shell/app.qml", .{repo});
 	const import_path = try std.fmt.allocPrint(allocator, "QML_IMPORT_PATH={s}/shell/native/qml", .{repo});
