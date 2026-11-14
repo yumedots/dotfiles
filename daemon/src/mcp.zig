@@ -1,0 +1,413 @@
+const std = @import("std");
+const json = @import("primitives/json.zig");
+const proc = @import("primitives/proc.zig");
+const sock = @import("primitives/sock.zig");
+const exec = @import("primitives/exec.zig");
+
+const gpa = std.heap.smp_allocator;
+const Io = std.Io;
+
+const Tool = struct {
+	name: []const u8,
+	description: []const u8,
+	inputSchema: []const u8,
+};
+
+const tools = [_]Tool{
+	.{ .name = "state", .description = "Full yudaemond state as JSON.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "providers", .description = "Per provider health: opencode, codex, cursor.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "bench", .description = "Build, start, idle RSS/CPU, shell total and hoggers.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"seconds\":{\"type\":\"integer\"}}}" },
+	.{ .name = "parity", .description = "State parity check for the panel.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "qs_log", .description = "Tail the newest quickshell log.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"integer\"}}}" },
+	.{ .name = "vm_create", .description = "Boot or reuse this session's VM from the golden layer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"from\":{\"type\":\"string\"},\"cores\":{\"type\":\"integer\"},\"mem\":{\"type\":\"integer\"},\"gl\":{\"type\":\"boolean\"},\"agent\":{\"type\":\"string\"}}}" },
+	.{ .name = "vm_start", .description = "Boot an existing VM.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_list", .description = "List VMs, tiers and resource use.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "vm_state", .description = "The guest daemon snapshot.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_exec", .description = "Run a command in the guest daemon.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"cmd\":{\"type\":\"string\"},\"argv\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_screenshot", .description = "Write a PNG screenshot and return its path.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_key", .description = "Send key codes at compositor level. Names like XF86AudioRaiseVolume map to the guest keycode; hold holds the key down in milliseconds for key repeat.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"keys\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hold\":{\"type\":\"integer\"}},\"required\":[\"name\",\"keys\"]}" },
+	.{ .name = "vm_type", .description = "Type text at compositor level.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"}},\"required\":[\"name\",\"text\"]}" },
+	.{ .name = "vm_click", .description = "Move and click the pointer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"button\":{\"type\":\"string\"}},\"required\":[\"name\",\"x\",\"y\"]}" },
+	.{ .name = "vm_move", .description = "Move the pointer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"}},\"required\":[\"name\",\"x\",\"y\"]}" },
+	.{ .name = "vm_scroll", .description = "Scroll the guest pointer by wheel notches.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"dy\":{\"type\":\"integer\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"}},\"required\":[\"name\",\"dy\"]}" },
+	.{ .name = "vm_gui", .description = "Open a Quickshell app inside the guest.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"app\":{\"type\":\"string\"}},\"required\":[\"name\",\"app\"]}" },
+	.{ .name = "vm_config", .description = "Change a VM's cores or memory.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"cores\":{\"type\":\"integer\"},\"mem\":{\"type\":\"integer\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_wait", .description = "Wait for a guest predicate, no sleep loops.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"until\":{\"type\":\"string\"},\"timeout\":{\"type\":\"integer\"}},\"required\":[\"name\",\"until\"]}" },
+	.{ .name = "vm_stop", .description = "Exit QEMU and keep the run overlay for an offline snapshot.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_sleep", .description = "Stop the VM and inflate the balloon.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_park", .description = "Stop the VM and reclaim its cgroup memory.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_wake", .description = "Deflate the balloon and continue the VM.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_destroy", .description = "Quit QEMU and delete the run disk.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_snapshot", .description = "Snapshot the run overlay.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"tag\":{\"type\":\"string\"}},\"required\":[\"name\",\"tag\"]}" },
+	.{ .name = "vm_restore", .description = "Restore the run overlay snapshot.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"tag\":{\"type\":\"string\"}},\"required\":[\"name\",\"tag\"]}" },
+	.{ .name = "vm_fork", .description = "Clone a VM disk into a new VM.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"from\":{\"type\":\"string\"}},\"required\":[\"name\",\"from\"]}" },
+	.{ .name = "vm_view", .description = "Open the VM window and hand input to the human.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_push", .description = "Copy a host file into the guest.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"name\",\"path\"]}" },
+	.{ .name = "vm_pull", .description = "Copy a guest file to the host.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"name\",\"path\"]}" },
+	.{ .name = "vm_ui_tree", .description = "Guest state plus the Hyprland client tree.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_run_scenario", .description = "Run a deterministic VM scenario; it is destroyed on success unless keep is set.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"scenario\":{\"type\":\"string\"},\"keep\":{\"type\":\"boolean\"}},\"required\":[\"scenario\"]}" },
+	.{ .name = "plugin_list", .description = "List loaded plugins, kinds and build state.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "plugin_build", .description = "Rebuild a plugin from source.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_load", .description = "Add a plugin to the load list without building it.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_unload", .description = "Remove a plugin from the load list.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_theme", .description = "Load one theme and unload every other theme.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_add", .description = "Clone a plugin repository and install it.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}" },
+	.{ .name = "plugin_update", .description = "Pull and rebuild an installed plugin.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_reload", .description = "Rebuild stale plugins and apply the load list.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "disk_scan", .description = "Scan a disk tree on demand. Root scans need yudae-fsd and polkit.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}}}" },
+	.{ .name = "disk_view", .description = "Focus one path in the last disk scan and return its children.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"depth\":{\"type\":\"integer\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_search", .description = "Search names in the last disk scan.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}" },
+	.{ .name = "disk_stat", .description = "Size, kind and child count of one scanned path.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_mark", .description = "Mark a path for the caches and uninstall list.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_unmark", .description = "Remove a mark.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_trash", .description = "Move a user path to the trash.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_delete", .description = "Delete a path. Root-owned paths need yudae-fsd and polkit.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}" },
+	.{ .name = "disk_move", .description = "Move a path.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"from\",\"to\"]}" },
+	.{ .name = "disk_copy", .description = "Copy a file or directory tree.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"from\",\"to\"]}" },
+	.{ .name = "disk_rename", .description = "Rename a path.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"from\",\"to\"]}" },
+	.{ .name = "disk_packages", .description = "Installed pacman, paru and flatpak packages with sizes.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "disk_uninstall", .description = "Uninstall named packages through polkit. Without confirm it returns the items.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"names\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"confirm\":{\"type\":\"boolean\"}},\"required\":[\"names\"]}" },
+	.{ .name = "disk_clean_packages", .description = "Remove orphan pacman packages. Without confirm it returns the items and space.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"confirm\":{\"type\":\"boolean\"}}}" },
+	.{ .name = "disk_caches", .description = "Cache table with sizes and tool commands.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "disk_clean", .description = "Clean one cache id or all. Without confirm it returns the items.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"},\"confirm\":{\"type\":\"boolean\"}}}" },
+	.{ .name = "disk_watch", .description = "Watch a filesystem with fanotify for N seconds and report events. Needs yudae-fsd.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"seconds\":{\"type\":\"integer\"}}}" },
+};
+
+pub fn run(io: Io, args: []const []const u8) !void {
+	_ = args;
+
+	var in_buffer: [65536]u8 = undefined;
+	var reader = std.Io.File.stdin().reader(io, &in_buffer);
+
+	var out_buffer: [16384]u8 = undefined;
+	var file_writer = std.Io.File.stdout().writer(io, &out_buffer);
+	const writer = &file_writer.interface;
+
+	var harness: []const u8 = "";
+	const session: []const u8 = envFirst();
+
+	while (true) {
+		const line = reader.interface.takeDelimiter('\n') catch break orelse break;
+		const message = std.mem.trim(u8, line, " \r");
+		if (message.len == 0) continue;
+
+		var arena = std.heap.ArenaAllocator.init(gpa);
+		defer arena.deinit();
+		const allocator = arena.allocator();
+
+		const parsed = json.parse(allocator, message) catch continue;
+		const root = parsed.value;
+		const id = json.field(root, "id") orelse json.Value{ .null = {} };
+		const method = json.textAt(root, "method");
+
+		if (std.mem.eql(u8, method, "initialize")) {
+			const params = json.field(root, "params") orelse json.Value{ .null = {} };
+			const info = json.field(params, "clientInfo") orelse json.Value{ .null = {} };
+			const raw = json.textAt(info, "name");
+			if (raw.len > 0) {
+				const mapped = if (std.mem.indexOf(u8, raw, "opencode") != null)
+					"opencode"
+				else if (std.mem.indexOf(u8, raw, "claude") != null)
+					"claude"
+				else if (std.mem.indexOf(u8, raw, "codex") != null)
+					"codex"
+				else
+					raw;
+				harness = gpa.dupe(u8, mapped) catch harness;
+			}
+			try respond(writer, allocator, id, Initialize{
+				.protocolVersion = "2025-06-18",
+				.serverInfo = .{ .name = "yudaemond", .version = "1" },
+				.capabilities = .{ .tools = .{} },
+			});
+			continue;
+		}
+
+		if (std.mem.eql(u8, method, "tools/list")) {
+			try respond(writer, allocator, id, .{ .tools = &tools });
+			continue;
+		}
+
+		if (std.mem.eql(u8, method, "tools/call")) {
+			const params = json.field(root, "params") orelse json.Value{ .null = {} };
+			const name = json.textAt(params, "name");
+			const arguments = json.field(params, "arguments") orelse json.Value{ .object = .empty };
+
+			const body = call(io, allocator, name, arguments, harness, session) catch |err| {
+				try respondError(writer, allocator, id, @errorName(err));
+				continue;
+			};
+
+			try respond(writer, allocator, id, .{
+				.content = &.{.{ .type = "text", .text = body }},
+				.isError = false,
+			});
+			continue;
+		}
+
+		try respondError(writer, allocator, id, "unknown method");
+	}
+}
+
+fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.Value, harness: []const u8, session: []const u8) ![]const u8 {
+	if (std.mem.startsWith(u8, name, "vm_") and !std.mem.eql(u8, name, "vm_create")) {
+		const vm_name = json.textAt(arguments, "name");
+		if (vm_name.len > 0) stampAgent(io, allocator, vm_name, harness, session);
+	}
+
+	if (std.mem.eql(u8, name, "state")) return fetch(io, allocator);
+
+	if (std.mem.eql(u8, name, "providers")) {
+		const body = try fetch(io, allocator);
+		const parsed = json.parse(allocator, body) catch return "{}";
+
+		var report: std.ArrayList(u8) = .empty;
+
+		for ([_][]const u8{ "opencode", "codex", "cursor", "daemon" }) |key| {
+			const entry = json.field(parsed.value, key) orelse continue;
+			try report.print(allocator, "{s}: {f}\n", .{ key, std.json.fmt(entry, .{}) });
+		}
+
+		return report.toOwnedSlice(allocator);
+	}
+
+	if (std.mem.eql(u8, name, "bench")) {
+		const seconds = json.textAt(arguments, "seconds");
+		const value = if (seconds.len > 0) seconds else "5";
+
+		return runSelf(io, allocator, &.{ "bench", "--json", "--seconds", value });
+	}
+
+	if (std.mem.eql(u8, name, "parity")) return runSelf(io, allocator, &.{"parity"});
+
+	if (std.mem.eql(u8, name, "qs_log")) return logTail(io, allocator, arguments);
+
+	if (std.mem.startsWith(u8, name, "disk_")) return callDaemon(io, allocator, "disk", name["disk_".len..], arguments);
+
+	if (std.mem.startsWith(u8, name, "plugin_")) return callDaemon(io, allocator, "plugins", name["plugin_".len..], arguments);
+
+	if (std.mem.eql(u8, name, "vm_view")) {
+		spawnViewer(io, allocator, json.textAt(arguments, "name"));
+		return std.fmt.allocPrint(allocator, "{{\"viewing\":\"{s}\"}}", .{json.textAt(arguments, "name")});
+	}
+
+	if (std.mem.eql(u8, name, "vm_create")) {
+		const filled = createArguments(allocator, arguments, harness, session) catch arguments;
+		return callDaemon(io, allocator, "vms", "create", filled);
+	}
+
+	if (std.mem.startsWith(u8, name, "vm_")) return callDaemon(io, allocator, "vms", name["vm_".len..], arguments);
+
+	return error.UnknownTool;
+}
+
+fn envFirst() []const u8 {
+	const keys = [_][*:0]const u8{ "OPENCODE_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CODEX_SESSION_ID" };
+	for (keys) |key| {
+		if (std.c.getenv(key)) |value| {
+			const slice = std.mem.span(value);
+			if (slice.len > 0) return slice;
+		}
+	}
+	return "";
+}
+
+fn stampAgent(io: Io, allocator: std.mem.Allocator, name: []const u8, harness: []const u8, session: []const u8) void {
+	if (harness.len == 0 and session.len == 0) return;
+
+	var out: std.Io.Writer.Allocating = .init(allocator);
+	const writer = &out.writer;
+
+	writer.writeAll("{\"call\":{\"target\":\"vms\",\"method\":\"agent\",\"args\":{\"name\":") catch return;
+	std.json.Stringify.encodeJsonString(name, .{}, writer) catch return;
+	writer.writeAll(",\"harness\":") catch return;
+	std.json.Stringify.encodeJsonString(harness, .{}, writer) catch return;
+	writer.writeAll(",\"session\":") catch return;
+	std.json.Stringify.encodeJsonString(session, .{}, writer) catch return;
+	writer.writeAll("}}}") catch return;
+
+	const path = proc.socketPath(io, allocator) catch return;
+	var buffer: [4096]u8 = undefined;
+	var connection = sock.Connection.connect(path, &buffer) catch return;
+	defer connection.close();
+	connection.writeLine(out.written()) catch {};
+}
+
+fn spawnViewer(io: Io, allocator: std.mem.Allocator, name: []const u8) void {
+	if (name.len == 0) return;
+
+	const script = std.fmt.allocPrint(allocator, "{s}/scripts/yudae", .{proc.repo(io, allocator)}) catch return;
+
+	_ = exec.spawn(io, .{
+		.argv = &.{ "setsid", script, "vm", "view", name },
+		.stdin = .ignore,
+		.stdout = .ignore,
+		.stderr = .ignore,
+	}) catch return;
+}
+
+fn createArguments(allocator: std.mem.Allocator, arguments: json.Value, harness: []const u8, session: []const u8) !json.Value {
+	if (session.len == 0) return arguments;
+	if (json.textAt(arguments, "name").len > 0) return arguments;
+
+	var map: std.json.ObjectMap = .empty;
+	switch (arguments) {
+		.object => |source| {
+			var iterator = source.iterator();
+			while (iterator.next()) |entry| try map.put(allocator, entry.key_ptr.*, entry.value_ptr.*);
+		},
+		else => {},
+	}
+
+	try map.put(allocator, "name", .{ .string = session });
+	try map.put(allocator, "session", .{ .string = session });
+	if (harness.len > 0) try map.put(allocator, "harness", .{ .string = harness });
+
+	return .{ .object = map };
+}
+
+fn callDaemon(io: Io, allocator: std.mem.Allocator, target: []const u8, method: []const u8, arguments: json.Value) ![]const u8 {
+	const path = try proc.socketPath(io, allocator);
+
+	var out: std.Io.Writer.Allocating = .init(allocator);
+	const writer = &out.writer;
+
+	try writer.writeAll("{\"call\":{\"target\":");
+	try std.json.Stringify.encodeJsonString(target, .{}, writer);
+	try writer.writeAll(",\"method\":");
+	try std.json.Stringify.encodeJsonString(method, .{}, writer);
+	try writer.writeAll(",\"args\":");
+	try writer.print("{f}", .{std.json.fmt(arguments, .{})});
+	try writer.writeAll("}}");
+
+	var buffer: [1048576]u8 = undefined;
+	var connection = sock.Connection.connect(path, &buffer) catch return error.DaemonDown;
+	defer connection.close();
+
+	try connection.writeLine(out.written());
+
+	var attempts: usize = 0;
+	while (attempts < 20) : (attempts += 1) {
+		const line = try connection.readLine() orelse return error.NoReply;
+		const parsed = try json.parse(allocator, line);
+
+		if (json.field(parsed.value, "ok") == null) continue;
+		if (!json.flag(parsed.value, "ok")) return error.CallFailed;
+
+		const result = json.field(parsed.value, "result") orelse return allocator.dupe(u8, "{}");
+
+		var body: std.Io.Writer.Allocating = .init(allocator);
+		try body.writer.print("{f}", .{std.json.fmt(result, .{})});
+		return body.written();
+	}
+
+	return error.NoReply;
+}
+
+fn fetch(io: Io, allocator: std.mem.Allocator) ![]const u8 {
+	const path = try proc.socketPath(io, allocator);
+	var buffer: [1048576]u8 = undefined;
+	var connection = sock.Connection.connect(path, &buffer) catch return error.DaemonDown;
+	defer connection.close();
+
+	try connection.writeLine(sock.sync);
+
+	const line = try connection.readLine();
+	return line orelse error.NoState;
+}
+
+fn runSelf(io: Io, allocator: std.mem.Allocator, argv: []const []const u8) ![]const u8 {
+	const self_path = try proc.readFile(io, allocator, "/proc/self/exe");
+	var full: std.ArrayList([]const u8) = .empty;
+	try full.append(allocator, std.mem.trimEnd(u8, self_path, "\x00\n"));
+
+	for (argv) |arg| try full.append(allocator, arg);
+
+	const result = try exec.run(io, allocator, full.items);
+	return result.out;
+}
+
+
+fn logTail(io: Io, allocator: std.mem.Allocator, arguments: json.Value) ![]const u8 {
+	const base = try std.fmt.allocPrint(allocator, "{s}/quickshell/by-id", .{proc.runtimeDir(io, allocator)});
+	const newest = try newestDir(io, allocator, base);
+	const path = try std.fmt.allocPrint(allocator, "{s}/log.qslog", .{newest});
+	const body = try proc.readFile(io, allocator, path);
+
+	const wanted = json.integer(json.field(arguments, "lines"));
+
+	if (wanted <= 0) return body;
+
+	var lines: std.ArrayList([]const u8) = .empty;
+	var it = std.mem.splitScalar(u8, body, '\n');
+	while (it.next()) |line| try lines.append(allocator, line);
+
+	const total = lines.items.len;
+	const count: usize = @intCast(@min(wanted, @as(i64, @intCast(total))));
+	return std.mem.join(allocator, "\n", lines.items[total - count ..]);
+}
+
+fn newestDir(io: Io, allocator: std.mem.Allocator, base: []const u8) ![]const u8 {
+	var dir = try std.Io.Dir.cwd().openDir(io, base, .{ .iterate = true });
+	defer dir.close(io);
+
+	var best: []const u8 = base;
+	var it = dir.iterate();
+
+	while (try it.next(io)) |entry| {
+		if (entry.kind != .directory) continue;
+
+		const candidate = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ base, entry.name });
+		const stat = std.Io.Dir.cwd().statFile(io, candidate, .{}) catch continue;
+		const current = std.Io.Dir.cwd().statFile(io, best, .{}) catch continue;
+
+		if (stat.mtime.nanoseconds > current.mtime.nanoseconds) best = candidate;
+	}
+
+	return best;
+}
+
+const Initialize = struct {
+	protocolVersion: []const u8,
+	serverInfo: struct { name: []const u8, version: []const u8 },
+	capabilities: struct { tools: struct {} },
+};
+
+fn write(writer: *std.Io.Writer, body: []const u8) !bool {
+	writer.writeAll(body) catch return false;
+	writer.flush() catch return false;
+	return true;
+}
+
+fn respond(writer: *std.Io.Writer, allocator: std.mem.Allocator, id: json.Value, result: anytype) !void {
+	const body = std.fmt.allocPrint(allocator, "{{\"jsonrpc\":\"2.0\",\"id\":{f},\"result\":{f}}}\n", .{ std.json.fmt(id, .{}), std.json.fmt(result, .{}) }) catch return error.OutOfMemory;
+
+	_ = try write(writer, body);
+}
+
+fn respondError(writer: *std.Io.Writer, allocator: std.mem.Allocator, id: json.Value, message: []const u8) !void {
+	const body = std.fmt.allocPrint(allocator, "{{\"jsonrpc\":\"2.0\",\"id\":{f},\"error\":{{\"code\":-32601,\"message\":\"{s}\"}}}}\n", .{ std.json.fmt(id, .{}), message }) catch return error.OutOfMemory;
+
+	_ = try write(writer, body);
+}
+
+test "a session names its own vm and keeps an explicit name" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const allocator = arena.allocator();
+
+	const args = try json.parse(allocator, "{\"cores\":2}");
+	const filled = try createArguments(allocator, args.value, "opencode", "ses_123");
+	try std.testing.expectEqualStrings("ses_123", json.textAt(filled, "name"));
+	try std.testing.expectEqualStrings("ses_123", json.textAt(filled, "session"));
+	try std.testing.expectEqualStrings("opencode", json.textAt(filled, "harness"));
+	try std.testing.expectEqual(@as(f64, 2), json.numberAt(filled, "cores"));
+
+	const named = try json.parse(allocator, "{\"name\":\"ui\"}");
+	const kept = try createArguments(allocator, named.value, "opencode", "ses_123");
+	try std.testing.expectEqualStrings("ui", json.textAt(kept, "name"));
+	try std.testing.expectEqualStrings("", json.textAt(kept, "session"));
+
+	const anonymous = try createArguments(allocator, args.value, "opencode", "");
+	try std.testing.expectEqualStrings("", json.textAt(anonymous, "name"));
+}

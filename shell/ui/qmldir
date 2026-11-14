@@ -1,0 +1,42 @@
+module ui
+AppWindow 1.0 AppWindow.qml
+AppIcon 1.0 AppIcon.qml
+AgentRow 1.0 AgentRow.qml
+Braille 1.0 Braille.qml
+MenuLevel 1.0 MenuLevel.qml
+HyprBorder 1.0 HyprBorder.qml
+HyprShadow 1.0 HyprShadow.qml
+Tooltip 1.0 Tooltip.qml
+BarStat 1.0 BarStat.qml
+BarText 1.0 BarText.qml
+ProcessList 1.0 ProcessList.qml
+ProcessPanel 1.0 ProcessPanel.qml
+Selector 1.0 Selector.qml
+Scrollbar 1.0 Scrollbar.qml
+StepList 1.0 StepList.qml
+ContextMenu 1.0 ContextMenu.qml
+SearchField 1.0 SearchField.qml
+NotificationRow 1.0 NotificationRow.qml
+CellGrid 1.0 CellGrid.qml
+DotGraph 1.0 DotGraph.qml
+PowerFlow 1.0 PowerFlow.qml
+SignalBars 1.0 SignalBars.qml
+SpeedGauge 1.0 SpeedGauge.qml
+StepBar 1.0 StepBar.qml
+PillSwitch 1.0 PillSwitch.qml
+Highlight 1.0 Highlight.qml
+Icon 1.0 Icon.qml
+IconRow 1.0 IconRow.qml
+GlyphRow 1.0 GlyphRow.qml
+RevealIcon 1.0 RevealIcon.qml
+Figures 1.0 Figures.qml
+AgentFace 1.0 AgentFace.qml
+BarIcon 1.0 BarIcon.qml
+DayDial 1.0 DayDial.qml
+DynamicIcon 1.0 DynamicIcon.qml
+singleton Handoff 1.0 Handoff.qml
+singleton Input 1.0 Input.qml
+GlyphStrip 1.0 GlyphStrip.qml
+Glyph 1.0 Glyph.qml
+Drawer 1.0 Drawer.qml
+Separator 1.0 Separator.qml

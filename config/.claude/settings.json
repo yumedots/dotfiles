@@ -1,0 +1,45 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${XDG_RUNTIME_DIR:-/tmp}/yudae-claude\"; mkdir -p \"$d\"; echo working > \"$d/$(jq -r .session_id)\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${XDG_RUNTIME_DIR:-/tmp}/yudae-claude\"; mkdir -p \"$d\"; echo working > \"$d/$(jq -r .session_id)\""
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${XDG_RUNTIME_DIR:-/tmp}/yudae-claude\"; mkdir -p \"$d\"; echo blocked > \"$d/$(jq -r .session_id)\""
+          }
+        ],
+        "matcher": "permission_prompt"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${XDG_RUNTIME_DIR:-/tmp}/yudae-claude\"; mkdir -p \"$d\"; echo idle > \"$d/$(jq -r .session_id)\""
+          }
+        ]
+      }
+    ]
+  }
+}

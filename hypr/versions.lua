@@ -3,7 +3,7 @@ local namedPrefix = "name:v"
 local sticky = {}
 
 local function save()
-	local base = os.getenv("XDG_CONFIG_HOME") or ((os.getenv("HOME") or "") .. "/.config")
+	local base = require("repo") .. "/shell/cache"
 	local parts = {}
 
 	for slot, version in pairs(sticky) do
@@ -12,7 +12,7 @@ local function save()
 		end
 	end
 
-	local handle = io.open(base .. "/quickshell/cache/versions.json", "w")
+	local handle = io.open(base .. "/versions.json", "w")
 
 	if handle then
 		handle:write("{" .. table.concat(parts, ",") .. "}")

@@ -1,0 +1,183 @@
+pragma Singleton
+
+import QtQuick
+import qs
+import qs.services
+
+QtObject {
+	id: root
+
+	readonly property var letters: ({ j: "down", k: "up", h: "left", l: "right" })
+	readonly property var arrows: ({ [Qt.Key_Down]: "down", [Qt.Key_Up]: "up", [Qt.Key_Left]: "left", [Qt.Key_Right]: "right" })
+	readonly property var aliases: ({
+		[Qt.Key_Escape]: "escape",
+		[Qt.Key_Return]: "accept",
+		[Qt.Key_Enter]: "accept",
+		[Qt.Key_Space]: "space",
+		[Qt.Key_Tab]: "tab"
+	})
+	readonly property var mixerArrows: ({
+		[Qt.Key_Up]: "left",
+		[Qt.Key_Down]: "right",
+		[Qt.Key_Left]: "down",
+		[Qt.Key_Right]: "up"
+	})
+
+	readonly property var cancel: (event) => event.key === Qt.Key_Escape
+	readonly property var accept: (event) => event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+	readonly property var pin: (event) => event.key === Qt.Key_P && (event.modifiers & Qt.ControlModifier)
+	readonly property var save: (event) => event.key === Qt.Key_S && (event.modifiers & Qt.ControlModifier)
+	readonly property var hint: (event) => event.text === Config.procHintKey
+
+	readonly property var axis: (dir, step, page) => ({ down: step, up: -step, right: page, left: -page })[dir] || 0
+	readonly property var direction: (event) => root.letters[event.text] || root.arrows[event.key] || ""
+	readonly property var name: (event) => root.aliases[event.key] || root.direction(event) || event.text || ""
+	readonly property var delta: (event, step, page) => root.axis(root.direction(event), step, page)
+	readonly property var arrow: (event, step, page) => root.axis(root.arrows[event.key] || "", step, page)
+
+	function act(event, keys, name) {
+		const action = keys[name !== undefined ? name : root.name(event)];
+
+		if (action === undefined)
+			return false;
+
+		action(event);
+		event.accepted = true;
+		return true;
+	}
+
+	function calendar(event, target) {
+		return root.act(event, {
+			escape: () => target.closeRequested(),
+			left: () => target.step(-1),
+			right: () => target.step(1),
+			up: () => target.step(-7),
+			down: () => target.step(7),
+			s: () => target.stepMonths(-1),
+			d: () => target.stepMonths(1),
+			a: () => target.stepYears(-1),
+			f: () => target.stepYears(1),
+			w: () => target.weekStart = target.weekStart === 1 ? 0 : 1,
+			r: () => Yudae.send({ cmd: { calendar: { reset: true } } })
+		});
+	}
+
+	function kill(event, target) {
+		return root.act(event, { [Config.procKillKey]: () => target.current && target.killRequested(target.current) });
+	}
+
+	function github(event, target) {
+		return root.act(event, {
+			escape: () => target.closeRequested(),
+			r: () => target.refreshRequested()
+		});
+	}
+
+	function notifications(event, target) {
+		return root.act(event, {
+			escape: () => target.closeRequested(),
+			up: () => target.move(-1),
+			down: () => target.move(1),
+			right: () => target.open(),
+			left: target.opened ? () => target.back() : undefined,
+			[Config.notifyDismissKey]: () => target.dismiss(),
+			[Config.notifyClearKey]: () => target.clearAll(),
+			accept: () => target.accept()
+		});
+	}
+
+	function display(event, target) {
+		return root.act(event, {
+			escape: () => target.closeRequested(),
+			accept: () => target.activate(),
+			up: () => target.moveRow(-1),
+			down: () => target.moveRow(1),
+			left: () => target.moveStep(-1),
+			right: () => target.moveStep(1),
+			r: () => target.detect()
+		});
+	}
+
+	function media(event, target) {
+		return root.act(event, {
+			escape: () => target.closeRequested(),
+			left: () => target.previous(),
+			right: () => target.next(),
+			space: () => target.togglePlay(),
+			accept: () => target.togglePlay()
+		});
+	}
+
+	function mixer(event, target) {
+		const step = event.modifiers & Qt.ShiftModifier ? Config.mixerShiftStep : Config.mixerStep;
+
+		return root.act(event, {
+			escape: () => target.closeRequested(),
+			left: () => target.moveTarget(-1),
+			right: () => target.moveTarget(1),
+			up: () => target.nudgeVolume(step),
+			down: () => target.nudgeVolume(-step),
+			m: () => target.toggleMute(target.selectedNode),
+			accept: () => target.activateNode(target.selectedNode)
+		}, root.mixerArrows[event.key]);
+	}
+
+	function network(event, target) {
+		if (event.text === Config.networkSpeedCancelKey && target.testing)
+			return root.act(event, { [Config.networkSpeedCancelKey]: () => target.cancelTest() }, Config.networkSpeedCancelKey);
+
+		if (target.testing)
+			return root.act(event, {
+				escape: () => target.closeRequested(),
+				accept: () => target.cancelTest(),
+				space: () => target.cancelTest()
+			});
+
+		return root.act(event, {
+			escape: () => target.unselectRun(),
+			accept: () => target.primaryAction(),
+			space: () => target.primaryAction(),
+			up: () => target.selectRun(),
+			down: () => target.selectRun(),
+			left: () => target.selectRun(),
+			right: () => target.selectRun()
+		});
+	}
+
+	function wallpaper(event, target) {
+		return root.act(event, {
+			escape: () => target.close(),
+			accept: () => target.applyCurrent(),
+			space: () => target.applyCurrent(),
+			left: () => target.move(-1),
+			right: () => target.move(1),
+			up: () => target.stepRow(-1),
+			down: () => target.stepRow(1)
+		});
+	}
+
+	function switcher(event, target) {
+		return root.act(event, {
+			escape: () => target.close(),
+			accept: () => target.activate(target.results[target.winCurrent]),
+			space: () => target.activate(target.results[target.winCurrent]),
+			tab: () => target.stepWindows(1),
+			left: () => target.stepWindows(-1),
+			right: () => target.stepWindows(1),
+			up: () => target.stepWindows(-target.windowColumns),
+			down: () => target.stepWindows(target.windowColumns)
+		});
+	}
+
+	property double switchStepAt: 0
+
+	function switchRepeat() {
+		const now = Date.now();
+
+		if (now - root.switchStepAt < Config.windowStepMs)
+			return false;
+
+		root.switchStepAt = now;
+		return true;
+	}
+}

@@ -1,0 +1,6 @@
+{
+  "name": "clock",
+  "daemon": "calendar",
+  "widget": "Clock",
+  "panel": "Calendar"
+}

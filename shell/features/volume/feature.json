@@ -1,0 +1,6 @@
+{
+  "name": "volume",
+  "daemon": "audio",
+  "widget": "VolumeStat",
+  "panel": "VolumeMixer"
+}

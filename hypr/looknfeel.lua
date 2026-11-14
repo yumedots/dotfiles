@@ -3,11 +3,11 @@ hl.config({
         gaps_in  = 4,
         gaps_out = 8,
 
-        border_size = 1,
+        border_size = 2,
 
         col = {
             active_border   = "rgba(ffffffee)",
-            inactive_border = "rgba(595959aa)",
+            inactive_border = "rgba(595959ff)",
         },
 
         resize_on_border = true,
@@ -19,13 +19,19 @@ hl.config({
 
     decoration = {
         rounding       = 0,
-        rounding_power = 0,
+        rounding_power = 2,
 
         active_opacity   = 1.0,
         inactive_opacity = 1.0,
 
         shadow = {
-            enabled      = false,
+            enabled      = true,
+            range        = 48,
+            render_power = 3,
+            sharp        = false,
+            scale        = 0.96,
+            color        = "rgba(00000070)",
+            offset       = { 0, 14 },
         },
 
         blur = {
@@ -40,12 +46,19 @@ hl.config({
     },
 
     misc = {
-        force_default_wallpaper = -1,
-        disable_hyprland_logo   = false,
+        force_default_wallpaper = 0,
+        disable_hyprland_logo   = true,
+        disable_splash_rendering = true,
+        background_color        = 0xff000000,
     },
 
     render = {
         new_render_scheduling = true,
+        cm_auto_hdr           = 0,
+    },
+
+    quirks = {
+        skip_non_kms_dmabuf_formats = false,
     },
 })
 
@@ -67,3 +80,4 @@ hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1,   bezier = "qu
 hl.animation({ leaf = "workspaces",    enabled = false })
 hl.animation({ leaf = "workspacesIn",  enabled = false })
 hl.animation({ leaf = "workspacesOut", enabled = false })
+

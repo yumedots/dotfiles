@@ -1,0 +1,409 @@
+import QtQuick
+import Quickshell
+import Quickshell.Hyprland
+import Quickshell.Io
+import Quickshell.Wayland
+import qs
+import qs.ui
+import qs.services
+import "bar"
+import "features/launcher"
+import "features/lock"
+import "features/wallpaper"
+
+ShellRoot {
+	id: shellRoot
+
+	property double hyprBootAt: Date.now()
+	property bool locked: false
+	readonly property string lockScript: Quickshell.shellDir + "/scripts/lock"
+
+	function launcher() {
+		const wasOpen = launcherWindow.shown;
+
+		launcherWindow.toggle();
+
+		if (!wasOpen)
+			Handoff.run(shellRoot.closeWidgetsUnderLauncher);
+	}
+
+	function clipboard() {
+		launcherWindow.openClipboard();
+	}
+
+	function windowSwitcher() {
+		if (launcherWindow.shown && launcherWindow.windows) {
+			launcherWindow.stepWindows(1);
+			return;
+		}
+
+		if (Yudae.windows.length === 0)
+			return;
+
+		const wasOpen = launcherWindow.shown;
+
+		launcherWindow.openWindows();
+
+		if (!wasOpen)
+			Handoff.run(shellRoot.closeWidgetsUnderLauncher);
+	}
+
+	function closeBarPopups() {
+		if (bars.instances.length > 0)
+			bars.instances[0].closePopups(null);
+	}
+
+	function closeWidgets() {
+		if (wallpaperWindow.shown && !wallpaperWindow.previewing)
+			wallpaperWindow.close();
+
+		shellRoot.closeBarPopups();
+	}
+
+	function closeWidgetsUnderLauncher() {
+		if (launcherWindow.shown)
+			shellRoot.closeBarPopups();
+	}
+
+	function closeLauncherUnderWidget() {
+		if (!launcherWindow.shown)
+			return;
+
+		let open = false;
+
+		if (bars.instances.length > 0)
+			open = bars.instances[0].anyPopupOpen();
+
+		if (open)
+			launcherWindow.close();
+	}
+
+	function openWidget(id, keyboard) {
+		if (bars.instances.length > 0)
+			bars.instances[0].toggleWidget(id, keyboard);
+
+		if (launcherWindow.shown)
+			Handoff.run(shellRoot.closeLauncherUnderWidget);
+	}
+
+	function wallpaper() {
+		if (wallpaperWindow.shown)
+			return;
+
+		launcherWindow.hideInstant();
+		wallpaperWindow.open();
+		shellRoot.closeBarPopups();
+	}
+
+	function powerMenu() {
+		if (powerMenuWindow.shown)
+			return;
+
+		powerMenuWindow.open();
+		shellRoot.closeBarPopups();
+		Handoff.run(shellRoot.closeLauncherUnderWidget);
+	}
+
+	function lock() {
+		shellRoot.closeWidgets();
+
+		if (powerMenuWindow.shown)
+			powerMenuWindow.close();
+
+		Handoff.run(shellRoot.closeLauncherUnderWidget);
+		Quickshell.execDetached([shellRoot.lockScript]);
+	}
+
+	function trayGroup() {
+		if (bars.instances.length === 0)
+			return;
+
+		const tray = bars.instances[0].widgets["tray"];
+
+		if (tray && typeof tray.clicked === "function")
+			tray.clicked();
+	}
+
+	function speedtest() {
+		if (bars.instances.length === 0)
+			return;
+
+		const net = bars.instances[0].widgets["network"];
+
+		if (net && typeof net.requestSpeedTest === "function")
+			net.requestSpeedTest();
+	}
+
+	function bareBar() {
+
+		const all = [];
+
+		for (let i = 0; i < bars.instances.length; i++)
+			all.push(bars.instances[i]);
+
+		BarInk.toggleAll(all);
+	}
+
+	// Opens a widget, or one of the few things the bar does besides showing
+	// widgets.
+	function widgetAction(id) {
+		if (id === "tray")
+			shellRoot.trayGroup();
+		else if (id === "speedtest")
+			shellRoot.speedtest();
+		else if (id === "bareBar")
+			shellRoot.bareBar();
+		else
+			shellRoot.openWidget(id, true);
+	}
+
+	function media(action) {
+		Yudae.send({ cmd: { media: action } });
+	}
+
+	Instantiator {
+		model: [["launcher", "launcher"], ["windows", "windows"], ["powerMenu", "powerMenu"]]
+
+		delegate: GlobalShortcut {
+			required property var modelData
+
+			name: modelData[0]
+
+			onPressed: modelData[1] === "launcher" ? shellRoot.launcher() : (modelData[1] === "windows" ? shellRoot.windowSwitcher() : shellRoot.powerMenu())
+		}
+	}
+
+	Instantiator {
+		model: [["clipboard", "clipboard"], ["cpu", "cpu"], ["memory", "memory"], ["volume", "volume"], ["calendar", "clock"], ["weather", "weather"], ["notifications", "notify"], ["contributions", "github"], ["media", "media"], ["network", "network"], ["display", "display"], ["power", "power"], ["tray", "tray"], ["bareBar", "bareBar"]]
+
+		delegate: GlobalShortcut {
+			required property var modelData
+
+			name: modelData[0]
+
+			onPressed: modelData[1] === "clipboard" ? shellRoot.clipboard() : shellRoot.widgetAction(modelData[1])
+		}
+	}
+
+	Instantiator {
+		model: ["playPause", "next", "previous"]
+
+		delegate: GlobalShortcut {
+			required property string modelData
+
+			name: "media" + modelData.charAt(0).toUpperCase() + modelData.slice(1)
+
+			onPressed: shellRoot.media(modelData)
+		}
+	}
+
+	IpcHandler {
+		target: "shell"
+
+		function launcher() {
+			shellRoot.launcher();
+		}
+
+		function clipboard() {
+			shellRoot.clipboard();
+		}
+
+		function windows() {
+			shellRoot.windowSwitcher();
+		}
+
+		function windowsStep(direction: string) {
+			launcherWindow.stepWindows({ left: -1, right: 1, up: -launcherWindow.windowColumns, down: launcherWindow.windowColumns }[direction] || 0);
+		}
+
+		function cpu() {
+			shellRoot.openWidget("cpu", true);
+		}
+
+		function memory() {
+			shellRoot.openWidget("memory", true);
+		}
+
+		function volume() {
+			shellRoot.openWidget("volume", true);
+		}
+
+		function calendar() {
+			shellRoot.openWidget("clock", true);
+		}
+
+		function weather() {
+			shellRoot.openWidget("weather", true);
+		}
+
+		function notifications() {
+			shellRoot.openWidget("notify", true);
+		}
+
+		function github() {
+			shellRoot.openWidget("github", true);
+		}
+
+		function media() {
+			shellRoot.openWidget("media", true);
+		}
+
+		function network() {
+			shellRoot.openWidget("network", true);
+		}
+
+		function speedtest() {
+			shellRoot.speedtest();
+		}
+
+		function bareBar() {
+			shellRoot.bareBar();
+		}
+
+		function killPopups() {
+			shellRoot.closeWidgets();
+			launcherWindow.close();
+		}
+
+		function closeBarPopups() {
+			shellRoot.closeWidgets();
+		}
+
+		function closeLauncher() {
+			launcherWindow.close();
+		}
+
+		function display() {
+			shellRoot.openWidget("display", true);
+		}
+
+		function agent() {
+			shellRoot.openWidget("agent", true);
+		}
+
+		function power() {
+			shellRoot.openWidget("power", true);
+		}
+
+		function powerMenu() {
+			shellRoot.powerMenu();
+		}
+
+		function tray() {
+			shellRoot.trayGroup();
+		}
+
+		function wallpaper() {
+			shellRoot.wallpaper();
+		}
+
+		function lock() {
+			shellRoot.lock();
+		}
+
+		function lockState(on: string) {
+			shellRoot.locked = on === "true";
+		}
+
+	}
+
+	property var watchedScripts: []
+
+	function scriptFiles(text) {
+		return text.split("\n").map(function (line) {
+			return line.trim().split(" ").pop();
+		}).filter(function (name) {
+			return name.endsWith(".js");
+		});
+	}
+
+	FileView {
+		id: moduleList
+
+		path: Quickshell.shellDir + "/qmldir"
+		preload: true
+		watchChanges: true
+
+		onFileChanged: Quickshell.reload(false)
+		onLoaded: shellRoot.watchedScripts = shellRoot.scriptFiles(moduleList.text())
+	}
+
+	Instantiator {
+		model: shellRoot.watchedScripts
+
+		delegate: FileView {
+			required property string modelData
+
+			path: Quickshell.shellDir + "/" + modelData
+			watchChanges: true
+			printErrors: false
+
+			onFileChanged: Quickshell.reload(false)
+		}
+	}
+
+	Connections {
+		target: Hyprland
+
+		function onActiveToplevelChanged() {
+			if (Date.now() - shellRoot.hyprBootAt < 1000)
+				return;
+
+			if (!Hyprland.activeToplevel)
+				return;
+
+			Hyprland.refreshToplevels();
+
+			shellRoot.closeWidgets();
+			launcherWindow.close();
+		}
+
+		function onFocusedWorkspaceChanged() {
+			if (Date.now() - shellRoot.hyprBootAt < 1000)
+				return;
+
+			shellRoot.closeWidgets();
+			launcherWindow.close();
+		}
+	}
+
+	Variants {
+		id: bars
+
+		model: Quickshell.screens
+
+		Bar {
+			locked: shellRoot.locked
+
+			onWidgetActivated: Handoff.run(shellRoot.closeLauncherUnderWidget)
+		}
+	}
+
+	Launcher {
+		id: launcherWindow
+		onPowerRequested: shellRoot.powerMenu()
+		onWallpaperRequested: shellRoot.wallpaper()
+	}
+
+	WallpaperPicker {
+		id: wallpaperWindow
+		alwaysMapped: true
+	}
+
+	PluginHost {
+		anchors.fill: parent
+	}
+
+	PowerMenu {
+		id: powerMenuWindow
+	}
+
+	IdleMonitor {
+		enabled: Config.lockAfterMinutes > 0 && !Yudae.awakeWanted
+		timeout: Math.max(1, Config.lockAfterMinutes * 60)
+
+		onIsIdleChanged: if (isIdle)
+			shellRoot.lock()
+	}
+
+}

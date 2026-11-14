@@ -1,0 +1,27 @@
+import QtQuick
+import qs.ui
+import qs
+import qs.services
+
+BarStat {
+	id: root
+
+	inkId: "display"
+
+	readonly property var listed: Yudae.screenMonitors
+	readonly property string raw: Yudae.screenRaw
+
+	mode: "icon"
+	icon: Config.iconDisplay
+	barColor: Config.mono ? Config.displayBaseMono : Config.displayBase
+	textColor: root.barColor
+
+	popupContent: Component {
+		DisplayPanel {
+			shown: root.popupVisible
+			raw: root.raw
+			monitors: root.listed
+			onCloseRequested: root.closePopup()
+		}
+	}
+}

@@ -1,0 +1,13 @@
+{
+  "context": { "cores": 2, "mem": 4096, "gl": true },
+  "steps": [
+    { "do": "wait", "until": "guest", "timeout": 60000 },
+    { "do": "wait", "until": "exec:pgrep -x yudaemond", "timeout": 60000 },
+    { "do": "wait", "until": "exec:pgrep -x quickshell", "timeout": 60000 },
+    { "do": "exec", "cmd": "mkdir -p /home/gabriel/.local/share/yudae/plugins && cp -r /home/gabriel/dotfiles/templates/_template-theme /home/gabriel/.local/share/yudae/plugins/ && mkdir -p /home/gabriel/.local/state/yudae && printf 'load = [\"tokyo\", \"_template-theme\"]\\n' > /home/gabriel/.local/state/yudae/plugins.toml", "code": 0 },
+    { "do": "exec", "cmd": "/home/gabriel/dotfiles/scripts/yudae plugin reload", "code": 0 },
+    { "do": "wait", "until": "exec:grep -q 'surface = \"#101010\"' /home/gabriel/.local/state/yudae/theme.toml && /home/gabriel/dotfiles/scripts/yudae state | grep -q '#101010'", "timeout": 30000 },
+    { "do": "screenshot" }
+  ],
+  "proof": "the later theme overrides the earlier one"
+}

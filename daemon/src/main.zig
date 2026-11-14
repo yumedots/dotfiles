@@ -1,0 +1,727 @@
+const std = @import("std");
+const hubmod = @import("hub.zig");
+const ipc = @import("ipc.zig");
+const proc = @import("primitives/proc.zig");
+const sock = @import("primitives/sock.zig");
+const http = @import("primitives/http.zig");
+const opencode = @import("providers/opencode.zig");
+const codex = @import("providers/codex.zig");
+const claude = @import("providers/claude.zig");
+const activity = @import("providers/activity.zig");
+const cursor = @import("providers/cursor.zig");
+const daemon = @import("providers/daemon.zig");
+const github = @import("providers/github.zig");
+const agentname = @import("providers/agentname.zig");
+const workspaces = @import("providers/workspaces.zig");
+const tray = @import("providers/tray.zig");
+const notifications = @import("providers/notifications.zig");
+const plugins = @import("providers/plugins.zig");
+const weather = @import("providers/weather.zig");
+const system = @import("providers/system.zig");
+const apps = @import("providers/apps.zig");
+const screen = @import("providers/screen.zig");
+const settings = @import("providers/settings.zig");
+const config_provider = @import("providers/config.zig");
+const network = @import("providers/network.zig");
+const audio = @import("providers/audio.zig");
+const wallpaper = @import("providers/wallpaper.zig");
+const ink = @import("providers/ink.zig");
+const bar = @import("providers/bar.zig");
+const launcher = @import("providers/launcher.zig");
+const icons = @import("providers/icons.zig");
+const subscriptions = @import("providers/subscriptions.zig");
+const supervisor = @import("providers/supervisor.zig");
+const versions = @import("providers/versions.zig");
+const windows = @import("providers/windows.zig");
+const media = @import("providers/media.zig");
+const calendar = @import("providers/calendar.zig");
+const vms = @import("providers/vms.zig");
+const fsd = @import("providers/disk/fsd.zig");
+const disk = @import("providers/disk/disk.zig");
+const iconsmod = @import("primitives/icons.zig");
+const cli = @import("cli.zig");
+const json = @import("primitives/json.zig");
+const sleep = @import("primitives/sleep.zig");
+const environ = @import("primitives/environ.zig");
+const exec = @import("primitives/exec.zig");
+
+pub const allocator = std.heap.smp_allocator;
+
+pub const Context = struct {
+	allocator: std.mem.Allocator,
+	io: std.Io,
+	hub: *hubmod.Hub,
+	client: *http.Client,
+	opencode: *opencode.Opencode,
+	codex: *codex.Codex,
+	cursor: *cursor.Cursor,
+	daemon: *daemon.Daemon,
+	github: *github.Github,
+	agent_name: *agentname.AgentName,
+	workspaces: *workspaces.Workspaces,
+	tray: *tray.Tray,
+	notifications: *notifications.Notifications,
+	plugins: *plugins.Plugins,
+	weather: *weather.Weather,
+	system: *system.System,
+	apps: *apps.Apps,
+	screen: *screen.Screen,
+	settings: *settings.Settings,
+	network: *network.Network,
+	audio: *audio.Audio,
+	wallpaper: *wallpaper.Wallpaper,
+	ink: *ink.Ink,
+	bar: *bar.Bar,
+	launcher: *launcher.Launcher,
+	icons: *icons.Icons,
+	subscriptions: *subscriptions.Subscriptions,
+	supervisor: *supervisor.Supervisor,
+	versions: *versions.Versions,
+	windows: *windows.Windows,
+	media: *media.Media,
+	calendar: *calendar.Calendar,
+	vms: *vms.Vms,
+	disk: *disk.Disk,
+	socket_path: []const u8,
+};
+
+pub fn socketPath(io: std.Io, allocator_: std.mem.Allocator) ![]u8 {
+	return proc.socketPath(io, allocator_);
+}
+
+fn dismissThunk(ctx: *anyopaque, id: []const u8) void {
+	const context: *Context = @ptrCast(@alignCast(ctx));
+	context.opencode.dismiss(id);
+}
+
+fn snapshotThunk(ctx: *anyopaque, allocator_: std.mem.Allocator) anyerror![]u8 {
+	const context: *Context = @ptrCast(@alignCast(ctx));
+	return context.hub.snapshot(allocator_);
+}
+
+fn syncThunk(ctx: *anyopaque, allocator_: std.mem.Allocator) anyerror![]u8 {
+	const context: *Context = @ptrCast(@alignCast(ctx));
+	return context.hub.syncSnapshot(allocator_);
+}
+
+fn commandThunk(ctx: *anyopaque, value: json.Value) void {
+	const context: *Context = @ptrCast(@alignCast(ctx));
+
+	if (json.field(value, "audio")) |audio_cmd| {
+		if (json.field(audio_cmd, "volume")) |target| {
+			const id = json.integer(json.field(target, "id"));
+			const level = json.numberAt(target, "level");
+
+			if (id > 0) context.audio.setVolume(id, level);
+		}
+
+		if (json.field(audio_cmd, "mute")) |target| {
+			const id = json.integer(json.field(target, "id"));
+			const muted = json.flag(target, "muted");
+
+			if (id > 0) context.audio.setMute(id, muted);
+		}
+
+		if (json.field(audio_cmd, "default")) |target| {
+			const id = json.integer(json.field(target, "id"));
+
+			if (id > 0) context.audio.setDefault(id);
+		}
+
+		if (json.field(audio_cmd, "watch")) |target| {
+			context.audio.setWatch(json.flag(target, "on"));
+		}
+
+		if (json.field(audio_cmd, "step")) |target| {
+			const delta = switch (target) {
+				.integer, .float, .number_string => json.number(target),
+				else => json.numberAt(target, "delta"),
+			};
+
+			context.audio.step(delta);
+		}
+
+		return;
+	}
+
+	if (json.field(value, "network")) |net_cmd| {
+		if (json.flag(net_cmd, "scan")) context.network.scan(true);
+
+		if (json.field(net_cmd, "connect")) |target| {
+			const ssid = json.textAt(target, "ssid");
+			const password = json.textAt(target, "password");
+
+			if (ssid.len > 0) context.network.connect(ssid, password);
+		}
+
+		if (json.field(net_cmd, "radio")) |target| context.network.setRadio(json.flag(target, "on"));
+
+		if (json.field(net_cmd, "use")) |target| {
+			const kind = json.textAt(target, "kind");
+
+			if (kind.len > 0) context.network.useKind(kind);
+		}
+
+		if (json.field(net_cmd, "dns")) |target| {
+			context.network.dnsCmd(json.textAt(target, "action"), json.textAt(target, "server"));
+		}
+
+		if (json.field(net_cmd, "inject")) |target| {
+			context.network.inject(target);
+		}
+
+		if (json.flag(net_cmd, "speed")) context.network.speedTest();
+		if (json.flag(net_cmd, "speedCancel")) context.network.speedCancel();
+
+		return;
+	}
+
+	if (json.field(value, "icons")) |icon_cmd| {
+		if (json.field(icon_cmd, "want")) |list| {
+			for (json.list(list)) |item| context.icons.want(json.text(item));
+		}
+
+		const pid = json.integer(json.field(icon_cmd, "pid"));
+		if (pid > 0) context.icons.wantPid(pid);
+
+		return;
+	}
+
+	if (json.field(value, "launcher")) |l_cmd| {
+		if (json.field(l_cmd, "query") != null) {
+			context.launcher.setQuery(
+				json.textAt(l_cmd, "query"),
+				json.textAt(l_cmd, "forced"),
+				json.textAt(l_cmd, "group"),
+				json.flag(l_cmd, "all"),
+			);
+		}
+
+		const pin = json.textAt(l_cmd, "pin");
+		if (pin.len > 0) context.launcher.togglePin(pin);
+
+		const save = json.textAt(l_cmd, "save");
+		if (save.len > 0) context.launcher.saveQuery(save);
+
+		const remember = json.textAt(l_cmd, "remember");
+		if (remember.len > 0) context.launcher.remember(remember);
+
+		const clip = json.textAt(l_cmd, "clip");
+		if (json.field(l_cmd, "clip") != null) context.launcher.previewClip(clip);
+
+		const copy = json.textAt(l_cmd, "copyClip");
+		if (copy.len > 0) context.launcher.copyClip(copy);
+
+		const activate = json.textAt(l_cmd, "activate");
+		if (activate.len > 0) context.launcher.activate(activate);
+
+		const copy_text = json.textAt(l_cmd, "copyText");
+		if (json.field(l_cmd, "copyText") != null) context.launcher.copyText(copy_text);
+
+		const kill = json.integer(json.field(l_cmd, "kill"));
+		if (kill > 0) context.launcher.killProcess(@intCast(kill));
+
+		const kill_vm = json.textAt(l_cmd, "killVm");
+		if (kill_vm.len > 0) context.launcher.killVm(kill_vm);
+
+		if (json.flag(l_cmd, "clips")) context.launcher.refreshClips();
+
+		if (json.flag(l_cmd, "clipMore")) context.launcher.moreClip();
+
+		const power = json.integer(json.field(l_cmd, "power"));
+		if (json.field(l_cmd, "power") != null and power >= 0) context.launcher.power(@intCast(power));
+
+		if (json.field(l_cmd, "wake")) |target| {
+			context.launcher.wake(
+				json.textAt(target, "sock"),
+				json.integer(json.field(target, "pid")),
+				json.textAt(target, "path"),
+			);
+		}
+
+		return;
+	}
+
+	if (json.field(value, "tray")) |tray_cmd| {
+		const key = json.textAt(tray_cmd, "key");
+
+		if (json.field(tray_cmd, "activate")) |kind| context.tray.activate(key, @intCast(json.integer(kind)));
+		if (json.field(tray_cmd, "menu")) |id| context.tray.menuEvent(key, @intCast(json.integer(id)));
+		if (json.flag(tray_cmd, "open")) context.tray.menuOpen(key);
+
+		return;
+	}
+
+	if (json.field(value, "workspaces")) |ws_cmd| {
+		const focus = json.integer(json.field(ws_cmd, "focus"));
+		if (focus > 0) context.workspaces.focus(focus);
+
+		return;
+	}
+
+	if (json.field(value, "notify")) |note_cmd| {
+		if (json.flag(note_cmd, "dismissAll")) context.notifications.dismissAll();
+
+		const dismiss = json.integer(json.field(note_cmd, "dismiss"));
+		if (dismiss > 0) context.notifications.dismiss(@intCast(dismiss));
+
+		if (json.field(note_cmd, "invoke")) |target| {
+			const id = json.integer(json.field(target, "id"));
+			if (id > 0) context.notifications.invoke(@intCast(id), json.textAt(target, "key"));
+		}
+
+		return;
+	}
+
+	if (json.field(value, "agentName")) |name| {
+		context.agent_name.set(json.textAt(name, "set"));
+		return;
+	}
+
+	if (json.field(value, "ink")) |ink_cmd| {
+		const band = json.integer(json.field(ink_cmd, "band"));
+		const bare = if (json.field(ink_cmd, "bare") != null) json.flag(ink_cmd, "bare") else null;
+
+		context.ink.set(band, bare);
+		return;
+	}
+
+	if (json.field(value, "windows")) |wi_cmd| {
+		if (json.field(wi_cmd, "query") != null) context.windows.setQuery(json.textAt(wi_cmd, "query"));
+
+		const focus = json.textAt(wi_cmd, "focus");
+		if (focus.len > 0) context.windows.focus(focus);
+
+		const launch = json.textAt(wi_cmd, "launch");
+		if (launch.len > 0) context.windows.launch(launch);
+
+		return;
+	}
+
+	if (json.field(value, "wallpaper")) |wp_cmd| {
+		if (json.field(wp_cmd, "apply")) |target| {
+			const path = json.textAt(target, "path");
+			const band = json.integer(json.field(target, "band"));
+
+			if (path.len > 0) {
+				const fade = if (json.field(target, "fade")) |_| json.flag(target, "fade") else true;
+				context.wallpaper.save(path);
+				context.ink.apply(path, band, fade);
+			}
+		}
+
+		if (json.flag(wp_cmd, "scan")) context.wallpaper.reload();
+
+		return;
+	}
+
+	if (json.field(value, "screen")) |screen_cmd| {
+		const key = json.textAt(screen_cmd, "key");
+		if (key.len > 0) context.screen.key(key);
+
+		const code = json.field(screen_cmd, "keyCode");
+		if (code) |value_code| context.screen.keyCode(json.integer(value_code));
+
+		if (json.field(screen_cmd, "pick")) |pick| {
+			const kind = json.textAt(pick, "kind");
+			const choice = json.textAt(pick, "value");
+
+			if (kind.len > 0) context.screen.pick(kind, choice);
+		}
+
+		if (json.flag(screen_cmd, "detect")) context.screen.detect();
+
+		return;
+	}
+
+	if (json.field(value, "settings")) |settings_cmd| {
+		if (json.field(settings_cmd, "font")) |size| {
+			context.settings.setFontSize(json.integer(size));
+		}
+
+		if (json.field(settings_cmd, "output")) |output| {
+			const name = json.textAt(output, "name");
+			const mode = json.field(output, "mode");
+			const scale = json.field(output, "scale");
+
+			if (name.len > 0) {
+				context.settings.setOutput(
+					name,
+					if (mode) |m| json.text(m) else null,
+					if (scale) |s| json.number(s) else null,
+				);
+			}
+		}
+
+		return;
+	}
+
+	if (json.field(value, "system")) |system_cmd| {
+		if (json.flag(system_cmd, "logout")) context.system.logout();
+
+		const awake = json.textAt(system_cmd, "keepAwake");
+		if (awake.len > 0) context.system.setKeepAwake(awake);
+
+		const governor = json.textAt(system_cmd, "governor");
+		if (governor.len > 0) context.system.setGovernor(governor);
+
+		if (json.field(system_cmd, "panel")) |panel| {
+			context.system.setPanel(json.textAt(panel, "field"), json.textAt(panel, "query"));
+		}
+
+		return;
+	}
+
+	if (json.field(value, "calendar")) |calendar_cmd| {
+		if (json.field(calendar_cmd, "days")) |days| context.calendar.shiftDays(json.integer(days));
+		if (json.field(calendar_cmd, "months")) |months| context.calendar.shiftMonths(json.integer(months));
+		if (json.field(calendar_cmd, "years")) |years| context.calendar.shiftYears(json.integer(years));
+		if (json.field(calendar_cmd, "weekStart")) |start| context.calendar.setWeekStart(json.integer(start));
+		if (json.flag(calendar_cmd, "reset")) context.calendar.reset();
+
+		return;
+	}
+
+	if (json.field(value, "media")) |action| {
+		context.media.action(json.text(action));
+		return;
+	}
+
+	const weather_cmd = json.field(value, "weather") orelse return;
+
+	if (json.field(weather_cmd, "shift")) |step| {
+		context.weather.shift(json.integer(step));
+		return;
+	}
+
+	if (json.field(weather_cmd, "focus")) |at| {
+		context.weather.focus(@intCast(json.integer(at)));
+		return;
+	}
+
+	if (json.field(weather_cmd, "query")) |query| {
+		context.weather.setQuery(json.text(query));
+		return;
+	}
+
+	if (json.field(weather_cmd, "search")) |query| {
+		context.weather.search(json.text(query));
+		return;
+	}
+
+	if (json.field(weather_cmd, "dismiss")) |_| {
+		context.weather.dismissSuggestions();
+		return;
+	}
+
+	const pick = json.field(weather_cmd, "choose") orelse json.field(weather_cmd, "add") orelse return;
+	const label = json.textAt(pick, "label");
+	const lat = json.numberAt(pick, "lat");
+	const lon = json.numberAt(pick, "lon");
+
+	if (json.field(weather_cmd, "add") != null) {
+		context.weather.add(label, lat, lon);
+	} else {
+		context.weather.choose(label, lat, lon);
+	}
+}
+
+fn callThunk(ctx: *anyopaque, target: []const u8, method: []const u8, args: json.Value, alloc: std.mem.Allocator) anyerror![]u8 {
+	const context: *Context = @ptrCast(@alignCast(ctx));
+
+	if (std.mem.eql(u8, target, "vms")) return context.vms.call(method, args, allocator);
+	if (std.mem.eql(u8, target, "disk")) return context.disk.call(method, args, alloc);
+	if (std.mem.eql(u8, target, "plugins")) return context.plugins.call(method, args, alloc);
+	if (std.mem.eql(u8, target, "state")) return context.hub.syncSnapshot(allocator);
+	if (std.mem.eql(u8, target, "ui")) return context.hub.syncSnapshot(allocator);
+
+	var out: std.Io.Writer.Allocating = .init(alloc);
+	const writer = &out.writer;
+
+	try writer.writeAll("{");
+	try std.json.Stringify.encodeJsonString(target, .{}, writer);
+	try writer.writeAll(":{");
+	try std.json.Stringify.encodeJsonString(method, .{}, writer);
+	try writer.writeAll(":");
+	try writer.print("{f}", .{std.json.fmt(args, .{})});
+	try writer.writeAll("}}");
+
+	const parsed = try json.parse(alloc, out.written());
+	commandThunk(ctx, parsed.value);
+
+	return alloc.dupe(u8, "{}");
+}
+
+fn refreshThunk(ctx: *anyopaque) void {
+	const thread = std.Thread.spawn(.{}, refreshAll, .{ctx}) catch return;
+	thread.detach();
+}
+
+fn refreshAll(ctx: *anyopaque) void {
+	const context: *Context = @ptrCast(@alignCast(ctx));
+	context.opencode.refreshAll();
+	context.subscriptions.refresh();
+	context.github.refresh();
+	context.weather.search("");
+}
+
+pub fn main() !void {
+	const env = try environ.current(std.Io.Threaded.global_single_threaded.io(), allocator);
+	var threaded: std.Io.Threaded = .init(allocator, .{ .environ = env, .async_limit = .nothing, .concurrent_limit = .nothing, .stack_size = 512 * 1024 });
+	const io = threaded.io();
+
+	const args = try proc.args(io, allocator);
+
+	const command = if (args.len > 1) args[1] else "run";
+
+	if (std.mem.eql(u8, command, "state") or std.mem.eql(u8, command, "--json")) {
+		return cli.state(io, args);
+	}
+
+	if (std.mem.eql(u8, command, "call")) return cli.call(io, args);
+	if (std.mem.eql(u8, command, "plugin")) return cli.plugin(io, args);
+	if (std.mem.eql(u8, command, "vm")) return cli.virtualMachines(io, args);
+	if (std.mem.eql(u8, command, "open")) return cli.open(io, args);
+	if (std.mem.eql(u8, command, "app")) return cli.app(io, args);
+	if (std.mem.eql(u8, command, "disk")) return cli.disk(io, args);
+	if (std.mem.eql(u8, command, "ui")) return cli.ui(io, args);
+	if (std.mem.eql(u8, command, "spawn-check")) return cli.spawnCheck(io, args);
+
+	if (std.mem.eql(u8, command, "logout")) return cli.logout(io);
+	if (std.mem.eql(u8, command, "doctor")) return cli.doctor(io);
+	if (std.mem.eql(u8, command, "bench")) return cli.bench(io, args);
+	if (std.mem.eql(u8, command, "parity")) return cli.parity(io, args);
+	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
+	if (std.mem.eql(u8, command, "fsd") or std.mem.eql(u8, command, "yudae-fsd")) return fsd.run(io);
+
+	if (!std.mem.eql(u8, command, "run")) {
+		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|plugin|vm|open|app|disk|ui|spawn-check|logout]\n", .{});
+		return;
+	}
+
+	try run(io);
+}
+
+fn beat(hub: *hubmod.Hub) void {
+	while (true) {
+		sleep.ms(15_000);
+		hub.publish();
+	}
+}
+
+fn run(io: std.Io) !void {
+	const socket_path = try socketPath(io, allocator);
+	const lock_path = try std.fmt.allocPrint(allocator, "{s}.lock", .{socket_path});
+
+	var guard = (try sock.Lock.take(lock_path)) orelse {
+		std.debug.print("yudaemond already serves {s}\n", .{socket_path});
+		return;
+	};
+	defer guard.release();
+
+	const hub = try allocator.create(hubmod.Hub);
+	hub.* = .{ .allocator = allocator, .io = io };
+
+	const client = try allocator.create(http.Client);
+	client.* = http.Client.init(allocator, io);
+
+	const opencode_provider = try opencode.Opencode.create(allocator, io, hub, client);
+	try hub.add(opencode_provider.provider());
+
+	const codex_provider = try codex.Codex.create(allocator, io, hub, client);
+	try hub.add(codex_provider.provider());
+
+	const cursor_provider = try cursor.Cursor.create(allocator, io, hub);
+	try hub.add(cursor_provider.provider());
+
+	const daemon_provider = try daemon.Daemon.create(allocator, io, hub);
+	try hub.add(daemon_provider.provider());
+
+	const agent_name_provider = try agentname.AgentName.create(allocator, io, hub);
+	try hub.add(agent_name_provider.provider());
+
+	const notify_provider = try notifications.Notifications.create(allocator, io, hub);
+	try hub.add(notify_provider.provider());
+	opencode_provider.attach(notify_provider);
+
+	const plugins_provider = try plugins.Plugins.create(allocator, io, hub, notify_provider);
+	try hub.add(plugins_provider.provider());
+
+	const workspaces_provider = try workspaces.Workspaces.create(allocator, io, hub);
+	try hub.add(workspaces_provider.provider());
+
+	const tray_provider = try tray.Tray.create(allocator, io, hub);
+	try hub.add(tray_provider.provider());
+
+	const github_provider = try github.Github.create(allocator, io, hub, client);
+	try hub.add(github_provider.provider());
+
+	const weather_provider = try weather.Weather.create(allocator, io, hub, client);
+	try hub.add(weather_provider.provider());
+
+	const system_provider = try system.System.create(allocator, io, hub, opencode_provider);
+	try hub.add(system_provider.provider());
+
+	const apps_provider = try apps.Apps.create(allocator, io, hub);
+	try hub.add(apps_provider.provider());
+
+	const screen_provider = try screen.Screen.create(allocator, io, hub);
+	try hub.add(screen_provider.provider());
+
+	const settings_provider = try settings.Settings.create(allocator, io, hub);
+	try hub.add(settings_provider.provider());
+
+	const config_settings = try config_provider.Config.create(allocator, io, hub);
+	plugins_provider.attachConfig(config_settings);
+	try hub.add(config_settings.provider());
+
+	const network_provider = try network.Network.create(allocator, io, hub);
+	try hub.add(network_provider.provider());
+
+	const audio_provider = try audio.Audio.create(allocator, io, hub);
+	try hub.add(audio_provider.provider());
+
+	const wallpaper_provider = try wallpaper.Wallpaper.create(allocator, io, hub);
+	try hub.add(wallpaper_provider.provider());
+
+	const ink_provider = try ink.Ink.create(allocator, io, hub);
+	ink_provider.attach(wallpaper_provider);
+	wallpaper_provider.onRescan(.{ .ctx = ink_provider, .run = ink.Ink.rescanned });
+	try hub.add(ink_provider.provider());
+
+	const bar_provider = try bar.Bar.create(allocator, io, hub);
+	try hub.add(bar_provider.provider());
+
+	const versions_provider = try versions.Versions.create(allocator, io, hub);
+	try hub.add(versions_provider.provider());
+
+	const windows_provider = try windows.Windows.create(allocator, io, hub);
+	try hub.add(windows_provider.provider());
+
+	const supervisor_provider = try supervisor.Supervisor.create(allocator, io, hub);
+	try hub.add(supervisor_provider.provider());
+
+	const claude_provider = try claude.Claude.create(allocator, io, client);
+	const subscriptions_provider = try subscriptions.Subscriptions.create(allocator, io, hub, opencode_provider, codex_provider, claude_provider);
+	try hub.add(subscriptions_provider.provider());
+
+	const icon_resolver = try iconsmod.Icons.create(allocator, io);
+	const icons_provider = try icons.Icons.create(allocator, io, hub, icon_resolver);
+	icons_provider.attach(apps_provider);
+	try hub.add(icons_provider.provider());
+
+	const launcher_provider = try launcher.Launcher.create(allocator, io, hub);
+	launcher_provider.attach(apps_provider, system_provider, windows_provider);
+	try hub.add(launcher_provider.provider());
+
+	const media_provider = try media.Media.create(allocator, io, hub);
+	try hub.add(media_provider.provider());
+
+	const calendar_provider = try calendar.Calendar.create(allocator, io, hub);
+	try hub.add(calendar_provider.provider());
+
+	const vms_provider = try vms.Vms.create(allocator, io, hub);
+	vms_provider.attachOpencode(opencode_provider);
+	try hub.add(vms_provider.provider());
+	launcher_provider.attachVms(vms_provider);
+
+	const disk_provider = try disk.Disk.create(allocator, io, hub);
+	try hub.add(disk_provider.provider());
+
+	screen_provider.attachSettings(settings_provider);
+
+	const context = try allocator.create(Context);
+	context.* = .{
+		.allocator = allocator,
+		.io = io,
+		.hub = hub,
+		.client = client,
+		.opencode = opencode_provider,
+		.codex = codex_provider,
+		.cursor = cursor_provider,
+		.daemon = daemon_provider,
+		.github = github_provider,
+		.agent_name = agent_name_provider,
+		.workspaces = workspaces_provider,
+		.tray = tray_provider,
+		.notifications = notify_provider,
+		.plugins = plugins_provider,
+		.weather = weather_provider,
+		.system = system_provider,
+		.apps = apps_provider,
+		.screen = screen_provider,
+		.settings = settings_provider,
+		.network = network_provider,
+		.audio = audio_provider,
+		.wallpaper = wallpaper_provider,
+		.ink = ink_provider,
+		.bar = bar_provider,
+		.launcher = launcher_provider,
+		.icons = icons_provider,
+		.subscriptions = subscriptions_provider,
+		.supervisor = supervisor_provider,
+		.versions = versions_provider,
+		.windows = windows_provider,
+		.media = media_provider,
+		.calendar = calendar_provider,
+		.vms = vms_provider,
+		.disk = disk_provider,
+		.socket_path = socket_path,
+	};
+
+	std.debug.print("yudaemond listening on {s}\n", .{context.socket_path});
+
+	hub.ipc = try ipc.Ipc.init(allocator, io, context.socket_path, .{
+		.ctx = context,
+		.snapshot = snapshotThunk,
+		.sync = syncThunk,
+		.dismiss = dismissThunk,
+		.refresh = refreshThunk,
+		.command = commandThunk,
+		.call = callThunk,
+	});
+
+	try hub.ipc.?.start();
+	const vsock_port = blk: {
+		const text = proc.env(io, allocator, "YUDAE_VSOCK_PORT") orelse break :blk 1024;
+		break :blk std.fmt.parseInt(u32, text, 10) catch 1024;
+	};
+	hub.ipc.?.startVsock(vsock_port) catch {};
+	daemon_provider.markListening();
+	try system_provider.start();
+	try opencode_provider.start();
+	try codex_provider.start();
+	try claude_provider.start();
+	const activity_provider = try activity.Activity.create(allocator, io, opencode_provider);
+	try activity_provider.start();
+	try cursor_provider.start();
+	try github_provider.start();
+	try tray_provider.start();
+	try workspaces_provider.start();
+	try notify_provider.start();
+	try plugins_provider.start();
+	try weather_provider.start();
+	try apps_provider.start();
+	try screen_provider.start();
+	try settings_provider.start();
+	try config_settings.start();
+	try network_provider.start();
+	try audio_provider.start();
+	try wallpaper_provider.start();
+	try ink_provider.start();
+	try bar_provider.start();
+	try launcher_provider.start();
+	try icons_provider.start();
+	try media_provider.start();
+	try subscriptions_provider.start();
+	try supervisor_provider.start();
+	try versions_provider.start();
+	try windows_provider.start();
+
+	hub.publish();
+
+	const heartbeat = try std.Thread.spawn(.{}, beat, .{hub});
+	heartbeat.detach();
+
+	sleep.forever();
+}

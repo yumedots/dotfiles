@@ -1,0 +1,241 @@
+const std = @import("std");
+const linux = std.os.linux;
+
+pub const Allocator = std.mem.Allocator;
+
+pub const sync = "{\"sync\":true}";
+
+const lock_exclusive = 2;
+const lock_nonblocking = 4;
+const lock_release = 8;
+
+pub fn failed(result: usize) bool {
+	return @as(isize, @bitCast(result)) < 0;
+}
+
+/// One daemon per runtime dir. The kernel drops the lock when the process dies, so a crash
+/// leaves no file to clean up and a restart is never blocked by its own corpse.
+pub const Lock = struct {
+	fd: i32,
+
+	/// Null means another process already holds it.
+	pub fn take(path: []const u8) !?Lock {
+		const terminated = try std.heap.smp_allocator.allocSentinel(u8, path.len, 0);
+		@memcpy(terminated, path);
+		defer std.heap.smp_allocator.free(terminated);
+
+		const result = linux.open(terminated, .{ .ACCMODE = .RDWR, .CREAT = true, .CLOEXEC = true }, 0o600);
+		if (failed(result)) return error.OpenFailed;
+
+		const fd: i32 = @intCast(result);
+
+		if (failed(linux.flock(fd, lock_exclusive | lock_nonblocking))) {
+			_ = linux.close(fd);
+			return null;
+		}
+
+		return .{ .fd = fd };
+	}
+
+	pub fn release(self: Lock) void {
+		_ = linux.flock(self.fd, lock_release);
+		_ = linux.close(self.fd);
+	}
+};
+
+pub const Server = struct {
+	fd: i32,
+	path: []const u8,
+
+	pub fn init(path: []const u8) !Server {
+		const result = linux.socket(linux.AF.UNIX, linux.SOCK.STREAM | linux.SOCK.CLOEXEC, 0);
+		if (failed(result)) return error.SocketFailed;
+
+		const fd: i32 = @intCast(result);
+
+		var address: linux.sockaddr.un = .{ .path = undefined };
+		@memset(&address.path, 0);
+
+		if (path.len >= address.path.len) return error.PathTooLong;
+		@memcpy(address.path[0..path.len], path);
+
+		const terminated = try std.heap.smp_allocator.allocSentinel(u8, path.len, 0);
+		@memcpy(terminated, path);
+		defer std.heap.smp_allocator.free(terminated);
+		_ = linux.unlink(terminated);
+
+		if (failed(linux.bind(fd, @ptrCast(&address), @sizeOf(linux.sockaddr.un)))) return error.BindFailed;
+		if (failed(linux.listen(fd, 128))) return error.ListenFailed;
+
+		return .{ .fd = fd, .path = path };
+	}
+
+	pub fn accept(self: Server) !i32 {
+		const result = linux.accept4(self.fd, null, null, linux.SOCK.CLOEXEC);
+		if (failed(result)) return error.AcceptFailed;
+
+		const fd: i32 = @intCast(result);
+		tune(fd);
+
+		return fd;
+	}
+
+	pub fn close(self: Server) void {
+		_ = linux.close(self.fd);
+	}
+};
+
+fn tune(fd: i32) void {
+	const timeout: linux.timeval = .{ .sec = 0, .usec = 100_000 };
+	const size: i32 = 1 << 20;
+
+	_ = linux.setsockopt(fd, linux.SOL.SOCKET, linux.SO.SNDTIMEO, std.mem.asBytes(&timeout), @sizeOf(linux.timeval));
+	_ = linux.setsockopt(fd, linux.SOL.SOCKET, linux.SO.SNDBUF, std.mem.asBytes(&size), @sizeOf(i32));
+}
+
+pub const VMADDR_CID_ANY: u32 = 0xffffffff;
+pub const VMADDR_CID_HOST: u32 = 2;
+
+pub const VsockServer = struct {
+	fd: i32,
+
+	pub fn init(port: u32) !VsockServer {
+		const result = linux.socket(linux.AF.VSOCK, linux.SOCK.STREAM | linux.SOCK.CLOEXEC, 0);
+		if (failed(result)) return error.SocketFailed;
+
+		const fd: i32 = @intCast(result);
+		var address: linux.sockaddr.vm = .{ .port = port, .cid = VMADDR_CID_ANY, .flags = 0 };
+
+		if (failed(linux.bind(fd, @ptrCast(&address), @sizeOf(linux.sockaddr.vm)))) return error.BindFailed;
+		if (failed(linux.listen(fd, 128))) return error.ListenFailed;
+
+		return .{ .fd = fd };
+	}
+
+	pub fn accept(self: VsockServer) !i32 {
+		const result = linux.accept4(self.fd, null, null, linux.SOCK.CLOEXEC);
+		if (failed(result)) return error.AcceptFailed;
+
+		const fd: i32 = @intCast(result);
+		tune(fd);
+
+		return fd;
+	}
+
+	pub fn close(self: VsockServer) void {
+		_ = linux.close(self.fd);
+	}
+};
+
+pub fn connectVsock(cid: u32, port: u32, buffer: []u8) !Connection {
+	const result = linux.socket(linux.AF.VSOCK, linux.SOCK.STREAM | linux.SOCK.CLOEXEC, 0);
+	if (failed(result)) return error.SocketFailed;
+
+	const fd: i32 = @intCast(result);
+	var address: linux.sockaddr.vm = .{ .port = port, .cid = cid, .flags = 0 };
+
+	if (failed(linux.connect(fd, @ptrCast(&address), @sizeOf(linux.sockaddr.vm)))) return error.ConnectFailed;
+
+	return .{ .fd = fd, .buffer = buffer };
+}
+
+pub const Connection = struct {
+	fd: i32,
+	buffer: []u8,
+	start: usize = 0,
+	length: usize = 0,
+
+	pub fn connect(path: []const u8, buffer: []u8) !Connection {
+		const result = linux.socket(linux.AF.UNIX, linux.SOCK.STREAM | linux.SOCK.CLOEXEC, 0);
+		if (failed(result)) return error.SocketFailed;
+
+		const fd: i32 = @intCast(result);
+
+		var address: linux.sockaddr.un = .{ .path = undefined };
+		@memset(&address.path, 0);
+
+		if (path.len >= address.path.len) return error.PathTooLong;
+		@memcpy(address.path[0..path.len], path);
+
+		if (failed(linux.connect(fd, @ptrCast(&address), @sizeOf(linux.sockaddr.un)))) return error.ConnectFailed;
+
+		return .{ .fd = fd, .buffer = buffer };
+	}
+
+	pub fn close(self: Connection) void {
+		_ = linux.close(self.fd);
+	}
+
+	pub fn writeLine(self: *Connection, line: []const u8) !void {
+		try writeAll(self.fd, line);
+		try writeAll(self.fd, "\n");
+	}
+
+	pub fn readLine(self: *Connection) !?[]const u8 {
+		while (true) {
+			if (std.mem.indexOfScalar(u8, self.buffer[self.start..self.length], '\n')) |offset| {
+				const cut = self.start + offset;
+				const line = self.buffer[self.start..cut];
+				self.start = cut + 1;
+
+				return line;
+			}
+
+			if (self.start > 0) {
+				const remaining = self.length - self.start;
+				std.mem.copyForwards(u8, self.buffer[0..remaining], self.buffer[self.start..self.length]);
+				self.length = remaining;
+				self.start = 0;
+				continue;
+			}
+
+			if (self.length == self.buffer.len) return error.LineTooLong;
+
+			const count = linux.read(self.fd, self.buffer[self.length..].ptr, self.buffer.len - self.length);
+			if (failed(count)) return error.ReadFailed;
+			if (count == 0) return null;
+
+			self.length += count;
+		}
+	}
+};
+
+pub fn writeAll(fd: i32, bytes: []const u8) !void {
+	var written: usize = 0;
+
+	while (written < bytes.len) {
+		const count = linux.write(fd, bytes[written..].ptr, bytes.len - written);
+		if (failed(count)) return error.WriteFailed;
+		if (count == 0) return error.WriteFailed;
+
+		written += count;
+	}
+}
+
+test "line framing keeps the remainder" {
+	var buffer: [64]u8 = undefined;
+	var connection: Connection = .{ .fd = -1, .buffer = &buffer };
+	@memcpy(connection.buffer[0..6], "a\nbb\nc");
+	connection.length = 6;
+
+	try std.testing.expectEqualStrings("a", (try connection.readLine()).?);
+	try std.testing.expectEqualStrings("bb", (try connection.readLine()).?);
+	try std.testing.expectEqualStrings("c", connection.buffer[connection.start..connection.length]);
+}
+
+test "the guard lets the first daemon in and turns the second one away" {
+	const path = try std.fmt.allocPrint(std.testing.allocator, "/tmp/yudae-lock-{d}", .{std.os.linux.getpid()});
+	defer std.testing.allocator.free(path);
+	defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+
+	const first = (try Lock.take(path)).?;
+
+	const second = try Lock.take(path);
+	try std.testing.expect(second == null);
+	if (second) |lock| lock.release();
+
+	first.release();
+
+	const third = (try Lock.take(path)).?;
+	third.release();
+}

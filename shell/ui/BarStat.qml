@@ -1,0 +1,301 @@
+import QtQuick
+import QtQuick.Window
+import qs
+import qs.services
+
+Item {
+	id: root
+
+	property real pct: 0
+	property string mode: Config.barStatMode
+	property bool mono: Config.barStatMono
+	property bool dim: false
+	property color dimColor: Config.foreground
+	property color barColor: Config.red
+	property color textColor: root.barColor
+	property string icon: ""
+	property real iconSize: Settings.iconSize
+	property string inkId: ""
+	property real iconLift: 0
+	property var iconComponent: null
+	property real iconWidth: 0
+	property real iconMinWidth: 0
+	property real iconHeight: 0
+	property string value: ""
+	property real gap: 0
+	property bool showBar: true
+	property bool sweep: false
+	property real sweepWidth: 0
+	property var bar: null
+	readonly property bool onScreen: root.bar !== null && root.bar.visible && !root.bar.fullscreen && !root.bar.locked
+	property var onActivate
+	property bool popupWanted: true
+	property bool popupKeyboard: true
+	property bool popupPersistent: false
+	property bool popupClosable: true
+	property bool popupPreload: false
+	property bool popupSlide: false
+	property bool popupAlignRight: false
+	property bool popupCentered: false
+	property bool popupAlwaysCentered: false
+	property bool popupCenterScreen: false
+	property real popupBorderWidth: -1
+	property real popupPadding: -1
+	property alias popupContent: popupWindow.contentSource
+
+	readonly property alias popupVisible: popupWindow.shown
+
+	function openPopup() {
+		if (!root.popupWanted)
+			return;
+
+		popupWindow.open();
+	}
+
+	function closePopup() {
+		popupWindow.close();
+	}
+
+	function isPopupOpen() {
+		return popupWindow.shown;
+	}
+
+	function clicked() {
+		if (root.onActivate)
+			root.onActivate();
+		else if (root.bar)
+			root.bar.activateWidget(root, root.popupKeyboard);
+	}
+
+	readonly property bool iconMode: root.mode === "icon"
+	readonly property real iconBreadth: root.iconComponent ? root.iconWidth : Math.max(iconMetrics.width, root.iconMinWidth)
+	readonly property color inkColor: BarInk.pick(root.bar, root.inkId, root.dim ? root.dimColor : (root.mono ? Config.foreground : root.textColor))
+	readonly property color fillColor: root.mono ? Config.foreground : root.barColor
+	readonly property int filled: Math.min(Config.barCells, Math.max(0, Math.round(root.pct / 100 * Config.barCells)))
+	readonly property real valueAscent: -valueMetrics.boundingRect.y
+	readonly property real iconAscent: -iconMetrics.boundingRect.y
+	readonly property real valueBelow: valueMetrics.tightBoundingRect.y + valueMetrics.tightBoundingRect.height
+	readonly property real inkAbove: Math.max(-iconsMetrics.tightBoundingRect.y, -valueMetrics.tightBoundingRect.y)
+	readonly property real inkBelow: Math.max(iconsMetrics.tightBoundingRect.y + iconsMetrics.tightBoundingRect.height, root.valueBelow)
+	readonly property real baselineLift: 0
+
+	// The ink box of the icon font, measured from the baseline the glyphs sit
+	// on. A drawn icon has no baseline of its own, so it is measured against
+	// the glyphs it shares the bar with.
+	readonly property real iconsInkAbove: -iconsMetrics.tightBoundingRect.y
+	readonly property real iconsInkBelow: iconsMetrics.tightBoundingRect.y + iconsMetrics.tightBoundingRect.height
+
+	// The height of the glyph ink, which is the height a drawn icon takes.
+	readonly property real iconInkHeight: root.iconsInkAbove + root.iconsInkBelow
+
+	// The line the icon glyphs sit on, in the content item's coordinates.
+	readonly property real iconBaseline: root.inkAbove
+
+	// The centre of the glyph ink, which is where an icon belongs, drawn or
+	// not. A glyph is measured against its own ink, so a bigger glyph does not
+	// sink below the line.
+	readonly property real iconInkCentre: root.iconBaseline - root.iconsInkAbove + root.iconInkHeight / 2
+	readonly property real glyphInkCentre: iconMetrics.tightBoundingRect.y + iconMetrics.tightBoundingRect.height / 2
+	readonly property real glyphInkHeight: iconMetrics.tightBoundingRect.height
+
+	implicitWidth: root.iconMode ? Math.ceil(root.iconBreadth + root.gap) : Config.lineLength + root.gap
+	readonly property real contentHeight: Math.round(root.inkAbove + root.inkBelow)
+	implicitHeight: root.contentHeight + (root.showBar ? Math.ceil(Config.barThickness) : 0)
+
+	Tooltip {
+		id: popupWindow
+
+		anchorWindow: root.bar
+		anchorItem: root
+		contentPadding: root.popupPadding
+		wantsKeyboard: root.popupKeyboard
+		preload: root.popupPreload
+		slideExit: root.popupSlide
+		alignRight: root.popupAlignRight
+		centered: root.popupCentered
+		alwaysCentered: root.popupAlwaysCentered
+		centerScreen: root.popupCenterScreen
+		closable: root.popupClosable
+		borderWidth: root.popupBorderWidth
+	}
+
+	TextMetrics {
+		id: iconsMetrics
+		font.family: Config.fontFamily
+		font.pixelSize: root.iconSize
+		text: Config.iconCpu + Config.iconMemory + Config.iconVolumeLow + Config.iconVolumeMid + Config.iconVolumeHigh + Config.iconBatteryFull + Config.iconBatteryHigh + Config.iconBatteryMid + Config.iconBatteryLow + Config.iconBatteryAlert + Config.iconBatteryCharge + Config.iconPowerPlug
+	}
+
+	TextMetrics {
+		id: iconMetrics
+		font.family: Config.fontFamily
+		font.pixelSize: root.iconSize
+		text: root.icon
+	}
+
+	TextMetrics {
+		id: valueMetrics
+		font.family: Config.fontFamily
+		font.pixelSize: Settings.fontSize
+		text: Config.valueSample
+	}
+
+	MouseArea {
+		anchors.fill: parent
+		anchors.margins: -Config.barHitPadding
+
+		onClicked: root.clicked()
+	}
+
+	Item {
+		id: content
+
+		anchors.left: parent.left
+		anchors.top: parent.top
+		anchors.bottom: parent.bottom
+		width: Config.lineLength
+
+		Text {
+			id: labelIcon
+
+			visible: root.iconComponent === null
+			x: 0
+			y: root.iconInkCentre - root.glyphInkCentre - root.iconAscent - root.iconLift
+			font.family: Config.fontFamily
+			font.pixelSize: root.iconSize
+			color: root.inkColor
+			text: root.icon
+
+			Behavior on color {
+				enabled: BarInk.fading
+				ColorAnimation {
+					duration: BarInk.fadeMs
+				}
+			}
+		}
+
+		BarIcon {
+			id: iconSlot
+
+			visible: root.iconComponent !== null
+			x: 0
+			width: content.width
+			height: content.height
+
+			component: root.iconComponent
+			drawnSize: root.iconHeight > 0 ? root.iconHeight : root.iconWidth
+			drawnWidth: root.iconHeight > 0 ? root.iconWidth : 0
+			ink: root.inkColor
+			lift: root.iconLift
+
+			inkAbove: root.inkAbove
+			inkBelow: root.inkBelow
+			inkCentre: root.iconInkCentre
+		}
+
+		Text {
+			id: labelValue
+
+			visible: !root.iconMode
+			x: root.iconComponent === null ? labelIcon.width : root.iconWidth
+			y: root.inkAbove - root.valueAscent
+			width: Math.max(labelValue.implicitWidth, content.width - (root.iconComponent === null ? labelIcon.width : root.iconWidth))
+			horizontalAlignment: Text.AlignHCenter
+			font.family: Config.fontFamily
+			font.pixelSize: Settings.fontSize
+			color: root.inkColor
+			text: root.value
+
+			Behavior on color {
+				enabled: BarInk.fading
+				ColorAnimation {
+					duration: BarInk.fadeMs
+				}
+			}
+		}
+
+		Item {
+			id: line
+
+			visible: root.showBar && !root.iconMode
+			anchors.left: parent.left
+			anchors.bottom: parent.bottom
+			width: parent.width
+			height: Config.barThickness
+			clip: true
+
+			Rectangle {
+				anchors.fill: parent
+				color: Config.dim
+			}
+
+			Rectangle {
+				id: fill
+
+				visible: !root.sweep
+				anchors.left: parent.left
+				anchors.top: parent.top
+				anchors.bottom: parent.bottom
+				width: line.width * root.filled / Config.barCells
+				color: root.fillColor
+			}
+
+			Item {
+				id: sweepLine
+
+				visible: root.sweep && root.filled > 0
+				anchors.top: parent.top
+				anchors.bottom: parent.bottom
+				width: root.sweepWidth > 0 ? Math.min(root.sweepWidth, line.width) : line.width
+
+				readonly property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
+				readonly property int steps: Math.max(1, Config.sweepSteps)
+				readonly property int deviceWidth: Math.max(sweepLine.steps, Math.round(width * sweepLine.dpr))
+				readonly property int fadePixels: Math.round(sweepLine.deviceWidth * Config.sweepFade)
+
+				property real travel: -sweepLine.deviceWidth
+
+				function edge(step) {
+					return Math.round(step * sweepLine.fadePixels / sweepLine.steps);
+				}
+
+				function toLocal(pixels) {
+					return pixels / sweepLine.dpr;
+				}
+
+				x: sweepLine.toLocal(Math.round(sweepLine.travel))
+
+				Repeater {
+					model: sweepLine.steps
+
+					delegate: Rectangle {
+						required property int index
+
+						x: sweepLine.toLocal(sweepLine.edge(index))
+						width: sweepLine.toLocal(sweepLine.edge(index + 1) - sweepLine.edge(index))
+						anchors.top: parent.top
+						anchors.bottom: parent.bottom
+						color: root.fillColor
+						opacity: (index + 1) / (sweepLine.steps + 1)
+					}
+				}
+
+				Rectangle {
+					anchors.top: parent.top
+					anchors.bottom: parent.bottom
+					x: sweepLine.toLocal(sweepLine.fadePixels)
+					width: sweepLine.toLocal(sweepLine.deviceWidth - sweepLine.fadePixels)
+					color: root.fillColor
+				}
+
+				NumberAnimation on travel {
+					from: -sweepLine.deviceWidth
+					to: Math.round(line.width * sweepLine.dpr)
+					duration: Config.barSweepMs
+					loops: Animation.Infinite
+					running: sweepLine.visible
+				}
+			}
+		}
+	}
+}

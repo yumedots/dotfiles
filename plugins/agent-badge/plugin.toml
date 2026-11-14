@@ -1,0 +1,5 @@
+id = "agent-badge"
+kind = "shell"
+version = "1.0.0"
+build = "make"
+provides = ["Entry.qml"]

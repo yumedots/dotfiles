@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+TAG=${1:-local}
+TAG=$(printf '%s' "$TAG" | tr -d '"')
+BENCH=${DOTFILES_VM_BENCH:-$HOME/.cache/yudae-vm-bench}
+export XDG_CACHE_HOME=${DOTFILES_VM_BENCH_CACHE:-$BENCH/cache}
+export DOTFILES_VM_RUNS=${DOTFILES_VM_RUNS:-$BENCH/runs}
+CACHE=$XDG_CACHE_HOME/dotfiles/vm
+LOG=$BENCH/logs
+mkdir -p "$CACHE" "$LOG" "$ROOT/bench"
+
+trap 'echo "bench failed, see $LOG" >&2' ERR
+
+ms() {
+	echo $(($(date +%s%N) / 1000000))
+}
+
+phase() {
+	local name=$1
+	shift
+	local start end
+	start=$(ms)
+	"$@" >"$LOG/$name.log" 2>&1
+	end=$(ms)
+	echo $((end - start))
+}
+
+show() {
+	printf '%dm%02ds' $(($1 / 60000)) $(($1 / 1000 % 60))
+}
+
+fetch=$(phase fetch "$ROOT/vm/images" fetch)
+packages=$(phase packages "$ROOT/vm/images" packages --force)
+golden=$(phase golden "$ROOT/vm/images" golden --force)
+total=$((fetch + packages + golden))
+packages_mb=$(du -sm "$CACHE/packages.qcow2" "$CACHE/packages.raw" 2>/dev/null | awk '{ s += $1 } END { print s }')
+golden_mb=$(du -sm "$CACHE/golden.qcow2" 2>/dev/null | cut -f1)
+
+mkdir -p "$ROOT/bench"
+printf '{"at":%s,"tag":"%s","fetchMs":%s,"packagesMs":%s,"goldenMs":%s,"totalMs":%s,"packagesMb":%s,"goldenMb":%s}\n' \
+	"$(date +%s)" "$TAG" "$fetch" "$packages" "$golden" "$total" "${packages_mb:-0}" "${golden_mb:-0}" \
+	| tee -a "$ROOT/bench/images.jsonl"
+
+printf 'fetch %s  packages %s  golden %s  total %s  packages %sMB  golden %sMB\n' \
+	"$(show "$fetch")" "$(show "$packages")" "$(show "$golden")" "$(show "$total")" "${packages_mb:-0}" "${golden_mb:-0}"

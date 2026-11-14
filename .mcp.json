@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "yudae": {
+      "command": "/home/gabriel/dotfiles/scripts/yudae",
+      "args": ["mcp"]
+    }
+  }
+}

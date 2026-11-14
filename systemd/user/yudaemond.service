@@ -1,0 +1,21 @@
+[Unit]
+Description=yudaemond shell backend
+Documentation=file:%h/dotfiles/daemon
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/dotfiles/daemon/zig-out/bin/yudaemond run
+Restart=always
+RestartSec=1
+Environment=MALLOC_ARENA_MAX=2
+Environment=MALLOC_TRIM_THRESHOLD_=65536
+Environment=QSG_RENDER_LOOP=threaded
+Environment=XDG_SESSION_TYPE=wayland
+MemoryMax=512M
+LimitNOFILE=65536
+Nice=5
+KillMode=process
+
+[Install]
+WantedBy=default.target

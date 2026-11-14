@@ -1,0 +1,8 @@
+id = "_template-hypr"
+kind = "hypr"
+version = "0.1.0"
+build = "make"
+provides = ["template-hypr.so"]
+
+[requires]
+hyprland = ">=0.50"

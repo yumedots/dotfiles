@@ -1,0 +1,4 @@
+singleton Config 1.0 services/Config.qml
+singleton Settings 1.0 Settings.qml
+Root 1.0 Root.qml
+PluginHost 1.0 PluginHost.qml

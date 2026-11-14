@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+BIN=$ROOT/vm/hostbin
+WALL=$ROOT/vm/hostwall
+
+systemd-detect-virt -q --vm || exit 0
+[ -d "$BIN" ] || exit 0
+
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/1000}
+export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1}
+
+timezone=$(cat "$ROOT/vm/hoststate/timezone" 2>/dev/null || true)
+if [ -n "$timezone" ] && [ "$(cat /etc/timezone 2>/dev/null)" != "$timezone" ]; then
+	sudo timedatectl set-timezone "$timezone" >/dev/null 2>&1 || true
+fi
+
+sudo -n hwclock -s >/dev/null 2>&1 || true
+sudo -n timedatectl set-ntp false >/dev/null 2>&1 || true
+
+mkdir -p "$HOME/.local/bin" "$HOME/Documents/Wallpaper"
+
+for name in awww awww-daemon; do
+	[ -x "$BIN/$name" ] && cp -f "$BIN/$name" "$HOME/.local/bin/$name"
+done
+
+chmod +x "$HOME/.local/bin/awww" "$HOME/.local/bin/awww-daemon" 2>/dev/null || true
+
+native=$ROOT/vm/hostbin/yudae-native
+if [ -d "$native" ]; then
+	mkdir -p "$HOME/.local/lib/yudae/qml"
+	cp -rf "$native"/. "$HOME/.local/lib/yudae/qml/"
+fi
+
+pgrep -x awww-daemon >/dev/null || (setsid "$HOME/.local/bin/awww-daemon" >/tmp/awww.log 2>&1 &)
+
+for _ in $(seq 1 60); do
+	"$HOME/.local/bin/awww" query >/dev/null 2>&1 && break
+	sleep 0.1
+done
+
+settings=$ROOT/shell/cache/settings.lua
+wall=$(sed -n 's/^[[:space:]]*wallpaper[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' "$settings" 2>/dev/null | head -1)
+wall_dir=$(dirname "$wall")
+
+if [ -n "$wall" ] && [ -d "$wall_dir" ]; then
+	sudo mkdir -p "$wall_dir"
+	grep -q "wallpaper $wall_dir virtiofs" /etc/fstab || echo "wallpaper $wall_dir virtiofs ro,nofail,defaults 0 0" | sudo tee -a /etc/fstab >/dev/null
+	mountpoint -q "$wall_dir" || sudo mount -t virtiofs wallpaper "$wall_dir" 2>/dev/null || true
+	"$HOME/.local/bin/awww" img --transition-type none "$wall" >/dev/null 2>&1 || true
+fi

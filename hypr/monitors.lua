@@ -1,4 +1,5 @@
-local path = (os.getenv("HOME") or "") .. "/.config/quickshell/cache/display.lua"
+local repo = require("repo")
+local path = repo .. "/shell/cache/display.lua"
 
 local ok, saved = pcall(dofile, path)
 if not ok or type(saved) ~= "table" then saved = {} end

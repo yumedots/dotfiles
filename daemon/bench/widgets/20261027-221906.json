@@ -1,0 +1,49 @@
+{
+  "at": "2026-10-27T22:19:06Z",
+  "instance": {
+    "id": "1793139328-12981",
+    "reused": true,
+    "shellPid": 13075,
+    "worktree": "/home/gabriel/.cache/hypr-test/1793139328-12981",
+    "signature": "efb50993780079460b0cbed1363e2166a2de1d9f_1793139329_1254588408",
+    "wayland": "wayland-3"
+  },
+  "launcherPid": 13119,
+  "daemonPid": 17645,
+  "daemonSocket": "/run/user/1000/yudaemond.sock",
+  "daemonShared": true,
+  "holdSeconds": 2.5,
+  "worst": "clipboard",
+  "widgets": [
+    {
+      "widget": "clipboard",
+      "status": "ok",
+      "reason": "",
+      "openMs": 35.674969,
+      "ipcMs": 91.296977,
+      "shellRssDeltaKb": 56,
+      "shellCpuPct": 4,
+      "daemonRssDeltaKb": 456,
+      "daemonCpuPct": 2.4,
+      "shellPid": 13119,
+      "shellRssPeakKb": 301140,
+      "daemonRssPeakKb": 44860,
+      "notes": "frame-diff signal, ~35ms; sampled 250ms after visible; launcher instance 13119; daemon shared with the real session"
+    },
+    {
+      "widget": "launcher",
+      "status": "ok",
+      "reason": "",
+      "openMs": 39.15516,
+      "ipcMs": 87.17469,
+      "shellRssDeltaKb": -8,
+      "shellCpuPct": 2.8,
+      "daemonRssDeltaKb": 56,
+      "daemonCpuPct": 0.8,
+      "shellPid": 13119,
+      "shellRssPeakKb": 302024,
+      "daemonRssPeakKb": 44404,
+      "notes": "frame-diff signal, ~35ms; sampled 250ms after visible; launcher instance 13119; daemon shared with the real session; the shell freed more than the widget added"
+    }
+  ]
+}

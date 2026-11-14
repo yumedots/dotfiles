@@ -1,0 +1,6 @@
+{
+  "name": "agent",
+  "daemon": "opencode",
+  "widget": "AgentStat",
+  "panel": "AgentPanel"
+}

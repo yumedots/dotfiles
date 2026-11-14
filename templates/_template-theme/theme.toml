@@ -1,0 +1,8 @@
+[colors]
+surface = "#101010"
+surfaceTranslucent = "#ff101010"
+foreground = "#ffffff"
+dim = "#3f3f3f"
+red = "#e05252"
+yellow = "#e0b24f"
+muted = "#ffffff"

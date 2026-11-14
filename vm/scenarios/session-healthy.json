@@ -1,0 +1,15 @@
+{
+  "context": { "cores": 4, "mem": 4096, "gl": true },
+  "steps": [
+    { "do": "wait", "until": "guest", "timeout": 60000 },
+    { "do": "exec", "cmd": "systemctl is-active yudaemond", "code": 0 },
+    { "do": "wait", "until": "exec:pgrep -x Hyprland", "timeout": 60000 },
+    { "do": "exec", "cmd": "pgrep -x Hyprland", "code": 0 },
+    { "do": "wait", "until": "exec:pgrep -x quickshell", "timeout": 60000 },
+    { "do": "exec", "cmd": "pgrep -x quickshell", "code": 0 },
+    { "do": "wait", "until": "exec:export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-1 HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); hyprctl layers | grep -q quickshell", "timeout": 30000 },
+    { "do": "sleep", "ms": 500 },
+    { "do": "screenshot" }
+  ],
+  "proof": "the guest daemon, Hyprland and quickshell are all up"
+}

@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+set -eu
+
+case "${1:-}" in
+	build|plugin|link|lint|bench|hypr|vm|doctor)
+		if [ -f xmake.lua ] && grep -q "xmake tasks" xmake.lua; then
+			self=$(readlink -f "$0")
+			exec "$(dirname "$self")/tasks.sh" "$@"
+		fi
+		;;
+esac
+
+exec /usr/bin/xmake "$@"

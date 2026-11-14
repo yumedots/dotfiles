@@ -1,0 +1,23 @@
+[Unit]
+Description=yudae filesystem helper
+Documentation=file:/usr/local/share/doc/yudae/daemon.md
+Requires=yudae-fsd.socket
+After=yudae-fsd.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/yudae/yudaemond fsd
+User=root
+Group=root
+RuntimeDirectory=yudae
+RuntimeDirectoryMode=0755
+Environment=YUDAE_FSD_SOCKET=/run/yudae/fsd.sock
+Restart=on-failure
+RestartSec=1
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=1G
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu
+
+self=$(readlink -f "$0")
+root=$(cd "$(dirname "$self")/.." && pwd)
+
+for bin in "$root/daemon/zig-out/bin/yudaemond" "$root/quickshell/yudaemond/zig-out/bin/yudaemond"; do
+	[ -x "$bin" ] && exec "$bin" "$@"
+done
+
+echo "yudae: build the daemon first (xmake build)" >&2
+exit 127

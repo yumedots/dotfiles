@@ -1,0 +1,383 @@
+pragma Singleton
+
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import qs
+
+// The daemon's state, read over its unix socket. Everything here is a view of
+// what yudaemond already worked out: the agent state, the sessions, the plans,
+// the done list and the pointer. Nothing is fetched or parsed here.
+QtObject {
+	id: root
+
+	readonly property string socketPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/yudaemond.sock"
+
+	// Whether the socket to the daemon is up.
+	property bool connected: false
+
+	// The last full snapshot the daemon sent.
+	property var snapshot: ({})
+
+	// The pointer position, for the face to look at.
+	property var cursor: ({ valid: false, x: 0, y: 0 })
+
+	readonly property var opencode: root.snapshot.opencode || ({})
+	readonly property var codex: root.snapshot.codex || ({})
+
+	readonly property string state: root.opencode.state || "idle"
+	readonly property string detailText: root.opencode.detail || ""
+	readonly property string usageError: root.opencode.usageError || ""
+	readonly property string codexError: root.codex.failure || ""
+	readonly property bool online: root.opencode.connected === true
+
+	readonly property string planError: {
+		for (let i = 0; i < root.subscriptions.length; i++) {
+			const entry = root.subscriptions[i];
+
+			if (entry.failure && entry.failure !== "")
+				return entry.failure;
+		}
+
+		return "";
+	}
+
+	readonly property var doneSessions: {
+		const rows = root.opencode.done || [];
+
+		return rows.map(function (row) {
+			return { id: row.id, title: row.title, icon: root.iconOf(row.source || "") };
+		});
+	}
+
+	readonly property var subscriptions: root.snapshot.subscriptions ? (root.snapshot.subscriptions.list || []) : []
+
+	readonly property var plans: {
+		const out = [];
+
+		for (let i = 0; i < root.subscriptions.length; i++) {
+			const entry = root.subscriptions[i];
+
+			if ((!entry.limits || entry.limits.length === 0) && !entry.failure)
+				continue;
+
+			out.push({
+				title: entry.id === "opencode" ? Config.agentPlanName : entry.title + (entry.plan ? " " + entry.plan : ""),
+				icon: entry.id === "opencode" ? Config.agentPlanIcon : (entry.id === "claude" ? "claude" : "openai"),
+				limits: entry.limits,
+				failure: entry.failure || "",
+			});
+		}
+
+		return out;
+	}
+
+	readonly property var planRings: {
+		const out = [];
+		const find = function (limits, title) {
+			for (let i = 0; i < limits.length; i++)
+				if (String(limits[i].title || "").toLowerCase() === title)
+					return limits[i];
+
+			return null;
+		};
+
+		for (let i = 0; i < root.plans.length; i++) {
+			const plan = root.plans[i];
+
+			if (plan.failure !== "" || !plan.limits || plan.limits.length === 0)
+				continue;
+
+			const limit = find(plan.limits, "monthly") || find(plan.limits, "weekly");
+
+			if (limit === null || limit.percent < Config.agentRingWarnPercent)
+				continue;
+
+			out.push({
+				title: plan.title,
+				icon: plan.icon,
+				percent: limit.percent,
+				resetsAt: limit.resetsAt,
+			});
+		}
+
+		out.sort(function (a, b) {
+			if (a.percent !== b.percent)
+				return b.percent - a.percent;
+
+			const left = Date.parse(a.resetsAt);
+			const right = Date.parse(b.resetsAt);
+
+			return (isFinite(left) ? left : Infinity) - (isFinite(right) ? right : Infinity);
+		});
+
+		return out;
+	}
+
+	readonly property var sessions: root.opencode.sessions || []
+	readonly property var running: root.opencode.running || []
+	readonly property var asking: root.opencode.asking || []
+
+	// The sessions with work in them, one row each: working, asking, or failed.
+	// Sub agents are left out, the session that sent for them shows instead.
+	readonly property var working: {
+		const rows = [];
+		const seen = {};
+
+		const push = function (id, running, question, failed) {
+			if (seen[id])
+				return;
+
+			seen[id] = true;
+
+			const session = root.sessionOf(id) || {};
+
+			rows.push({
+				id: id,
+				title: session.title || "session",
+				icon: root.iconOf(session.source || ""),
+				working: running,
+				question: question || root.asking.indexOf(id) >= 0,
+				failed: failed,
+				detail: session.blocked || session.failure || "",
+				updated: session.updated || 0,
+			});
+		};
+
+		for (let i = 0; i < root.sessions.length; i++) {
+			const session = root.sessions[i];
+
+			if (session.parent)
+				continue;
+
+			const busy = session.status === "busy" || session.status === "retry";
+			const question = !!session.blocked;
+			const failed = !!session.failure;
+
+			if (!busy && !question && !failed)
+				continue;
+
+			push(session.id, busy, question, failed);
+		}
+
+		for (let i = 0; i < root.running.length; i++) {
+			const id = root.running[i];
+			const session = root.sessionOf(id);
+
+			if (session && session.parent)
+				continue;
+
+			push(id, true, false, false);
+		}
+
+		const rank = function (row) {
+			return row.working ? 0 : (row.question ? 1 : 2);
+		};
+
+		rows.sort(function (a, b) {
+			if (rank(a) !== rank(b))
+				return rank(a) - rank(b);
+
+			return b.updated - a.updated;
+		});
+
+		let failures = 0;
+
+		return rows.filter(function (row) {
+			if (!row.failed)
+				return true;
+
+			failures += 1;
+
+			return failures <= 3;
+		});
+	}
+
+	function sessionOf(id) {
+		for (let i = 0; i < root.sessions.length; i++)
+			if (root.sessions[i].id === id)
+				return root.sessions[i];
+
+		return null;
+	}
+
+	function iconOf(source) {
+		if (source === "claude")
+			return "claude";
+
+		if (source === "codex")
+			return "openai";
+
+		return "opencode";
+	}
+
+	property bool gazeWanted: false
+
+	function watchGaze(flag) {
+		root.gazeWanted = flag === true;
+		root.send({ gaze: root.gazeWanted });
+	}
+
+	readonly property var notifications: root.snapshot.notifications || ({})
+	readonly property var plugins: root.snapshot.plugins ? (root.snapshot.plugins.list || []) : []
+	readonly property var themes: root.snapshot.plugins ? (root.snapshot.plugins.themes || []) : []
+
+	function setTheme(id) {
+		root.request("plugins", "theme", { id: id });
+	}
+	readonly property var workspaces: root.snapshot.workspaces || ({})
+	readonly property var tray: root.snapshot.tray || []
+	readonly property var github: root.snapshot.github || ({})
+	readonly property string agentName: root.snapshot.agentName || ""
+	readonly property var weatherState: root.snapshot.weather || ({})
+
+	readonly property var calendarState: root.snapshot.calendar || ({})
+	readonly property var mediaState: root.snapshot.media || ({})
+
+	readonly property var screenState: root.snapshot.screen || ({})
+	readonly property var screenBorder: root.screenState.border || ({})
+	readonly property var screenShadow: root.screenState.shadow || ({ enabled: true, range: 48, color: "rgba(00000070)", offsetX: 0, offsetY: 14 })
+	readonly property var screenMonitors: root.screenState.monitors || []
+	readonly property int screenPrimary: root.screenState.primary || 0
+	readonly property var screenActive: root.screenMonitors[root.screenPrimary] || null
+	readonly property var networkState: root.snapshot.network || ({})
+	readonly property var network: root.networkState
+
+	readonly property var settings: root.snapshot.settings || ({})
+	readonly property var displayState: root.snapshot.display || ({})
+	readonly property int settingsFontSize: root.displayState.fontSize || 0
+	readonly property int settingsIconSize: root.displayState.iconSize || 0
+	readonly property string settingsRecord: root.displayState.record || ""
+
+	readonly property var screenPanel: root.screenState.panel || ({})
+	readonly property var screenGroups: root.screenPanel.groups || []
+	readonly property string screenRaw: root.screenState.raw || ""
+
+	readonly property var icons: root.snapshot.icons || ({})
+	readonly property var launcher: root.snapshot.launcher || ({})
+	readonly property var ink: root.snapshot.ink || ({})
+	readonly property var windows: root.snapshot.windows ? (root.snapshot.windows.list || []) : []
+	readonly property string windowsEmpty: root.snapshot.windows ? (root.snapshot.windows.empty || "") : ""
+
+	readonly property var bar: root.snapshot.bar || ({})
+	readonly property var wallpaper: root.snapshot.wallpaper || ({})
+
+	readonly property var audio: root.snapshot.audio || ({})
+	readonly property var audioNodes: root.audio.nodes || []
+	readonly property var vms: root.snapshot.vms || ({ budget: {}, list: [] })
+	readonly property var diskState: root.snapshot.disk || ({})
+
+	function vmsCommand(method, args) {
+		root.request("vms", method, args || ({}));
+	}
+
+	function diskCommand(method, args, callback) {
+		root.request("disk", method, args || ({}), callback);
+	}
+
+	property var pending: []
+
+	function request(target, method, args, callback) {
+		root.pending.push(callback || null);
+		root.send({ call: { target: target, method: method, args: args || ({}) } });
+	}
+
+	readonly property var appsEntries: (root.snapshot.apps && root.snapshot.apps.entries) || ({})
+	readonly property var systemState: root.snapshot.system || ({})
+	readonly property var system: root.systemState
+	readonly property bool awakeWanted: root.system.awake ? root.system.awake.want === true : false
+
+	function cmd(name, body) {
+		root.send({ cmd: { [name]: body } });
+	}
+
+	function systemCommand(message) {
+		root.cmd("system", message);
+	}
+
+	function weather(message) {
+		root.cmd("weather", message);
+	}
+
+	function dismiss(id) {
+		root.send({ dismiss: id });
+	}
+
+	function refresh() {
+		root.send({ refresh: true });
+	}
+
+	function send(message) {
+		if (!root.socket.connected)
+			return;
+
+		root.socket.write(JSON.stringify(message) + "\n");
+		root.socket.flush();
+	}
+
+	function receive(line) {
+		const text = String(line).trim();
+
+		if (text === "")
+			return;
+
+		let message;
+
+		try {
+			message = JSON.parse(text);
+		} catch (error) {
+			return;
+		}
+
+		if (message.t === "gaze") {
+			root.cursor = { valid: true, x: message.x, y: message.y };
+			return;
+		}
+
+		if (message.ok !== undefined) {
+			if (root.pending.length > 0) {
+				const callback = root.pending.shift();
+				if (callback)
+					callback(message.ok ? message.result : null);
+			}
+
+			return;
+		}
+
+		root.snapshot = message;
+	}
+
+	property Socket socket: Socket {
+		path: root.socketPath
+
+		parser: SplitParser {
+			splitMarker: "\n"
+
+			onRead: function (line) { root.receive(line); }
+		}
+
+		onConnectionStateChanged: {
+			root.connected = root.socket.connected;
+
+			if (root.socket.connected) {
+				root.send({ sync: true });
+
+				if (root.gazeWanted)
+					root.send({ gaze: true });
+			}
+		}
+	}
+
+	// The daemon may start, restart or stop at any time. Reconnecting on a
+	// timer keeps the bar in step without anything else watching the socket.
+	property Timer retry: Timer {
+		interval: 1000
+		running: !root.connected
+		repeat: true
+
+		onTriggered: if (!root.socket.connected)
+			root.socket.connected = true
+	}
+
+	Component.onCompleted: root.socket.connected = true
+}

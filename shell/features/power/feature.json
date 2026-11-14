@@ -1,0 +1,6 @@
+{
+  "name": "power",
+  "daemon": "system",
+  "widget": "PowerStat",
+  "panel": "PowerMonitor"
+}

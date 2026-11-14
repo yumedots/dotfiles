@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+set -eu
+
+root=$(cd "$(dirname "$0")/.." && pwd)
+prefix=${PREFIX:-/usr/local}
+bindir="$prefix/lib/yudae"
+
+if [ "$(id -u)" -ne 0 ]; then
+	echo "run as root, after deciding to install the helper" >&2
+	exit 1
+fi
+
+printf 'Install yudae-fsd and its polkit action? [y/N] '
+read answer
+case "$answer" in
+	y|Y|yes|YES) ;;
+	*) echo "nothing installed"; exit 1 ;;
+esac
+
+install -d "$bindir" /usr/share/polkit-1/actions /usr/lib/systemd/system
+install -m 0755 "$root/daemon/zig-out/bin/yudaemond" "$bindir/yudaemond"
+install -m 0644 "$root/systemd/system/yudae-fsd.socket" /usr/lib/systemd/system/yudae-fsd.socket
+install -m 0644 "$root/systemd/system/yudae-fsd.service" /usr/lib/systemd/system/yudae-fsd.service
+install -m 0644 "$root/systemd/system/org.yudae.policy" /usr/share/polkit-1/actions/org.yudae.policy
+
+systemctl daemon-reload
+systemctl enable --now yudae-fsd.socket
+echo "installed yudae-fsd"

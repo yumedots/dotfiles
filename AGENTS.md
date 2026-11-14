@@ -1,5 +1,7 @@
 # Rules
 
+- Every agent uses its own VM. `vm_create` with no name names it after the session; pass that name to every `vm_*` call. Never start, reuse, stop or destroy another agent's VM, including `ui`.
+
 Do not write comments in code
 Talk in an TLDR mode and explain in an simple TLDR with the less amount of words possible
 NEVER commit or run any git write command until the user explicitly says commit or anything similar, no commits on your own ever
@@ -7,7 +9,14 @@ When the user asks to commit, commit in small coherent blocks, never one big com
 When the user asks to commit, commit messages are one line only, no description and no footer, matching the style of the existing commits
 NEVER install ANYTHING without telling the user first — packages, skills, MCP servers, plugins, everything. Say what is missing and why it is needed, then let the user choose exactly: (1) give root and install it now, (2) do not install, try another way, (3) do not install, I will do it myself. No install happens unless the user picks option 1.
 No on-screen instructions or shortcut hints in widgets: never render "press X", key lists, hints, or counters. The UI is discovered by using it.
-
+If a VM task needs an action the daemon does not expose, do not write a throwaway script for it. Ask the user whether to add it to yudaemond; if yes, implement, test and document the verb, then use it.
+Every surface shows the same icon for the same thing: the VM app, its machines and the launcher entry use one glyph.
+Icons live once, in the icon list (`iconX` in `shell/services/Config.qml` and `shell/config.toml`, plus the `icons` map). Before using an icon, look it up in that list and reuse it everywhere, switches and rows included. Add one only when the list has none, and never invent a second glyph for something that already has one.
+Nerd font glyphs are always drawn through `shell/ui/Glyph.qml`, which centers the glyph ink in its box; never a bare `Text` inside a circle, badge, switch or slot.
+Text never overlaps other text: every `Text` in a row has a bounded width, anchors to its neighbours and elides; never position text by fractions of the parent width.
+Never put "·" or similar dot separators between pieces of text in the UI; separate with spacing.
+Scrollbars sit on the right border of their container, never floating inside it; Scrollbar.qml does this by default.
+Every QML color comes from `shell/services/Config.qml`; `xmake lint` rejects color literals in QML.
 
 # Ponytail, lazy senior dev mode
 You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
@@ -39,26 +48,29 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 
 (Yes, this file also applies to agents working on the ponytail repo itself. Especially to them.)
 
+# Repo map
 
-# QML / quickshell workflow
+```
+config/            plain app configs, one dir per app, symlinked into ~/.config
+plugins/           source-only plugins, see docs/plugins.md
+templates/         copyable plugin templates, one per kind
+hypr/              hyprland conf + plugins; the one non-config symlinked into ~/.config
+shell/             quickshell; run with `quickshell -p shell/shell.qml`, never symlinked
+daemon/            yudaemond (Zig); providers pair with shell/features/<name>
+systemd/ scripts/ vm/ docs/ .agents/skills/
+xmake.lua          the single entry point: build plugin link lint test bench hypr vm doctor
+```
 
-Saving a file live-reloads quickshell — never restart it for a normal edit, never run a second `quickshell` instance.
+`xmake` is `scripts/xmake`, linked into `~/.local/bin`. It runs the repo tasks through `scripts/tasks.sh` and passes everything else to the system xmake. `plans.md` is the source of truth for the shape and the order of work.
 
-console.log and runtime errors: /run/user/1000/quickshell/by-id/<newest>/log.qslog (grep -a).
+# Skills
 
-QML lint: `ln -sfn ~/.config/quickshell /tmp/qmlimport/qs` then `/usr/lib/qt6/bin/qmllint -I /tmp/qmlimport <files>` (exit 255 = syntax error; quickshell-dialect warnings are noise). lib/*.js changes: `node quickshell/lib/check.js`.
+Task guides are registered in `.agents/skills/`; reference lives in `docs/`.
 
-Visual verification: hypr-test section below.
+# Reference
 
-
-# Desktop testing with hypr-test
-
-Verify every Hyprland, quickshell and dotfile change with scripts/hypr-test. It runs a private nested Hyprland + quickshell on a worktree copy of this repo, so your real session is never touched. A change is not verified until it has been seen through it.
-
-- Edit files here in the repo. Test only with scripts/hypr-test, never with hyprctl or input against the real session.
-- `scripts/hypr-test start` — nested Hyprland + quickshell on the worktree copy (fails if one is already running).
-- `scripts/hypr-test shot` — screenshot of the test instance, prints the png path.
-- `scripts/hypr-test run <cmd...>` — run hyprctl/qs/ipc against the test instance only.
-- `scripts/hypr-test stop` — kill it and remove the worktree. Always stop when done.
-- Loop: shot, act via run, shot, verify. On errors the script prints the quickshell log — read it instead of guessing.
-- If you cannot see images, hand the png to a vision subagent instead of guessing.
+- `docs/architecture.md` - repo shape, feature pairing, xmake tasks.
+- `docs/daemon.md` - hub, IPC, snapshot, command routing, VM control plane.
+- `docs/agent-tooling.md` - `yudae` CLI, MCP tools, the agent workflow on a VM.
+- `docs/plugins.md` - the plugin standard: manifest, kinds, build and load.
+- `docs/perf.md` - budgets and the bench tools.

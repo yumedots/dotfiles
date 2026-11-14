@@ -1,0 +1,5 @@
+id = "_template-shell"
+kind = "shell"
+version = "0.1.0"
+build = "make"
+provides = ["Entry.qml"]

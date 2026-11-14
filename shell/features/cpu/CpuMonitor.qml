@@ -1,0 +1,41 @@
+import QtQuick
+import qs.ui
+import qs
+import qs.services
+
+ProcessPanel {
+	id: root
+
+	readonly property var sys: Yudae.system.cpu || ({})
+
+	readonly property color accentInk: Config.mono ? Config.cpuBaseMono : Config.cpuBase
+	readonly property color peakInk: Config.mono ? Config.cpuPeakMono : Config.cpuPeak
+	readonly property var cores: root.source && root.source.cores ? root.source.cores : []
+	readonly property real blockSize: (Config.cpuTooltipWidth - (Config.cpuBlockColumns - 1) * Config.cpuBlockGap) / Config.cpuBlockColumns
+	readonly property int blockRows: Math.max(1, Math.ceil(root.cores.length / Config.cpuBlockColumns))
+	readonly property real vizHeight: root.blockRows * (root.blockSize + Config.cpuBlockGap) - Config.cpuBlockGap
+
+	title: root.sys.model || "CPU"
+	detail: root.sys.spec || ""
+	detailColor: root.accentInk
+	listInk: root.accentInk
+	totalInk: root.sys.ink || root.accentInk
+	panelWidth: Config.cpuTooltipWidth
+	panelPadding: Config.cpuTooltipPadding
+	topCount: Config.cpuTopCount
+	psField: "pcpu"
+	rowColor: (row) => row.color || root.accentInk
+
+	viz: Item {
+		width: parent.width
+		height: root.vizHeight
+
+		CellGrid {
+			values: root.cores
+			columns: Config.cpuBlockColumns
+			cellSize: root.blockSize
+			gap: Config.cpuBlockGap
+			colorFor: (value, index) => Qt.tint(Config.cpuIdle, Qt.alpha(Config.cpuCore, Config.cpuCoreFloor + (1 - Config.cpuCoreFloor) * Math.min(1, value / 100)))
+		}
+	}
+}

@@ -1,78 +1,22 @@
 local programs = require("programs")
 local actions = require("actions")
 local versions = require("versions")
+local repo = require("repo")
 local mainMod = "SUPER"
-local launcherConfig = "$HOME/.config/quickshell/launcherShell.qml"
 
 hl.config({ binds = { scroll_event_delay = 0 } })
 
 local function switcherOpen()
     for _, layer in ipairs(hl.get_layers({ namespace = "launcher" })) do
-        if layer.interactivity == 1 then return true end
+        if layer.keyboard_interactivity == 1 then return true end
     end
 
     return false
 end
 
-local pidFile = (os.getenv("XDG_RUNTIME_DIR") or "/run/user/1000") .. "/qs-launcher.pid"
-
-local function pidFromFile()
-    local file = io.open(pidFile, "r")
-    local pid = file and file:read("*l") or ""
-
-    if file then file:close() end
-
-    return pid:match("(%d+)")
-end
-
-local function procHolds(pid)
-    local file = io.open("/proc/" .. pid .. "/cmdline", "r")
-    local cmd = file and file:read("*a") or ""
-
-    if file then file:close() end
-
-    return cmd:find("launcherShell.qml", 1, true) ~= nil
-end
-
-local function savePid(pid)
-    local file = io.open(pidFile, "w")
-    if not file then return end
-
-    file:write(pid)
-    file:close()
-end
-
-local function launcherAlive()
-    local pid = pidFromFile()
-
-    if pid and procHolds(pid) then return true end
-
-    local pipe = io.popen("pgrep -f '^quickshell -p .*launcherShell\\.qml'")
-    local pids = pipe and pipe:read("*a") or ""
-
-    if pipe then pipe:close() end
-
-    pid = pids:match("(%d+)")
-    if not pid then return false end
-
-    savePid(pid)
-    return true
-end
-
 local function wakeLauncher(action)
-    local ipc = "qs ipc -p " .. launcherConfig .. " call shell " .. action
-    local start = "ulimit -Sn 65536; export MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536 QSG_RENDER_LOOP=basic; setsid quickshell -p " .. launcherConfig
-    local wake = "printf %s " .. action .. " > \"$XDG_RUNTIME_DIR/qs-launcher-wake\"; "
-        .. start .. " >/dev/null 2>&1 & echo $! > \"$XDG_RUNTIME_DIR/qs-launcher.pid\"; "
-        .. "sleep 0.6; if [ -e \"$XDG_RUNTIME_DIR/qs-launcher-wake\" ]; then " .. ipc .. "; fi"
-
     return function()
-        if launcherAlive() then
-            hl.dispatch(hl.dsp.global("quickshell:" .. action))
-            return
-        end
-
-        hl.exec_cmd(wake)
+        hl.dispatch(hl.dsp.global("quickshell:" .. action))
     end
 end
 
@@ -199,7 +143,9 @@ end
 
 for i = 1, 10 do
     local key = i % 10
-    hl.bind(mainMod .. " + " .. key,         gotoWorkspace(i))
+    hl.bind(mainMod .. " + " .. key,         function()
+        gotoWorkspace(i)()
+    end)
     hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i, follow = false }))
     hl.bind("CTRL + ALT + " .. key,         function()
         local ws = hl.get_active_workspace()
@@ -216,17 +162,39 @@ hl.bind("ALT + SHIFT + mouse_up",   function() versions.step(-1) end)
 hl.bind("ALT + mouse_down",         function() versions.step(1) end)
 hl.bind("ALT + mouse_up",           function() versions.step(-1) end)
 
-hl.bind(mainMod .. " + RETURN", hl.dsp.exec_cmd(programs.terminal))
-hl.bind(mainMod .. " + W", hl.dsp.window.close(), { repeating = true })
+hl.bind(mainMod .. " + RETURN", function()
+    hl.dispatch(hl.dsp.exec_cmd(programs.terminal))
+end)
+hl.bind(mainMod .. " + W", function()
+    hl.dispatch(hl.dsp.window.close())
+end, { repeating = true, dont_inhibit = true })
 hl.bind("F11", hl.dsp.window.fullscreen())
+hl.bind("SUPER + ALT + ESCAPE", function()
+    for _, win in ipairs(hl.get_windows()) do
+        if win.class ~= "qemu" and win.mapped then
+            hl.dispatch(hl.dsp.focus({ window = win }))
+            return
+        end
+    end
+
+    hl.dispatch(hl.dsp.focus({ workspace = 1 }))
+end, { dont_inhibit = true })
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd(programs.session))
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(programs.browser))
 hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd(programs.fileManager))
-hl.bind(mainMod .. " + SPACE", actions.floatToggle)
-hl.bind("ALT + SPACE", wakeLauncher("launcher"))
-hl.bind(mainMod .. " + B", wakeLauncher("clipboard"))
-hl.bind(mainMod .. " + TAB", wakeLauncher("windows"), { repeating = true })
-hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
+hl.bind(mainMod .. " + SPACE", function()
+    actions.floatToggle()
+end)
+hl.bind("ALT + SPACE", function()
+    hl.dispatch(hl.dsp.global("quickshell:launcher"))
+end)
+hl.bind(mainMod .. " + B", function()
+    hl.dispatch(hl.dsp.global("quickshell:clipboard"))
+end)
+hl.bind(mainMod .. " + TAB", function()
+    hl.dispatch(hl.dsp.global("quickshell:windows"))
+end, { repeating = true })
+hl.bind(mainMod .. " + D", hl.dsp.layout("togglesplit"))
 
 local resizeStep = 40
 
@@ -244,6 +212,11 @@ hl.bind(mainMod .. " + S", actions.scratchpadSwap)
 hl.bind(mainMod .. " + O", hl.dsp.global("quickshell:notifications"))
 hl.bind(mainMod .. " + F", hl.dsp.global("quickshell:power"))
 hl.bind(mainMod .. " + F4", wakeLauncher("powerMenu"))
+hl.bind(mainMod .. " + L", hl.dsp.exec_cmd(repo .. "/shell/scripts/lock"))
+
+hl.define_submap("lock", "reset", function()
+	hl.bind("F35", hl.dsp.submap("reset"))
+end)
 hl.bind(mainMod .. " + G", hl.dsp.global("quickshell:contributions"))
 hl.bind(mainMod .. " + P", hl.dsp.global("quickshell:display"))
 hl.bind(mainMod .. " + T", hl.dsp.global("quickshell:tray"))
@@ -277,17 +250,23 @@ hl.bind(mainMod .. " + mouse_up", function()
     end
 end)
 
-hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
+local windowDrag = hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 hl.bind("PRINT",         hl.dsp.exec_cmd("~/.local/bin/snap"))
 hl.bind("SHIFT + PRINT", hl.dsp.exec_cmd("env SNAP_SCREENSHOT_DIR=/tmp ~/.local/bin/snap --save"))
 
-hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("yudae call audio step 0.1"),  { locked = true, repeating = true })
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("yudae call audio step -0.1"), { locked = true, repeating = true })
 hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true, repeating = true })
 hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),   { locked = true, repeating = true })
 hl.bind("XF86AudioNext",  hl.dsp.global("quickshell:mediaNext"),      { locked = true })
 hl.bind("XF86AudioPause", hl.dsp.global("quickshell:mediaPlayPause"), { locked = true })
 hl.bind("XF86AudioPlay",  hl.dsp.global("quickshell:mediaPlayPause"), { locked = true })
 hl.bind("XF86AudioPrev",  hl.dsp.global("quickshell:mediaPrevious"),  { locked = true })
+
+return {
+    launcherDrag = function (open)
+        windowDrag:set_enabled(not open)
+    end,
+}

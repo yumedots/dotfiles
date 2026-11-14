@@ -1,0 +1,1119 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/vm
+BASE=${DOTFILES_VM_BASE:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-base}
+INPUTS=${DOTFILES_VM_INPUTS:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-inputs}
+PKGSTORE=${DOTFILES_VM_PKGS:-$INPUTS/packages}
+PKG_IMG=$INPUTS/packages.btrfs
+PKG_IMG_SHA=$PKG_IMG.sha
+TARGET_BASE=$INPUTS/target-base.img
+TARGET_SIZE=${DOTFILES_VM_TARGET_SIZE:-32G}
+DCOPY=$INPUTS/dcopy
+DIRECT=$INPUTS/direct
+ROOTFS=${DOTFILES_VM_ROOTFS:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-rootfs}
+ROOTFS_SHA=$ROOTFS.sha
+DISK_HEAD=$INPUTS/disk-head.img
+ROOT_IMG_CACHE=$BASE/root.btrfs
+ROOT_IMG_SHA=$BASE/root.btrfs.sha
+ROOT_IMG_ZST=${DOTFILES_VM_ROOT_IMG_ZST:-${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/vm-rootfs.img.zst}
+ROOT_IMG_ZST_SHA=$ROOT_IMG_ZST.sha
+ROOT_IMG_INPUT=$INPUTS/rootfs.img.zst
+ROOT_IMG_INPUT_SHA=$ROOT_IMG_INPUT.sha
+ROOT_UUID=28605d0a-df51-46ea-bfe7-e9e6d52fe390
+ROOT_IMG=${DOTFILES_VM_ROOT_IMG:-6G}
+DISK_SIZE=${DOTFILES_VM_DISK_SIZE:-32G}
+RUNS=${DOTFILES_VM_RUNS:-$ROOT/vm/runs}
+
+CLOUD_NAME=Arch-Linux-x86_64-cloudimg-20261101.620452.qcow2
+CLOUD_SHA=794eb4889b39e1f0ed7d5ae998b2a1ed2137db8cf8c3476cf2962c7437ecb003
+CLOUD=$INPUTS/cloud.qcow2
+CLOUD_STAMP=$INPUTS/cloud.stamp
+PACKAGES=$CACHE/packages.qcow2
+GOLDEN=$CACHE/golden.qcow2
+ARCH_SNAPSHOT=""
+FORCE=0
+VM_EXCLUDE='^(cachyos-|linux-cachyos|linux-firmware|qemu-|virtiofsd|firefox|qbittorrent|prismlauncher|vlc|tesseract|rust|zig|clang|llvm|cmake|ninja|intel-ucode|amd-ucode|sof-firmware|alsa-firmware|openstarbound|polychromatic|vinegar|visual-studio-code-insiders-bin|wlrctl|libvirt|docker|podman|noto-fonts$|noto-fonts-cjk|awesome-terminal-fonts|cantarell-fonts|ttf-bitstream-vera|ttf-liberation|ttf-opensans|dolphin|nautilus|pavucontrol|bind$|dnsmasq|iwd|modemmanager|usb_modeswitch|xl2tpd|nfs-utils|ufw|layer-shell-qt|graphicsmagick|xdg-desktop-portal-gtk|xdg-desktop-portal-kde|polkit-kde-agent|polkit-gnome|gst-|ffmpeg|bluez|pipewire|wireplumber|alsa-|libpulse|networkmanager|wpa_supplicant|upower|power-profiles|flatpak|nodejs|npm|bun|python|texinfo|groff|man-db|man-pages|limine|plymouth|greetd|mesa-utils|vulkan|spice|usbredir|snapper|btrfs-assistant|mdadm|lvm2|dmraid|nfs-utils|xfsprogs|nilfs|jfs|f2fs|exfat|os-prober|efibootmgr|reflector|pkgfile|plocate|profile-sync|realtime-privileges|stress-ng|strace|smartmontools|sg3_utils|hdparm|dmidecode|cpupower|hwdetect|lsb-release|logrotate|which|wget|micro|lazygit|onefetch|fastfetch|btop|fd|ripgrep|fzf|zoxide|less|nano|vim|neovim|tmux|screen|htop|git|linux$|linux-headers|gdb|gtest|protobuf|abseil|re2|glib2-devel|autoconf|automake|libtool|m4|bison|flex|perl|texinfo|groff|man-db|man-pages|noto-fonts-emoji|mesa-utils|vulkan|qt6-translations)|nvidia'
+SEED=$CACHE/seed.img
+LOG=$CACHE/provision.log
+QEMU=$(command -v qemu-system-x86_64)
+QEMU_IMG=$(command -v qemu-img)
+
+mirrors=(
+	https://geo.mirror.pkgbuild.com
+	https://mirror.rackspace.com/archlinux
+	https://mirrors.kernel.org/archlinux
+	https://archlinux.mirror.wearetriple.com
+	https://mirror.funami.tech/archlinux
+)
+
+usage() {
+	echo "usage: vm/images fetch|packages|backup [--snapshot YYYY/MM/DD] [--force]|golden [--snapshot YYYY/MM/DD] [--force]|ensure|overlay <name> [golden-tag]|snapshot <name> <tag>|restore <name> <tag>|list" >&2
+	exit 2
+}
+
+speed_pick() {
+	local best="" best_speed=0 mirror speed url
+	for mirror in "${mirrors[@]}"; do
+		url="$mirror/images/latest/$CLOUD_NAME"
+		speed=$(curl -fsSL --max-time 15 -r 0-2097151 -o /dev/null -w '%{speed_download}' "$url" 2>/dev/null || echo 0)
+		echo "probe $mirror ${speed%.*}B/s" >&2
+		if [ "${speed%.*}" -gt "$best_speed" ]; then
+			best_speed=${speed%.*}
+			best=$url
+		fi
+	done
+	[ -n "$best" ] || best="https://geo.mirror.pkgbuild.com/images/latest/$CLOUD_NAME"
+	echo "$best"
+}
+
+cloud_mark() {
+	mkdir -p "$INPUTS"
+	{ stat -c '%s %Y' "$CLOUD"; printf '%s\n' "$CLOUD_SHA"; } > "$CLOUD_STAMP"
+}
+
+cmd_fetch() {
+	mkdir -p "$INPUTS"
+	local mark=$CLOUD_STAMP
+	if [ -f "$CLOUD" ] && [ -f "$mark" ] &&
+		[ "$(head -1 "$mark")" = "$(stat -c '%s %Y' "$CLOUD")" ] &&
+		[ "$(tail -1 "$mark")" = "$CLOUD_SHA" ]; then
+		echo "cloud image cached $CLOUD"
+		return
+	fi
+	if [ -f "$CLOUD" ] && [ "$(sha256sum "$CLOUD" | cut -d' ' -f1)" = "$CLOUD_SHA" ]; then
+		cloud_mark
+		echo "cloud image cached $CLOUD"
+		return
+	fi
+	if [ -f "$CACHE/$CLOUD_NAME" ] && [ "$(sha256sum "$CACHE/$CLOUD_NAME" | cut -d' ' -f1)" = "$CLOUD_SHA" ]; then
+		cp --reflink=auto "$CACHE/$CLOUD_NAME" "$CLOUD"
+		cloud_mark
+		echo "cloud image promoted $CLOUD"
+		return
+	fi
+	local url
+	url=$(speed_pick)
+	echo "download $url"
+	curl -fL --retry 3 --progress-bar -o "$CLOUD.part" "$url"
+	echo "$CLOUD_SHA  $CLOUD.part" | sha256sum -c -
+	mv "$CLOUD.part" "$CLOUD"
+	cloud_mark
+}
+
+parallel_script() {
+	cat <<'SCRIPT'
+#!/bin/bash
+set -u
+echo "dotfiles: parallel start $(date +%s)"
+vm_exclude='@EXCLUDE@'
+mkdir -p /mnt/seed /mnt/pkg /target
+mountpoint -q /mnt/seed || mount -t vfat /dev/vdb /mnt/seed
+mountpoint -q /mnt/pkg || mount -t btrfs -o ro /dev/vdd /mnt/pkg || { echo "dotfiles: parallel pkg mount failed"; poweroff -f; exit 1; }
+if [ -f /mnt/seed/fast ] && [ -s /mnt/pkg/files.txt ] && [ -f /mnt/pkg/pacman-local.tar ]; then
+	sed 's#^#/mnt/pkg/#' /mnt/pkg/files.txt > /tmp/files.txt
+	echo "dotfiles: parallel fast list $(wc -l < /tmp/files.txt)"
+else
+	systemctl stop systemd-resolved systemd-networkd NetworkManager 2>/dev/null || true
+	iface=$(ip -o link show | awk -F': ' '$2 != "lo" {print $2; exit}')
+	[ -n "$iface" ] || iface=eth0
+	ip link set "$iface" up 2>/dev/null || true
+	ip addr replace 10.0.2.15/24 dev "$iface" 2>/dev/null || true
+	ip route replace default via 10.0.2.2 2>/dev/null || true
+	rm -f /etc/resolv.conf
+	printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf
+	pacman -Sy --noconfirm >/dev/null 2>&1 || { echo "dotfiles: parallel sync failed"; poweroff -f; exit 1; }
+	grep -vE "$vm_exclude" /mnt/seed/packages.txt > /tmp/candidates.txt
+	pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
+	[ -s /tmp/install.txt ] || { echo "dotfiles: parallel no candidates"; poweroff -f; exit 1; }
+	pacman -Syu --print-format '%n-%v' --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) > /tmp/txn.raw 2>/tmp/txn.err || true
+	grep -E '^[A-Za-z0-9@._+:-]+-[^-]+-[^-]+$' /tmp/txn.raw | sort -u > /tmp/names.txt
+	[ -s /tmp/names.txt ] || { echo "dotfiles: parallel resolve failed"; tail -3 /tmp/txn.err; poweroff -f; exit 1; }
+	: > /tmp/files.txt
+	while read -r name; do
+		f=$(ls /mnt/pkg/"$name"-*.pkg.tar.zst 2>/dev/null | head -1)
+		[ -n "$f" ] || { echo "dotfiles: parallel missing $name"; poweroff -f; exit 1; }
+		echo "$f" >> /tmp/files.txt
+	done < /tmp/names.txt
+fi
+mount /dev/vdc3 /target || { echo "dotfiles: parallel mount failed"; poweroff -f; exit 1; }
+btrfs filesystem resize max /target >/dev/null 2>&1 || true
+echo "dotfiles: parallel files $(wc -l < /tmp/files.txt) $(date +%s)"
+xargs -a /tmp/files.txt -P 16 -I{} bsdtar -xpf {} -C /target --exclude=.PKGINFO --exclude=.MTREE --exclude=.INSTALL --exclude=.BUILDINFO 2>/tmp/extract.err
+echo "dotfiles: parallel extracted $(wc -l < /tmp/extract.err) $(date +%s)"
+if [ -f /mnt/seed/fast ] && [ -f /mnt/pkg/pacman-local.tar ]; then
+	rm -rf /target/var/lib/pacman/local
+	tar -C /target/var/lib/pacman -xf /mnt/pkg/pacman-local.tar || { echo "dotfiles: parallel db tar failed"; poweroff -f; exit 1; }
+else
+	pacman -U --dbonly --nodeps --overwrite '*' --noconfirm --root /target $(cat /tmp/files.txt) >/tmp/db.log 2>&1 || { echo "dotfiles: parallel db failed"; tail -5 /tmp/db.log; poweroff -f; exit 1; }
+fi
+mkdir -p /target/etc/pacman.d/gnupg
+cp -a /mnt/pkg/gnupg/. /target/etc/pacman.d/gnupg/ 2>/dev/null || true
+mkdir -p /target/etc/systemd/network /target/etc/systemd/system/multi-user.target.wants
+cat > /target/etc/systemd/network/20-wired.network <<'NET'
+[Match]
+Name=en* eth0
+[Network]
+DHCP=yes
+NET
+ln -sfn /usr/lib/systemd/system/systemd-networkd.service /target/etc/systemd/system/multi-user.target.wants/systemd-networkd.service
+ln -sfn /usr/lib/systemd/system/systemd-resolved.service /target/etc/systemd/system/multi-user.target.wants/systemd-resolved.service
+cp /mnt/seed/yudae-desktop.service /target/etc/systemd/system/ 2>/dev/null || true
+cp /mnt/seed/yudaemond.service /target/etc/systemd/system/ 2>/dev/null || true
+mkdir -p /target/proc /target/sys /target/dev
+mount --bind /proc /target/proc
+mount --bind /sys /target/sys
+mount --bind /dev /target/dev
+chroot /target /bin/bash -c '
+id -u gabriel >/dev/null 2>&1 || useradd -m -u 1000 -G wheel,video,render,input -s /bin/bash gabriel
+mkdir -p /etc/sudoers.d
+printf "gabriel ALL=(ALL) NOPASSWD:ALL\n" > /etc/sudoers.d/gabriel
+chmod 440 /etc/sudoers.d/gabriel
+mkdir -p /home/gabriel/dotfiles /run/user/1000
+chown gabriel:gabriel /run/user/1000
+grep -q "dotfiles /home/gabriel/dotfiles virtiofs" /etc/fstab || echo "dotfiles /home/gabriel/dotfiles virtiofs ro,nofail,defaults 0 0" >> /etc/fstab
+mkdir -p /home/gabriel/.config
+ln -sfn /home/gabriel/dotfiles/hypr /home/gabriel/.config/hypr
+passwd -d root >/dev/null 2>&1 || true
+touch /var/lib/dotfiles-golden
+
+'
+cat > /target/usr/local/bin/dotfiles-firstboot.sh <<'FIX'
+#!/bin/bash
+[ -e /var/lib/dotfiles-fixups ] && exit 0
+ldconfig 2>/dev/null || true
+fc-cache -f 2>/dev/null || true
+glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
+update-desktop-database -q /usr/share/applications 2>/dev/null || true
+update-ca-trust 2>/dev/null || true
+depmod -a $(ls /usr/lib/modules | head -1) 2>/dev/null || true
+touch /var/lib/dotfiles-fixups
+FIX
+chmod 755 /target/usr/local/bin/dotfiles-firstboot.sh
+cat > /target/etc/systemd/system/dotfiles-firstboot.service <<'UNIT'
+[Unit]
+Description=dotfiles first boot fixups
+ConditionPathExists=!/var/lib/dotfiles-fixups
+After=local-fs.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/dotfiles-firstboot.sh
+[Install]
+WantedBy=multi-user.target
+UNIT
+mkdir -p /target/etc/systemd/system/multi-user.target.wants /target/etc/systemd/system/graphical.target.wants
+ln -sfn /etc/systemd/system/yudaemond.service /target/etc/systemd/system/multi-user.target.wants/yudaemond.service
+ln -sfn /etc/systemd/system/dotfiles-firstboot.service /target/etc/systemd/system/multi-user.target.wants/dotfiles-firstboot.service
+ln -sfn /etc/systemd/system/yudae-desktop.service /target/etc/systemd/system/graphical.target.wants/yudae-desktop.service
+ln -sfn /usr/lib/systemd/system/graphical.target /target/etc/systemd/system/default.target
+echo "dotfiles: parallel golden $(date +%s)"
+echo dotfiles-golden-ok > /dev/ttyS0
+umount /target/proc /target/sys /target/dev 2>/dev/null || true
+sync
+umount /target 2>/dev/null || true
+echo "dotfiles: parallel done $(date +%s)"
+poweroff -f
+SCRIPT
+}
+
+provision_script() {
+	cat <<'SCRIPT'
+#!/bin/bash
+set -u
+exec > >(tee /dev/console) 2>&1
+echo "dotfiles: provision start"
+@SNAPSHOT@
+sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 12/' /etc/pacman.conf
+sed -i 's|^#\?CacheDir.*|CacheDir = /var/cache/pacman/pkg /mnt/hostpkg|' /etc/pacman.conf
+grep -q '^CacheDir' /etc/pacman.conf || echo 'CacheDir = /var/cache/pacman/pkg /mnt/hostpkg' >> /etc/pacman.conf
+mkdir -p /mnt/hostpkg
+mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
+mkdir -p /var/cache/pacman/pkg
+for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
+	[ -e "$pkg" ] || continue
+	ln -sf "$pkg" "/var/cache/pacman/pkg/$(basename "$pkg")"
+done
+rm -f /var/cache/pacman/pkg/limine-* /var/cache/pacman/pkg/plymouth-*
+pacman -Sy --noconfirm >/dev/null 2>&1
+vm_exclude='@EXCLUDE@'
+grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
+pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
+{ pacman -Sp --needed --noconfirm $(cat /tmp/install.txt); pacman -Spu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt); } 2>/dev/null | grep '^http' | sort -u > /tmp/urls.txt || true
+cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
+pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
+if grep -q 'failed to commit transaction' /tmp/pacman.log; then
+	grep 'signature from' /tmp/pacman.log | sed 's/^error: //; s/:.*//' | while read -r name; do
+		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
+	done
+	pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt)
+fi
+for pkg in /var/cache/pacman/pkg/*.pkg.tar.zst; do
+	[ -f "$pkg" ] || continue
+	name=$(basename "$pkg")
+	[ -e "/mnt/hostpkg/$name" ] || cp "$pkg" "/mnt/hostpkg/$name" 2>/dev/null || true
+done
+pacman -Scc --noconfirm >/dev/null 2>&1 || true
+cp /tmp/install.txt /opt/packages.installed
+fstrim -av >/dev/null 2>&1 || true
+bash /opt/golden-setup.sh
+tar -C /var/lib/pacman -cf /mnt/hostpkg/pacman-local.tar local 2>/dev/null || true
+grep -a 'Packages (' /tmp/pacman.log | head -1 | sed 's/.*Packages ([0-9]*) //' | tr ' ' '\n' > /mnt/hostpkg/transaction.txt 2>/dev/null || true
+touch /var/lib/dotfiles-provisioned
+echo "dotfiles: provision done"
+poweroff
+SCRIPT
+}
+
+delta_script() {
+	cat <<'SCRIPT'
+#!/bin/bash
+set -u
+exec > >(tee /dev/console) 2>&1
+echo "dotfiles: delta start"
+@SNAPSHOT@
+sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 12/' /etc/pacman.conf
+sed -i 's|^#\?CacheDir.*|CacheDir = /var/cache/pacman/pkg /mnt/hostpkg|' /etc/pacman.conf
+grep -q '^CacheDir' /etc/pacman.conf || echo 'CacheDir = /var/cache/pacman/pkg /mnt/hostpkg' >> /etc/pacman.conf
+mkdir -p /mnt/hostpkg
+mountpoint -q /mnt/hostpkg || mount -t 9p -o trans=virtio,version=9p2000.L hostpkg /mnt/hostpkg
+mkdir -p /var/cache/pacman/pkg
+for pkg in /mnt/hostpkg/*.pkg.tar.zst /mnt/hostpkg/*.pkg.tar.xz; do
+	[ -e "$pkg" ] || continue
+	ln -sf "$pkg" "/var/cache/pacman/pkg/$(basename "$pkg")"
+done
+rm -f /var/cache/pacman/pkg/limine-* /var/cache/pacman/pkg/plymouth-*
+pacman -Sy --noconfirm >/dev/null 2>&1
+vm_exclude='@EXCLUDE@'
+grep -vE "$vm_exclude" /opt/packages.txt > /tmp/candidates.txt
+pacman -Slq | grep -Fxf /tmp/candidates.txt > /tmp/install.txt 2>/dev/null || true
+{ pacman -Sp --needed --noconfirm $(cat /tmp/install.txt); pacman -Spu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt); } 2>/dev/null | grep '^http' | sort -u > /tmp/urls.txt || true
+cp /tmp/urls.txt /mnt/hostpkg/urls.txt 2>/dev/null || true
+if [ -f /opt/packages.installed ]; then
+	sort -u /opt/packages.installed > /tmp/old.txt
+	sort -u /tmp/install.txt > /tmp/new.txt
+	comm -23 /tmp/old.txt /tmp/new.txt > /tmp/remove.txt
+	if [ -s /tmp/remove.txt ]; then
+		pacman -Rns --noconfirm $(cat /tmp/remove.txt) 2>&1 | tee /tmp/pacman-remove.log || pacman -R --noconfirm $(cat /tmp/remove.txt) 2>&1 | tee -a /tmp/pacman-remove.log || true
+	fi
+fi
+pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt) 2>&1 | tee /tmp/pacman.log
+if grep -q 'failed to commit transaction' /tmp/pacman.log; then
+	grep 'signature from' /tmp/pacman.log | sed 's/^error: //; s/:.*//' | while read -r name; do
+		rm -f /var/cache/pacman/pkg/"$name"-*.pkg.tar.*
+	done
+	pacman -Syu --needed --noconfirm --ignore linux,linux-firmware,linux-headers $(cat /tmp/install.txt)
+fi
+orphans=$(pacman -Qtdq)
+[ -z "$orphans" ] || pacman -Rns --noconfirm $orphans >/dev/null 2>&1 || true
+cp /tmp/install.txt /opt/packages.installed
+bash /opt/golden-setup.sh
+for pkg in /var/cache/pacman/pkg/*.pkg.tar.zst; do
+	[ -f "$pkg" ] || continue
+	name=$(basename "$pkg")
+	[ -e "/mnt/hostpkg/$name" ] || cp "$pkg" "/mnt/hostpkg/$name" 2>/dev/null || true
+done
+pacman -Scc --noconfirm >/dev/null 2>&1 || true
+fstrim -av >/dev/null 2>&1 || true
+echo "dotfiles: delta done"
+poweroff
+SCRIPT
+}
+
+vms_exist() {
+	[ -d "$RUNS" ] || return 1
+	find "$RUNS" -mindepth 2 -maxdepth 2 -name disk.qcow2 -print -quit 2>/dev/null | grep -q .
+}
+
+packages_want() {
+	{ cat "$CACHE/seed/packages.txt" 2>/dev/null; printf '%s\n' "$ARCH_SNAPSHOT" "$CLOUD_NAME"; provision_script; delta_script; golden_setup; desktop_unit; daemon_unit; parallel_script; } | sha256sum | cut -d' ' -f1
+}
+
+userns_run() {
+	local uid gid ustart ucount gstart gcount
+	uid=$(id -u)
+	gid=$(id -g)
+	read -r ustart ucount < <(awk -F: -v u="$(id -un)" '$1 == u { print $2, $3; exit }' /etc/subuid)
+	read -r gstart gcount < <(awk -F: -v g="$(id -gn)" '$1 == g { print $2, $3; exit }' /etc/subgid)
+	[ -n "$ustart" ] && [ -n "$gstart" ] && [ "$ucount" -gt 1 ] && [ "$gcount" -gt 1 ] || return 1
+	unshare --user \
+		--map-users=0:$uid:1 --map-users=1:$ustart:$((ucount - 1)) \
+		--map-groups=0:$gid:1 --map-groups=1:$gstart:$((gcount - 1)) -- "$@"
+}
+
+build_dcopy() {
+	local bin=$DCOPY
+	mkdir -p "$INPUTS"
+	if [ ! -x "$bin" ] || [ "$ROOT/vm/dcopy/main.go" -nt "$bin" ]; then
+		(cd "$ROOT/vm/dcopy" && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o "$bin" .) || return 1
+	fi
+}
+
+prefetch_rootfs() {
+	userns_run bash -c 'find "$1" -type f -print0 2>/dev/null | xargs -0 -P 8 cat >/dev/null 2>&1' _ "$ROOTFS"
+}
+
+make_disk_head() {
+	local want=""
+	case $DISK_SIZE in
+		32G) want=$((32 * 1024 * 1024 * 1024)) ;;
+		7G) want=$((7 * 1024 * 1024 * 1024)) ;;
+		6G) want=$((6 * 1024 * 1024 * 1024)) ;;
+	esac
+	if [ -f "$DISK_HEAD" ] && { [ -z "$want" ] || [ "$(stat -c %s "$DISK_HEAD")" = "$want" ]; }; then
+		return 0
+	fi
+	command -v sfdisk >/dev/null 2>&1 || return 1
+	[ -f "$CLOUD" ] || return 1
+	mkdir -p "$INPUTS"
+	local raw=$CACHE/cloud.raw
+	"$QEMU_IMG" convert -f qcow2 -O raw "$CLOUD" "$raw" || return 1
+	dd if="$raw" of="$DISK_HEAD" bs=512 count=618496 status=none || return 1
+	truncate -s "$DISK_SIZE" "$DISK_HEAD"
+	echo ', +' | sfdisk --force -N 3 "$DISK_HEAD" >/dev/null 2>&1 || return 1
+	rm -f "$raw"
+}
+
+slice_root_image() {
+	[ -f "$PACKAGES" ] || return 1
+	[ "$DISK_SIZE" = 32G ] || return 1
+	command -v qemu-img numfmt >/dev/null 2>&1 || return 1
+	local raw=$CACHE/packages.disk bytes
+	bytes=$(numfmt --from=iec "$DISK_SIZE") || return 1
+	"$QEMU_IMG" convert -f qcow2 -O raw "$PACKAGES" "$raw" || return 1
+	build_dcopy || return 1
+	mkdir -p "$BASE"
+	rm -f "$ROOT_IMG_CACHE"
+	"$DCOPY" "$raw" "$ROOT_IMG_CACHE" 0 $((302 * 1024 * 1024)) || return 1
+	truncate -s $((bytes - 302 * 1024 * 1024)) "$ROOT_IMG_CACHE"
+	rm -f "$raw"
+	if command -v btrfs >/dev/null 2>&1 && ! btrfs check --readonly "$ROOT_IMG_CACHE" >/dev/null 2>&1; then
+		rm -f "$ROOT_IMG_CACHE"
+		return 1
+	fi
+	printf '%s\n' "$(packages_want)" > "$ROOT_IMG_SHA"
+}
+
+root_source_ready() {
+	[ -f "$ROOT_IMG_CACHE" ] && [ -f "$ROOT_IMG_SHA" ] && [ "$(cat "$ROOT_IMG_SHA")" = "$(packages_want)" ] && return 0
+	[ -f "$ROOT_IMG_INPUT" ] && [ -f "$ROOT_IMG_INPUT_SHA" ] && [ "$(cat "$ROOT_IMG_INPUT_SHA")" = "$(packages_want)" ] && return 0
+	[ -d "$ROOTFS" ] && [ -f "$ROOTFS_SHA" ] && [ "$(cat "$ROOTFS_SHA")" = "$(packages_want)" ] && return 0
+	return 1
+}
+
+pkg_digest() {
+	find "$PKGSTORE" -maxdepth 1 -type f -printf '%f %s %T@\n' 2>/dev/null | sort | sha256sum | cut -d' ' -f1
+}
+
+make_pkg_image() {
+	[ -d "$PKGSTORE" ] || return 1
+	[ -f "$PKG_IMG" ] && [ -f "$PKG_IMG_SHA" ] && [ "$(cat "$PKG_IMG_SHA")" = "$(pkg_digest)" ] && return 0
+	command -v mkfs.btrfs >/dev/null 2>&1 || return 1
+	mkdir -p "$INPUTS"
+	rm -f "$PKG_IMG.tmp"
+	truncate -s 1536M "$PKG_IMG.tmp"
+	mkfs.btrfs -q -m single -d single -K --nodesize 4096 --csum xxhash -r "$PKGSTORE" -L pkg "$PKG_IMG.tmp" || { rm -f "$PKG_IMG.tmp"; return 1; }
+	mv "$PKG_IMG.tmp" "$PKG_IMG"
+	pkg_digest > "$PKG_IMG_SHA"
+}
+
+make_target_base() {
+	[ -f "$TARGET_BASE" ] && return 0
+	[ -f "$CLOUD" ] || return 1
+	command -v sfdisk >/dev/null 2>&1 || return 1
+	mkdir -p "$INPUTS"
+	"$QEMU_IMG" convert -f qcow2 -O raw "$CLOUD" "$TARGET_BASE" || return 1
+	truncate -s "$TARGET_SIZE" "$TARGET_BASE"
+	echo ', +' | sfdisk --force -N 3 "$TARGET_BASE" >/dev/null 2>&1 || return 1
+}
+
+slice_raw_image() {
+	local src=$1 bytes
+	[ -f "$src" ] || return 1
+	bytes=$(stat -c %s "$src") || return 1
+	[ "$bytes" -gt $((302 * 1024 * 1024)) ] || return 1
+	mkdir -p "$BASE"
+	rm -f "$ROOT_IMG_CACHE"
+	"$DCOPY" "$src" "$ROOT_IMG_CACHE" 0 $((302 * 1024 * 1024)) || return 1
+	truncate -s $((bytes - 302 * 1024 * 1024)) "$ROOT_IMG_CACHE"
+	printf '%s\n' "$(packages_want)" > "$ROOT_IMG_SHA"
+}
+
+materialize_packages() {
+	make_disk_head || return 1
+	mkdir -p "$BASE"
+	command -v go >/dev/null 2>&1 || return 1
+
+	local raw=$CACHE/packages.raw image=$CACHE/root.btrfs current
+	current=$(packages_want)
+	mkdir -p "$CACHE"
+	local zst=$ROOT_IMG_ZST zst_sha=$ROOT_IMG_ZST_SHA
+	[ -f "$zst" ] && [ -f "$zst_sha" ] || { zst=$ROOT_IMG_INPUT; zst_sha=$ROOT_IMG_INPUT_SHA; }
+	if [ ! -f "$ROOT_IMG_CACHE" ] && [ -f "$zst" ] && [ -f "$zst_sha" ] && [ "$(cat "$zst_sha")" = "$current" ]; then
+		if command -v zstd >/dev/null 2>&1 && zstd -q -d --sparse -T0 -o "$ROOT_IMG_CACHE.tmp" "$zst"; then
+			mv "$ROOT_IMG_CACHE.tmp" "$ROOT_IMG_CACHE"
+			printf '%s\n' "$current" > "$ROOT_IMG_SHA"
+			echo "root image restored"
+		else
+			rm -f "$ROOT_IMG_CACHE.tmp"
+		fi
+	fi
+	cp --reflink=auto "$DISK_HEAD" "$raw"
+	build_dcopy || return 1
+	if [ -f "$ROOT_IMG_CACHE" ] && [ -f "$ROOT_IMG_SHA" ] && [ "$(cat "$ROOT_IMG_SHA")" = "$current" ]; then
+		"$DCOPY" "$ROOT_IMG_CACHE" "$raw" $((302 * 1024 * 1024)) || return 1
+		rm -f "$PACKAGES"
+		"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$raw" "$PACKAGES" >/dev/null
+		echo "packages layer cached"
+		return 0
+	fi
+
+	[ -d "$ROOTFS" ] && [ -f "$ROOTFS_SHA" ] && [ "$(cat "$ROOTFS_SHA")" = "$current" ] || return 1
+	command -v mkfs.btrfs >/dev/null 2>&1 || return 1
+	rm -f "$image"
+	truncate -s "$ROOT_IMG" "$image"
+	prefetch_rootfs &
+	userns_run mkfs.btrfs -q -m single -d single -K --nodesize 4096 --csum xxhash \
+		-O ^free-space-tree,^block-group-tree -r "$ROOTFS" -U "$ROOT_UUID" -L root "$image" || return 1
+	wait || true
+	"$DCOPY" "$image" "$raw" $((302 * 1024 * 1024)) || return 1
+	if [ -z "$ARCH_SNAPSHOT" ] && cp --reflink=auto "$image" "$ROOT_IMG_CACHE.tmp"; then
+		mv "$ROOT_IMG_CACHE.tmp" "$ROOT_IMG_CACHE"
+		printf '%s\n' "$current" > "$ROOT_IMG_SHA"
+	fi
+	rm -f "$image" "$PACKAGES"
+	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$raw" "$PACKAGES" >/dev/null
+}
+
+build_parallel() {
+	[ -z "$ARCH_SNAPSHOT" ] || return 1
+	[ -f "$DIRECT/initramfs.img" ] || return 1
+	[ -f "$CACHE/seed/packages.txt" ] || return 1
+	[ -d "$PKGSTORE" ] || return 1
+	command -v qemu-img sfdisk mcopy mkfs.vfat >/dev/null 2>&1 || return 1
+
+	local target=$CACHE/parallel-target.img builder=$CACHE/parallel-builder.qcow2 seed=$CACHE/parallel-seed.img log=$CACHE/parallel.log
+	rm -f "$target" "$builder" "$seed" "$log"
+	parallel_script | sed "s#@EXCLUDE@#$VM_EXCLUDE#" > "$CACHE/seed/parallel.sh"
+	truncate -s 32M "$seed"
+	mkfs.vfat -n cidata "$seed" >/dev/null 2>&1 || return 1
+	mcopy -i "$seed" "$CACHE/seed/parallel.sh" ::boot.sh || return 1
+	mcopy -i "$seed" "$CACHE/seed/packages.txt" ::packages.txt || return 1
+	local f
+	for f in yudae-desktop.service yudaemond.service; do
+		mcopy -i "$seed" "$CACHE/seed/$f" "::$f" || return 1
+	done
+	cat > "$CACHE/seed/parallel.service" <<'UNIT'
+[Unit]
+Description=dotfiles parallel build
+After=local-fs.target
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /mnt/seed/boot.sh
+StandardOutput=journal+console
+StandardError=journal+console
+[Install]
+WantedBy=provision.target
+UNIT
+	cat > "$CACHE/seed/parallel.target" <<'UNIT'
+[Unit]
+Description=dotfiles parallel build
+Requires=provision.service
+After=provision.service
+UNIT
+	mcopy -i "$seed" "$CACHE/seed/parallel.service" ::provision.service || return 1
+	mcopy -i "$seed" "$CACHE/seed/parallel.target" ::provision.target || return 1
+	local current
+	current=$(packages_want)
+	if [ -f "$PKGSTORE/parallel.sha" ] && [ "$(cat "$PKGSTORE/parallel.sha")" = "$current" ] &&
+		[ -f "$PKGSTORE/files.txt" ] && [ -f "$PKGSTORE/pacman-local.tar" ]; then
+		: > "$CACHE/seed/fast"
+		mcopy -i "$seed" "$CACHE/seed/fast" ::fast || return 1
+	else
+		rm -f "$CACHE/seed/fast"
+	fi
+
+	make_pkg_image || return 1
+	make_target_base || return 1
+	cp --reflink=auto "$TARGET_BASE" "$target" || return 1
+	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -b "$CLOUD" -F qcow2 "$builder" 32G >/dev/null || return 1
+	echo "parallel build start"
+	timeout 600 "$QEMU" -name dotfiles-parallel -machine q35,accel=kvm -cpu host -smp "$(nproc)" -m 8G \
+		-kernel "$(cat "$DIRECT/kernel")" -initrd "$DIRECT/initramfs.img" \
+		-append "console=ttyS0 root=/dev/vda3 rw dotfiles.parallel=1" \
+		-drive "file=$builder,if=virtio,format=qcow2,cache=writeback" \
+		-drive "file=$seed,if=virtio,format=raw,readonly=on" \
+		-drive "file=$target,if=virtio,format=raw,cache=writeback" \
+		-drive "file=$PKG_IMG,if=virtio,format=raw,readonly=on" \
+		-device virtio-rng-pci -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
+		-display none -serial "file:$log" -no-reboot || true
+	grep -q 'dotfiles: parallel done' "$log" || { rm -f "$target" "$builder" "$seed"; return 1; }
+	cp --reflink=auto "$target" "$CACHE/packages.raw" || { rm -f "$target" "$builder" "$seed"; return 1; }
+	slice_raw_image "$target" || true
+	rm -f "$PACKAGES"
+	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$CACHE/packages.raw" "$PACKAGES" >/dev/null || return 1
+	rm -f "$target" "$builder" "$seed"
+	echo "parallel build ready"
+}
+
+cmd_packages() {
+	mkdir -p "$CACHE/seed"
+	local source=${DOTFILES_VM_PACKAGES:-}
+	if [ -n "$source" ]; then
+		cp "$source" "$CACHE/seed/packages.txt"
+	else
+		pacman -Qqen > "$CACHE/seed/packages.txt"
+	fi
+
+	local stamp=$CACHE/packages.sha current delta=0
+	current=$(packages_want)
+
+	if [ "$FORCE" -eq 0 ] && [ -f "$PACKAGES" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$current" ]; then
+		echo "packages layer cached $PACKAGES"
+		return
+	fi
+
+	if vms_exist; then
+		echo "refused: VMs exist under $RUNS; destroy them first (yudae vm list)" >&2
+		exit 1
+	fi
+
+	if [ -z "$ARCH_SNAPSHOT" ] && root_source_ready; then
+		if materialize_packages; then
+			rm -f "$GOLDEN" "$CACHE/golden.sha"
+			printf '%s\n' "$current" > "$stamp"
+			echo "packages layer materialized $PACKAGES"
+			return
+		fi
+		echo "materialize failed, falling back to pacman" >&2
+	fi
+
+	if [ "$FORCE" -eq 0 ] && [ -z "$ARCH_SNAPSHOT" ] && [ -f "$BASE/packages.qcow2" ] && [ -f "$BASE/packages.sha" ] && [ -f "$BASE/cloud.qcow2" ] && [ "$(cat "$BASE/packages.sha")" = "$current" ]; then
+		mkdir -p "$CACHE"
+		cp --reflink=auto "$BASE/packages.qcow2" "$PACKAGES"
+		rm -f "$GOLDEN" "$CACHE/golden.sha"
+		printf '%s\n' "$current" > "$stamp"
+		echo "packages layer restored $PACKAGES"
+		return
+	fi
+
+	cmd_fetch
+
+	if [ -f "$PACKAGES" ] && [ "$FORCE" -eq 0 ]; then
+		delta=1
+	else
+		: > "$CACHE/seed/provision.sh"
+		packages_seed
+		direct_initramfs || true
+		if build_parallel; then
+			rm -f "$GOLDEN" "$CACHE/golden.sha"
+			printf '%s\n' "$current" > "$stamp"
+			echo "packages layer ready $PACKAGES"
+			if [ -z "$ARCH_SNAPSHOT" ]; then
+				mkdir -p "$BASE"
+				if [ -f "$CACHE/packages.raw" ]; then
+					cp --reflink=auto "$CACHE/packages.raw" "$BASE/packages.raw"
+					"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$BASE/packages.raw" "$BASE/packages.qcow2" >/dev/null
+				else
+					cp --reflink=auto "$PACKAGES" "$BASE/packages.qcow2"
+				fi
+				cp "$stamp" "$BASE/packages.sha"
+			fi
+			return
+		fi
+		echo "parallel build failed, falling back to pacman" >&2
+		mkdir -p "$CACHE"
+		rm -f "$PACKAGES"
+		"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F qcow2 -b "$CLOUD" "$PACKAGES" 32G
+	fi
+
+	local snapshot_line=""
+	if [ -n "$ARCH_SNAPSHOT" ]; then
+		snapshot_line="echo 'Server = https://archive.archlinux.org/repos/${ARCH_SNAPSHOT}/\$repo/os/\$arch' > /etc/pacman.d/mirrorlist"
+	fi
+
+	if [ "$delta" -eq 1 ]; then
+		delta_script | sed "s|@SNAPSHOT@|$snapshot_line|; s#@EXCLUDE@#$VM_EXCLUDE#" > "$CACHE/seed/provision.sh"
+		if "$QEMU_IMG" snapshot -l "$PACKAGES" 2>/dev/null | grep -q delta-backup; then
+			"$QEMU_IMG" snapshot -a delta-backup "$PACKAGES" >/dev/null 2>&1 || true
+			"$QEMU_IMG" snapshot -d delta-backup "$PACKAGES" >/dev/null 2>&1 || true
+		fi
+		"$QEMU_IMG" snapshot -c delta-backup "$PACKAGES" >/dev/null
+	else
+		provision_script | sed "s|@SNAPSHOT@|$snapshot_line|; s#@EXCLUDE@#$VM_EXCLUDE#" > "$CACHE/seed/provision.sh"
+	fi
+
+	packages_seed
+	direct_initramfs || true
+	run_packages_vm
+
+	if [ "$delta" -eq 1 ]; then
+		if ! grep -q 'dotfiles: delta done' "$LOG" || ! grep -q 'dotfiles-golden-ok' "$LOG"; then
+			"$QEMU_IMG" snapshot -a delta-backup "$PACKAGES" >/dev/null 2>&1 || true
+			"$QEMU_IMG" snapshot -d delta-backup "$PACKAGES" >/dev/null 2>&1 || true
+			echo "delta failed, packages rolled back, see $LOG" >&2
+			exit 1
+		fi
+		"$QEMU_IMG" snapshot -d delta-backup "$PACKAGES" >/dev/null 2>&1 || true
+	else
+		if ! grep -q 'dotfiles: provision done' "$LOG" || ! grep -q 'dotfiles-golden-ok' "$LOG"; then
+			rm -f "$PACKAGES"
+			echo "provision failed, see $LOG" >&2
+			exit 1
+		fi
+	fi
+
+	rm -f "$GOLDEN" "$CACHE/golden.sha"
+	printf '%s\n' "$current" > "$stamp"
+	echo "packages layer ready $PACKAGES"
+
+	if [ "$delta" -eq 1 ]; then
+		compact_packages
+	fi
+
+	if [ -z "$ARCH_SNAPSHOT" ]; then
+		mkdir -p "$BASE"
+		if [ -f "$CACHE/packages.raw" ]; then
+			cp --reflink=auto "$CACHE/packages.raw" "$BASE/packages.raw"
+			"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F raw -b "$BASE/packages.raw" "$BASE/packages.qcow2" >/dev/null
+		else
+			cp --reflink=auto "$PACKAGES" "$BASE/packages.qcow2"
+		fi
+		cp "$stamp" "$BASE/packages.sha"
+		if [ "$delta" -eq 0 ]; then
+			printf '%s\n' "$current" > "$PKGSTORE/parallel.sha"
+		fi
+		slice_root_image || echo "root image cache skipped" >&2
+	fi
+}
+
+packages_seed() {
+	cat > "$CACHE/seed/meta-data" <<EOF
+instance-id: dotfiles-packages-$(date +%s%N)
+local-hostname: yudae-guest
+EOF
+	{
+		echo "#cloud-config"
+		echo "hostname: yudae-guest"
+		echo "users:"
+		echo "  - default"
+		echo "  - name: gabriel"
+		echo "    uid: 1000"
+		echo "    groups: wheel,video,render,input"
+		echo "    shell: /bin/bash"
+		echo "    sudo: ALL=(ALL) NOPASSWD:ALL"
+		echo "    lock_passwd: true"
+		echo "ssh_pwauth: false"
+		echo "write_files:"
+		echo "  - path: /opt/packages.txt"
+		echo "    permissions: '0644'"
+		echo "    content: |"
+		sed 's/^/      /' "$CACHE/seed/packages.txt"
+		echo "  - path: /opt/provision.sh"
+		echo "    permissions: '0755'"
+		echo "    content: |"
+		sed 's/^/      /' "$CACHE/seed/provision.sh"
+		echo "  - path: /etc/systemd/system/yudae-desktop.service"
+		echo "    permissions: '0644'"
+		echo "    content: |"
+		desktop_unit | sed 's/^/      /'
+		echo "  - path: /etc/systemd/system/yudaemond.service"
+		echo "    permissions: '0644'"
+		echo "    content: |"
+		daemon_unit | sed 's/^/      /'
+		echo "  - path: /opt/golden-setup.sh"
+		echo "    permissions: '0755'"
+		echo "    content: |"
+		golden_setup | sed 's/^/      /'
+		echo "runcmd:"
+		echo "  - [ bash, /opt/provision.sh ]"
+	} > "$CACHE/seed/user-data"
+
+	rm -f "$SEED"
+	truncate -s 16M "$SEED"
+	mkfs.vfat -n cidata "$SEED" >/dev/null
+	mcopy -i "$SEED" "$CACHE/seed/user-data" ::user-data
+	mcopy -i "$SEED" "$CACHE/seed/meta-data" ::meta-data
+	mcopy -i "$SEED" "$CACHE/seed/provision.sh" ::provision.sh
+	mcopy -i "$SEED" "$CACHE/seed/packages.txt" ::packages.txt
+	desktop_unit > "$CACHE/seed/yudae-desktop.service"
+	daemon_unit > "$CACHE/seed/yudaemond.service"
+	golden_setup > "$CACHE/seed/golden-setup.sh"
+	cat > "$CACHE/seed/boot.sh" <<'BOOT'
+#!/bin/bash
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+mkdir -p /mnt/seed
+mountpoint -q /mnt/seed || mount -t vfat /dev/vdb /mnt/seed 2>/dev/null || true
+mkdir -p /opt /etc/systemd/system
+cp /mnt/seed/packages.txt /opt/packages.txt
+cp /mnt/seed/golden-setup.sh /opt/golden-setup.sh
+cp /mnt/seed/yudae-desktop.service /etc/systemd/system/yudae-desktop.service
+cp /mnt/seed/yudaemond.service /etc/systemd/system/yudaemond.service
+systemctl stop systemd-resolved systemd-networkd NetworkManager 2>/dev/null || true
+iface=$(ip -o link show | awk -F': ' '$2 != "lo" {print $2; exit}')
+[ -n "$iface" ] || iface=eth0
+ip link set "$iface" up 2>/dev/null || true
+ip addr replace 10.0.2.15/24 dev "$iface" 2>/dev/null || true
+ip route replace default via 10.0.2.2 2>/dev/null || true
+rm -f /etc/resolv.conf
+printf 'nameserver 10.0.2.3\n' > /etc/resolv.conf
+growpart /dev/vda 3 >/dev/null 2>&1 || parted -s /dev/vda resizepart 3 100% >/dev/null 2>&1 || true
+partx -u /dev/vda >/dev/null 2>&1 || true
+btrfs filesystem resize max / >/dev/null 2>&1 || true
+hostname yudae-guest 2>/dev/null || true
+printf 'yudae-guest\n' > /etc/hostname
+if [ -d /mnt/hostpkg/gnupg ]; then
+	mkdir -p /etc/pacman.d/gnupg
+	cp -a /mnt/hostpkg/gnupg/. /etc/pacman.d/gnupg/ 2>/dev/null || true
+fi
+if [ ! -e /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -e /etc/pacman.d/gnupg/pubring.kbx ]; then
+	pacman-key --init >/dev/null 2>&1 || true
+	pacman-key --populate archlinux >/dev/null 2>&1 || true
+fi
+mkdir -p /mnt/hostpkg/gnupg
+cp -a /etc/pacman.d/gnupg/. /mnt/hostpkg/gnupg/ 2>/dev/null || true
+bash /mnt/seed/provision.sh
+poweroff -f
+BOOT
+	cat > "$CACHE/seed/provision.service" <<'UNIT'
+[Unit]
+Description=dotfiles provision
+After=local-fs.target
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /mnt/seed/boot.sh
+StandardOutput=journal+console
+StandardError=journal+console
+[Install]
+WantedBy=provision.target
+UNIT
+	cat > "$CACHE/seed/provision.target" <<'UNIT'
+[Unit]
+Description=dotfiles provision
+Requires=provision.service
+After=provision.service
+UNIT
+	mcopy -i "$SEED" "$CACHE/seed/yudae-desktop.service" ::yudae-desktop.service
+	mcopy -i "$SEED" "$CACHE/seed/yudaemond.service" ::yudaemond.service
+	mcopy -i "$SEED" "$CACHE/seed/golden-setup.sh" ::golden-setup.sh
+	mcopy -i "$SEED" "$CACHE/seed/boot.sh" ::boot.sh
+	mcopy -i "$SEED" "$CACHE/seed/provision.service" ::provision.service
+	mcopy -i "$SEED" "$CACHE/seed/provision.target" ::provision.target
+}
+
+direct_initramfs() {
+	local dir=$DIRECT kver kernel module file
+	kver=$(uname -r)
+	kernel=/usr/lib/modules/$kver/vmlinuz
+	[ -f "$kernel" ] || return 1
+	command -v go >/dev/null 2>&1 || return 1
+	if [ -x "$dir/init" ] && [ -f "$dir/initramfs.img" ] && [ -f "$dir/kernel" ] &&
+		[ "$(cat "$dir/kernel")" = "$kernel" ] && [ "$dir/initramfs.img" -nt "$ROOT/vm/direct-init/main.go" ]; then
+		return 0
+	fi
+
+	mkdir -p "$dir/initramfs/modules"
+	if [ ! -x "$dir/init" ] || [ "$ROOT/vm/direct-init/main.go" -nt "$dir/init" ]; then
+		(cd "$ROOT/vm/direct-init" && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o "$dir/init" .) || return 1
+	fi
+	cp -f "$dir/init" "$dir/initramfs/init"
+	chmod 755 "$dir/initramfs/init"
+
+	for module in fat vfat failover net_failover virtio_net netfs 9pnet 9p 9pnet_virtio; do
+		file=$(find "/usr/lib/modules/$kver/kernel" -name "$module.ko.zst" -print -quit)
+		[ -n "$file" ] || return 1
+		zstd -q -d -f "$file" -o "$dir/initramfs/modules/$module.ko" || return 1
+	done
+
+	(cd "$dir/initramfs" && find . -print0 | cpio --null -o -H newc 2>/dev/null | gzip -9) > "$dir/initramfs.img" || return 1
+	printf '%s\n' "$kernel" > "$dir/kernel"
+}
+
+prefetch_packages() {
+	local urls=$PKGSTORE/urls.txt
+	[ -f "$urls" ] || return 0
+	export PKGSTORE
+	export MIRRORS="https://geo.mirror.pkgbuild.com https://mirror.rackspace.com/archlinux https://mirrors.kernel.org/archlinux https://archlinux.mirror.wearetriple.com"
+	awk 'NF && $0 !~ /^#/' "$urls" | xargs -P 12 -I{} sh -c '
+		url=$1
+		name=$(basename "$url")
+		[ -f "$PKGSTORE/$name" ] && exit 0
+		path=$(printf "%s" "$url" | sed -E "s#^https?://[^/]+##")
+		mirror=$(printf "%s\n" $MIRRORS | shuf -n1)
+		curl -fsSL --retry 1 -o "$PKGSTORE/$name.part" "$mirror$path" && mv "$PKGSTORE/$name.part" "$PKGSTORE/$name"
+	' _ {}
+}
+
+run_packages_vm() {
+	echo "provision $PACKAGES (log $LOG)"
+	: > "$LOG"
+
+	mkdir -p "$PKGSTORE"
+	if [ -z "$(find "$PKGSTORE" -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)" ]; then
+		find "$CACHE/pkgcache" -maxdepth 1 -type f -exec cp -n {} "$PKGSTORE/" \; 2>/dev/null || true
+	fi
+	[ -f "$PKGSTORE/urls.txt" ] || cp "$CACHE/pkgcache/urls.txt" "$PKGSTORE/" 2>/dev/null || true
+	[ -d "$PKGSTORE/gnupg" ] || cp -a "$CACHE/pkgcache/gnupg" "$PKGSTORE/" 2>/dev/null || true
+
+	(prefetch_packages) &
+
+	local direct=0
+	[ -f "$DIRECT/initramfs.img" ] && [ -f "$DIRECT/kernel" ] && direct=1
+
+	if [ "$direct" -eq 1 ]; then
+		timeout 1200 "$QEMU" \
+			-name dotfiles-packages \
+			-machine q35,accel=kvm \
+			-cpu host \
+			-smp "$(nproc)" \
+			-m 8G \
+			-kernel "$(cat "$DIRECT/kernel")" \
+			-initrd "$DIRECT/initramfs.img" \
+			-append "console=ttyS0 root=/dev/vda3 rw systemd.unit=provision.target" \
+			-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe,discard=unmap" \
+			-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
+			-virtfs "local,path=$PKGSTORE,mount_tag=hostpkg,security_model=none" \
+			-device virtio-rng-pci \
+			-netdev user,id=net0 \
+			-device virtio-net-pci,netdev=net0 \
+			-display none \
+			-serial "file:$LOG" \
+			-no-reboot
+	else
+		timeout 1200 "$QEMU" \
+			-name dotfiles-packages \
+			-machine q35,accel=kvm \
+			-cpu host \
+			-smp "$(nproc)" \
+			-m 8G \
+			-drive "file=$PACKAGES,if=virtio,format=qcow2,cache=unsafe,discard=unmap" \
+			-drive "file=$SEED,if=virtio,format=raw,readonly=on" \
+			-virtfs "local,path=$PKGSTORE,mount_tag=hostpkg,security_model=none" \
+			-device virtio-rng-pci \
+			-netdev user,id=net0 \
+			-device virtio-net-pci,netdev=net0 \
+			-display none \
+			-serial "file:$LOG" \
+			-no-reboot
+	fi
+}
+
+compact_packages() {
+	local cap=${DOTFILES_VM_PACKAGES_CAP_MB:-8192} mb tmp
+	mb=$(du -sm "$PACKAGES" | cut -f1)
+	[ "$mb" -le "$cap" ] && return
+	tmp=$PACKAGES.compact
+	rm -f "$tmp"
+	if "$QEMU_IMG" convert -O qcow2 -o lazy_refcounts=on -b "$CLOUD" -F qcow2 "$PACKAGES" "$tmp"; then
+		mv "$tmp" "$PACKAGES"
+		echo "compacted packages layer to $(du -sm "$PACKAGES" | cut -f1)MB"
+	else
+		rm -f "$tmp"
+	fi
+}
+
+desktop_unit() {
+	cat <<'UNIT'
+[Unit]
+Description=Hyprland desktop
+After=yudaemond.service systemd-user-sessions.service
+RequiresMountsFor=/home/gabriel/dotfiles
+Conflicts=getty@tty1.service
+
+[Service]
+User=gabriel
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=journal+console
+Environment=HOME=/home/gabriel
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=XDG_CONFIG_HOME=/home/gabriel/.config
+Environment=XDG_SESSION_TYPE=wayland
+Environment=XDG_CURRENT_DESKTOP=Hyprland
+Environment=XDG_SESSION_DESKTOP=Hyprland
+ExecStart=/usr/bin/start-hyprland
+Restart=no
+
+[Install]
+WantedBy=graphical.target
+UNIT
+}
+
+daemon_unit() {
+	cat <<'UNIT'
+[Unit]
+Description=yudaemond guest
+After=local-fs.target user-runtime-dir@1000.service
+Requires=user-runtime-dir@1000.service
+RequiresMountsFor=/home/gabriel/dotfiles
+
+[Service]
+User=gabriel
+Group=gabriel
+Environment=HOME=/home/gabriel
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStartPre=+/bin/sh -c "echo yudaemond-start > /dev/ttyS0"
+ExecStart=/home/gabriel/dotfiles/daemon/zig-out/bin/yudaemond run
+StandardOutput=journal+console
+StandardError=journal+console
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+}
+
+golden_setup() {
+	cat <<'SETUP'
+#!/bin/bash
+id -u gabriel >/dev/null 2>&1 || useradd -m -u 1000 -G wheel,video,render,input -s /bin/bash gabriel
+mkdir -p /etc/sudoers.d
+printf 'gabriel ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/gabriel
+chmod 440 /etc/sudoers.d/gabriel
+mkdir -p /home/gabriel/dotfiles /run/user/1000
+chown gabriel:gabriel /run/user/1000
+grep -q 'dotfiles /home/gabriel/dotfiles virtiofs' /etc/fstab || echo 'dotfiles /home/gabriel/dotfiles virtiofs ro,nofail,defaults 0 0' >> /etc/fstab
+mkdir -p /home/gabriel/.config
+ln -sfn /home/gabriel/dotfiles/hypr /home/gabriel/.config/hypr
+mkdir -p /etc/systemd/network
+cat > /etc/systemd/network/20-wired.network <<'NET'
+[Match]
+Name=en* eth0
+[Network]
+DHCP=yes
+NET
+systemctl enable systemd-networkd systemd-resolved
+systemctl daemon-reload
+systemctl enable yudaemond yudae-desktop
+systemctl set-default graphical.target
+passwd -d root >/dev/null 2>&1 || true
+touch /var/lib/dotfiles-golden
+echo dotfiles-golden-ok > /dev/ttyS0
+SETUP
+}
+
+cmd_golden() {
+	if [ ! -f "$PACKAGES" ] || [ ! -f "$CACHE/packages.sha" ]; then
+		cmd_packages
+	fi
+
+	mkdir -p "$CACHE"
+	local stamp=$CACHE/golden.sha current want
+	want=$(packages_want)
+	if [ "$(cat "$CACHE/packages.sha" 2>/dev/null)" != "$want" ]; then
+		cmd_packages
+	fi
+	current=$(cat "$CACHE/packages.sha")
+
+	if [ "$FORCE" -eq 0 ] && [ -f "$GOLDEN" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$current" ]; then
+		echo "golden layer cached $GOLDEN"
+		return
+	fi
+
+	if vms_exist; then
+		echo "refused: VMs exist under $RUNS; destroy them first (yudae vm list)" >&2
+		exit 1
+	fi
+
+	rm -f "$GOLDEN"
+	"$QEMU_IMG" create -f qcow2 -o lazy_refcounts=on -F qcow2 -b "$PACKAGES" "$GOLDEN" 32G
+	printf '%s\n' "$current" > "$stamp"
+	echo "golden layer ready $GOLDEN"
+}
+
+cmd_backup() {
+	[ -f "$ROOT_IMG_CACHE" ] || { echo "no compiled root image" >&2; exit 1; }
+	command -v zstd >/dev/null 2>&1 || { echo "zstd missing" >&2; exit 1; }
+	zstd -q -T0 -3 -o "$ROOT_IMG_ZST.tmp" "$ROOT_IMG_CACHE" || exit 1
+	mv "$ROOT_IMG_ZST.tmp" "$ROOT_IMG_ZST"
+	if [ -f "$ROOT_IMG_SHA" ]; then cat "$ROOT_IMG_SHA" > "$ROOT_IMG_ZST_SHA"; fi
+	mkdir -p "$INPUTS"
+	cp --reflink=auto "$ROOT_IMG_ZST" "$ROOT_IMG_INPUT" 2>/dev/null || cp "$ROOT_IMG_ZST" "$ROOT_IMG_INPUT"
+	cp "$ROOT_IMG_ZST_SHA" "$ROOT_IMG_INPUT_SHA"
+	echo "root image backup $ROOT_IMG_ZST"
+}
+
+cmd_ensure() {
+	[ -f "$GOLDEN" ] && return
+	cmd_golden
+}
+
+cmd_overlay() {
+	[ $# -ge 1 ] || usage
+	local name=$1
+	local base=${2:-}
+	if [ -n "$base" ]; then
+		local golden="$CACHE/golden-$base.qcow2"
+		[ "$base" = current ] && golden=$GOLDEN
+		[ -f "$golden" ] || { echo "golden $base not built" >&2; exit 1; }
+	else
+		cmd_ensure
+		local golden="$GOLDEN"
+	fi
+	mkdir -p "$RUNS/$name"
+	rm -f "$RUNS/$name/disk.qcow2"
+	"$QEMU_IMG" create -f qcow2 -F qcow2 -b "$golden" "$RUNS/$name/disk.qcow2" 32G
+	echo "$RUNS/$name/disk.qcow2"
+}
+
+cmd_snapshot() {
+	[ $# -ge 2 ] || usage
+	"$QEMU_IMG" snapshot -c "$2" "$RUNS/$1/disk.qcow2"
+	"$QEMU_IMG" snapshot -l "$RUNS/$1/disk.qcow2"
+}
+
+cmd_restore() {
+	[ $# -ge 2 ] || usage
+	"$QEMU_IMG" snapshot -a "$2" "$RUNS/$1/disk.qcow2"
+	echo "restored $2"
+}
+
+cmd_list() {
+	local golden tag
+	for golden in "$CACHE"/golden*.qcow2; do
+		[ -f "$golden" ] || continue
+		tag=$(basename "$golden" .qcow2)
+		tag=${tag#golden-}
+		[ "$tag" = "golden" ] && tag=current
+		echo "golden $tag"
+	done
+	find "$RUNS" -maxdepth 2 -name disk.qcow2 -printf '%h\n' 2>/dev/null | xargs -r -n1 basename
+}
+
+command=${1:-}
+shift || true
+
+case "$command" in
+	fetch) cmd_fetch ;;
+	packages|golden)
+		while [ $# -gt 0 ]; do
+			case "$1" in
+				--snapshot)
+					shift
+					[ $# -gt 0 ] || usage
+					ARCH_SNAPSHOT=$1
+					;;
+				--force)
+					FORCE=1
+					;;
+				*) usage ;;
+			esac
+			shift
+		done
+		if [ -n "$ARCH_SNAPSHOT" ]; then
+			slug=$(echo "$ARCH_SNAPSHOT" | tr '/' '-')
+			PACKAGES=$CACHE/packages-$slug.qcow2
+			GOLDEN=$CACHE/golden-$slug.qcow2
+		fi
+		if [ "$command" = packages ]; then cmd_packages; else cmd_golden; fi
+		;;
+	backup) cmd_backup ;;
+	ensure) cmd_ensure ;;
+	overlay) cmd_overlay "$@" ;;
+	snapshot) cmd_snapshot "$@" ;;
+	restore) cmd_restore "$@" ;;
+	list) cmd_list ;;
+	*) usage ;;
+esac

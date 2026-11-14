@@ -1,0 +1,27 @@
+import QtQuick
+import qs.ui
+import qs
+import qs.services
+
+BarStat {
+	id: root
+
+	inkId: "memory"
+
+	readonly property var memory: Yudae.system.memory || null
+	readonly property real usedGB: root.memory ? root.memory.used / 1024 / 1024 : 0
+
+	pct: root.memory ? root.memory.pct : 0
+	barColor: root.memory && root.memory.color ? root.memory.color : Config.memoryBase
+	icon: Config.iconMemory
+	value: root.usedGB.toFixed(1) + "G"
+
+	popupContent: Component {
+		MemoryMonitor {
+			id: monitor
+
+			source: root
+			onCloseRequested: root.closePopup()
+		}
+	}
+}

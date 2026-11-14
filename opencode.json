@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "yudae": {
+        "type": "local",
+        "command": [
+          "/home/gabriel/dotfiles/scripts/yudae",
+          "mcp"
+        ]
+      }
+    }
+  }
+}
