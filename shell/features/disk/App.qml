@@ -22,6 +22,7 @@ AppWindow {
 	})
 	property var cacheRows: []
 	property var pending: null
+	property var job: null
 	property var mapSelection: ({})
 	property var packageSelection: ({})
 	property var cacheSelection: ({})
@@ -96,6 +97,11 @@ AppWindow {
 		}
 
 		openPath(focus.substring(0, cut));
+	}
+
+	Component.onCompleted: {
+		win.loadPackages();
+		win.loadCaches();
 	}
 
 	function selectTab(name) {
@@ -218,27 +224,24 @@ AppWindow {
 		};
 	}
 
-	function cleanFileAt(items, index) {
-		if (index >= items.length) {
+	function step(tasks, index, failed) {
+		if (index >= tasks.length) {
+			win.job = { done: tasks.length, total: tasks.length, label: "", failed: failed };
 			win.mapSelection = ({});
-			Yudae.diskCommand("view", { path: win.focus });
-			return;
-		}
-
-		Yudae.diskCommand("delete", { path: items[index].path }, function () {
-			win.cleanFileAt(items, index + 1);
-		});
-	}
-
-	function cleanCacheAt(ids, index) {
-		if (index >= ids.length) {
+			win.packageSelection = ({});
 			win.cacheSelection = ({});
+			Yudae.diskCommand("view", { path: win.focus });
+			win.loadPackages();
 			win.loadCaches();
+			jobTimer.restart();
 			return;
 		}
 
-		Yudae.diskCommand("clean", { id: ids[index], confirm: true }, function () {
-			win.cleanCacheAt(ids, index + 1);
+		win.job = { done: index, total: tasks.length, label: tasks[index].label, failed: failed };
+
+		tasks[index].run(function (result) {
+			const bad = !result || result.ok === false || (result.error && result.error.length > 0);
+			win.step(tasks, index + 1, failed + (bad ? 1 : 0));
 		});
 	}
 
@@ -247,20 +250,28 @@ AppWindow {
 			return;
 
 		const action = win.pending;
+		const tasks = [];
+
+		action.items.forEach(function (item) {
+			tasks.push({ label: item.name, run: function (done) { Yudae.diskCommand("delete", { path: item.path }, done); } });
+		});
+
+		action.ids.forEach(function (id) {
+			tasks.push({ label: id, run: function (done) { Yudae.diskCommand("clean", { id: id, confirm: true }, done); } });
+		});
+
+		if (action.names.length > 0)
+			tasks.push({ label: action.names.length + " packages", run: function (done) { Yudae.diskCommand("uninstall", { names: action.names, confirm: true }, done); } });
+
 		win.pending = null;
+		win.step(tasks, 0, 0);
+	}
 
-		if (action.names.length > 0) {
-			Yudae.diskCommand("uninstall", { names: action.names, confirm: true }, function () {
-				win.packageSelection = ({});
-				win.loadPackages();
-			});
-		}
+	Timer {
+		id: jobTimer
 
-		if (action.ids.length > 0)
-			win.cleanCacheAt(action.ids, 0);
-
-		if (action.items.length > 0)
-			win.cleanFileAt(action.items, 0);
+		interval: 3500
+		onTriggered: win.job = null
 	}
 
 	Rectangle {
@@ -402,8 +413,7 @@ AppWindow {
 
 				RowList {
 					anchors.fill: parent
-					anchors.margins: 22
-					anchors.bottomMargin: win.pending ? 62 : 22
+					anchors.bottomMargin: win.pending || win.job ? 40 : 0
 					rows: win.packageItems
 					glyph: Config.diskIconPackage
 					selected: win.packageSelection
@@ -433,8 +443,7 @@ AppWindow {
 
 				RowList {
 					anchors.fill: parent
-					anchors.margins: 22
-					anchors.bottomMargin: win.pending ? 62 : 22
+					anchors.bottomMargin: win.pending || win.job ? 40 : 0
 					rows: win.cacheItems
 					glyph: Config.diskIconCache
 					selected: win.cacheSelection
@@ -558,8 +567,21 @@ AppWindow {
 		anchors.bottom: parent.bottom
 		height: 40
 		z: 4
-		visible: win.pending !== null
+		visible: win.pending !== null || win.job !== null
 		color: Config.launcherSearchBox
+
+		Rectangle {
+			anchors.left: parent.left
+			anchors.top: parent.top
+			anchors.bottom: parent.bottom
+			width: win.job ? parent.width * win.job.done / Math.max(1, win.job.total) : 0
+			color: Config.diskAccent
+			opacity: 0.35
+
+			Behavior on width {
+				NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+			}
+		}
 
 		Text {
 			anchors.left: parent.left
@@ -572,11 +594,17 @@ AppWindow {
 			font.family: Config.fontFamily
 			font.pixelSize: 12
 			color: Config.foreground
-			text: win.pending ? ("Are you sure you want to delete " + (win.pending.count === 1 ? "this item" : "these " + win.pending.count + " items") + "?") : ""
+			text: win.job
+				? (win.job.done < win.job.total
+					? "Cleaning " + (win.job.done + 1) + " of " + win.job.total + "  " + win.job.label
+					: "Cleaned " + (win.job.total - win.job.failed) + " of " + win.job.total + (win.job.failed > 0 ? "  " + win.job.failed + " failed" : ""))
+				: (win.pending ? "Are you sure you want to delete " + (win.pending.count === 1 ? "this item" : "these " + win.pending.count + " items") + "?" : "")
 		}
 
 		Row {
 			id: answers
+
+			visible: win.job === null
 
 			anchors.right: parent.right
 			anchors.rightMargin: 22

@@ -13,9 +13,12 @@ Item {
 	property string sortKey: "size"
 	property bool sortDesc: true
 	readonly property int rowHeight: 34
-	readonly property int step: root.rowHeight + 1
+	readonly property int step: root.rowHeight
 	readonly property var ordered: {
-		const list = root.rows.slice();
+		const needle = search.text.trim().toLowerCase();
+		const list = root.rows.filter(function (r) {
+			return needle === "" || (String(r.name) + " " + String(r.detail)).toLowerCase().indexOf(needle) >= 0;
+		});
 		const key = root.sortKey;
 		const dir = root.sortDesc ? -1 : 1;
 
@@ -30,7 +33,7 @@ Item {
 	}
 	readonly property var padded: {
 		const list = root.ordered.slice();
-		const want = list.length === 0 ? 0 : Math.ceil(body.height / root.step);
+		const want = list.length === 0 ? 0 : Math.floor((body.height + 1) / root.step);
 
 		while (list.length < want)
 			list.push({ empty: true, key: "empty" + list.length });
@@ -39,6 +42,11 @@ Item {
 	}
 
 	signal toggled(var row)
+
+	onOrderedChanged: {
+		glide.stop();
+		list.contentY = 0;
+	}
 
 	function sortBy(key) {
 		if (root.sortKey === key)
@@ -49,77 +57,97 @@ Item {
 		}
 	}
 
-	Item {
-		id: head
+	SearchField {
+		id: search
 
 		anchors.left: parent.left
-		anchors.right: parent.right
+		anchors.leftMargin: 14
+		anchors.right: sorts.left
+		anchors.rightMargin: 10
 		anchors.top: parent.top
-		height: 30
+		anchors.topMargin: 14
+		height: 34
+		size: 12
+		padding: 12
+		corner: 0
+		textOffset: 2
+		placeholder: "Search"
+		typing: true
+	}
 
-		Row {
-			anchors.left: parent.left
-			anchors.leftMargin: 70
-			anchors.verticalCenter: parent.verticalCenter
-			spacing: 6
+	Row {
+		id: sorts
 
-			Text {
-				font.family: Config.fontFamily
-				font.pixelSize: 11
-				color: root.sortKey === "name" ? Config.foreground : Config.dim
-				text: "Name"
+		anchors.right: parent.right
+		anchors.rightMargin: 14
+		anchors.verticalCenter: search.verticalCenter
+		spacing: 8
 
-				MouseArea {
-					anchors.fill: parent
-					anchors.margins: -6
-					onClicked: root.sortBy("name")
+		Repeater {
+			model: [["Name", "name"], ["Size", "size"]]
+
+			delegate: Rectangle {
+				id: chip
+
+				required property var modelData
+
+				readonly property bool active: root.sortKey === chip.modelData[1]
+
+				width: chipRow.width + 24
+				height: 34
+				radius: 0
+				color: chip.active ? Config.launcherHighlight : Config.launcherSearchBox
+
+				Row {
+					id: chipRow
+
+					anchors.centerIn: parent
+					spacing: 6
+
+					Text {
+						anchors.verticalCenter: parent.verticalCenter
+
+						font.family: Config.fontFamily
+						font.pixelSize: 12
+						color: chip.active ? Config.foreground : Config.dim
+						text: chip.modelData[0]
+					}
+
+					Glyph {
+						anchors.verticalCenter: parent.verticalCenter
+						visible: chip.active
+						glyph: root.sortDesc ? Config.diskIconSortDesc : Config.diskIconSortAsc
+						size: 10
+						color: Config.foreground
+					}
 				}
-			}
-
-			Glyph {
-				anchors.verticalCenter: parent.verticalCenter
-				visible: root.sortKey === "name"
-				glyph: root.sortDesc ? Config.diskIconSortDesc : Config.diskIconSortAsc
-				size: 10
-				color: Config.foreground
-			}
-		}
-
-		Row {
-			anchors.right: parent.right
-			anchors.rightMargin: 14
-			anchors.verticalCenter: parent.verticalCenter
-			spacing: 6
-
-			Glyph {
-				anchors.verticalCenter: parent.verticalCenter
-				visible: root.sortKey === "size"
-				glyph: root.sortDesc ? Config.diskIconSortDesc : Config.diskIconSortAsc
-				size: 10
-				color: Config.foreground
-			}
-
-			Text {
-				font.family: Config.fontFamily
-				font.pixelSize: 11
-				color: root.sortKey === "size" ? Config.foreground : Config.dim
-				text: "Size"
 
 				MouseArea {
 					anchors.fill: parent
-					anchors.margins: -6
-					onClicked: root.sortBy("size")
+					onClicked: root.sortBy(chip.modelData[1])
 				}
 			}
 		}
 	}
+
+	MouseArea {
+		anchors.fill: search
+		z: 5
+		onPressed: function (mouse) {
+			search.focusInput();
+			mouse.accepted = false;
+		}
+	}
+
+	Component.onCompleted: search.focusInput()
 
 	Item {
 		id: body
 
 		anchors.left: parent.left
 		anchors.right: parent.right
-		anchors.top: head.bottom
+		anchors.top: search.bottom
+		anchors.topMargin: 14
 		anchors.bottom: parent.bottom
 		clip: true
 
@@ -128,7 +156,7 @@ Item {
 
 			anchors.fill: parent
 			model: root.padded
-			spacing: 1
+			spacing: 0
 			interactive: false
 			boundsBehavior: Flickable.StopAtBounds
 
@@ -144,7 +172,11 @@ Item {
 			WheelHandler {
 				acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
 				onWheel: function (event) {
-					const max = Math.max(0, list.contentHeight - list.height);
+					const max = list.contentHeight - list.height;
+
+					if (max < 2)
+						return;
+
 					const base = Math.round(list.contentY / root.step) * root.step;
 					const next = Math.max(0, Math.min(max, base + (event.angleDelta.y > 0 ? -1 : 1) * root.step));
 
@@ -209,8 +241,9 @@ Item {
 
 					anchors.left: rowIcon.right
 					anchors.leftMargin: 12
+					anchors.right: detailText.left
+					anchors.rightMargin: 16
 					anchors.verticalCenter: parent.verticalCenter
-					width: Math.max(80, (row.width - 140) * 0.38)
 					elide: Text.ElideRight
 					visible: !row.filler
 
@@ -221,11 +254,12 @@ Item {
 				}
 
 				Text {
-					anchors.left: nameText.right
-					anchors.leftMargin: 12
+					id: detailText
+
 					anchors.right: sizeText.left
-					anchors.rightMargin: 12
+					anchors.rightMargin: 16
 					anchors.verticalCenter: parent.verticalCenter
+					width: row.width * 0.34
 					elide: Text.ElideMiddle
 					visible: !row.filler
 
@@ -254,9 +288,5 @@ Item {
 			}
 		}
 
-		Scrollbar {
-			view: list
-			edge: body
-		}
 	}
 }

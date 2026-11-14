@@ -1,6 +1,5 @@
 import QtQuick
 import qs
-import qs.ui
 
 Item {
 	id: root
@@ -15,8 +14,11 @@ Item {
 	Rectangle {
 		anchors.fill: parent
 		radius: width / 2
-		color: Config.foreground
-		opacity: root.checked ? 1 : 0.16
+		color: root.checked ? Config.foreground : Qt.lighter(Config.launcherHighlight, 1.7)
+
+		Behavior on color {
+			ColorAnimation { duration: 110 }
+		}
 	}
 
 	Rectangle {

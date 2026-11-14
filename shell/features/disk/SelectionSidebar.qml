@@ -21,15 +21,6 @@ Item {
 	}
 
 	Rectangle {
-		anchors.right: parent.right
-		anchors.top: parent.top
-		anchors.bottom: parent.bottom
-		width: root.hair
-		z: 2
-		color: Config.dim
-	}
-
-	Rectangle {
 		anchors.left: parent.left
 		anchors.right: parent.right
 		y: root.topInset - root.hair
