@@ -49,7 +49,7 @@ const Mode = struct {
 
 const modes = [_]Mode{
 	.{ .mode = "clipboard", .name = "Clipboard", .mark = "", .glyph = glyph_clip, .keywords = &.{ "copy", "paste" } },
-	.{ .mode = "wallpaper", .name = "Wallpaper", .mark = "~", .glyph = glyph_wallpaper, .keywords = &.{ "wallpaper", "background", "desktop" } },
+	.{ .mode = "wallpaper", .name = "Appearance", .mark = "~", .glyph = glyph_wallpaper, .keywords = &.{ "appearance", "wallpaper", "background", "desktop" } },
 	.{ .mode = "procs", .name = "Processes", .mark = "%", .glyph = glyph_process, .keywords = &.{ "top", "atop", "cpu", "processes", "monitor", "kill" } },
 	.{ .mode = "vms", .name = "Virtual machines", .mark = "", .glyph = glyph_vm, .keywords = &.{ "vm", "virtual", "machine", "qemu", "guest", "kill" } },
 	.{ .mode = "disk", .name = "Disk", .mark = "", .glyph = glyph_disk, .keywords = &.{ "disk", "space", "storage", "usage", "treemap", "caches", "packages" } },
