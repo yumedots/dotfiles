@@ -1,12 +1,33 @@
 pragma Singleton
 
 import QtQuick
+import Quickshell
+import Quickshell.Io
 import qs.services
 
 QtObject {
 	id: root
 
-	readonly property var settings: Yudae.settings || ({})
+	property var local: ({})
+	readonly property var settings: {
+		const live = Yudae.settings || ({});
+
+		return Object.keys(live).length > 0 ? live : root.local;
+	}
+
+	property FileView settingsFile: FileView {
+		path: Quickshell.shellDir + "/cache/settings.json"
+		watchChanges: true
+		printErrors: false
+
+		onLoaded: {
+			try {
+				root.local = JSON.parse(text());
+			} catch (error) {
+				root.local = ({});
+			}
+		}
+	}
 
 	// base surface, ink and the mono ink that replaces the hue when mono is on
 	readonly property var surface: settings.surface !== undefined ? settings.surface : "#101010"
@@ -116,12 +137,21 @@ QtObject {
 	readonly property var iconAwakeOn: settings.iconAwakeOn !== undefined ? settings.iconAwakeOn : "\udb80\udd76"
 	readonly property var iconSun: settings.iconSun !== undefined ? settings.iconSun : "\uf522"
 	readonly property var iconMoon: settings.iconMoon !== undefined ? settings.iconMoon : "\ue3a4"
+	readonly property var iconWifi1: settings.iconWifi1 !== undefined ? settings.iconWifi1 : "\udb82\udd1f"
+	readonly property var iconWifi2: settings.iconWifi2 !== undefined ? settings.iconWifi2 : "\udb82\udd22"
+	readonly property var iconWifi3: settings.iconWifi3 !== undefined ? settings.iconWifi3 : "\udb82\udd25"
+	readonly property var iconWifi4: settings.iconWifi4 !== undefined ? settings.iconWifi4 : "\udb82\udd28"
+	readonly property var iconWifiOff: settings.iconWifiOff !== undefined ? settings.iconWifiOff : "\udb82\udd2d"
+	readonly property var iconEthernet: settings.iconEthernet !== undefined ? settings.iconEthernet : "\udb80\ude00"
+	readonly property var iconLock: settings.iconLock !== undefined ? settings.iconLock : "\uf023"
 
 	// cpu and process list
 	readonly property var cpuBase: settings.cpuBase !== undefined ? settings.cpuBase : "#a78bfa"
 	readonly property var cpuBaseMono: settings.cpuBaseMono !== undefined ? settings.cpuBaseMono : "#ffffff"
 	readonly property var cpuPeak: settings.cpuPeak !== undefined ? settings.cpuPeak : "#e05252"
 	readonly property var cpuPeakMono: settings.cpuPeakMono !== undefined ? settings.cpuPeakMono : "#ffffff"
+	readonly property var cpuCore: settings.cpuCore !== undefined ? settings.cpuCore : "#7aa2f7"
+	readonly property var cpuCoreFloor: settings.cpuCoreFloor !== undefined ? settings.cpuCoreFloor : 0.18
 	readonly property var cpuIdle: settings.cpuIdle !== undefined ? settings.cpuIdle : "#2f2f2f"
 	readonly property var cpuTopCount: settings.cpuTopCount !== undefined ? settings.cpuTopCount : 5
 	readonly property var cpuTooltipWidth: settings.cpuTooltipWidth !== undefined ? settings.cpuTooltipWidth : 240
@@ -129,7 +159,8 @@ QtObject {
 	readonly property var cpuBlockGap: settings.cpuBlockGap !== undefined ? settings.cpuBlockGap : 4
 	readonly property var cpuBlockColumns: settings.cpuBlockColumns !== undefined ? settings.cpuBlockColumns : 16
 	readonly property var topProcessTitle: settings.topProcessTitle !== undefined ? settings.topProcessTitle : "Top processes"
-	readonly property var procsGap: settings.procsGap !== undefined ? settings.procsGap : 6
+	readonly property var procRowHeight: settings.procRowHeight !== undefined ? settings.procRowHeight : 22
+	readonly property var procsGap: settings.procsGap !== undefined ? settings.procsGap : 2
 	readonly property var psIgnore: settings.psIgnore !== undefined ? settings.psIgnore : ["ps", "ps <defunct>"]
 	readonly property var procSearchHint: settings.procSearchHint !== undefined ? settings.procSearchHint : "f to type"
 	readonly property var procSearchPadding: settings.procSearchPadding !== undefined ? settings.procSearchPadding : 4
@@ -169,11 +200,11 @@ QtObject {
 	readonly property var mixerIconSize: settings.mixerIconSize !== undefined ? settings.mixerIconSize : 22
 	readonly property var mixerDeviceIconSize: settings.mixerDeviceIconSize !== undefined ? settings.mixerDeviceIconSize : 26
 	readonly property var mixerListGap: settings.mixerListGap !== undefined ? settings.mixerListGap : 8
-	readonly property var mixerRowRadius: settings.mixerRowRadius !== undefined ? settings.mixerRowRadius : 4
+	readonly property var rowRadius: settings.rowRadius !== undefined ? settings.rowRadius : 4
 	readonly property var mixerMaxVolume: settings.mixerMaxVolume !== undefined ? settings.mixerMaxVolume : 1
 	readonly property var mixerStepCount: settings.mixerStepCount !== undefined ? settings.mixerStepCount : 10
 	readonly property var mixerStep: settings.mixerStep !== undefined ? settings.mixerStep : 0.1
-	readonly property var mixerShiftStep: settings.mixerShiftStep !== undefined ? settings.mixerShiftStep : 0.05
+	readonly property var mixerShiftStep: settings.mixerShiftStep !== undefined ? settings.mixerShiftStep : 0.1
 	readonly property var mixerOnlyPlaying: settings.mixerOnlyPlaying !== undefined ? settings.mixerOnlyPlaying : true
 	readonly property var mixerHoldMs: settings.mixerHoldMs !== undefined ? settings.mixerHoldMs : 2000
 	readonly property var mixerPendingMs: settings.mixerPendingMs !== undefined ? settings.mixerPendingMs : 500
@@ -223,20 +254,22 @@ QtObject {
 	readonly property var launcherGridCellHeight: settings.launcherGridCellHeight !== undefined ? settings.launcherGridCellHeight : 124
 	readonly property var launcherGridIconSize: settings.launcherGridIconSize !== undefined ? settings.launcherGridIconSize : 64
 	readonly property var launcherGridLabelSize: settings.launcherGridLabelSize !== undefined ? settings.launcherGridLabelSize : 14
+	readonly property var launcherMove: settings.launcherMove !== undefined ? settings.launcherMove : "remember"
 	readonly property var launcherIconActive: settings.launcherIconActive !== undefined ? settings.launcherIconActive : "\uf00c"
 
 	// wallpaper picker
 	readonly property var wallpaperTransitionMs: settings.wallpaperTransitionMs !== undefined ? settings.wallpaperTransitionMs : 400
 	readonly property var wallpaperEmpty: settings.wallpaperEmpty !== undefined ? settings.wallpaperEmpty : "No wallpapers found"
 	readonly property var wallpaperPickerWidth: settings.wallpaperPickerWidth !== undefined ? settings.wallpaperPickerWidth : 1100
-	readonly property var wallpaperStageWidth: settings.wallpaperStageWidth !== undefined ? settings.wallpaperStageWidth : 680
 	readonly property var wallpaperPreviewRatio: settings.wallpaperPreviewRatio !== undefined ? settings.wallpaperPreviewRatio : 1.78
-	readonly property var wallpaperPickerPadding: settings.wallpaperPickerPadding !== undefined ? settings.wallpaperPickerPadding : 16
-	readonly property var wallpaperSectionGap: settings.wallpaperSectionGap !== undefined ? settings.wallpaperSectionGap : 16
-	readonly property var wallpaperColumns: settings.wallpaperColumns !== undefined ? settings.wallpaperColumns : 3
-	readonly property var wallpaperTileGap: settings.wallpaperTileGap !== undefined ? settings.wallpaperTileGap : 8
+	readonly property var wallpaperRowHeight: settings.wallpaperRowHeight !== undefined ? settings.wallpaperRowHeight : 230
+	readonly property var wallpaperRowMin: settings.wallpaperRowMin !== undefined ? settings.wallpaperRowMin : 115
+	readonly property var wallpaperSlimRatio: settings.wallpaperSlimRatio !== undefined ? settings.wallpaperSlimRatio : 0.42
 	readonly property var wallpaperNameSize: settings.wallpaperNameSize !== undefined ? settings.wallpaperNameSize : 13
-	readonly property var wallpaperHoverScale: settings.wallpaperHoverScale !== undefined ? settings.wallpaperHoverScale : 1.04
+	readonly property var themeNameSize: settings.themeNameSize !== undefined ? settings.themeNameSize : 24
+	readonly property var themeEmpty: settings.themeEmpty !== undefined ? settings.themeEmpty : "No themes installed"
+	readonly property var wallpaperPickerPadding: settings.wallpaperPickerPadding !== undefined ? settings.wallpaperPickerPadding : 16
+	readonly property var wallpaperTileGap: settings.wallpaperTileGap !== undefined ? settings.wallpaperTileGap : 8
 	readonly property var wallpaperTileDim: settings.wallpaperTileDim !== undefined ? settings.wallpaperTileDim : 0.6
 	readonly property var wallpaperRingWidth: settings.wallpaperRingWidth !== undefined ? settings.wallpaperRingWidth : 2
 	readonly property var wallpaperMarkSize: settings.wallpaperMarkSize !== undefined ? settings.wallpaperMarkSize : 11
@@ -279,10 +312,12 @@ QtObject {
 	readonly property var powerAwakeTitle: settings.powerAwakeTitle !== undefined ? settings.powerAwakeTitle : "Keep awake"
 
 	// pill switch
-	readonly property var toggleHeight: settings.toggleHeight !== undefined ? settings.toggleHeight : 22
+	readonly property var rowHeight: settings.rowHeight !== undefined ? settings.rowHeight : 30
+	readonly property var rowInset: settings.rowInset !== undefined ? settings.rowInset : 3
+	readonly property var toggleHeight: settings.toggleHeight !== undefined ? settings.toggleHeight : root.rowHeight - 2 * root.rowInset
 	readonly property var togglePadding: settings.togglePadding !== undefined ? settings.togglePadding : 2
 	readonly property var toggleLabelPad: settings.toggleLabelPad !== undefined ? settings.toggleLabelPad : 4
-	readonly property var toggleFontSize: settings.toggleFontSize !== undefined ? settings.toggleFontSize : 11
+	readonly property var toggleFontSize: settings.toggleFontSize !== undefined ? settings.toggleFontSize : 13
 	readonly property var toggleEmpty: settings.toggleEmpty !== undefined ? settings.toggleEmpty : "|"
 	readonly property var toggleTrack: settings.toggleTrack !== undefined ? settings.toggleTrack : "#2f2f2f"
 	readonly property var toggleHover: settings.toggleHover !== undefined ? settings.toggleHover : "#3f3f3f"
@@ -361,6 +396,13 @@ QtObject {
 	readonly property var calendarDialMoonLift: settings.calendarDialMoonLift !== undefined ? settings.calendarDialMoonLift : 5
 	readonly property var calendarDialDayStart: settings.calendarDialDayStart !== undefined ? settings.calendarDialDayStart : 6
 	readonly property var calendarDialDayEnd: settings.calendarDialDayEnd !== undefined ? settings.calendarDialDayEnd : 18
+	readonly property var calendarDialNight: settings.calendarDialNight !== undefined ? settings.calendarDialNight : "#2b4a94"
+	readonly property var calendarDialRed: settings.calendarDialRed !== undefined ? settings.calendarDialRed : "#d14a3c"
+	readonly property var calendarDialOrange: settings.calendarDialOrange !== undefined ? settings.calendarDialOrange : "#e8873a"
+	readonly property var calendarDialYellow: settings.calendarDialYellow !== undefined ? settings.calendarDialYellow : "#f2c14e"
+	readonly property var calendarDialCream: settings.calendarDialCream !== undefined ? settings.calendarDialCream : "#f7e3a1"
+	readonly property var calendarDialNoon: settings.calendarDialNoon !== undefined ? settings.calendarDialNoon : "#fdf3cf"
+	readonly property var calendarDialDay: settings.calendarDialDay !== undefined ? settings.calendarDialDay : "#7cc4f0"
 	readonly property var calendarBirthYear: settings.calendarBirthYear !== undefined ? settings.calendarBirthYear : 0
 	readonly property var calendarLifeExpectancy: settings.calendarLifeExpectancy !== undefined ? settings.calendarLifeExpectancy : 90
 	readonly property var calendarOutside: settings.calendarOutside !== undefined ? settings.calendarOutside : "#ffffff"
@@ -398,6 +440,7 @@ QtObject {
 	readonly property var weatherSeparator: settings.weatherSeparator !== undefined ? settings.weatherSeparator : 1
 	readonly property var weatherSeparatorColor: settings.weatherSeparatorColor !== undefined ? settings.weatherSeparatorColor : "#2b2b2b"
 	readonly property var weatherDayCardColor: settings.weatherDayCardColor !== undefined ? settings.weatherDayCardColor : "#181818"
+	readonly property var weatherDayLabelColor: settings.weatherDayLabelColor !== undefined ? settings.weatherDayLabelColor : "#ffffff"
 	readonly property var weatherDayCardRadius: settings.weatherDayCardRadius !== undefined ? settings.weatherDayCardRadius : 8
 	readonly property var weatherCardSearchDebounce: settings.weatherCardSearchDebounce !== undefined ? settings.weatherCardSearchDebounce : 60
 	readonly property var weatherCodes: settings.weatherCodes !== undefined ? settings.weatherCodes : [
@@ -509,6 +552,7 @@ QtObject {
 	readonly property var networkTooltipWidth: settings.networkTooltipWidth !== undefined ? settings.networkTooltipWidth : 260
 	readonly property var networkTooltipPadding: settings.networkTooltipPadding !== undefined ? settings.networkTooltipPadding : 12
 	readonly property var networkRowHeight: settings.networkRowHeight !== undefined ? settings.networkRowHeight : 18
+	readonly property var networkDropdownRows: settings.networkDropdownRows !== undefined ? settings.networkDropdownRows : 6
 	readonly property var networkRowGap: settings.networkRowGap !== undefined ? settings.networkRowGap : 3
 	readonly property var networkBarCount: settings.networkBarCount !== undefined ? settings.networkBarCount : 4
 	readonly property var networkBarWidth: settings.networkBarWidth !== undefined ? settings.networkBarWidth : 3
@@ -537,9 +581,12 @@ QtObject {
 	readonly property var networkTitle: settings.networkTitle !== undefined ? settings.networkTitle : "Network"
 	readonly property var networkWiredNothing: settings.networkWiredNothing !== undefined ? settings.networkWiredNothing : "No connection"
 	readonly property var networkPasswordHint: settings.networkPasswordHint !== undefined ? settings.networkPasswordHint : "Password"
-	readonly property var networkWifiIcons: settings.networkWifiIcons !== undefined ? settings.networkWifiIcons : ["\udb82\udcbc", "\udb82\udcbd", "\udb82\udcbe", "\udb82\udcbf"]
-	readonly property var networkLanIcon: settings.networkLanIcon !== undefined ? settings.networkLanIcon : "\udb80\ude00"
-	readonly property var networkLockIcon: settings.networkLockIcon !== undefined ? settings.networkLockIcon : "\uf023"
+	readonly property var networkWifiLabel: settings.networkWifiLabel !== undefined ? settings.networkWifiLabel : "Wi-Fi"
+	readonly property var networkEthernetLabel: settings.networkEthernetLabel !== undefined ? settings.networkEthernetLabel : "Ethernet"
+	readonly property var networkWifiIdle: settings.networkWifiIdle !== undefined ? settings.networkWifiIdle : "Not connected"
+	readonly property var networkWifiConnecting: settings.networkWifiConnecting !== undefined ? settings.networkWifiConnecting : "Connecting\u2026"
+	readonly property var networkOtherLabel: settings.networkOtherLabel !== undefined ? settings.networkOtherLabel : "Other networks"
+	readonly property var networkWifiOff: settings.networkWifiOff !== undefined ? settings.networkWifiOff : "Wi-Fi is off"
 
 	// agent panel
 	readonly property var agentFaceSize: settings.agentFaceSize !== undefined ? settings.agentFaceSize : 44
@@ -587,6 +634,13 @@ QtObject {
 		cpu: root.iconCpu,
 		day: root.calendarIconDay,
 		display: root.iconDisplay,
+		ethernet: root.iconEthernet,
+		lock: root.iconLock,
+		wifi1: root.iconWifi1,
+		wifi2: root.iconWifi2,
+		wifi3: root.iconWifi3,
+		wifi4: root.iconWifi4,
+		wifiOff: root.iconWifiOff,
 		down: root.iconDown,
 		github: root.iconGithub,
 		input: root.iconInput,
@@ -613,6 +667,10 @@ QtObject {
 		weatherRight: root.weatherIconRight,
 		year: root.calendarIconYear
 	})
+
+	function wifiGlyph(bars) {
+		return root["iconWifi" + Math.max(1, Math.min(4, bars || 1))];
+	}
 
 	function glyph(name) {
 		return root.icons[name] || "";

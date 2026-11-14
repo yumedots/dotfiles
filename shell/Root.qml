@@ -54,7 +54,7 @@ ShellRoot {
 	}
 
 	function closeWidgets() {
-		if (wallpaperWindow.shown)
+		if (wallpaperWindow.shown && !wallpaperWindow.previewing)
 			wallpaperWindow.close();
 
 		shellRoot.closeBarPopups();
@@ -90,9 +90,9 @@ ShellRoot {
 		if (wallpaperWindow.shown)
 			return;
 
+		launcherWindow.hideInstant();
 		wallpaperWindow.open();
 		shellRoot.closeBarPopups();
-		Handoff.run(shellRoot.closeLauncherUnderWidget);
 	}
 
 	function powerMenu() {
@@ -387,6 +387,11 @@ ShellRoot {
 
 	WallpaperPicker {
 		id: wallpaperWindow
+		alwaysMapped: true
+	}
+
+	PluginHost {
+		anchors.fill: parent
 	}
 
 	PowerMenu {

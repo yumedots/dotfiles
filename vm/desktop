@@ -16,11 +16,7 @@ if [ -n "$timezone" ] && [ "$(cat /etc/timezone 2>/dev/null)" != "$timezone" ]; 
 	sudo timedatectl set-timezone "$timezone" >/dev/null 2>&1 || true
 fi
 
-epoch=$(cat "$ROOT/vm/hoststate/epoch" 2>/dev/null || true)
-if [ -n "$epoch" ]; then
-	sudo -n date -s "@$epoch" >/dev/null 2>&1 || true
-fi
-
+sudo -n hwclock -s >/dev/null 2>&1 || true
 sudo -n timedatectl set-ntp false >/dev/null 2>&1 || true
 
 mkdir -p "$HOME/.local/bin" "$HOME/Documents/Wallpaper"
@@ -53,8 +49,4 @@ if [ -n "$wall" ] && [ -d "$wall_dir" ]; then
 	grep -q "wallpaper $wall_dir virtiofs" /etc/fstab || echo "wallpaper $wall_dir virtiofs ro,nofail,defaults 0 0" | sudo tee -a /etc/fstab >/dev/null
 	mountpoint -q "$wall_dir" || sudo mount -t virtiofs wallpaper "$wall_dir" 2>/dev/null || true
 	"$HOME/.local/bin/awww" img --transition-type none "$wall" >/dev/null 2>&1 || true
-fi
-
-if [ -d "$HOME/.local/lib/yudae/qml/Yudae/Native" ] && pgrep -x quickshell >/dev/null; then
-	"$ROOT/vm/shell" restart >/dev/null 2>&1 || true
 fi

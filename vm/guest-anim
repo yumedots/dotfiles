@@ -1,8 +1,0 @@
-#!/bin/sh
-set -eu
-
-export XDG_RUNTIME_DIR=/run/user/1000
-export WAYLAND_DISPLAY=wayland-1
-export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1)
-
-setsid alacritty --class bench-anim -e sh -c 'while true; do seq 1 4000; done' >/dev/null 2>&1 &

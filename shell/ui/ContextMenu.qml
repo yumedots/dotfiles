@@ -15,7 +15,7 @@ Rectangle {
 	height: column.height + 12
 	color: Config.surface
 	border.width: 1
-	border.color: "#1f1f1f"
+	border.color: Config.dim
 	visible: false
 
 	function place() {
@@ -52,7 +52,8 @@ Rectangle {
 
 				Rectangle {
 					anchors.fill: parent
-					color: rowMouse.containsMouse && rowMouse.enabled ? "#141414" : "transparent"
+					radius: Config.rowRadius
+					color: rowMouse.containsMouse && rowMouse.enabled ? Config.launcherHighlight : "transparent"
 				}
 
 				Text {

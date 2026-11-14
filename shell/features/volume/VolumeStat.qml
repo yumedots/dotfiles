@@ -35,6 +35,9 @@ BarStat {
 	onVolumeChanged: root.pingVolume()
 	onIsMutedChanged: root.pingVolume()
 
+	readonly property int audioTick: Yudae.audio.tick || 0
+	onAudioTickChanged: root.pingVolume()
+
 	pct: root.volume * 100
 	barColor: Config.volumeBase
 	textColor: Config.volumeBase
@@ -43,6 +46,15 @@ BarStat {
 		: root.pct >= 34 ? Config.iconVolumeMid
 		: Config.iconVolumeLow
 	value: Math.round(root.pct) + "%"
+	iconMinWidth: widest.width
+
+	TextMetrics {
+		id: widest
+
+		font.family: Config.fontFamily
+		font.pixelSize: root.iconSize
+		text: Config.iconVolumeHigh
+	}
 
 	property bool osd: false
 	property double bootAt: Date.now()

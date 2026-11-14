@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.ui
 import qs
@@ -12,6 +13,8 @@ PanelWindow {
 	signal wallpaperRequested()
 
 	property bool shown: false
+	property bool instant: false
+	property bool keepQuery: false
 	property string query: ""
 	property string group: ""
 	property string forced: ""
@@ -23,6 +26,16 @@ PanelWindow {
 	property string anchorKey: ""
 	property bool following: false
 	property bool freshAnchor: false
+
+	property bool placed: false
+	property real placeX: 0
+	property real placeY: 0
+	property real savedX: 0
+	property real savedY: 0
+	property bool savedPlace: false
+	property real dragX: 0
+	property real dragY: 0
+	property bool dragHold: false
 
 	property bool windows: false
 	property int winIndex: 0
@@ -40,7 +53,79 @@ PanelWindow {
 		onTriggered: root.settled = true
 	}
 
+	Timer {
+		id: windowDragTimer
+
+		interval: 50
+
+		onTriggered: root.applyWindowDrag()
+	}
+
 	readonly property var state: Yudae.launcher
+
+	FileView {
+		id: placement
+
+		path: Quickshell.stateDir + "/launcher-position.json"
+		preload: true
+		printErrors: false
+
+		onLoaded: root.loadPlace(text())
+	}
+
+	function defaultX() {
+		return Math.round((root.width - card.width) / 2);
+	}
+
+	function defaultY() {
+		return root.spotlight ? Math.round(root.height * Config.launcherSpotlightTop) : Math.round((root.height - card.height) / 2);
+	}
+
+	function place(x, y) {
+		if (root.configured && root.width > 1 && root.height > 1 && card.width > 0 && card.height > 0) {
+			root.placeX = Calc.clamp(x, 0, Math.max(0, root.width - card.width));
+			root.placeY = Calc.clamp(y, 0, Math.max(0, root.height - card.height));
+		} else {
+			root.placeX = x;
+			root.placeY = y;
+		}
+
+		root.placed = true;
+	}
+
+	function clampPlace() {
+		if (!root.placed || root.width <= 1 || root.height <= 1 || card.width <= 0 || card.height <= 0)
+			return;
+
+		root.place(root.placeX, root.placeY);
+	}
+
+	function loadPlace(body) {
+		try {
+			const at = JSON.parse(body);
+
+			if (typeof at.x !== "number" || typeof at.y !== "number")
+				return;
+
+			root.savedX = at.x;
+			root.savedY = at.y;
+			root.savedPlace = true;
+
+			if (root.shown && !root.placed && Config.launcherMove !== "forget")
+				root.place(root.savedX, root.savedY);
+		} catch (error) {
+		}
+	}
+
+	function savePlace() {
+		if (!root.placed || Config.launcherMove === "forget")
+			return;
+
+		root.savedX = root.placeX;
+		root.savedY = root.placeY;
+		root.savedPlace = true;
+		placement.setText(JSON.stringify({ x: Math.round(root.placeX), y: Math.round(root.placeY) }));
+	}
 
 	// A card on its way out keeps the screen it was showing. The snapshot goes
 	// back to the first screen once the launcher lets go of it, and following
@@ -147,9 +232,15 @@ PanelWindow {
 	visible: alwaysMapped || root.shown || card.opacity > 0
 
 	Component.onCompleted: {
+		root.setWindowDrag(false);
+
 		if (root.alwaysMapped)
 			root.push();
 	}
+
+	onWidthChanged: root.clampPlace()
+	onHeightChanged: root.clampPlace()
+	onConfiguredChanged: root.clampPlace()
 
 	Timer {
 		id: grabTimer
@@ -250,11 +341,27 @@ PanelWindow {
 		Yudae.cmd("launcher", { query: root.query, forced: root.forced, group: root.group, all: Config.launcherGrid });
 	}
 
+	function setWindowDrag(hold) {
+		root.dragHold = hold;
+		windowDragTimer.restart();
+	}
+
+	function applyWindowDrag() {
+		Quickshell.execDetached(["hyprctl", "eval", "require('binds').launcherDrag(" + (root.dragHold ? "true" : "false") + ")"]);
+	}
+
 	function open(mode) {
+		root.instant = false;
+
 		if (mode !== undefined)
 			root.windows = false;
 
-		root.query = "";
+		root.setWindowDrag(true);
+
+		if (root.keepQuery)
+			root.keepQuery = false;
+		else
+			root.query = "";
 		root.group = "";
 		root.forced = mode || "";
 		root.pointer = null;
@@ -269,6 +376,14 @@ PanelWindow {
 		// snapshot, so it has nothing to wait for.
 		root.settled = root.windows;
 		settleGuard.restart();
+
+		root.placed = Config.launcherMove !== "forget" && root.savedPlace;
+
+		if (root.placed) {
+			root.placeX = root.savedX;
+			root.placeY = root.savedY;
+			root.clampPlace();
+		}
 
 		root.shown = true;
 		root.winIndex = root.windows ? 1 : 0;
@@ -291,7 +406,14 @@ PanelWindow {
 		root.open("clipboard");
 	}
 
+	function hideInstant() {
+		root.instant = true;
+		root.keepQuery = true;
+		root.close();
+	}
+
 	function close() {
+		root.setWindowDrag(false);
 		root.heldMode = root.mode;
 		root.heldResults = root.results;
 		root.shown = false;
@@ -497,7 +619,7 @@ PanelWindow {
 	}
 
 	function openWallpaper() {
-		root.close();
+		root.hideInstant();
 		root.wallpaperRequested();
 	}
 
@@ -773,8 +895,8 @@ PanelWindow {
 	HyprBorder {
 		id: card
 
-		x: Math.round((root.width - card.width) / 2)
-		y: root.spotlight ? Math.round(root.height * Config.launcherSpotlightTop) : Math.round((root.height - card.height) / 2)
+		x: root.placed ? root.placeX : root.defaultX()
+		y: root.placed ? root.placeY : root.defaultY()
 
 		width: root.windows ? windowsGrid.implicitWidth + card.inset * 2
 		      : root.grid ? appGrid.implicitWidth + card.inset * 2
@@ -787,13 +909,18 @@ PanelWindow {
 		opacity: root.shown && root.settled ? 1 : 0
 		visible: root.configured && (root.shown || opacity > 0)
 
+		onWidthChanged: root.clampPlace()
+		onHeightChanged: root.clampPlace()
+
 		Behavior on opacity {
+			enabled: !root.instant
+
 			NumberAnimation { duration: Config.popupFadeMs; easing.type: Easing.OutCubic }
 		}
 		focus: true
 
 		onOpacityChanged: {
-			if (opacity !== 0)
+			if (opacity !== 0 || root.instant)
 				return;
 
 			root.settle();
@@ -1017,8 +1144,9 @@ PanelWindow {
 					id: listPane
 
 					anchors.left: parent.left
+					anchors.leftMargin: -Config.launcherPadding
 					anchors.right: root.isClipboard ? previewPane.left : parent.right
-					anchors.rightMargin: root.isClipboard ? Config.launcherGap : 0
+					anchors.rightMargin: root.isClipboard ? Config.launcherGap : -Config.launcherPadding
 					anchors.top: parent.top
 					anchors.bottom: parent.bottom
 
@@ -1029,6 +1157,7 @@ PanelWindow {
 						visible: root.results.length > 0 && !root.grid
 						visibleRows: root.rows
 						scrollWidth: root.spotlight ? 0 : Config.scrollbarWidth
+						highlightRadius: 0
 						rowHeight: root.rowHeight
 						rowSpacing: Config.launcherGap
 						model: root.grid ? [] : root.results
@@ -1050,6 +1179,7 @@ PanelWindow {
 								id: rowIcon
 
 								anchors.left: parent.left
+								anchors.leftMargin: Config.launcherPadding
 								anchors.verticalCenter: parent.verticalCenter
 								width: row.wide ? root.kaomojiSlot : root.iconSlot
 								height: root.iconSlot
@@ -1077,7 +1207,7 @@ PanelWindow {
 								anchors.centerIn: parent
 								width: root.iconSize
 								height: root.iconSize
-								radius: 3
+								radius: Config.rowRadius
 								color: Config.surface
 								visible: row.modelData.kind === "app" && (rowIcon.icon === "" || rowIconImage.status === Image.Error)
 							}
@@ -1130,7 +1260,7 @@ PanelWindow {
 								id: rowUsage
 
 								anchors.right: parent.right
-								anchors.rightMargin: Config.launcherPadding
+								anchors.rightMargin: Config.launcherPadding * 2
 								anchors.verticalCenter: parent.verticalCenter
 								width: visible ? implicitWidth : 0
 								visible: row.modelData.kind === "proc" || row.modelData.kind === "vm"
@@ -1232,6 +1362,29 @@ PanelWindow {
 			title: root.winName
 			emptyMessage: root.empty
 			available: root.screen ? root.screen.width : root.width
+		}
+
+		DragHandler {
+			target: null
+			acceptedButtons: Qt.LeftButton
+			acceptedModifiers: Qt.MetaModifier
+			grabPermissions: PointerHandler.CanTakeOverFromAnything
+
+			onActiveChanged: {
+				if (active) {
+					root.dragX = card.x;
+					root.dragY = card.y;
+					root.place(root.dragX, root.dragY);
+					return;
+				}
+
+				root.savePlace();
+			}
+
+			onActiveTranslationChanged: {
+				if (active)
+					root.place(root.dragX + activeTranslation.x, root.dragY + activeTranslation.y);
+			}
 		}
 	}
 }

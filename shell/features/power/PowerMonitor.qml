@@ -65,10 +65,8 @@ ProcessPanel {
 			onPick: (next) => root.governorPicked(String(next))
 		},
 
-		Rectangle {
+		Separator {
 			width: parent.width
-			height: 1
-			color: Config.dim
 		},
 
 		Item {

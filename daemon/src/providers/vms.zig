@@ -51,6 +51,7 @@ const Vm = struct {
 	cgroup: ?cgroup.Cgroup = null,
 	created_ms: i64,
 	used_ms: i64,
+	destroy_ms: i64 = 0,
 	cpu_ticks: u64 = 0,
 	cpu_ms: i64 = 0,
 	cpu_pct: f64 = 0,
@@ -319,6 +320,8 @@ pub const Vms = struct {
 		const warm_idle: i64 = 900000;
 		const parked_idle: i64 = 3600000;
 		var changed = false;
+		var doomed: std.ArrayListUnmanaged([]u8) = .empty;
+		defer doomed.deinit(self.allocator);
 
 		self.mutex.lockUncancelable(self.io);
 
@@ -380,9 +383,19 @@ pub const Vms = struct {
 				vm.pid = 0;
 				vm.vfs_pid = 0;
 			}
+
+			if (idleDestroy(vm.destroy_ms, vm.used_ms, now)) {
+				const copy = self.allocator.dupe(u8, vm.name) catch continue;
+				doomed.append(self.allocator, copy) catch self.allocator.free(copy);
+			}
 		}
 
 		self.mutex.unlock(self.io);
+
+		for (doomed.items) |name| {
+			_ = self.removeVm(name, self.allocator) catch {};
+			self.allocator.free(name);
+		}
 
 		if (changed) self.hub.publish();
 	}
@@ -398,9 +411,28 @@ pub const Vms = struct {
 
 		self.mutex.lockUncancelable(self.io);
 
-		if (self.findLocked(name) != null) {
+		const session = json.textAt(args, "session");
+
+		if (self.findLocked(name)) |existing| {
+			const same = session.len > 0 and std.mem.eql(u8, existing.session, session);
+			if (!same) {
+				self.mutex.unlock(self.io);
+				return error.NameTaken;
+			}
+
+			const boot = existing.tier == .off;
+			existing.used_ms = fmt.nowMs(self.io);
 			self.mutex.unlock(self.io);
-			return error.NameTaken;
+
+			if (boot) {
+				self.bootVm(existing) catch |err| {
+					self.cleanupVm(existing);
+					return err;
+				};
+				self.hub.publish();
+			}
+
+			return std.fmt.allocPrint(allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"pid\":{d},\"reused\":true}}", .{ existing.name, existing.cid, existing.pid });
 		}
 
 		const mem = self.memOf(args);
@@ -428,10 +460,10 @@ pub const Vms = struct {
 
 		const vm = try self.allocator.create(Vm);
 		const dir = try std.fs.path.join(self.allocator, &.{ proc.repo(self.io, self.allocator), "vm", "runs", name });
-		const disk = if (from.len > 0)
-			try self.cloneDisk(name, from)
-		else
-			try images.overlay(self.io, self.allocator, name);
+		const disk = if (from.len > 0) blk: {
+			if (self.diskOf(from) != null) break :blk try self.cloneDisk(name, from);
+			break :blk images.overlayFrom(self.io, self.allocator, name, from) catch return error.NotFound;
+		} else try images.overlay(self.io, self.allocator, name);
 
 		vm.* = .{
 			.name = try self.allocator.dupe(u8, name),
@@ -448,6 +480,7 @@ pub const Vms = struct {
 			.tier = .off,
 			.created_ms = fmt.nowMs(self.io),
 			.used_ms = fmt.nowMs(self.io),
+			.destroy_ms = destroyIdleOf(args),
 		};
 
 		self.bootVm(vm) catch |err| {
@@ -708,6 +741,7 @@ pub const Vms = struct {
 				.pid = if (alive) pid else 0,
 				.created_ms = fmt.nowMs(self.io),
 				.used_ms = fmt.nowMs(self.io),
+				.destroy_ms = if (json.field(parsed.value, "destroyMs")) |value| @max(json.integer(value), 0) else idleDestroyDefault(),
 			};
 
 			const thumb_path = std.fs.path.join(self.allocator, &.{ vm.dir, "thumb.jpg" }) catch "";
@@ -762,7 +796,7 @@ pub const Vms = struct {
 			result.deinit(self.allocator);
 		} else |_| {}
 
-		const body = std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"cores\":{d},\"memMb\":{d},\"gl\":{s},\"pid\":{d},\"agent\":\"{s}\",\"harness\":\"{s}\",\"session\":\"{s}\",\"sessionTitle\":\"{s}\",\"base\":\"{s}\",\"dirty\":{s},\"packages\":\"{s}\"}}", .{
+		const body = std.fmt.allocPrint(self.allocator, "{{\"name\":\"{s}\",\"cid\":{d},\"cores\":{d},\"memMb\":{d},\"gl\":{s},\"pid\":{d},\"agent\":\"{s}\",\"harness\":\"{s}\",\"session\":\"{s}\",\"sessionTitle\":\"{s}\",\"base\":\"{s}\",\"dirty\":{s},\"packages\":\"{s}\",\"destroyMs\":{d}}}", .{
 			vm.name,
 			vm.cid,
 			vm.cores,
@@ -776,6 +810,7 @@ pub const Vms = struct {
 			base_mem orelse "",
 			dirty,
 			packages_mem orelse "",
+			vm.destroy_ms,
 		}) catch return;
 
 		proc.writeFile(self.io, path, body) catch {};
@@ -821,13 +856,11 @@ pub const Vms = struct {
 		defer arena.deinit();
 		const allocator = arena.allocator();
 
-		const command = std.fmt.allocPrint(allocator,
-			"sudo -n timedatectl set-ntp false >/dev/null 2>&1; " ++
+		const command = std.fmt.allocPrint(allocator, "sudo -n timedatectl set-ntp false >/dev/null 2>&1; " ++
 			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
 			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\\.lock$' | head -1)); " ++
 			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
-			"hyprctl dispatch 'function() hl.monitor({{output=\"Virtual-1\",mode=\"{d}x{d}@279.96\",position=\"auto\",scale=\"{s}\"}}) end'",
-			.{ width, height, scale }) catch return;
+			"hyprctl dispatch 'function() hl.monitor({{output=\"Virtual-1\",mode=\"{d}x{d}@279.96\",position=\"auto\",scale=\"{s}\"}}) end'", .{ width, height, scale }) catch return;
 
 		_ = self.guestExec(cid, &.{ "sh", "-lc", command }, allocator) catch return;
 	}
@@ -916,10 +949,12 @@ pub const Vms = struct {
 	}
 
 	fn destroyVm(self: *Vms, args: json.Value, allocator: Allocator) ![]u8 {
+		return self.removeVm(json.textAt(args, "name"), allocator);
+	}
+
+	fn removeVm(self: *Vms, name: []const u8, allocator: Allocator) ![]u8 {
 		self.op.lockUncancelable(self.io);
 		defer self.op.unlock(self.io);
-
-		const name = json.textAt(args, "name");
 
 		self.mutex.lockUncancelable(self.io);
 		const vm = self.findLocked(name) orelse {
@@ -1374,6 +1409,10 @@ pub const Vms = struct {
 		try writer.print("{d}", .{json.integer(json.field(context, "mem"))});
 		try writer.writeAll(",\"gl\":");
 		try writer.writeAll(if (json.flag(context, "gl")) "true" else "false");
+		if (json.textAt(context, "from").len > 0) {
+			try writer.writeAll(",\"from\":");
+			try std.json.Stringify.encodeJsonString(json.textAt(context, "from"), .{}, writer);
+		}
 		try writer.writeAll("}");
 
 		const created = try self.createVm((try json.parse(allocator, create_args.written())).value, allocator);
@@ -1383,6 +1422,7 @@ pub const Vms = struct {
 		const results_writer = &results.writer;
 		try results_writer.writeAll("[");
 
+		const shots = try std.fs.path.join(allocator, &.{ repo, "vm", "runs", "shots", name });
 		var ok = true;
 		var index: usize = 0;
 
@@ -1423,6 +1463,12 @@ pub const Vms = struct {
 					try step_writer.print("{f}", .{std.json.fmt(keys, .{})});
 				}
 
+				if (std.mem.eql(u8, action, "screenshot") and json.textAt(step, "path").len == 0) {
+					const shot_path = try std.fmt.allocPrint(allocator, "{s}/shot-{d}.png", .{ shots, fmt.nowMs(self.io) });
+					try step_writer.writeAll(",\"path\":");
+					try std.json.Stringify.encodeJsonString(shot_path, .{}, step_writer);
+				}
+
 				try step_writer.writeAll("}");
 
 				result = try self.call(action, (try json.parse(allocator, built.written())).value, allocator);
@@ -1440,10 +1486,16 @@ pub const Vms = struct {
 
 		try results_writer.writeAll("]");
 
-		return std.fmt.allocPrint(allocator, "{{\"scenario\":\"{s}\",\"name\":\"{s}\",\"ok\":{s},\"steps\":{s}}}", .{
+		const keep = json.flag(args, "keep") or json.flag(context, "keep") or json.flag(parsed.value, "keep");
+		const kept = !(ok and !keep);
+		if (!kept) _ = self.removeVm(name, allocator) catch {};
+
+		return std.fmt.allocPrint(allocator, "{{\"scenario\":\"{s}\",\"name\":\"{s}\",\"ok\":{s},\"kept\":{s},\"proof\":\"{s}\",\"steps\":{s}}}", .{
 			scenario,
 			name,
 			if (ok) "true" else "false",
+			if (kept) "true" else "false",
+			shots,
 			results.written(),
 		});
 	}
@@ -1463,9 +1515,7 @@ pub const Vms = struct {
 		if (exec.run(self.io, self.allocator, &.{ "hyprctl", "clients", "-j" })) |result| {
 			defer result.deinit(self.allocator);
 			if (std.mem.indexOf(u8, result.out, class) != null) {
-				const focus = std.fmt.allocPrint(allocator,
-					"function() for _,w in ipairs(hl.get_windows()) do if w.class == \"{s}\" then hl.dispatch(hl.dsp.focus({{window=w}})) return end end end",
-					.{class}) catch return allocator.dupe(u8, "{}");
+				const focus = std.fmt.allocPrint(allocator, "function() for _,w in ipairs(hl.get_windows()) do if w.class == \"{s}\" then hl.dispatch(hl.dsp.focus({{window=w}})) return end end end", .{class}) catch return allocator.dupe(u8, "{}");
 				const hypr = @import("../primitives/hypr.zig");
 				const reply = hypr.request(self.io, allocator, focus) catch null;
 				if (reply) |body| allocator.free(body);
@@ -1658,12 +1708,10 @@ pub const Vms = struct {
 		else
 			"launcher";
 
-		const command = try std.fmt.allocPrint(allocator,
-			"export XDG_RUNTIME_DIR=/run/user/1000; " ++
+		const command = try std.fmt.allocPrint(allocator, "export XDG_RUNTIME_DIR=/run/user/1000; " ++
 			"export WAYLAND_DISPLAY=$(basename $(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\\.lock$' | head -1)); " ++
 			"export HYPRLAND_INSTANCE_SIGNATURE=$(ls /run/user/1000/hypr | head -1); " ++
-			"hyprctl dispatch 'hl.dsp.global(\"quickshell:{s}\")'",
-			.{glyph});
+			"hyprctl dispatch 'hl.dsp.global(\"quickshell:{s}\")'", .{glyph});
 
 		const result = try self.guestExec(cid, &.{ "sh", "-lc", command }, allocator);
 		if (result.code != 0) return error.UiFailed;
@@ -1709,18 +1757,26 @@ pub const Vms = struct {
 
 		if (keys.len == 0) return error.MissingArgs;
 
+		const asked = json.integer(json.field(args, "hold"));
+		const hold = std.math.clamp(if (asked == 0) 30 else asked, 10, 10000);
+
 		var body: std.Io.Writer.Allocating = .init(allocator);
 		const writer = &body.writer;
 		try writer.writeAll("{\"keys\":[");
 
 		for (keys, 0..) |item, index| {
 			if (index > 0) try writer.writeAll(",");
+
+			const key = input.hardwareOf(json.text(item)) orelse blk: {
+				break :blk try std.ascii.allocLowerString(allocator, json.text(item));
+			};
+
 			try writer.writeAll("{\"type\":\"qcode\",\"data\":");
-			try std.json.Stringify.encodeJsonString(json.text(item), .{}, writer);
+			try std.json.Stringify.encodeJsonString(key, .{}, writer);
 			try writer.writeAll("}");
 		}
 
-		try writer.writeAll("],\"hold-time\":30}");
+		try writer.print("],\"hold-time\":{d}}}", .{hold});
 
 		const client = self.qmpOf(name) orelse return error.NotRunning;
 		_ = client.execute(allocator, "send-key", body.written()) catch return error.KeyFailed;
@@ -1902,6 +1958,7 @@ pub const Vms = struct {
 			.tier = .off,
 			.created_ms = fmt.nowMs(self.io),
 			.used_ms = fmt.nowMs(self.io),
+			.destroy_ms = idleDestroyDefault(),
 		};
 
 		self.mutex.lockUncancelable(self.io);
@@ -1942,6 +1999,9 @@ pub const Vms = struct {
 	fn vmName(self: *Vms, args: json.Value) ![]const u8 {
 		const name = json.textAt(args, "name");
 		if (name.len > 0) return name;
+
+		const session = json.textAt(args, "session");
+		if (session.len > 0) return session;
 
 		return std.fmt.allocPrint(self.allocator, "vm-{d}", .{fmt.nowMs(self.io)});
 	}
@@ -2059,6 +2119,12 @@ test "the balloon target fits a four gigabyte guest" {
 	try std.testing.expectEqual(@as(u64, 3221225472), balloonBytes(4096));
 }
 
+test "the idle destroy ignores the off switch and fires past the deadline" {
+	try std.testing.expect(!idleDestroy(0, 0, 86400000));
+	try std.testing.expect(!idleDestroy(1000, 5000, 5500));
+	try std.testing.expect(idleDestroy(1000, 5000, 7000));
+}
+
 fn safePath(path: []const u8) bool {
 	if (path.len == 0 or path.len > 256) return false;
 	if (std.mem.indexOfScalar(u8, path, '\'') != null) return false;
@@ -2075,6 +2141,20 @@ fn validName(name: []const u8) bool {
 	}
 
 	return true;
+}
+
+fn idleDestroyDefault() i64 {
+	const raw = std.c.getenv("YUDAE_VM_IDLE_DESTROY_MS") orelse return 86400000;
+	return @max(std.fmt.parseInt(i64, std.mem.span(raw), 10) catch 86400000, 0);
+}
+
+fn destroyIdleOf(args: json.Value) i64 {
+	if (json.field(args, "destroyIdleMs")) |value| return @max(json.integer(value), 0);
+	return idleDestroyDefault();
+}
+
+fn idleDestroy(destroy_ms: i64, used_ms: i64, now: i64) bool {
+	return destroy_ms > 0 and now - used_ms > destroy_ms;
 }
 
 fn waitFile(io: Io, path: []const u8, timeout_ms: i64) !bool {

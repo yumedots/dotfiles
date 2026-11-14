@@ -12,6 +12,7 @@ Item {
 	property real rowHeight: 0
 	property real rowSpacing: Config.procsGap
 	property real scrollWidth: Config.scrollbarWidth
+	property real highlightRadius: Config.rowRadius
 
 	readonly property int count: list.count
 	readonly property var current: list.currentItem ? list.currentItem.modelData : null
@@ -28,12 +29,19 @@ Item {
 			list.currentIndex = root.currentIndex;
 	}
 
+	property real offset: 0
+
+	function place(y) {
+		root.offset = Calc.clamp(y, 0, Math.max(0, list.contentHeight - list.height));
+		list.contentY = root.offset;
+	}
+
 	function scroll(step) {
-		list.contentY = Calc.clamp(list.contentY + step, 0, Math.max(0, list.contentHeight - list.height));
+		root.place(root.offset + step);
 	}
 
 	function reset() {
-		list.contentY = 0;
+		root.place(0);
 	}
 
 	function move(step) {
@@ -66,7 +74,7 @@ Item {
 		const step = root.rowHeight + root.rowSpacing;
 		const top = index * step;
 
-		list.contentY = Math.min(Math.max(top < list.contentY ? top : (top + root.rowHeight > list.contentY + list.height ? top + root.rowHeight - list.height : list.contentY), 0), Math.max(0, list.contentHeight - list.height));
+		root.place(top < root.offset ? top : (top + root.rowHeight > root.offset + list.height ? top + root.rowHeight - list.height : root.offset));
 	}
 
 	onCountChanged: {
@@ -87,24 +95,37 @@ Item {
 		clip: true
 		spacing: root.rowSpacing
 		boundsBehavior: Flickable.StopAtBounds
+		interactive: false
 		keyNavigationEnabled: false
 		highlightFollowsCurrentItem: true
 		highlightMoveDuration: 0
 		highlightResizeDuration: 0
 
 		onModelChanged: {
+			Qt.callLater(root.place, root.offset);
 			root.applyIndex();
 			Qt.callLater(root.applyIndex);
 		}
 
 		highlight: Highlight {
 			fillParent: false
+			radius: root.highlightRadius
 		}
-
 	}
 
 	Scrollbar {
 		visible: root.scrollWidth > 0 && list.contentHeight > list.height + 1
 		view: list
 	}
+
+	MouseArea {
+		anchors.fill: list
+		acceptedButtons: Qt.NoButton
+
+		onWheel: function (wheel) {
+			root.scroll((wheel.angleDelta.y > 0 ? -1 : 1) * (root.rowHeight + root.rowSpacing));
+			wheel.accepted = true;
+		}
+	}
+
 }

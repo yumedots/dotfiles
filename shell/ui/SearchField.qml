@@ -8,6 +8,8 @@ Rectangle {
 	property string glyph: Config.launcherPrompt
 	property string hintKey: ""
 	property string hintText: ""
+	property string placeholder: ""
+	property int echoMode: TextInput.Normal
 	property bool typing: false
 	property color boxColor: Config.launcherSearchBox
 	property real size: Config.launcherFontSize
@@ -16,6 +18,7 @@ Rectangle {
 	property real gap: Math.round(root.size * 0.625)
 	property real padding: Config.procSearchPadding
 	property real boxHeight: 0
+	property real corner: Config.rowRadius
 
 	signal accepted()
 	signal edited()
@@ -23,13 +26,14 @@ Rectangle {
 
 	readonly property bool hint: !root.typing && root.hintKey !== "" && input.text === ""
 	readonly property string hintLabel: root.hintText.length > root.hintKey.length ? root.hintText.slice(root.hintKey.length).trim() : ""
-	readonly property real slot: root.glyphSlot > 0 ? root.glyphSlot : icon.implicitWidth
+	readonly property real slot: root.slotWidth
+	readonly property real slotWidth: root.glyphSlot > 0 ? root.glyphSlot : (root.glyph === "" ? 0 : root.glyphSize)
 	readonly property real lineHeight: Math.round(root.size * 1.6)
 
 	implicitWidth: 2 * root.padding + root.slot + root.gap + (root.hintKey !== "" ? keycap.implicitWidth : Config.procSearchMinWidth)
 	implicitHeight: root.boxHeight > 0 ? root.boxHeight : root.lineHeight + 2 * root.padding
 	color: root.boxColor
-	radius: 0
+	radius: root.corner
 
 	function focusInput() {
 		input.forceActiveFocus();
@@ -48,20 +52,18 @@ Rectangle {
 			root.focusInput();
 	}
 
-	Text {
+	Glyph {
 		id: icon
 
 		anchors.left: parent.left
 		anchors.leftMargin: root.padding
 		anchors.verticalCenter: parent.verticalCenter
 
-		width: root.slot
-		horizontalAlignment: Text.AlignHCenter
-
-		font.family: Config.fontFamily
-		font.pixelSize: root.glyphSize
+		width: root.slotWidth
+		height: root.glyphSize
+		size: root.glyphSize
 		color: Config.foreground
-		text: root.glyph
+		glyph: root.glyph
 	}
 
 	Text {
@@ -88,6 +90,7 @@ Rectangle {
 		anchors.verticalCenter: parent.verticalCenter
 
 		visible: !root.hint
+		echoMode: root.echoMode
 		clip: true
 		focus: root.typing
 		selectByMouse: false
@@ -109,6 +112,17 @@ Rectangle {
 
 			root.keyPressed(event);
 		}
+	}
+
+	Text {
+		anchors.left: input.left
+		anchors.verticalCenter: parent.verticalCenter
+
+		visible: !root.hint && input.text === "" && root.placeholder !== ""
+		font.family: Config.fontFamily
+		font.pixelSize: root.size
+		color: Config.muted
+		text: root.placeholder
 	}
 
 	MouseArea {

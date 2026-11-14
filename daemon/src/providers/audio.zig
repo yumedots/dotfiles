@@ -85,6 +85,7 @@ const Out = struct {
 	hasInput: bool,
 	recording: bool,
 	watch: bool,
+	tick: u64,
 };
 
 pub const Audio = struct {
@@ -99,7 +100,9 @@ pub const Audio = struct {
 	source: i64 = 0,
 	has_input: bool = false,
 	watch: std.atomic.Value(bool) = .init(false),
+	tick: std.atomic.Value(u64) = .init(0),
 	dirty: std.atomic.Value(bool) = .init(true),
+	publish_wanted: std.atomic.Value(bool) = .init(false),
 	write_mutex: std.Io.Mutex = .init,
 	write_ready: std.Io.Condition = .init,
 	writes: [16]Write = undefined,
@@ -141,6 +144,23 @@ pub const Audio = struct {
 
 		const writer = try std.Thread.spawn(.{}, writeLoop, .{self});
 		writer.detach();
+
+		const publisher = try std.Thread.spawn(.{}, publishLoop, .{self});
+		publisher.detach();
+	}
+
+	fn publishLoop(self: *Audio) void {
+		while (true) {
+			sleep.ms(20);
+
+			if (!self.publish_wanted.swap(false, .monotonic)) continue;
+
+			self.hub.publish();
+		}
+	}
+
+	fn wakePublish(self: *Audio) void {
+		self.publish_wanted.store(true, .monotonic);
 	}
 
 	fn writeLoop(self: *Audio) void {
@@ -178,8 +198,6 @@ pub const Audio = struct {
 		if (exec.run(self.io, self.allocator, argv.items)) |result| {
 			result.deinit(self.allocator);
 		} else |_| {}
-
-		self.sampleSerial();
 	}
 
 	fn takeWrite(self: *Audio) ?Write {
@@ -438,6 +456,7 @@ pub const Audio = struct {
 			const state = json.textAt(info, "state");
 
 			var volume: f64 = 0;
+			var have_volume = false;
 			var mute = false;
 
 			if (json.field(info, "params")) |params| {
@@ -448,9 +467,10 @@ pub const Audio = struct {
 						if (json.field(first, "channelVolumes")) |channels| {
 							for (json.list(channels)) |channel| volume = @max(volume, json.number(channel));
 							volume = std.math.cbrt(volume);
+							have_volume = true;
 						}
 
-						if (volume == 0) {
+						if (!have_volume) {
 							if (json.field(first, "volume")) |value| {
 								switch (value) {
 									.integer, .float, .number_string => volume = json.number(value),
@@ -562,6 +582,32 @@ pub const Audio = struct {
 		return changed;
 	}
 
+	pub fn step(self: *Audio, delta: f64) void {
+		_ = self.tick.fetchAdd(1, .monotonic);
+
+		const until = std.Io.Clock.real.now(self.io).toMilliseconds() + pending_ms;
+
+		var id: i64 = 0;
+		var level: f64 = 0;
+
+		self.mutex.lockUncancelable(self.io);
+		for (self.nodes.items) |*node| {
+			if (node.id != self.sink) continue;
+
+			node.volume = std.math.clamp(node.volume + delta, 0, 1);
+			node.pending = node.volume;
+			node.pending_until = until;
+			id = node.id;
+			level = node.volume;
+		}
+		self.mutex.unlock(self.io);
+
+		if (id <= 0) return;
+
+		self.wakePublish();
+		self.queueWrite(.{ .id = id, .level = level, .kind = .volume });
+	}
+
 	pub fn setVolume(self: *Audio, id: i64, fraction: f64) void {
 		const level = std.math.clamp(fraction, 0, 1);
 		const until = std.Io.Clock.real.now(self.io).toMilliseconds() + pending_ms;
@@ -576,7 +622,7 @@ pub const Audio = struct {
 		}
 		self.mutex.unlock(self.io);
 
-		self.hub.publish();
+		self.wakePublish();
 		self.queueWrite(.{ .id = id, .level = level, .kind = .volume });
 	}
 
@@ -677,6 +723,7 @@ pub const Audio = struct {
 			.hasInput = self.has_input,
 			.recording = recording,
 			.watch = self.watch.load(.monotonic),
+			.tick = self.tick.load(.monotonic),
 		}, .{})});
 	}
 };
@@ -781,7 +828,10 @@ const dump_fixture =
 	\\   "params":{"Props":[{"volume":1.0,"channelVolumes":[0.064,0.064],"mute":false}]}}},
 	\\ {"id":68,"type":"PipeWire:Interface:Node","info":{"state":"running","props":{
 	\\   "media.class":"Stream/Output/Audio","node.name":"player","application.name":"Player",
-	\\   "application.process.id":1234},"params":{"Props":[{"volume":0.25,"mute":false}]}}}
+	\\   "application.process.id":1234},"params":{"Props":[{"volume":0.25,"mute":false}]}}},
+	\\ {"id":70,"type":"PipeWire:Interface:Node","info":{"state":"running","props":{
+	\\   "media.class":"Stream/Output/Audio","node.name":"silent","application.name":"Silent"},
+	\\   "params":{"Props":[{"volume":1.0,"channelVolumes":[0.0,0.0],"mute":false}]}}}
 	\\]
 ;
 
@@ -798,7 +848,7 @@ test "pw-dump maps to the mixer shape" {
 
 	try std.testing.expect(audio.apply(dump_fixture));
 
-	try std.testing.expectEqual(@as(usize, 4), audio.nodes.items.len);
+	try std.testing.expectEqual(@as(usize, 5), audio.nodes.items.len);
 	try std.testing.expectEqual(@as(i64, 52), audio.sink);
 	try std.testing.expectEqual(@as(i64, 54), audio.source);
 	try std.testing.expectEqual(false, audio.has_input);
@@ -817,6 +867,9 @@ test "pw-dump maps to the mixer shape" {
 	const mic = audio.nodes.items[1];
 	try std.testing.expect(mic.mute);
 	try std.testing.expectEqual(@as(f64, 1), mic.volume);
+
+	const silent = audio.nodes.items[4];
+	try std.testing.expectEqual(@as(f64, 0), silent.volume);
 }
 
 test "only audio objects wake the mixer" {

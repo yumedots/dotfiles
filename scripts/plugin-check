@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""Check every plugin folder against the plugin manifest contract."""
+
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+KINDS = {"hypr", "theme", "shell", "app", "daemon"}
+ID_RE = re.compile(r"^_?[a-z][a-z0-9-]*$")
+BINARY_SUFFIXES = {".so", ".bin", ".o", ".a", ".dylib", ".dll", ".exe"}
+MANIFEST_KEYS = {"id", "kind", "version", "requires", "build", "provides"}
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$")
+
+
+class Failure(Exception):
+    pass
+
+
+def color_keys():
+    text = (ROOT / "shell" / "services" / "Config.qml").read_text()
+    return set(re.findall(r'settings\.(\w+) !== undefined \? settings\.\w+ : "#[0-9a-fA-F]{6,8}"', text))
+
+
+def manifest(plugin_dir):
+    path = plugin_dir / "plugin.toml"
+    try:
+        with path.open("rb") as handle:
+            data = tomllib.load(handle)
+    except FileNotFoundError:
+        raise Failure("missing plugin.toml")
+    except tomllib.TOMLDecodeError as error:
+        raise Failure(f"bad plugin.toml: {error}")
+
+    unknown = set(data) - MANIFEST_KEYS
+    if unknown:
+        raise Failure(f"unknown manifest keys: {', '.join(sorted(unknown))}")
+
+    plugin_id = data.get("id")
+    if not isinstance(plugin_id, str) or not ID_RE.match(plugin_id):
+        raise Failure("id must match ^_?[a-z][a-z0-9-]*$")
+    if plugin_id != plugin_dir.name:
+        raise Failure(f"id {plugin_id!r} does not match folder {plugin_dir.name!r}")
+
+    kind = data.get("kind")
+    if kind not in KINDS:
+        raise Failure(f"unknown kind {kind!r}")
+
+    version = data.get("version")
+    if not isinstance(version, str) or not version:
+        raise Failure("version must be a non-empty string")
+
+    build = data.get("build")
+    if not isinstance(build, str) or not build:
+        raise Failure("build must be a non-empty command string")
+
+    provides = data.get("provides")
+    if not isinstance(provides, list) or not provides:
+        raise Failure("provides must be a non-empty array")
+    for item in provides:
+        if not isinstance(item, str) or not item:
+            raise Failure("provides entries must be non-empty strings")
+        pure = Path(item)
+        if pure.is_absolute() or ".." in pure.parts:
+            raise Failure(f"provides entry escapes the build dir: {item!r}")
+
+    requires = data.get("requires", {})
+    if not isinstance(requires, dict):
+        raise Failure("requires must be a table")
+    for name, constraint in requires.items():
+        if name != "hyprland":
+            raise Failure(f"unknown requirement {name!r}")
+        parse_constraint(constraint)
+
+    return data
+
+
+def parse_constraint(text):
+    if not isinstance(text, str):
+        raise Failure("requires.hyprland must be a string")
+    match = re.fullmatch(r"(>=|<=|>|<|=)?\s*(\d+(?:\.\d+){0,2})", text.strip())
+    if not match:
+        raise Failure(f"bad requires.hyprland constraint {text!r}")
+    operator = match.group(1) or "="
+    version = tuple(int(part) for part in match.group(2).split("."))
+    return operator, version
+
+
+def satisfies(have, operator, want):
+    width = max(len(have), len(want))
+    have += (0,) * (width - len(have))
+    want += (0,) * (width - len(want))
+    if operator == ">=":
+        return have >= want
+    if operator == "<=":
+        return have <= want
+    if operator == ">":
+        return have > want
+    if operator == "<":
+        return have < want
+    return have == want
+
+
+def check_requires(data, kind):
+    requirement = data.get("requires", {}).get("hyprland")
+    if requirement is None:
+        return
+    operator, want = parse_constraint(requirement)
+    try:
+        output = subprocess.run(
+            ["pkg-config", "--modversion", "hyprland"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        if kind == "hypr":
+            raise Failure("requires hyprland but pkg-config cannot find it")
+        return
+    have = tuple(int(part) for part in re.findall(r"\d+", output)[:3])
+    if not satisfies(have, operator, want):
+        raise Failure(f"hyprland {output} does not satisfy {requirement}")
+
+
+def binary(path):
+    if path.suffix.lower() in BINARY_SUFFIXES:
+        return True
+    try:
+        with path.open("rb") as handle:
+            return handle.read(4) == b"\x7fELF"
+    except OSError:
+        return False
+
+
+def check_source_only(plugin_dir):
+    for path in plugin_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        if binary(path):
+            raise Failure(f"binary in plugin folder: {path.relative_to(plugin_dir)}")
+
+
+def build(plugin_dir, data):
+    out = Path(tempfile.mkdtemp(prefix=f"yudae-{plugin_dir.name}-"))
+    before = {path.relative_to(plugin_dir) for path in plugin_dir.rglob("*")}
+    command = data["build"]
+    try:
+        result = subprocess.run(
+            ["sh", "-c", command],
+            cwd=plugin_dir,
+            env={**os.environ, "OUT": str(out)},
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
+    except subprocess.TimeoutExpired:
+        raise Failure("build timed out")
+    if result.returncode != 0:
+        tail = (result.stdout + result.stderr).strip().splitlines()[-12:]
+        raise Failure("build failed:\n" + "\n".join(tail))
+
+    for item in data["provides"]:
+        if not (out / item).is_file():
+            raise Failure(f"build did not write {item}")
+
+    after = {path.relative_to(plugin_dir) for path in plugin_dir.rglob("*")}
+    for added in after - before:
+        path = plugin_dir / added
+        if path.is_file() and not path.is_symlink():
+            raise Failure(f"build wrote into the plugin folder: {added}")
+
+    return out
+
+
+def check_theme(plugin_dir, data, out):
+    if "theme.toml" not in data["provides"]:
+        raise Failure("theme plugin must provide theme.toml")
+    with (out / "theme.toml").open("rb") as handle:
+        theme = tomllib.load(handle)
+    tables = {name: entries for name, entries in theme.items() if isinstance(entries, dict)}
+    if not tables or not any(tables.values()):
+        raise Failure("theme.toml needs at least one color table")
+    allowed = color_keys()
+    for section, entries in tables.items():
+        for name, value in entries.items():
+            if isinstance(value, bool):
+                continue
+            if name not in allowed:
+                raise Failure(f"theme color {section}.{name} is not a shell setting")
+            if not isinstance(value, str) or not COLOR_RE.match(value):
+                raise Failure(f"theme color {section}.{name} is not #rrggbb or #aarrggbb")
+
+
+def check_hypr(plugin_dir, data):
+    if not (plugin_dir / "hypr.lua").is_file():
+        raise Failure("hypr plugin needs hypr.lua")
+    if not any(item.endswith((".so", ".bin")) for item in data["provides"]):
+        raise Failure("hypr plugin must provide a .so or .bin")
+
+
+def check_shell(plugin_dir):
+    files = sorted(path for path in plugin_dir.rglob("*.qml") if path.is_file())
+    if not files:
+        raise Failure("shell plugin has no QML")
+    lint = os.environ.get("QMLLINT") or shutil.which("qmllint") or "/usr/lib/qt6/bin/qmllint"
+    if not Path(lint).is_file():
+        raise Failure("qmllint is missing")
+    with tempfile.TemporaryDirectory(prefix="yudae-qml-") as imports:
+        os.symlink(ROOT / "shell", Path(imports) / "qs")
+        result = subprocess.run(
+            [lint, "-I", imports, "-I", str(plugin_dir)] + [str(path) for path in files],
+            capture_output=True,
+            text=True,
+        )
+    if result.returncode != 0:
+        reason = "qmllint syntax error" if result.returncode == 255 else "qmllint failed"
+        tail = (result.stdout + result.stderr).strip().splitlines()[-12:]
+        raise Failure(reason + ":\n" + "\n".join(tail))
+
+
+def check(root):
+    if not root.is_dir():
+        raise Failure(f"missing {root}")
+    plugins = sorted(path for path in root.iterdir() if path.is_dir() and not path.name.startswith("."))
+    for plugin_dir in plugins:
+        data = manifest(plugin_dir)
+        check_requires(data, data["kind"])
+        check_source_only(plugin_dir)
+        out = build(plugin_dir, data)
+        try:
+            if data["kind"] == "theme":
+                check_theme(plugin_dir, data, out)
+            elif data["kind"] == "hypr":
+                check_hypr(plugin_dir, data)
+            elif data["kind"] == "shell":
+                check_shell(plugin_dir)
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+        print(f"ok {plugin_dir.name} ({data['kind']})")
+    print(f"plugins: {len(plugins)} checked")
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("root", nargs="?", type=Path, default=ROOT / "plugins")
+    args = parser.parse_args()
+    try:
+        return check(args.root)
+    except Failure as error:
+        print(f"plugin check failed: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

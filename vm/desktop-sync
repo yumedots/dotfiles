@@ -11,7 +11,6 @@ mkdir -p "$BIN" "$WALL" "$STATE"
 timezone=$(cat /etc/timezone 2>/dev/null || true)
 [ -n "$timezone" ] || timezone=$(readlink -f /etc/localtime | sed 's|.*/zoneinfo/||')
 printf '%s\n' "$timezone" > "$STATE/timezone"
-date +%s > "$STATE/epoch"
 
 for name in awww awww-daemon; do
 	[ -x "/usr/bin/$name" ] && cp -f "/usr/bin/$name" "$BIN/$name"

@@ -32,7 +32,7 @@ Item {
 
 		match = text.match(/^0x([0-9a-f]{8})$/i);
 
-		return match ? "#" + match[1] : text || "#70000000";
+		return match ? "#" + match[1] : text || Config.surfaceTranslucent;
 	}
 
 	Item {

@@ -1,0 +1,102 @@
+[colors]
+mono = true
+surface = "#282828"
+surfaceTranslucent = "#ff282828"
+foreground = "#ebdbb2"
+dim = "#5a524c"
+red = "#fb4934"
+yellow = "#fabd2f"
+muted = "#ebdbb2"
+toggleTrack = "#504945"
+toggleHover = "#665c54"
+toggleLabelInk = "#282828"
+toggleFaded = "#ebdbb2"
+
+[bar]
+borderFallbackColor = "#83a598"
+barStatMono = true
+
+[cpu]
+cpuBase = "#d3869b"
+cpuCore = "#83a598"
+cpuBaseMono = "#ebdbb2"
+cpuPeak = "#fb4934"
+cpuPeakMono = "#ebdbb2"
+cpuIdle = "#3c3836"
+
+[memory]
+memoryBase = "#b8bb26"
+memoryBaseMono = "#ebdbb2"
+memoryCached = "#83a598"
+memoryCachedMono = "#ebdbb2"
+memoryBuffers = "#504945"
+memoryBuffersMono = "#ebdbb2"
+memoryFree = "#3c3836"
+memorySwap = "#83a598"
+memoryWarn = "#fabd2f"
+memoryWarnMono = "#ebdbb2"
+memoryDanger = "#fb4934"
+memoryDangerMono = "#ebdbb2"
+memorySeparatorColor = "#282828"
+
+[mixer]
+mixerSeparatorColor = "#3c3836"
+
+[media]
+volumeBase = "#ebdbb2"
+
+[launcher]
+launcherSearchBox = "#3c3836"
+launcherHighlight = "#504945"
+launcherHighlightText = "#ebdbb2"
+
+[power]
+powerBase = "#b8bb26"
+powerBaseMono = "#ebdbb2"
+powerWarn = "#fabd2f"
+powerDanger = "#fb4934"
+
+[weather]
+weatherBase = "#8ec07c"
+weatherBaseMono = "#ebdbb2"
+weatherSeparatorColor = "#3c3836"
+weatherDayCardColor = "#504945"
+weatherDayLabelColor = "#ebdbb2"
+
+[calendar]
+calendarBase = "#ebdbb2"
+calendarOutside = "#ebdbb2"
+calendarTodayBox = "#3c3836"
+calendarTrack = "#504945"
+calendarCursor = "#ebdbb2"
+calendarDialNight = "#504945"
+calendarDialRed = "#fb4934"
+calendarDialOrange = "#fe8019"
+calendarDialYellow = "#fabd2f"
+calendarDialCream = "#fbf1c7"
+calendarDialNoon = "#ebdbb2"
+calendarDialDay = "#8ec07c"
+
+[notify]
+notifyBase = "#ebdbb2"
+notifySeparatorColor = "#3c3836"
+
+[contrib]
+contribBase = "#b8bb26"
+contribBaseMono = "#ebdbb2"
+contribEmpty = "#32302f"
+
+[display]
+displayBase = "#83a598"
+displayBaseMono = "#ebdbb2"
+displaySeparatorColor = "#3c3836"
+
+[network]
+networkBase = "#83a598"
+networkBaseMono = "#ebdbb2"
+networkDown = "#b8bb26"
+networkDownMono = "#ebdbb2"
+networkUp = "#d3869b"
+networkUpMono = "#ebdbb2"
+networkIdle = "#3c3836"
+networkBarsOff = "#3c3836"

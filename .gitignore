@@ -1,8 +1,9 @@
 shell/cache
-hypr/plugins/agent-cursor/agent-cursor.bin
+plugins/**/*.so
+plugins/**/*.bin
+plugins/**/*.o
 .DS_Store
 trashrc
-hypr/plugins/borders-plus-plus/borders-plus-plus.so
 .xmake/
 /vm/runs/
 /daemon/.zig-cache-headless/
@@ -13,3 +14,5 @@ shell/native/qml
 /build/
 config/zsh/.zcompdump-*
 config/zsh/.zsh_history
+/bench/images.jsonl
+/config/kconf_updaterc

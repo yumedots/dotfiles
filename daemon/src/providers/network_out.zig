@@ -13,12 +13,22 @@ pub const WifiOut = struct {
 	ssid: []const u8,
 	security: []const u8,
 	locked: bool,
+	saved: bool,
 	signal: i64,
 	signalText: []const u8,
 	bars: i64,
 	channel: i64,
 	frequency: i64,
 	inUse: bool,
+};
+
+pub const AdapterOut = struct {
+	kind: []const u8,
+	iface: []const u8,
+	state: []const u8,
+	connection: []const u8,
+	connected: bool,
+	active: bool,
 };
 
 pub const DetailOut = struct {
@@ -67,6 +77,12 @@ pub const Out = struct {
 	dnsPending: bool,
 	dnsError: []const u8,
 	wifi: []WifiOut,
+	radio: bool,
+	hasWifi: bool,
+	adapters: []AdapterOut,
+	wifiPending: []const u8,
+	wifiError: []const u8,
+	wifiAsk: []const u8,
 	speed: SpeedOut,
 };
 

@@ -1,0 +1,5 @@
+id = "_template-theme"
+kind = "theme"
+version = "0.1.0"
+build = "make"
+provides = ["theme.toml"]

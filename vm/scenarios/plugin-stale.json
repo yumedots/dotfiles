@@ -1,0 +1,20 @@
+{
+  "context": { "cores": 2, "mem": 4096, "gl": true },
+  "steps": [
+    { "do": "wait", "until": "guest", "timeout": 60000 },
+    { "do": "wait", "until": "exec:pgrep -x yudaemond", "timeout": 60000 },
+    { "do": "wait", "until": "exec:pgrep -x quickshell", "timeout": 60000 },
+    { "do": "exec", "cmd": "d=/home/gabriel/.local/share/yudae/plugins/stale; mkdir -p $d; printf 'id = \"stale\"\\nkind = \"hypr\"\\nversion = \"1\"\\nbuild = \"touch $OUT/stale.so\"\\nprovides = [\"stale.so\"]\\n' > $d/plugin.toml; printf -- '-- fixture\\n' > $d/hypr.lua; printf 'one\\n' > $d/source.txt", "code": 0 },
+    { "do": "exec", "cmd": "mkdir -p /home/gabriel/.local/state/yudae && printf 'load = [\"stale\"]\\n' > /home/gabriel/.local/state/yudae/plugins.toml", "code": 0 },
+    { "do": "exec", "cmd": "/home/gabriel/dotfiles/scripts/yudae plugin reload", "code": 0 },
+    { "do": "wait", "until": "exec:test -f /home/gabriel/.local/state/yudae/build/stale/stamp", "timeout": 30000 },
+    { "do": "sleep", "ms": 1100 },
+    { "do": "exec", "cmd": "stat -c %Y /home/gabriel/.local/state/yudae/build/stale/stamp > /tmp/stale-before", "code": 0 },
+    { "do": "sleep", "ms": 1100 },
+    { "do": "exec", "cmd": "printf 'two\\n' >> /home/gabriel/.local/share/yudae/plugins/stale/source.txt", "code": 0 },
+    { "do": "exec", "cmd": "/home/gabriel/dotfiles/scripts/yudae plugin reload", "code": 0 },
+    { "do": "wait", "until": "exec:test \"$(stat -c %Y /home/gabriel/.local/state/yudae/build/stale/stamp)\" -gt \"$(cat /tmp/stale-before)\"", "timeout": 30000 },
+    { "do": "screenshot" }
+  ],
+  "proof": "editing plugin source makes the stamp stale and rebuilds it"
+}

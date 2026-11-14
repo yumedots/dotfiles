@@ -3,6 +3,7 @@ const hubmod = @import("../hub.zig");
 const hypr = @import("../primitives/hypr.zig");
 const json = @import("../primitives/json.zig");
 const exec = @import("../primitives/exec.zig");
+const proc = @import("../primitives/proc.zig");
 const sleep = @import("../primitives/sleep.zig");
 const sock = @import("../primitives/sock.zig");
 
@@ -60,6 +61,7 @@ pub const Workspaces = struct {
 	}
 
 	pub fn start(self: *Workspaces) !void {
+		self.seed();
 		self.refresh();
 
 		const listener = try std.Thread.spawn(.{}, loop, .{self});
@@ -123,6 +125,17 @@ pub const Workspaces = struct {
 		self.allocator.free(answer);
 	}
 
+	fn seed(self: *Workspaces) void {
+		var arena = std.heap.ArenaAllocator.init(self.allocator);
+		defer arena.deinit();
+
+		const allocator = arena.allocator();
+		const path = std.fmt.allocPrint(allocator, "{s}/shell/cache/versions.json", .{proc.repo(self.io, allocator)}) catch return;
+		const body = proc.readFile(self.io, allocator, path) catch return;
+
+		seedVersions(&self.versions, allocator, body);
+	}
+
 	pub fn refresh(self: *Workspaces) void {
 		var arena = std.heap.ArenaAllocator.init(self.allocator);
 		defer arena.deinit();
@@ -151,6 +164,20 @@ pub const Workspaces = struct {
 			}
 		}
 
+		const name = json.textAt(active_json.value, "name");
+		const active_id = json.integer(json.field(active_json.value, "id"));
+		const place = slotOf(name);
+		const slot = if (place) |found| found.slot else active_id;
+		const version = if (place) |found| found.version else 1;
+
+		if (name.len > 0 and slot > 0 and slot <= max_slot) self.versions[@intCast(slot)] = version;
+
+		for (self.versions, 0..) |held, index| {
+			if (index == 0 or held <= 1) continue;
+
+			ids.append(allocator, @intCast(index)) catch {};
+		}
+
 		std.mem.sort(i64, ids.items, {}, std.sort.asc(i64));
 
 		var unique: usize = 0;
@@ -159,14 +186,6 @@ pub const Workspaces = struct {
 			ids.items[unique] = id;
 			unique += 1;
 		}
-
-		const name = json.textAt(active_json.value, "name");
-		const active_id = json.integer(json.field(active_json.value, "id"));
-		const place = slotOf(name);
-		const slot = if (place) |found| found.slot else active_id;
-		const version = if (place) |found| found.version else 1;
-
-		if (name.len > 0 and slot > 0 and slot <= max_slot) self.versions[@intCast(slot)] = version;
 
 		const changed = !std.mem.eql(i64, self.ids.items, ids.items[0..unique]) or self.focused_slot != slot or self.focused_version != version;
 
@@ -180,6 +199,23 @@ pub const Workspaces = struct {
 		if (changed) self.hub.publish();
 	}
 };
+
+fn seedVersions(versions: *[max_slot + 1]i64, allocator: Allocator, body: []const u8) void {
+	const parsed = json.parse(allocator, body) catch return;
+	const map = switch (parsed.value) {
+		.object => |object| object,
+		else => return,
+	};
+
+	var it = map.iterator();
+	while (it.next()) |entry| {
+		const slot = std.fmt.parseInt(i64, entry.key_ptr.*, 10) catch continue;
+		const version = json.integer(entry.value_ptr.*);
+		if (slot < 1 or slot > max_slot or version < 2) continue;
+
+		versions[@intCast(slot)] = version;
+	}
+}
 
 const Place = struct { slot: i64, version: i64 };
 
@@ -198,4 +234,16 @@ test "versioned workspace names carry a slot and a version" {
 	try std.testing.expectEqual(@as(i64, 2), slotOf("v3.2").?.version);
 	try std.testing.expect(slotOf("3") == null);
 	try std.testing.expect(slotOf("vx.1") == null);
+}
+
+test "saved versions keep their slots" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	var versions: [max_slot + 1]i64 = @splat(1);
+	seedVersions(&versions, arena.allocator(), "{\"3\":2,\"9\":4,\"x\":5,\"70\":2}");
+
+	try std.testing.expectEqual(@as(i64, 2), versions[3]);
+	try std.testing.expectEqual(@as(i64, 4), versions[9]);
+	try std.testing.expectEqual(@as(i64, 1), versions[1]);
 }

@@ -51,13 +51,24 @@ task_link() {
 	fi
 }
 
+build_plugins() {
+	local state=${XDG_STATE_HOME:-$HOME/.local/state}/yudae/build makefile id
+	for makefile in "$ROOT"/plugins/*/Makefile; do
+		[ -e "$makefile" ] || continue
+		id=$(basename "$(dirname "$makefile")")
+		case "$id" in _template-*) continue ;; esac
+		make -C "$(dirname "$makefile")" OUT="$state/$id" >/dev/null
+		echo "built $id"
+	done
+}
+
 task_build() {
 	"$ROOT/scripts/yubuild"
+	build_plugins
+}
 
-	for makefile in "$ROOT"/hypr/plugins/*/Makefile; do
-		[ -e "$makefile" ] || continue
-		make -C "$(dirname "$makefile")" >/dev/null
-	done
+task_plugin() {
+	build_plugins
 }
 
 task_lint() {
@@ -78,6 +89,8 @@ task_lint() {
 		node "$check" || fail=1
 	done
 
+	python3 "$ROOT/scripts/color-check" || fail=1
+
 	if [ "$fail" -ne 0 ]; then
 		exit 1
 	fi
@@ -90,7 +103,17 @@ task_bench() {
 }
 
 task_vm() {
-	"$ROOT/scripts/vm" "$@"
+	if [ $# -eq 0 ]; then
+		echo "usage: xmake vm fetch|packages|golden|ensure|overlay|snapshot|restore|list|bench [tag] (running VMs: yudae vm)" >&2
+		exit 2
+	fi
+
+	if [ "$1" = bench ]; then
+		shift
+		exec "$ROOT/vm/bench-images" "$@"
+	fi
+
+	exec "$ROOT/vm/images" "$@"
 }
 
 task_doctor() {
@@ -132,7 +155,7 @@ task_doctor() {
 }
 
 usage() {
-	echo "usage: xmake build|link|lint|bench|vm|doctor" >&2
+	echo "usage: xmake build|plugin|link|lint|bench|vm|doctor" >&2
 	exit 2
 }
 
@@ -141,6 +164,7 @@ shift || true
 
 case "$command" in
 	build) task_build ;;
+	plugin) task_plugin ;;
 	link) task_link ;;
 	lint) task_lint ;;
 	bench) task_bench "$@" ;;

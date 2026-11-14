@@ -19,6 +19,7 @@ Item {
 	property var onPick
 	property bool follow: true
 	property bool circular: false
+	property bool lens: true
 	property real ringWidth: Config.stepBarHeight
 
 	readonly property int count: root.model.length
@@ -186,7 +187,7 @@ Item {
 		border.width: 2
 		border.color: Config.surface
 		antialiasing: true
-		visible: !root.solid && root.shown >= 0
+		visible: root.lens && !root.solid && root.shown >= 0
 		x: root.vertical ? (root.width - size) / 2 : root.lensAt - size / 2
 		y: root.vertical ? root.lensAt - size / 2 : (root.height - size) / 2
 

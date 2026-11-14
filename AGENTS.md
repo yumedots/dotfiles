@@ -1,5 +1,7 @@
 # Rules
 
+- Every agent uses its own VM. `vm_create` with no name names it after the session; pass that name to every `vm_*` call. Never start, reuse, stop or destroy another agent's VM, including `ui`.
+
 Do not write comments in code
 Talk in an TLDR mode and explain in an simple TLDR with the less amount of words possible
 NEVER commit or run any git write command until the user explicitly says commit or anything similar, no commits on your own ever
@@ -9,8 +11,11 @@ NEVER install ANYTHING without telling the user first — packages, skills, MCP 
 No on-screen instructions or shortcut hints in widgets: never render "press X", key lists, hints, or counters. The UI is discovered by using it.
 If a VM task needs an action the daemon does not expose, do not write a throwaway script for it. Ask the user whether to add it to yudaemond; if yes, implement, test and document the verb, then use it.
 Every surface shows the same icon for the same thing: the VM app, its machines and the launcher entry use one glyph.
+Icons live once, in the icon list (`iconX` in `shell/services/Config.qml` and `shell/config.toml`, plus the `icons` map). Before using an icon, look it up in that list and reuse it everywhere, switches and rows included. Add one only when the list has none, and never invent a second glyph for something that already has one.
+Nerd font glyphs are always drawn through `shell/ui/Glyph.qml`, which centers the glyph ink in its box; never a bare `Text` inside a circle, badge, switch or slot.
 Never put "·" or similar dot separators between pieces of text in the UI; separate with spacing.
 Scrollbars sit on the right border of their container, never floating inside it; Scrollbar.qml does this by default.
+Every QML color comes from `shell/services/Config.qml`; `xmake lint` rejects color literals in QML.
 
 # Ponytail, lazy senior dev mode
 You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
@@ -46,28 +51,24 @@ Not lazy about: understanding the problem (read it fully and trace the real flow
 
 ```
 config/            plain app configs, one dir per app, symlinked into ~/.config
+plugins/           source-only plugins, see docs/plugins.md
 hypr/              hyprland conf + plugins; the one non-config symlinked into ~/.config
 shell/             quickshell; run with `quickshell -p shell/shell.qml`, never symlinked
 daemon/            yudaemond (Zig); providers pair with shell/features/<name>
-systemd/ scripts/ vm/ docs/ agents/skills/
-xmake.lua          the single entry point: build link lint test bench hypr vm doctor
+systemd/ scripts/ vm/ docs/ .agents/skills/
+xmake.lua          the single entry point: build plugin link lint test bench hypr vm doctor
 ```
 
 `xmake` is `scripts/xmake`, linked into `~/.local/bin`. It runs the repo tasks through `scripts/tasks.sh` and passes everything else to the system xmake. `plans.md` is the source of truth for the shape and the order of work.
 
 # Skills
 
-Read the one that matches the task before editing:
-
-- `agents/skills/quickshell.md` - QML, live reload, surfaces, lint, logs.
-- `agents/skills/daemon.md` - yudaemond rules, adding a provider, performance gates, lifecycle.
-- `agents/skills/vm.md` - the QEMU VM lifecycle and scenarios.
-
-Agent skills are registered in `.agents/skills/`; the project MCP servers are in `opencode.json` and `.mcp.json`.
+Task guides are registered in `.agents/skills/`; reference lives in `docs/`.
 
 # Reference
 
 - `docs/architecture.md` - repo shape, feature pairing, xmake tasks.
 - `docs/daemon.md` - hub, IPC, snapshot, command routing, VM control plane.
 - `docs/agent-tooling.md` - `yudae` CLI, MCP tools, the agent workflow on a VM.
+- `docs/plugins.md` - the plugin standard: manifest, kinds, build and load.
 - `docs/perf.md` - budgets and the bench tools.

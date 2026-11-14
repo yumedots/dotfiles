@@ -1,0 +1,5 @@
+id = "_template-daemon"
+kind = "daemon"
+version = "0.1.0"
+build = "make"
+provides = ["provider.txt"]

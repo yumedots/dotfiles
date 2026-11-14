@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Reject hardcoded colors in shell QML; every color comes from Config.qml."""
+
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SHELL = ROOT / "shell"
+CONFIG = SHELL / "services" / "Config.qml"
+COLOR = re.compile(r'(?:color|barColor|textColor|fillColor)\s*:\s*"(#[0-9a-fA-F]{3,8}|white|black|gray|grey)"')
+
+
+def main():
+    failures = []
+    for path in sorted(SHELL.rglob("*.qml")):
+        if path == CONFIG or "cache" in path.parts:
+            continue
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            if COLOR.search(line):
+                failures.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()}")
+
+    for failure in failures:
+        print(failure, file=sys.stderr)
+    if failures:
+        print(f"hardcoded colors: {len(failures)}", file=sys.stderr)
+        return 1
+
+    print("colors use Config.qml")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

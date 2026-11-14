@@ -19,13 +19,13 @@ const tools = [_]Tool{
 	.{ .name = "bench", .description = "Build, start, idle RSS/CPU, shell total and hoggers.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"seconds\":{\"type\":\"integer\"}}}" },
 	.{ .name = "parity", .description = "State parity check for the panel.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
 	.{ .name = "qs_log", .description = "Tail the newest quickshell log.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"lines\":{\"type\":\"integer\"}}}" },
-	.{ .name = "vm_create", .description = "Boot a VM from the golden layer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"from\":{\"type\":\"string\"},\"cores\":{\"type\":\"integer\"},\"mem\":{\"type\":\"integer\"},\"gl\":{\"type\":\"boolean\"},\"agent\":{\"type\":\"string\"}}}" },
+	.{ .name = "vm_create", .description = "Boot or reuse this session's VM from the golden layer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"from\":{\"type\":\"string\"},\"cores\":{\"type\":\"integer\"},\"mem\":{\"type\":\"integer\"},\"gl\":{\"type\":\"boolean\"},\"agent\":{\"type\":\"string\"}}}" },
 	.{ .name = "vm_start", .description = "Boot an existing VM.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
 	.{ .name = "vm_list", .description = "List VMs, tiers and resource use.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
 	.{ .name = "vm_state", .description = "The guest daemon snapshot.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
 	.{ .name = "vm_exec", .description = "Run a command in the guest daemon.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"cmd\":{\"type\":\"string\"},\"argv\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"name\"]}" },
 	.{ .name = "vm_screenshot", .description = "Write a PNG screenshot and return its path.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
-	.{ .name = "vm_key", .description = "Send key codes at compositor level.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"keys\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"name\",\"keys\"]}" },
+	.{ .name = "vm_key", .description = "Send key codes at compositor level. Names like XF86AudioRaiseVolume map to the guest keycode; hold holds the key down in milliseconds for key repeat.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"keys\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"hold\":{\"type\":\"integer\"}},\"required\":[\"name\",\"keys\"]}" },
 	.{ .name = "vm_type", .description = "Type text at compositor level.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"}},\"required\":[\"name\",\"text\"]}" },
 	.{ .name = "vm_click", .description = "Move and click the pointer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"button\":{\"type\":\"string\"}},\"required\":[\"name\",\"x\",\"y\"]}" },
 	.{ .name = "vm_move", .description = "Move the pointer.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"}},\"required\":[\"name\",\"x\",\"y\"]}" },
@@ -37,7 +37,7 @@ const tools = [_]Tool{
 	.{ .name = "vm_sleep", .description = "Stop the VM and inflate the balloon.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
 	.{ .name = "vm_park", .description = "Stop the VM and reclaim its cgroup memory.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
 	.{ .name = "vm_wake", .description = "Deflate the balloon and continue the VM.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
-	.{ .name = "vm_destroy", .description = "Quit QEMU and delete the run overlay.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
+	.{ .name = "vm_destroy", .description = "Quit QEMU and delete the run disk.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
 	.{ .name = "vm_snapshot", .description = "Snapshot the run overlay.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"tag\":{\"type\":\"string\"}},\"required\":[\"name\",\"tag\"]}" },
 	.{ .name = "vm_restore", .description = "Restore the run overlay snapshot.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"tag\":{\"type\":\"string\"}},\"required\":[\"name\",\"tag\"]}" },
 	.{ .name = "vm_fork", .description = "Clone a VM disk into a new VM.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"from\":{\"type\":\"string\"}},\"required\":[\"name\",\"from\"]}" },
@@ -45,7 +45,15 @@ const tools = [_]Tool{
 	.{ .name = "vm_push", .description = "Copy a host file into the guest.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"name\",\"path\"]}" },
 	.{ .name = "vm_pull", .description = "Copy a guest file to the host.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"name\",\"path\"]}" },
 	.{ .name = "vm_ui_tree", .description = "Guest state plus the Hyprland client tree.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}" },
-	.{ .name = "vm_run_scenario", .description = "Run a deterministic VM scenario.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"scenario\":{\"type\":\"string\"}},\"required\":[\"scenario\"]}" },
+	.{ .name = "vm_run_scenario", .description = "Run a deterministic VM scenario; it is destroyed on success unless keep is set.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"scenario\":{\"type\":\"string\"},\"keep\":{\"type\":\"boolean\"}},\"required\":[\"scenario\"]}" },
+	.{ .name = "plugin_list", .description = "List loaded plugins, kinds and build state.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
+	.{ .name = "plugin_build", .description = "Rebuild a plugin from source.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_load", .description = "Add a plugin to the load list without building it.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_unload", .description = "Remove a plugin from the load list.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_theme", .description = "Load one theme and unload every other theme.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_add", .description = "Clone a plugin repository and install it.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}" },
+	.{ .name = "plugin_update", .description = "Pull and rebuild an installed plugin.", .inputSchema = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"]}" },
+	.{ .name = "plugin_reload", .description = "Rebuild stale plugins and apply the load list.", .inputSchema = "{\"type\":\"object\",\"properties\":{}}" },
 };
 
 pub fn run(io: Io, args: []const []const u8) !void {
@@ -157,9 +165,16 @@ fn call(io: Io, allocator: std.mem.Allocator, name: []const u8, arguments: json.
 
 	if (std.mem.eql(u8, name, "qs_log")) return logTail(io, allocator, arguments);
 
+	if (std.mem.startsWith(u8, name, "plugin_")) return callDaemon(io, allocator, "plugins", name["plugin_".len..], arguments);
+
 	if (std.mem.eql(u8, name, "vm_view")) {
 		spawnViewer(io, allocator, json.textAt(arguments, "name"));
 		return std.fmt.allocPrint(allocator, "{{\"viewing\":\"{s}\"}}", .{json.textAt(arguments, "name")});
+	}
+
+	if (std.mem.eql(u8, name, "vm_create")) {
+		const filled = createArguments(allocator, arguments, harness, session) catch arguments;
+		return callDaemon(io, allocator, "vms", "create", filled);
 	}
 
 	if (std.mem.startsWith(u8, name, "vm_")) return callDaemon(io, allocator, "vms", name["vm_".len..], arguments);
@@ -210,6 +225,26 @@ fn spawnViewer(io: Io, allocator: std.mem.Allocator, name: []const u8) void {
 		.stdout = .ignore,
 		.stderr = .ignore,
 	}) catch return;
+}
+
+fn createArguments(allocator: std.mem.Allocator, arguments: json.Value, harness: []const u8, session: []const u8) !json.Value {
+	if (session.len == 0) return arguments;
+	if (json.textAt(arguments, "name").len > 0) return arguments;
+
+	var map: std.json.ObjectMap = .empty;
+	switch (arguments) {
+		.object => |source| {
+			var iterator = source.iterator();
+			while (iterator.next()) |entry| try map.put(allocator, entry.key_ptr.*, entry.value_ptr.*);
+		},
+		else => {},
+	}
+
+	try map.put(allocator, "name", .{ .string = session });
+	try map.put(allocator, "session", .{ .string = session });
+	if (harness.len > 0) try map.put(allocator, "harness", .{ .string = harness });
+
+	return .{ .object = map };
 }
 
 fn callDaemon(io: Io, allocator: std.mem.Allocator, target: []const u8, method: []const u8, arguments: json.Value) ![]const u8 {
@@ -335,4 +370,25 @@ fn respondError(writer: *std.Io.Writer, allocator: std.mem.Allocator, id: json.V
 	const body = std.fmt.allocPrint(allocator, "{{\"jsonrpc\":\"2.0\",\"id\":{f},\"error\":{{\"code\":-32601,\"message\":\"{s}\"}}}}\n", .{ std.json.fmt(id, .{}), message }) catch return error.OutOfMemory;
 
 	_ = try write(writer, body);
+}
+
+test "a session names its own vm and keeps an explicit name" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+	const allocator = arena.allocator();
+
+	const args = try json.parse(allocator, "{\"cores\":2}");
+	const filled = try createArguments(allocator, args.value, "opencode", "ses_123");
+	try std.testing.expectEqualStrings("ses_123", json.textAt(filled, "name"));
+	try std.testing.expectEqualStrings("ses_123", json.textAt(filled, "session"));
+	try std.testing.expectEqualStrings("opencode", json.textAt(filled, "harness"));
+	try std.testing.expectEqual(@as(f64, 2), json.numberAt(filled, "cores"));
+
+	const named = try json.parse(allocator, "{\"name\":\"ui\"}");
+	const kept = try createArguments(allocator, named.value, "opencode", "ses_123");
+	try std.testing.expectEqualStrings("ui", json.textAt(kept, "name"));
+	try std.testing.expectEqualStrings("", json.textAt(kept, "session"));
+
+	const anonymous = try createArguments(allocator, args.value, "opencode", "");
+	try std.testing.expectEqualStrings("", json.textAt(anonymous, "name"));
 }

@@ -8,7 +8,7 @@ hl.config({ binds = { scroll_event_delay = 0 } })
 
 local function switcherOpen()
     for _, layer in ipairs(hl.get_layers({ namespace = "launcher" })) do
-        if layer.interactivity == 1 then return true end
+        if layer.keyboard_interactivity == 1 then return true end
     end
 
     return false
@@ -250,17 +250,23 @@ hl.bind(mainMod .. " + mouse_up", function()
     end
 end)
 
-hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
+local windowDrag = hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 hl.bind("PRINT",         hl.dsp.exec_cmd("~/.local/bin/snap"))
 hl.bind("SHIFT + PRINT", hl.dsp.exec_cmd("env SNAP_SCREENSHOT_DIR=/tmp ~/.local/bin/snap --save"))
 
-hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("yudae call audio step 0.1"),  { locked = true, repeating = true })
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("yudae call audio step -0.1"), { locked = true, repeating = true })
 hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true, repeating = true })
 hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),   { locked = true, repeating = true })
 hl.bind("XF86AudioNext",  hl.dsp.global("quickshell:mediaNext"),      { locked = true })
 hl.bind("XF86AudioPause", hl.dsp.global("quickshell:mediaPlayPause"), { locked = true })
 hl.bind("XF86AudioPlay",  hl.dsp.global("quickshell:mediaPlayPause"), { locked = true })
 hl.bind("XF86AudioPrev",  hl.dsp.global("quickshell:mediaPrevious"),  { locked = true })
+
+return {
+    launcherDrag = function (open)
+        windowDrag:set_enabled(not open)
+    end,
+}

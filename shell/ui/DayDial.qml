@@ -65,19 +65,19 @@ Item {
 				centerY: dial.cy
 				angle: 0
 
-				GradientStop { position: 0.0; color: "#2b4a94" }
-				GradientStop { position: 0.104; color: "#2b4a94" }
-				GradientStop { position: 0.125; color: "#d14a3c" }
-				GradientStop { position: 0.146; color: "#e8873a" }
-				GradientStop { position: 0.1875; color: "#f2c14e" }
-				GradientStop { position: 0.229; color: "#f7e3a1" }
-				GradientStop { position: 0.25; color: "#fdf3cf" }
-				GradientStop { position: 0.271; color: "#f7e3a1" }
-				GradientStop { position: 0.3125; color: "#f2c14e" }
-				GradientStop { position: 0.354; color: "#7cc4f0" }
-				GradientStop { position: 0.396; color: "#2b4a94" }
-				GradientStop { position: 0.4375; color: "#2b4a94" }
-				GradientStop { position: 0.5; color: "#2b4a94" }
+				GradientStop { position: 0.0; color: Config.calendarDialNight }
+				GradientStop { position: 0.104; color: Config.calendarDialNight }
+				GradientStop { position: 0.125; color: Config.calendarDialRed }
+				GradientStop { position: 0.146; color: Config.calendarDialOrange }
+				GradientStop { position: 0.1875; color: Config.calendarDialYellow }
+				GradientStop { position: 0.229; color: Config.calendarDialCream }
+				GradientStop { position: 0.25; color: Config.calendarDialNoon }
+				GradientStop { position: 0.271; color: Config.calendarDialCream }
+				GradientStop { position: 0.3125; color: Config.calendarDialYellow }
+				GradientStop { position: 0.354; color: Config.calendarDialDay }
+				GradientStop { position: 0.396; color: Config.calendarDialNight }
+				GradientStop { position: 0.4375; color: Config.calendarDialNight }
+				GradientStop { position: 0.5; color: Config.calendarDialNight }
 			}
 
 			PathPolyline {

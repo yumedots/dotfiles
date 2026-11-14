@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import qs
 import qs.services
 import qs.ui
@@ -15,22 +16,32 @@ PanelWindow {
 	readonly property var state: Yudae.wallpaper
 	readonly property string listing: (root.state.list || []).map(function (entry) { return entry.path; }).join("\n")
 	readonly property string activeWallpaper: root.state.active || ""
+	readonly property string themeListing: JSON.stringify(Yudae.themes.map(function (entry) { return { id: entry.id, surface: entry.surface, foreground: entry.foreground, accents: entry.accents, cover: entry.cover, background: entry.background }; }))
+	readonly property var themes: JSON.parse(root.themeListing)
+	readonly property var looks: root.themes.filter(function (entry) { return entry.background !== ""; })
+	readonly property string activeTheme: (Yudae.themes.filter(function (entry) { return entry.active; })[0] || ({})).id || "gray"
 	property var wallpapers: []
 	property int currentIndex: 0
-	property var pointer: null
+	property int themeIndex: 0
+	property int lookIndex: 0
+	property int row: 0
+	property bool previewing: false
+	property int highlightMs: Config.wallpaperFadeMs
+	property bool instant: false
+	property bool moved: false
+	property bool previewed: false
+	property string returnWorkspace: ""
+	property string originTheme: ""
+	property string originWallpaper: ""
 
 	readonly property var held: root.currentIndex >= 0 && root.currentIndex < root.wallpapers.length ? root.wallpapers[root.currentIndex] : null
-	readonly property string shotPath: root.held === null ? "" : root.held.path
-	readonly property int columns: Math.max(1, Config.wallpaperColumns)
-	readonly property real heroWidth: Config.wallpaperStageWidth
-	readonly property real heroHeight: Math.round(root.heroWidth / Config.wallpaperPreviewRatio)
-	readonly property real shelfWidth: Config.wallpaperPickerWidth - Config.wallpaperStageWidth - Config.wallpaperSectionGap
-	readonly property real gridWidth: root.shelfWidth - Config.scrollbarWidth - Config.wallpaperTileGap
-	readonly property real cell: root.gridWidth / root.columns
-	readonly property real tileWidth: Math.max(1, root.cell - Config.wallpaperTileGap)
-	readonly property real tileHeight: Math.max(1, Math.round(root.tileWidth / Config.wallpaperPreviewRatio))
-	readonly property real contentHeight: root.heroHeight
+	readonly property real tileHeight: Config.wallpaperRowHeight
+	readonly property real wideWidth: Math.round(root.tileHeight * Config.wallpaperPreviewRatio)
+	readonly property real slimWidth: Math.round(root.tileHeight * Config.wallpaperSlimRatio)
+	readonly property real rowMin: Config.wallpaperRowMin
+	readonly property real contentHeight: stage.implicitHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
+
 
 	anchors.top: true
 	anchors.left: true
@@ -59,67 +70,165 @@ PanelWindow {
 
 	mask: root.shown ? null : emptyRegion
 
-	onListingChanged: {
-		root.wallpapers = root.state.list || [];
+	onListingChanged: root.refreshWallpapers()
+	onThemesChanged: root.refreshWallpapers()
+
+	function refreshWallpapers() {
+		const list = (root.state.list || []).slice();
+		const seen = list.map(function (entry) { return entry.path; });
+
+		root.looks.forEach(function (look) {
+			if (seen.indexOf(look.background) >= 0)
+				return;
+
+			seen.push(look.background);
+			list.push({
+				path: look.background,
+				name: look.id,
+				thumb: look.background,
+				preview: look.background
+			});
+		});
+
+		if (root.activeWallpaper !== "" && seen.indexOf(root.activeWallpaper) < 0) {
+			list.unshift({
+				path: root.activeWallpaper,
+				name: root.activeWallpaper.split("/").pop(),
+				thumb: root.activeWallpaper,
+				preview: root.activeWallpaper
+			});
+		}
+
+		root.wallpapers = list;
+
+		if (root.shown && !root.moved) {
+			root.syncSelection();
+			root.positionAll();
+			return;
+		}
+
 		root.selectActive();
 	}
 
-	property string heroPath: ""
-	property string heroThumb: ""
-	property string heroPreview: ""
-
-	onCurrentIndexChanged: {
-		root.reveal();
-
-		if (root.shown || card.opacity > 0)
-			heroTimer.restart();
-	}
-
-	onShownChanged: {
-		if (!root.shown)
-			return;
-
-		root.setHero();
-	}
-
-	Timer {
-		id: heroTimer
-
-		interval: 140
-		onTriggered: root.setHero()
-	}
-
-	function setHero() {
-		const entry = root.held;
-		root.heroPath = entry === null ? "" : entry.path;
-		root.heroThumb = entry !== null && entry.thumb ? entry.thumb : root.heroPath;
-		root.heroPreview = entry !== null && entry.preview ? entry.preview : root.heroPath;
-	}
-
-	function reveal() {
-		if (root.currentIndex >= 0 && grid.count > 0)
-			grid.positionViewAtIndex(root.currentIndex, GridView.Contain);
-	}
-
 	function selectActive() {
-		const active = root.state.active || "";
-		const index = root.wallpapers.map(function (entry) { return entry.path; }).indexOf(active);
+		const index = root.wallpapers.map(function (entry) { return entry.path; }).indexOf(root.activeWallpaper);
 
+		root.highlightMs = 0;
 		root.currentIndex = index >= 0 ? index : 0;
-		Qt.callLater(root.reveal);
+		root.positionAll();
+	}
+
+	function syncSelection() {
+		root.highlightMs = 0;
+		root.currentIndex = Math.max(0, root.wallpapers.map(function (entry) { return entry.path; }).indexOf(root.activeWallpaper));
+		root.themeIndex = Math.max(0, root.themes.findIndex(function (entry) { return entry.id === root.activeTheme; }));
+		root.lookIndex = Math.max(0, root.looks.findIndex(function (entry) { return entry.id === root.activeTheme; }));
+	}
+
+	function positionAll() {
+		if (looksStrip.count > 0)
+			looksStrip.positionViewAtIndex(root.lookIndex, ListView.Center);
+
+		if (strip.count > 0)
+			strip.positionViewAtIndex(root.currentIndex, ListView.Center);
+
+		if (themeStrip.count > 0)
+			themeStrip.positionViewAtIndex(root.themeIndex, ListView.Center);
+	}
+
+	readonly property var rows: {
+		const list = [];
+
+		if (root.looks.length > 0)
+			list.push(0);
+		list.push(1);
+		list.push(2);
+
+		return list;
 	}
 
 	function move(step) {
-		if (root.wallpapers.length === 0)
+		root.moved = true;
+		root.highlightMs = Config.wallpaperFadeMs;
+
+		if (root.row === 0)
+			root.lookIndex = Calc.clamp(root.lookIndex + step, 0, root.looks.length - 1);
+		else if (root.row === 2)
+			root.themeIndex = Calc.clamp(root.themeIndex + step, 0, root.themes.length - 1);
+		else if (root.wallpapers.length > 0)
+			root.currentIndex = Calc.clamp(root.currentIndex + step, 0, root.wallpapers.length - 1);
+
+		moveTimer.restart();
+	}
+
+	function stepRow(step) {
+		const at = Math.max(0, root.rows.indexOf(root.row));
+
+		root.row = root.rows[(at + step + root.rows.length) % root.rows.length];
+		root.positionAll();
+	}
+
+	function hideWindows() {
+		if (root.previewing)
 			return;
 
-		root.currentIndex = Calc.clamp(root.currentIndex + step, 0, root.wallpapers.length - 1);
-		root.reveal();
+		const focused = Hyprland.focusedWorkspace;
+
+
+		root.returnWorkspace = focused ? focused.name : "";
+		root.previewing = true;
+		Quickshell.execDetached(["/usr/bin/hyprctl", "dispatch", 'hl.dsp.focus({workspace = 99})']);
+	}
+
+	function showWindows() {
+		if (!root.previewing)
+			return;
+
+		root.previewing = false;
+
+		if (root.returnWorkspace !== "")
+			Quickshell.execDetached(["/usr/bin/hyprctl", "dispatch", 'hl.dsp.focus({workspace = "' + root.returnWorkspace + '"})']);
+	}
+
+	Timer {
+		id: moveTimer
+
+		interval: 140
+		onTriggered: root.previewCurrent()
+	}
+
+	function previewCurrent() {
+		if (!root.shown)
+			return;
+
+		if (root.row === 0 && root.looks.length > 0) {
+			root.applyLook(root.looks[root.lookIndex]);
+			root.previewed = true;
+			return;
+		}
+
+		if (root.row === 2 && root.themes.length > 0) {
+			Yudae.setTheme(root.themes[root.themeIndex].id);
+			root.previewed = true;
+		}
 	}
 
 	function open() {
 		root.shown = true;
-		root.pointer = null;
+		root.row = root.rows[0];
+		root.selectActive();
+		root.themeIndex = Math.max(0, root.themes.findIndex(function (entry) { return entry.id === root.activeTheme; }));
+		root.originTheme = root.activeTheme;
+		root.originWallpaper = root.activeWallpaper;
+		root.previewed = false;
+		root.moved = false;
+		root.highlightMs = 0;
+		root.instant = true;
+		root.refreshWallpapers();
+		root.syncSelection();
+		root.positionAll();
+		root.hideWindows();
+		Qt.callLater(function () { root.instant = false; });
 
 		if (root.wallpapers.length === 0)
 			root.reload();
@@ -128,6 +237,16 @@ PanelWindow {
 	}
 
 	function close() {
+		if (root.previewed) {
+			if (root.originTheme !== "")
+				Yudae.setTheme(root.originTheme);
+
+			if (root.originWallpaper !== "")
+				Yudae.cmd("wallpaper", { apply: { path: root.originWallpaper, band: BarInk.bandPx() } });
+		}
+
+		root.previewed = false;
+		root.showWindows();
 		root.shown = false;
 	}
 
@@ -144,27 +263,19 @@ PanelWindow {
 	}
 
 	function applyCurrent() {
-		if (root.held === null)
-			return;
+		if (root.row === 1 && root.held !== null)
+			Yudae.cmd("wallpaper", { apply: { path: root.held.path, band: BarInk.bandPx() } });
+		else
+			root.previewCurrent();
 
-		Yudae.cmd("wallpaper", { apply: { path: root.held.path, band: BarInk.bandPx() } });
-		root.close();
+		root.previewed = false;
 	}
 
+	function applyLook(look) {
+		Yudae.setTheme(look.id);
 
-	Rectangle {
-		id: scrim
-
-		anchors.fill: parent
-		color: Config.surface
-		opacity: root.shown ? Config.wallpaperScrim : 0
-
-		Behavior on opacity {
-			NumberAnimation {
-				duration: Config.wallpaperScrimMs
-				easing.type: Easing.OutCubic
-			}
-		}
+		if (look.background !== "")
+			Yudae.cmd("wallpaper", { apply: { path: look.background, band: BarInk.bandPx() } });
 	}
 
 	MouseArea {
@@ -192,6 +303,8 @@ PanelWindow {
 		focus: true
 
 		Behavior on opacity {
+			enabled: !root.instant
+
 			NumberAnimation {
 				duration: Config.wallpaperScrimMs
 				easing.type: Easing.OutCubic
@@ -202,48 +315,105 @@ PanelWindow {
 			Input.wallpaper(event, root);
 		}
 
-		Row {
-			id: layout
+		Column {
+			id: stage
 
 			width: parent.width
-			height: parent.height
-			spacing: Config.wallpaperSectionGap
+			spacing: 0
 
-			Item {
-				id: stage
+			ListView {
+				id: looksStrip
 
-				width: root.heroWidth
-				height: layout.height
+				width: parent.width
+				height: root.row === 0 ? root.tileHeight : root.rowMin
+				Behavior on height {
+					enabled: !root.instant
 
-				Rectangle {
-					id: hero
+					NumberAnimation {
+						duration: Config.wallpaperFadeMs
+						easing.type: Easing.OutCubic
+					}
+				}
 
-					width: parent.width
-					height: root.heroHeight
+
+				orientation: ListView.Horizontal
+				clip: true
+				interactive: false
+				keyNavigationEnabled: false
+				spacing: 0
+				model: root.looks
+				currentIndex: root.lookIndex
+				highlightRangeMode: ListView.StrictlyEnforceRange
+				preferredHighlightBegin: (looksStrip.width - root.wideWidth) / 2
+				preferredHighlightEnd: (looksStrip.width + root.wideWidth) / 2
+				highlightMoveDuration: root.highlightMs
+				cacheBuffer: root.wideWidth
+
+				header: Item {
+					width: Math.round((looksStrip.width - root.wideWidth) / 2)
+					height: 1
+				}
+
+				footer: Item {
+					width: Math.round((looksStrip.width - root.wideWidth) / 2)
+					height: 1
+				}
+
+				delegate: Item {
+					id: look
+
+					required property var modelData
+					required property int index
+
+					readonly property bool current: look.index === root.lookIndex
+
+					width: look.current ? root.wideWidth : root.slimWidth
+					height: looksStrip.height
 					clip: true
-					color: Config.launcherSearchBox
 
-					Image {
-						id: heroQuick
-
+					Rectangle {
 						anchors.fill: parent
-						fillMode: Image.PreserveAspectCrop
-						cache: true
-						asynchronous: true
-						retainWhileLoading: true
-						source: root.heroThumb === "" ? "" : "file://" + root.heroThumb
+						color: look.modelData.surface || Config.surface
 					}
 
-					Image {
-						id: heroShot
+					Item {
+						anchors.centerIn: parent
+						width: root.wideWidth
+						height: parent.height
+						opacity: 1
 
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+								easing.type: Easing.OutCubic
+							}
+						}
+
+						Image {
+							anchors.fill: parent
+							fillMode: Image.PreserveAspectCrop
+							cache: true
+							asynchronous: true
+							retainWhileLoading: true
+							source: look.modelData.cover === "" ? "" : "file://" + look.modelData.cover
+							sourceSize.width: 1024
+							sourceSize.height: 1024
+							mipmap: true
+						}
+					}
+
+					Rectangle {
 						anchors.fill: parent
-						fillMode: Image.PreserveAspectCrop
-						cache: true
-						asynchronous: true
-						retainWhileLoading: true
-						opacity: status === Image.Ready ? 1 : 0
-						source: root.heroPreview === "" ? "" : "file://" + root.heroPreview
+						color: "transparent"
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						color: "transparent"
+						visible: root.row === 0
+						opacity: look.current ? 1 : 0
+						border.width: Config.wallpaperRingWidth
+						border.color: Config.foreground
 
 						Behavior on opacity {
 							NumberAnimation {
@@ -252,167 +422,403 @@ PanelWindow {
 						}
 					}
 
-					Text {
-						anchors.centerIn: parent
-						visible: root.shotPath === ""
-						font.family: Config.fontFamily
-						font.pixelSize: Config.wallpaperNameSize
-						color: Config.muted
-						text: Config.wallpaperEmpty
+					Rectangle {
+						anchors.right: parent.right
+						anchors.bottom: parent.bottom
+						visible: look.modelData.id === (root.previewed ? root.originTheme : root.activeTheme)
+						width: Config.wallpaperMarkSize + 8
+						height: Config.wallpaperMarkSize + 8
+						color: look.modelData.surface || Config.surface
+
+						Glyph {
+							anchors.fill: parent
+							size: Config.wallpaperMarkSize
+							color: look.modelData.foreground || Config.foreground
+							glyph: Config.launcherIconActive
+						}
 					}
-				}
-			}
 
-			Item {
-				id: shelf
+					MouseArea {
+						anchors.fill: parent
 
-				width: root.shelfWidth
-				height: layout.height
-
-				GridView {
-					id: grid
-
-					anchors.left: parent.left
-					anchors.right: parent.right
-					anchors.rightMargin: Config.scrollbarWidth + Config.wallpaperTileGap
-					anchors.top: parent.top
-					anchors.topMargin: -Math.round(Config.wallpaperTileGap / 2)
-					anchors.bottom: parent.bottom
-
-					clip: true
-					interactive: false
-					boundsBehavior: Flickable.StopAtBounds
-					keyNavigationEnabled: false
-					cellWidth: root.cell
-					cellHeight: root.tileHeight + Config.wallpaperTileGap
-					model: root.wallpapers
-
-					onModelChanged: Qt.callLater(root.reveal)
-
-					delegate: Item {
-						id: cell
-
-						required property var modelData
-						required property int index
-
-						readonly property bool current: cell.index === root.currentIndex
-						readonly property bool applied: cell.modelData.path === root.activeWallpaper
-
-						width: grid.cellWidth
-						height: grid.cellHeight
-						z: cell.current ? 1 : 0
-
-						Rectangle {
-							id: tile
-
-							x: Math.round((cell.width - root.tileWidth) / 2)
-							y: Math.round((cell.height - root.tileHeight) / 2)
-							width: root.tileWidth
-							height: root.tileHeight
-							color: Config.launcherSearchBox
-							scale: cell.current ? Config.wallpaperHoverScale : 1
-
-							Behavior on scale {
-								NumberAnimation {
-									duration: Config.wallpaperFadeMs
-									easing.type: Easing.OutCubic
-								}
+						onClicked: {
+							if (root.row !== 0) {
+								root.row = 0;
+								return;
 							}
 
-							Image {
-								id: thumb
-
-								anchors.fill: parent
-								fillMode: Image.PreserveAspectCrop
-								cache: true
-								asynchronous: true
-								retainWhileLoading: true
-								opacity: cell.current ? 1 : Config.wallpaperTileDim
-								source: "file://" + (cell.modelData.thumb || cell.modelData.path)
-
-								Behavior on opacity {
-									NumberAnimation {
-										duration: Config.wallpaperFadeMs
-										easing.type: Easing.OutCubic
-									}
-								}
-							}
-
-							Rectangle {
-								anchors.fill: parent
-								color: "transparent"
-								visible: cell.current
-								border.width: Config.wallpaperRingWidth
-								border.color: Config.foreground
-							}
-
-							Rectangle {
-								id: badge
-
-								anchors.right: parent.right
-								anchors.bottom: parent.bottom
-								visible: cell.applied
-								width: Math.max(mark.implicitWidth, mark.implicitHeight) + 8
-								height: Math.max(mark.implicitWidth, mark.implicitHeight) + 8
-								color: Config.surface
-
-								Text {
-									id: mark
-
-									anchors.centerIn: parent
-									font.family: Config.fontFamily
-									font.pixelSize: Config.wallpaperMarkSize
-									color: Config.foreground
-									text: Config.launcherIconActive
-								}
-							}
-
-							HoverHandler {
-								onPointChanged: {
-									if (!hovered)
-										return;
-
-									const at = point.scenePosition;
-									const prev = root.pointer;
-
-									if (!prev) {
-										root.pointer = { x: at.x, y: at.y, engaged: false };
-										return;
-									}
-
-									if (prev.engaged || (at.x - prev.x) ** 2 + (at.y - prev.y) ** 2 >= root.tileHeight ** 2) {
-										root.pointer = { x: at.x, y: at.y, engaged: true };
-
-										if (at.x !== prev.x || at.y !== prev.y)
-											root.currentIndex = cell.index;
-									}
-								}
-							}
-
-							MouseArea {
-								anchors.fill: parent
-
-								onClicked: {
-									root.currentIndex = cell.index;
-									root.applyCurrent();
-								}
-							}
+							root.lookIndex = look.index;
+							root.applyCurrent();
 						}
 					}
 				}
 
+				Text {
+					anchors.centerIn: parent
+					visible: root.looks.length === 0
+					font.family: Config.fontFamily
+					font.pixelSize: Config.wallpaperNameSize
+					color: Config.muted
+					text: Config.themeEmpty
+				}
+
 				MouseArea {
-					anchors.fill: grid
+					anchors.fill: parent
 					acceptedButtons: Qt.NoButton
 
 					onWheel: function (wheel) {
-						grid.contentY = Calc.clamp(grid.contentY - wheel.angleDelta.y, 0, Math.max(0, grid.contentHeight - grid.height));
+						root.row = 0;
+						root.move(wheel.angleDelta.y > 0 ? -1 : 1);
 						wheel.accepted = true;
 					}
 				}
+			}
 
-				Scrollbar {
-					view: grid
+			ListView {
+				id: strip
+
+				width: parent.width
+				height: root.row === 1 ? root.tileHeight : root.rowMin
+				Behavior on height {
+					enabled: !root.instant
+
+					NumberAnimation {
+						duration: Config.wallpaperFadeMs
+						easing.type: Easing.OutCubic
+					}
+				}
+
+
+				orientation: ListView.Horizontal
+				clip: true
+				interactive: false
+				keyNavigationEnabled: false
+				spacing: 0
+				model: root.wallpapers
+				currentIndex: root.currentIndex
+				highlightRangeMode: ListView.StrictlyEnforceRange
+				preferredHighlightBegin: (strip.width - root.wideWidth) / 2
+				preferredHighlightEnd: (strip.width + root.wideWidth) / 2
+				highlightMoveDuration: root.highlightMs
+				cacheBuffer: root.wideWidth
+
+				header: Item {
+					width: Math.round((strip.width - root.wideWidth) / 2)
+					height: 1
+				}
+
+				footer: Item {
+					width: Math.round((strip.width - root.wideWidth) / 2)
+					height: 1
+				}
+
+				delegate: Item {
+					id: cell
+
+					required property var modelData
+					required property int index
+
+					readonly property bool current: cell.index === root.currentIndex
+					readonly property bool near: Math.abs(cell.index - root.currentIndex) <= 2
+					readonly property bool applied: cell.modelData.path === (root.previewed ? root.originWallpaper : root.activeWallpaper)
+
+					width: cell.current ? root.wideWidth : root.slimWidth
+					height: strip.height
+					clip: true
+
+					Rectangle {
+						anchors.fill: parent
+						color: Config.launcherSearchBox
+					}
+
+					Item {
+						anchors.centerIn: parent
+						width: root.wideWidth
+						height: parent.height
+						opacity: 1
+
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+								easing.type: Easing.OutCubic
+							}
+						}
+
+						Image {
+							anchors.fill: parent
+							fillMode: Image.PreserveAspectCrop
+							cache: true
+							asynchronous: true
+							retainWhileLoading: true
+							source: "file://" + (cell.modelData.thumb || cell.modelData.path)
+						}
+
+						Image {
+							anchors.fill: parent
+							fillMode: Image.PreserveAspectCrop
+							cache: true
+							asynchronous: true
+							visible: cell.near
+							opacity: status === Image.Ready ? 1 : 0
+							source: cell.near ? "file://" + cell.modelData.path : ""
+							sourceSize.width: 1280
+							sourceSize.height: 1280
+							mipmap: true
+
+							Behavior on opacity {
+								NumberAnimation {
+									duration: Config.wallpaperFadeMs
+								}
+							}
+						}
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						color: "transparent"
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						color: "transparent"
+						visible: root.row === 1
+						opacity: cell.current ? 1 : 0
+						border.width: Config.wallpaperRingWidth
+						border.color: Config.foreground
+
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+							}
+						}
+					}
+
+					Rectangle {
+						anchors.right: parent.right
+						anchors.bottom: parent.bottom
+						visible: cell.applied
+						width: Config.wallpaperMarkSize + 8
+						height: Config.wallpaperMarkSize + 8
+						color: Config.surface
+
+						Glyph {
+							anchors.fill: parent
+							size: Config.wallpaperMarkSize
+							glyph: Config.launcherIconActive
+						}
+					}
+
+					MouseArea {
+						anchors.fill: parent
+
+						onClicked: {
+							if (root.row !== 1) {
+								root.row = 1;
+								return;
+							}
+
+							root.currentIndex = cell.index;
+							root.applyCurrent();
+						}
+					}
+				}
+
+				Text {
+					anchors.centerIn: parent
+					visible: root.wallpapers.length === 0
+					font.family: Config.fontFamily
+					font.pixelSize: Config.wallpaperNameSize
+					color: Config.muted
+					text: Config.wallpaperEmpty
+				}
+
+				MouseArea {
+					anchors.fill: parent
+					acceptedButtons: Qt.NoButton
+
+					onWheel: function (wheel) {
+						root.row = 1;
+						root.move(wheel.angleDelta.y > 0 ? -1 : 1);
+						wheel.accepted = true;
+					}
+				}
+			}
+
+			ListView {
+				id: themeStrip
+
+				width: parent.width
+				height: root.row === 2 ? root.tileHeight : root.rowMin
+				Behavior on height {
+					enabled: !root.instant
+
+					NumberAnimation {
+						duration: Config.wallpaperFadeMs
+						easing.type: Easing.OutCubic
+					}
+				}
+
+
+				orientation: ListView.Horizontal
+				clip: true
+				interactive: false
+				keyNavigationEnabled: false
+				spacing: 0
+				model: root.themes
+				currentIndex: root.themeIndex
+				highlightRangeMode: ListView.StrictlyEnforceRange
+				preferredHighlightBegin: (themeStrip.width - root.wideWidth) / 2
+				preferredHighlightEnd: (themeStrip.width + root.wideWidth) / 2
+				highlightMoveDuration: root.highlightMs
+				cacheBuffer: root.wideWidth
+
+				header: Item {
+					width: Math.round((themeStrip.width - root.wideWidth) / 2)
+					height: 1
+				}
+
+				footer: Item {
+					width: Math.round((themeStrip.width - root.wideWidth) / 2)
+					height: 1
+				}
+
+				delegate: Item {
+					id: chip
+
+					required property var modelData
+					required property int index
+
+					readonly property bool current: chip.index === root.themeIndex
+
+					width: chip.current ? root.wideWidth : root.slimWidth
+					height: themeStrip.height
+					clip: true
+
+					Rectangle {
+						anchors.fill: parent
+						color: chip.modelData.surface || Config.surface
+					}
+
+					Item {
+						anchors.centerIn: parent
+						width: root.wideWidth
+						height: parent.height
+						opacity: 1
+
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+								easing.type: Easing.OutCubic
+							}
+						}
+
+						Text {
+							anchors.centerIn: parent
+							anchors.verticalCenterOffset: -Math.round(parent.height * 0.21)
+							font.family: Config.fontFamily
+							font.pixelSize: Config.themeNameSize
+							color: chip.modelData.foreground || Config.foreground
+							text: chip.modelData.id
+							opacity: chip.current && root.row === 2 ? 1 : 0
+
+							Behavior on opacity {
+								NumberAnimation {
+									duration: Config.wallpaperFadeMs
+								}
+							}
+						}
+
+						Row {
+							id: themeBand
+
+							anchors.left: parent.left
+							anchors.right: parent.right
+							anchors.bottom: parent.bottom
+							height: Math.round(parent.height * 0.42)
+
+							Repeater {
+								model: chip.modelData.accents
+
+								Rectangle {
+									required property string modelData
+
+									width: themeBand.width / Math.max(1, chip.modelData.accents.length)
+									height: themeBand.height
+									color: modelData
+								}
+							}
+						}
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						color: "transparent"
+					}
+
+					Rectangle {
+						anchors.fill: parent
+						color: "transparent"
+						visible: root.row === 2
+						opacity: chip.current ? 1 : 0
+						border.width: Config.wallpaperRingWidth
+						border.color: chip.modelData.foreground || Config.foreground
+
+						Behavior on opacity {
+							NumberAnimation {
+								duration: Config.wallpaperFadeMs
+							}
+						}
+					}
+
+					Rectangle {
+						anchors.right: parent.right
+						anchors.bottom: parent.bottom
+						visible: chip.modelData.id === (root.previewed ? root.originTheme : root.activeTheme)
+						width: Config.wallpaperMarkSize + 8
+						height: Config.wallpaperMarkSize + 8
+						color: chip.modelData.foreground || Config.foreground
+
+						Glyph {
+							anchors.fill: parent
+							size: Config.wallpaperMarkSize
+							color: chip.modelData.surface || Config.surface
+							glyph: Config.launcherIconActive
+						}
+					}
+
+					MouseArea {
+						anchors.fill: parent
+
+						onClicked: {
+							if (root.row !== 2) {
+								root.row = 2;
+								return;
+							}
+
+							root.themeIndex = chip.index;
+							root.applyCurrent();
+						}
+					}
+				}
+
+				Text {
+					anchors.centerIn: parent
+					visible: root.themes.length === 0
+					font.family: Config.fontFamily
+					font.pixelSize: Config.wallpaperNameSize
+					color: Config.muted
+					text: Config.themeEmpty
+				}
+
+				MouseArea {
+					anchors.fill: parent
+					acceptedButtons: Qt.NoButton
+
+					onWheel: function (wheel) {
+						root.row = 2;
+						root.move(wheel.angleDelta.y > 0 ? -1 : 1);
+						wheel.accepted = true;
+					}
 				}
 			}
 		}

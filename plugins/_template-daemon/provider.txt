@@ -1,0 +1,3 @@
+A daemon plugin becomes a provider in daemon/src/providers/<id>.zig and is added to
+the compile-time provider list in daemon/src/main.zig. The loader validates the
+manifest and builds it, but the compiled daemon decides what runs.

@@ -126,6 +126,52 @@ pub fn mcp(io: Io, args: []const []const u8) !void {
 	return mcpmod.run(io, args);
 }
 
+pub fn plugin(io: Io, args: []const []const u8) !void {
+	if (args.len < 3) {
+		std.debug.print("usage: yudae plugin <list|build|load|unload|theme|add|update|reload> [id|url]\n", .{});
+		std.process.exit(2);
+	}
+
+	const method = args[2];
+	const rest = args[3..];
+	const needs_id = std.mem.eql(u8, method, "build") or std.mem.eql(u8, method, "load") or
+		std.mem.eql(u8, method, "unload") or std.mem.eql(u8, method, "update") or std.mem.eql(u8, method, "theme");
+
+	if (needs_id and rest.len == 0) {
+		std.debug.print("usage: yudae plugin {s} <id>\n", .{method});
+		std.process.exit(2);
+	}
+
+	if (std.mem.eql(u8, method, "add") and rest.len == 0) {
+		std.debug.print("usage: yudae plugin add <git-url>\n", .{});
+		std.process.exit(2);
+	}
+
+	var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+	defer arena.deinit();
+	const allocator = arena.allocator();
+
+	var out: std.Io.Writer.Allocating = .init(allocator);
+	const writer = &out.writer;
+
+	try writer.writeAll("{\"call\":{\"target\":\"plugins\",\"method\":");
+	try std.json.Stringify.encodeJsonString(method, .{}, writer);
+	try writer.writeAll(",\"args\":{");
+
+	if (needs_id) {
+		try writer.writeAll("\"id\":");
+		try std.json.Stringify.encodeJsonString(rest[0], .{}, writer);
+	} else if (std.mem.eql(u8, method, "add")) {
+		try writer.writeAll("\"url\":");
+		try std.json.Stringify.encodeJsonString(rest[0], .{}, writer);
+	}
+
+	try writer.writeAll("}}}");
+
+	const result = roundTrip(io, allocator, out.written(), false) catch std.process.exit(1);
+	printResult(io, result);
+}
+
 pub fn call(io: Io, args: []const []const u8) !void {
 	var quiet = false;
 	var index: usize = 2;
@@ -343,6 +389,9 @@ pub fn virtualMachines(io: Io, args: []const []const u8) !void {
 			try writeRawField(writer, &wrote, "gl", "true");
 		} else if (std.mem.eql(u8, arg, "--human")) {
 			try writeRawField(writer, &wrote, "human", "true");
+		} else if (std.mem.eql(u8, arg, "--hold") and index + 1 < rest.len) {
+			index += 1;
+			try writeRawField(writer, &wrote, "hold", rest[index]);
 		} else if (name.len == 0) {
 			name = arg;
 		} else {
@@ -440,7 +489,7 @@ fn roundTrip(io: Io, allocator: Allocator, message: []const u8, quiet: bool) ![]
 	try connection.writeLine(message);
 
 	var attempts: usize = 0;
-	while (attempts < 20) : (attempts += 1) {
+	while (attempts < 8192) : (attempts += 1) {
 		const line = try connection.readLine() orelse {
 			std.debug.print("yudaemond sent no reply\n", .{});
 			return error.NoReply;

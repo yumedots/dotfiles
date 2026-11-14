@@ -88,7 +88,7 @@ Item {
 				required property var modelData
 				required property int index
 
-				readonly property real labelWidth: label.implicitWidth
+				readonly property real labelWidth: label.inkWidth
 
 				width: Math.max(root.knobSize, slot.labelWidth + Config.toggleLabelPad * 2)
 				height: row.height
@@ -103,16 +103,13 @@ Item {
 					visible: hover.containsMouse && slot.index !== root.selected
 				}
 
-				Text {
+				Glyph {
 					id: label
 
-					anchors.centerIn: parent
-					anchors.verticalCenterOffset: Config.toggleLabelLift
-
-					font.family: Config.fontFamily
-					font.pixelSize: Config.toggleFontSize
+					anchors.fill: parent
+					size: Config.toggleFontSize
 					color: slot.index === root.selected ? root.labelInk : (hover.containsMouse ? root.ink : root.fadedInk)
-					text: root.labelOf(slot.modelData)
+					glyph: root.labelOf(slot.modelData)
 				}
 
 				MouseArea {

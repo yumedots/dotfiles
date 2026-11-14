@@ -15,6 +15,7 @@ const agentname = @import("providers/agentname.zig");
 const workspaces = @import("providers/workspaces.zig");
 const tray = @import("providers/tray.zig");
 const notifications = @import("providers/notifications.zig");
+const plugins = @import("providers/plugins.zig");
 const weather = @import("providers/weather.zig");
 const system = @import("providers/system.zig");
 const apps = @import("providers/apps.zig");
@@ -58,6 +59,7 @@ pub const Context = struct {
 	workspaces: *workspaces.Workspaces,
 	tray: *tray.Tray,
 	notifications: *notifications.Notifications,
+	plugins: *plugins.Plugins,
 	weather: *weather.Weather,
 	system: *system.System,
 	apps: *apps.Apps,
@@ -127,6 +129,15 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 			context.audio.setWatch(json.flag(target, "on"));
 		}
 
+		if (json.field(audio_cmd, "step")) |target| {
+			const delta = switch (target) {
+				.integer, .float, .number_string => json.number(target),
+				else => json.numberAt(target, "delta"),
+			};
+
+			context.audio.step(delta);
+		}
+
 		return;
 	}
 
@@ -138,6 +149,14 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 			const password = json.textAt(target, "password");
 
 			if (ssid.len > 0) context.network.connect(ssid, password);
+		}
+
+		if (json.field(net_cmd, "radio")) |target| context.network.setRadio(json.flag(target, "on"));
+
+		if (json.field(net_cmd, "use")) |target| {
+			const kind = json.textAt(target, "kind");
+
+			if (kind.len > 0) context.network.useKind(kind);
 		}
 
 		if (json.field(net_cmd, "dns")) |target| {
@@ -282,8 +301,9 @@ fn commandThunk(ctx: *anyopaque, value: json.Value) void {
 			const band = json.integer(json.field(target, "band"));
 
 			if (path.len > 0) {
+				const fade = if (json.field(target, "fade")) |_| json.flag(target, "fade") else true;
 				context.wallpaper.save(path);
-				context.ink.apply(path, band);
+				context.ink.apply(path, band, fade);
 			}
 		}
 
@@ -407,6 +427,7 @@ fn callThunk(ctx: *anyopaque, target: []const u8, method: []const u8, args: json
 	const context: *Context = @ptrCast(@alignCast(ctx));
 
 	if (std.mem.eql(u8, target, "vms")) return context.vms.call(method, args, allocator);
+	if (std.mem.eql(u8, target, "plugins")) return context.plugins.call(method, args, alloc);
 	if (std.mem.eql(u8, target, "state")) return context.hub.syncSnapshot(allocator);
 	if (std.mem.eql(u8, target, "ui")) return context.hub.syncSnapshot(allocator);
 
@@ -454,6 +475,7 @@ pub fn main() !void {
 	}
 
 	if (std.mem.eql(u8, command, "call")) return cli.call(io, args);
+	if (std.mem.eql(u8, command, "plugin")) return cli.plugin(io, args);
 	if (std.mem.eql(u8, command, "vm")) return cli.virtualMachines(io, args);
 	if (std.mem.eql(u8, command, "open")) return cli.open(io, args);
 	if (std.mem.eql(u8, command, "app")) return cli.app(io, args);
@@ -467,7 +489,7 @@ pub fn main() !void {
 	if (std.mem.eql(u8, command, "mcp")) return cli.mcp(io, args);
 
 	if (!std.mem.eql(u8, command, "run")) {
-		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|vm|open|app|ui|spawn-check|logout]\n", .{});
+		std.debug.print("usage: yudae [run|state|doctor|bench [widgets]|parity|mcp|call|plugin|vm|open|app|ui|spawn-check|logout]\n", .{});
 		return;
 	}
 
@@ -516,6 +538,9 @@ fn run(io: std.Io) !void {
 	try hub.add(notify_provider.provider());
 	opencode_provider.attach(notify_provider);
 
+	const plugins_provider = try plugins.Plugins.create(allocator, io, hub, notify_provider);
+	try hub.add(plugins_provider.provider());
+
 	const workspaces_provider = try workspaces.Workspaces.create(allocator, io, hub);
 	try hub.add(workspaces_provider.provider());
 
@@ -541,6 +566,7 @@ fn run(io: std.Io) !void {
 	try hub.add(settings_provider.provider());
 
 	const config_settings = try config_provider.Config.create(allocator, io, hub);
+	plugins_provider.attachConfig(config_settings);
 	try hub.add(config_settings.provider());
 
 	const network_provider = try network.Network.create(allocator, io, hub);
@@ -610,6 +636,7 @@ fn run(io: std.Io) !void {
 		.workspaces = workspaces_provider,
 		.tray = tray_provider,
 		.notifications = notify_provider,
+		.plugins = plugins_provider,
 		.weather = weather_provider,
 		.system = system_provider,
 		.apps = apps_provider,
@@ -662,6 +689,7 @@ fn run(io: std.Io) !void {
 	try tray_provider.start();
 	try workspaces_provider.start();
 	try notify_provider.start();
+	try plugins_provider.start();
 	try weather_provider.start();
 	try apps_provider.start();
 	try screen_provider.start();

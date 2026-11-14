@@ -5,6 +5,86 @@ pub const Key = struct {
 	shift: bool = false,
 };
 
+const Hardware = struct {
+	name: []const u8,
+	qcode: []const u8,
+};
+
+const hardware = [_]Hardware{
+	.{ .name = "xf86audioraisevolume", .qcode = "volumeup" },
+	.{ .name = "xf86volumeup", .qcode = "volumeup" },
+	.{ .name = "volumeup", .qcode = "volumeup" },
+	.{ .name = "volup", .qcode = "volumeup" },
+	.{ .name = "raisevolume", .qcode = "volumeup" },
+	.{ .name = "xf86audiolowervolume", .qcode = "volumedown" },
+	.{ .name = "xf86volumedown", .qcode = "volumedown" },
+	.{ .name = "volumedown", .qcode = "volumedown" },
+	.{ .name = "voldown", .qcode = "volumedown" },
+	.{ .name = "lowervolume", .qcode = "volumedown" },
+	.{ .name = "xf86audiomute", .qcode = "audiomute" },
+	.{ .name = "audiomute", .qcode = "audiomute" },
+	.{ .name = "mute", .qcode = "audiomute" },
+	.{ .name = "togglemute", .qcode = "audiomute" },
+	.{ .name = "xf86audionext", .qcode = "audionext" },
+	.{ .name = "audionext", .qcode = "audionext" },
+	.{ .name = "nextsong", .qcode = "audionext" },
+	.{ .name = "nexttrack", .qcode = "audionext" },
+	.{ .name = "xf86audioprev", .qcode = "audioprev" },
+	.{ .name = "audioprev", .qcode = "audioprev" },
+	.{ .name = "previoussong", .qcode = "audioprev" },
+	.{ .name = "previoustrack", .qcode = "audioprev" },
+	.{ .name = "xf86audioplay", .qcode = "audioplay" },
+	.{ .name = "audioplay", .qcode = "audioplay" },
+	.{ .name = "xf86audiopause", .qcode = "audioplay" },
+	.{ .name = "playpause", .qcode = "audioplay" },
+	.{ .name = "xf86audiostop", .qcode = "audiostop" },
+	.{ .name = "audiostop", .qcode = "audiostop" },
+	.{ .name = "stopcd", .qcode = "audiostop" },
+	.{ .name = "xf86mail", .qcode = "mail" },
+	.{ .name = "mail", .qcode = "mail" },
+	.{ .name = "xf86calculator", .qcode = "calculator" },
+	.{ .name = "calculator", .qcode = "calculator" },
+	.{ .name = "xf86forward", .qcode = "forward" },
+	.{ .name = "forward", .qcode = "forward" },
+	.{ .name = "xf86print", .qcode = "print" },
+	.{ .name = "print", .qcode = "print" },
+	.{ .name = "sysrq", .qcode = "sysrq" },
+	.{ .name = "super", .qcode = "meta_l" },
+	.{ .name = "superl", .qcode = "meta_l" },
+	.{ .name = "metaleft", .qcode = "meta_l" },
+	.{ .name = "metaright", .qcode = "meta_r" },
+	.{ .name = "compose", .qcode = "compose" },
+};
+
+pub fn hardwareOf(name: []const u8) ?[]const u8 {
+	for (hardware) |entry| {
+		if (sameName(name, entry.name)) return entry.qcode;
+	}
+
+	return null;
+}
+
+fn sameName(name: []const u8, known: []const u8) bool {
+	var index: usize = 0;
+	var known_index: usize = 0;
+
+	while (true) {
+		while (index < name.len and separator(name[index])) index += 1;
+		if (index >= name.len) break;
+		if (known_index >= known.len) return false;
+		if (std.ascii.toLower(name[index]) != known[known_index]) return false;
+
+		index += 1;
+		known_index += 1;
+	}
+
+	return known_index == known.len;
+}
+
+fn separator(byte: u8) bool {
+	return byte == '-' or byte == '_' or byte == '.' or byte == ' ';
+}
+
 pub fn keyOf(char: u8) ?Key {
 	if (char >= 'a' and char <= 'z') return .{ .code = letter(char) };
 	if (char >= 'A' and char <= 'Z') return .{ .code = letter(char + 32), .shift = true };
@@ -103,4 +183,14 @@ test "shifted punctuation carries the shift" {
 	try std.testing.expect(keyOf('!').?.shift);
 	try std.testing.expectEqualStrings("a", keyOf('A').?.code);
 	try std.testing.expect(keyOf('A').?.shift);
+}
+
+test "hardware names ignore case and separators" {
+	try std.testing.expectEqualStrings("volumeup", hardwareOf("XF86AudioRaiseVolume").?);
+	try std.testing.expectEqualStrings("volumeup", hardwareOf("volume-up").?);
+	try std.testing.expectEqualStrings("volumedown", hardwareOf("volume_down").?);
+	try std.testing.expectEqualStrings("audiomute", hardwareOf("Mute").?);
+	try std.testing.expectEqualStrings("meta_l", hardwareOf("Super_L").?);
+	try std.testing.expect(hardwareOf("a") == null);
+	try std.testing.expect(hardwareOf("raisevolumeup") == null);
 }

@@ -35,7 +35,7 @@ ProcessPanel {
 			columns: Config.cpuBlockColumns
 			cellSize: root.blockSize
 			gap: Config.cpuBlockGap
-			colorFor: (value, index) => root.sys.coreInk ? root.sys.coreInk[index] : Config.cpuIdle
+			colorFor: (value, index) => Qt.tint(Config.cpuIdle, Qt.alpha(Config.cpuCore, Config.cpuCoreFloor + (1 - Config.cpuCoreFloor) * Math.min(1, value / 100)))
 		}
 	}
 }

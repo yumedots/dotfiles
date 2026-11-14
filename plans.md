@@ -1,219 +1,84 @@
 # Plans
 
-TLDR: one repo, split by what a thing is. xmake is the single entry point. `vm` runs disposable KVM machines (from `~/playground`) for real-session tests. One IPC door for commands.
+## 1. Plugins
 
-## 1. Repo layout
+One standard to make, load and share anything that modifies the system: Hyprland plugins, themes, shell features, app configs. Themes are plugins.
 
-Today `~/.config` is the repo, so app configs, quickshell, hyprland, the daemon and scripts all sit together. Target: the repo lives outside `~/.config`, and only plain app configs are symlinked into it.
+### A plugin is a folder
 
 ```
-dotfiles/
-  config/            plain app configs, one dir per app (alacritty foot ghostty btop gtk-3.0 gtk-4.0 zsh yazi micro lazygit opencode ...)
-                     each dir is symlinked to ~/.config/<name>
-  hypr/              hyprland conf + cursor plugin (C++); the one non-config symlinked, hyprland reads ~/.config/hypr
-  shell/             quickshell, run with `quickshell -p`, never symlinked
-    features/<name>/ one folder per feature: Card.qml Widget.qml Service.qml feature.json
-    ui/              primitives used twice or more
-    lib/ greeter/ lock/ launcher/
-  daemon/            yudaemond (Zig); src/providers/<name>.zig pairs with features/<name>
-  systemd/ scripts/
-  vm/                see section 3
-  docs/              reference: how the system is shaped
-  agents/skills/     task guides: how to do X
-  xmake.lua + one xmake.lua per dir
-  plans.md AGENTS.md README.md
+plugins/<id>/
+  plugin.toml     id, kind, version, requires, build, provides
+  Makefile        build instructions: make OUT=<dir> writes the files in provides
+  src/ ...        source
 ```
 
-Rules:
-- A feature has one name. `features/weather/` on the QML side, `providers/weather.zig` on the daemon side. Add or delete both together.
-- `config/` has no code. Anything with logic leaves it.
-- `AGENTS.md` becomes an index. Procedure goes in `agents/skills/`, reference in `docs/`.
-- Only `xmake link` writes into `~/.config`. It refuses to overwrite a real file and prints what it would replace.
+- Source only. No `.so`, `.bin`, `.o` or ELF file inside a plugin folder; the loader and the suite reject them so a Hyprland update can always rebuild.
+- Built files go to `~/.local/state/yudae/build/<id>/`, never into the plugin folder.
+- A plugin may ship anything else, Lua and scripts included. Security is the user's call; nothing else is rejected.
+- `drop-preview.so` is tracked in git today; it needs `git rm --cached` and a `.gitignore` entry when the user says commit.
 
-Moves, in order (each one verified in the VM before the next):
-1. Inside the current repo: create `config/`, `shell/`, `daemon/`, `hypr/` and move things in. Fix every path (systemd units, greetd, hypr exec lines, `scripts/yubuild`).
-2. Add `xmake link`, replace the files in `~/.config` with symlinks.
-3. Move the repo root to `~/dotfiles` (the existing clone there is a stale copy of the same remote, replace it).
+### The load list
 
-Risk: the shell and greeter currently assume `~/.config/quickshell`. Both must run from the repo path. AGENTS.md rule "everything the shell runs lives in ~/.config/quickshell" changes to "lives in the repo, run with `-p`".
+`~/.local/state/yudae/plugins.toml`, never shipped. `YUDAE_PLUGINS` overrides the path for tests and VMs.
 
-## 2. xmake as the single entry point
+```toml
+load = ["tokyo", "borders-plus-plus", "drop-preview"]
 
-`xmake <task>` replaces remembering scripts. xmake orchestrates, it does not replace the real builders.
+[tokyo]
+accent = "#7aa2f7"
+```
 
-| task | does |
+- A plugin not in `load` is never touched. Order matters; later plugins override earlier ones.
+- A `[id]` table passes options to that plugin.
+- A missing file means no plugins and the built-in defaults.
+
+### Kinds
+
+Each kind has one adapter in yudaemond. A new kind is one adapter; plugins never touch the loader.
+
+| kind | loading does |
 | --- | --- |
-| `xmake build` | daemon (wraps `zig build`), cursor plugin (native C++ target) |
-| `xmake link` | symlink `config/*` and `hypr/` into `~/.config` |
-| `xmake lint` | qmllint on `shell/`, `node shell/lib/check.js` |
-| `xmake test` | daemon parsers/protocol tests, qml fixtures, idle-spawn test |
-| `xmake bench` | `yudaemond bench`, compared with `bench/baseline.json` |
-| `xmake vm ...` | section 3 |
-| `xmake doctor` | what is missing and why |
+| `hypr` | daemon writes `loaded.lua` with `hl.plugin.load` and the plugin's `hypr.lua`; `hypr/hyprland.lua` `dofile`s it, replacing `hypr/plugins.lua` |
+| `theme` | merges its colors into `Yudae.settings`; the shell retints live |
+| `shell` | the shell instantiates its QML feature |
+| `app` | renders a template into the state dir (foot, gtk, ...) |
+| `daemon` | a provider; compile-time list first |
 
-Keep `zig build` underneath: the build budgets (incremental <2s, cold <20s, binary <3MB) are measured on it, and `scripts/yubuild` prints them. xmake calls it and reports the same numbers. Do not reimplement Zig compilation in Lua.
+### Building on Hyprland updates
 
-## 3. VM work for agents and humans
+- At start yudaemond reads `pkg-config --modversion hyprland`. Each plugin's stamp holds that version and the source hash. A different version, older or newer, runs `make` for every loaded `hypr` plugin. No package hooks; nothing is installed.
+- Missing compiler or headers: report what is missing.
+- A failed build means that plugin is not loaded, a notification is shown, the others still load.
+- `loaded.lua` only loads binaries with a current stamp and never compiles. A stale plugin is skipped at login, rebuilt by the daemon and loaded live with `hyprctl plugin load`.
+- A running Hyprland older than the installed headers refuses the `.so`; that is non-fatal and the plugin loads after the next login.
 
-The daemon is the control plane. Nothing lives in a separate broker.
+### Commands
 
-### Where it lives
+`yudae plugin list | build <id> | load <id> | unload <id> | add <git-url> | update <id> | reload`. `load` and `unload` edit the TOML and reload immediately. `add` clones into `$XDG_DATA_HOME/yudae/plugins/<id>`, prints what it contains (kind, Makefile, Lua, scripts) and installs without a prompt, recording the commit.
 
-- **Code:** `daemon/src/providers/vms/` in Zig, inside yudaemond. Split by job: `qmp.zig`, `vsock.zig`, `budget.zig`, `tiers.zig`, `cgroup.zig`, `images.zig`. QMP is JSON over a unix socket and vsock is a socket family, so std is enough. No C library is needed. If one ever is (libvirt is not), it needs your explicit yes first.
-- **Why Zig and not Go:** the daemon already owns state, the socket protocol, the MCP and the bench budgets. A Go daemon would be a second runtime, a second protocol and an extra hop, for libraries we do not need.
-- **Images and tasks:** `vm/` with xmake, taken from playground: the overlay and snapshot tasks, the pinned fetch with mirror speed-test, `bench.sh`, the qemu command builder. Dropped: the Mac pieces (GPUI window, cocoa, hvf, the QEMU fork, `tryDisplay`, the Go `firstBoot`, which cloud-init and the packages layer replace). Playground stays an archive. Its old uncommitted work is in `git stash` there.
-- **Merge:** copy what is useful into `vm/`. No submodule.
+### Tests
 
-### Control plane
+- Zig unit tests for the loader: empty list, missing folder, bad TOML, unknown kind, duplicate id, `requires` mismatch, order, override conflict, unload.
+- A conformance suite in `xmake test` that discovers every `plugins/*` and checks it by kind: valid manifest, `make` succeeds, `provides` exist, no binaries, theme color keys, `app` templates render, `shell` passes `qmllint`, `hypr` loads.
+- VM scenarios `vm/scenarios/plugin-*.json`: no `plugins.toml`, load and unload a `hypr` plugin, stale stamp, broken source, binary in the folder, missing compiler, theme load, theme layering, theme with Lua, one real `shell` plugin, one real `app` plugin.
+- Extra golden images for a real Hyprland change: `old` built from a dated Arch Linux Archive snapshot (the whole system, since Hyprland needs matching `hyprutils` and `aquamarine`), the current one, and a newer one if needed. Selected by a flag on `xmake vm packages`, started with `yudae vm create --from`. Scenarios: upgrade, downgrade, same version (no-op), stale headers. The faked-stamp scenario stays as the fast smoke test.
 
-```
-host yudaemond  ──QMP unix socket──▶  qemu (one per VM): screendump, input, stop/cont, save/restore, balloon, block
-      │
-      └──vsock (CID per VM)────────▶  guest yudaemond (same binary, headless providers): state, doctor, ui tree, call, exec
-```
+### Agents first
 
-- The host daemon runs every VM and owns all screenshots. Agents never talk to QEMU or the guest directly.
-- The guest runs the same yudaemond, so the same snapshot JSON, the same `yudae call` and the same `ui tree` work inside and outside a VM. vsock needs no network and no ssh. `/dev/vhost-vsock` exists on this machine.
-- QMP is for hardware-level things only: screendump, key and mouse input, pause, save, balloon.
-- The snapshot has a `vms` section that QML renders, like any other provider.
+- Skill in `.agents/skills/plugin/SKILL.md` with frontmatter and a few rules; the reference is `docs/plugins.md`.
+- `plugins/_template-<kind>/`: one minimal working example per kind that passes the suite; an agent copies one.
+- The `yudae plugin` verbs are MCP tools.
+- `docs/plugins.md` comes after, written from the templates; `docs/architecture.md` and `docs/agent-tooling.md` updated.
 
-### Images: layered qcow2, cloud image at the bottom
+### Order of work
 
-```
-Arch-Linux-x86_64-cloudimg.qcow2   official, pinned by sha256, cloud-init for user/keys/hostname
-  packages layer                   built once from the host package list, rebuilt only when the list hash changes
-    golden layer                   desktop booted healthy, guest yudaemond up
-      run overlay                  one per VM, deleted on destroy
-```
+1. Manifest spec, conformance suite, the two-file skill, the "no `plugins.toml`" scenario.
+2. `_template-hypr` and `_template-theme`.
+3. The loader in yudaemond.
+4. The `hypr` adapter: replace `hypr/plugins.lua`, move the three plugins to `plugins/<id>/`, move their config (`plugins.lua`, `hypr/drop-preview.lua`) into each `hypr.lua`. Nothing moves before the loader exists.
+5. The `theme` adapter with one real theme.
+6. The extra VM images and the full end-to-end suite.
+7. MCP tools, `docs/plugins.md`, `add` and `update`, then the `shell` and `app` kinds.
 
-- The package list comes from the host: `pacman -Qqen` (~200) and `-Qqem` (~5). The guest reads the host pacman cache and the AUR helper's built packages read-only over virtiofs, so building the layer downloads almost nothing. The guest uses the same CachyOS v3 repos and `-cpu host`.
-- The dotfiles repo is mounted read-only over virtiofs. An uncommitted edit shows up in the guest at once, no rebuild.
-
-### GPU acceleration is the default: virgl (OpenGL), not Venus
-
-- Every VM gets `virtio-gpu-gl` (virgl) on the host GPU. Host here is an RTX 3070 on the NVIDIA driver, `/dev/dri/renderD128` is present.
-- **Why OpenGL and not Venus:** our whole desktop is OpenGL. Hyprland composites with GLES/GL and Qt Quick in quickshell uses OpenGL. Venus (Vulkan) adds Vulkan apps and GL 4.6 through Zink, and Collabora notes both virgl and Venus pay host/guest sync costs. Reports on a CachyOS host show virgl and Venus both slower than llvmpipe in some setups, with the host GPU stuck at idle clocks. Venus also needs a new NVIDIA proprietary driver (570.86 or later per the Mesa docs). Choose Venus per VM only for a Vulkan workload. Measure before trusting either.
-- **Headless:** `-display egl-headless` renders on the host GPU without a window. Screenshots come from QMP `screendump`.
-- **Human view:** `-display dbus,p2p=yes,gl=on`. QEMU hands the scanout over as a dmabuf (`ScanoutDMABUF2`), zero copy, and the Quickshell `vms` app draws it in `Yudae.Native.VmDisplay`. The patched QEMU in `~/qemu-linux` caches the export and keeps the guest presenting. With no viewer the daemon runs `yudae-pump` at 1536x864 scale 1; `vm view` stops it, sets 2560x1440 scale 1.6667 and opens the app, with no VM restart. The guest overlays are transparent via a local copy of the native plugin and `setDefaultAlphaBuffer(true)`.
-- **Many VMs, one GPU:** each VM gets its own host GL context, so virgl behaves like several OpenGL apps on the host. The governor caps the number of GL VMs and shows it. Collabora notes virgl struggles with many concurrent GL apps, so the cap comes from a measured bench, not a guess.
-- DRM native context does not exist for NVIDIA. Not an option here.
-- **Cost:** a virgl device cannot be saved. UTM and Proxmox both report that save and snapshot fail with virgl, and QEMU blocks migration for it. GL VMs therefore have no RAM-to-file save.
-
-### Sleep and wake
-
-| tier | state | cost | wake |
-| --- | --- | --- | --- |
-| hot | running | full | none |
-| warm | QMP `stop`, balloon inflated | RAM only, no CPU | milliseconds |
-| parked | warm plus the VM's cgroup RAM reclaimed to swap | almost no RAM, no CPU | the first touches page back in, about a second |
-| off | QEMU exited, overlay kept | disk only | boot from golden, a few seconds |
-
-- **Why not save RAM to a file:** it only helps when it is cheaper than the alternatives, and for GL VMs QEMU cannot do it at all. Parked reaches the same goal on the host side: after `stop`, write to the VM cgroup's `memory.reclaim` so the kernel pages the idle guest RAM out to zram or swap. The GPU context stays valid because QEMU keeps running. Needs measuring (swap size, wake time).
-- **What a RAM file would buy:** a fresh VM in about a second from a booted golden state, and one page-cache copy shared by many clones. Firecracker does it by mapping the memory file `MAP_PRIVATE`, restore in tens of milliseconds. QEMU has `mapped-ram` with multifd and direct-io for fast non-live saves, but still loads RAM up front, and the lazy userfaultfd fast-load series is not merged. So it is an optional later tier for non-GL VMs, not part of the first version.
-- Idle detection: no tool call for N seconds and guest CPU near zero, then warm; warm for M minutes, then parked; parked for long, then off.
-- Any tool call wakes the VM before it runs. The agent never sees sleep.
-- Boot from golden stays fast through a trimmed guest: Hyprland autologin, no display manager, only the units the desktop needs. Target measured in the bench.
-
-### Resource governor (in the daemon)
-
-- Global budget: default half the RAM and a quarter of the cores. A new VM is admitted, queued, or makes the least recently used VM sleep. The host never swaps.
-- Each VM is a systemd user scope with `MemoryMax`, `CPUQuota`, `CPUWeight`, `IOWeight`, low priority, so the desktop stays smooth. Balloon with free-page-reporting shrinks idle guests, and parking reclaims the rest.
-- Meters are read in-process from cgroup files (`cpu.stat`, `memory.current`, `memory.max`), with zero spawns at steady state. Detailed sampling runs only while a client subscribes, which is the processes widget being open.
-
-### Processes widget
-
-A VMs section in the processes widget (`ProcessPanel`, `ProcessList`), one row per VM:
-- name, tier, owning agent;
-- CPU against its quota, RAM against its limit with the balloon's current size, overlay disk size, GL context;
-- a header bar for the global budget: used against allowed, for RAM, CPU and GL VMs;
-- the actions sleep, wake, destroy and view.
-
-### Many agents
-
-- **Default: one VM per agent.** Overlays and golden clones are cheap, and isolation is the point.
-- **Teams:** a team gets a run id. VMs created under it share a read-only input and a write-once results directory, and show up grouped in the widget.
-- **Shared VM:** several agents can attach to one VM. One holds the controller role (input), the others observe (screenshot, exec read-only). Taking over needs the holder to release it or time out. The same flag is how a human takes control.
-- **Fork:** `vm_fork(name)` clones a VM's disk (and its RAM only for non-GL VMs, later) so agent B starts from agent A's exact state. Use it to try two fixes in parallel.
-- **Budget fairness:** per-agent quota inside the global budget, so one agent cannot starve the others.
-
-### How agents work on VMs
-
-Structured state first, pixels last, a human can always look and take over.
-
-Exposed as `yudaemond mcp` tools and the same verbs on the CLI with `--json`:
-- Lifecycle: `vm_create(from, dotfiles=<ref|worktree>, cores, mem, gl)`, `vm_list`, `vm_sleep`, `vm_wake`, `vm_destroy`, `vm_snapshot`, `vm_restore`, `vm_fork`.
-- Do: `vm_exec(cmd)` through the guest daemon, `vm_push`, `vm_pull`, `vm_key`, `vm_type`, `vm_click`, `vm_move`. Input goes through QMP at compositor level, so keybinds really get tested.
-- See: `vm_state` (the guest daemon snapshot), `vm_ui_tree`, `hyprctl -j` through exec, `vm_screenshot`. Screenshots judge visuals only.
-- Wait: `vm_wait(until=<window | surface mapped | state predicate | log pattern | exit>, timeout)`, driven by QMP events, Hyprland events and the guest daemon socket. No sleep loops, no screenshot spam.
-- Verify: `vm_run_scenario(name)` runs deterministic checks first and screenshots for a vision judge last.
-- Every result is bounded and typed: capped output with a handle for the rest, exit codes, durations.
-
-Quickshell as an MCP surface is done at the daemon: `yudae ui tree` and `yudae call` work on the host and in any guest. Not in QML.
-
-### Humans
-
-- `vm view <name>` opens the Quickshell `vms` app on the same VM (dbus dmabuf), read-only or interactive. The app inhibits host shortcuts while focused; F11 is fullscreen and hides the sidebar. A human and an agent can watch the same screen.
-- A control flag: while a human holds input, agent input fails with "human has control".
-- `vm tail` follows the console, the guest journal and the agent call log. Every call is recorded and replayable.
-- Each VM records `harness`, `session`, `agentSinceMs` and `lastCallMs` from the MCP `clientInfo` and the agent environment; the app sidebar shows them.
-
-### Isolation and records
-
-- User-mode networking, optional egress allowlist. Only the repo and the pacman cache are shared, both read-only. No secrets, no `$HOME`. Results leave through `vm_pull`.
-- Leases with a TTL: when the agent session ends, the VM is slept, then destroyed.
-- Every run writes `runs/<id>/` with the base hash, package-list hash, dotfiles ref and dirty diff, scenario, logs and screenshots, so a failure can be replayed on the same state.
-
-### Scenarios
-
-`vm/scenarios/<name>.json` with `context`, `steps` and `proof`. First ones: session boots healthy, lock and unlock, greeter login, launcher search and launch, workspace switch, bar unmaps in fullscreen, idle shell spawns no process.
-
-The VM guest covers greetd, the lock, real session start, a clean-machine install and parallel agents.
-
-### Host prerequisites
-
-- Installed: `qemu-desktop` 11.1.3, `qemu-ui-dbus`, `qemu-ui-egl-headless`, `qemu-ui-opengl`, `virtiofsd` 1.14.
-- The databases were stale; the full `-Syu` ran and the running kernel and NVIDIA module already match the installed packages.
-
-## 4. Single IPC entry
-
-One command for everything that talks to the running shell and daemon:
-
-```
-yudae call <target> <method> [args...]     # -q is a quiet no-op if nothing is running
-yudae state | doctor | bench | parity | ui tree
-yudae vm <verb> ...                        # section 3, same as the MCP tools
-```
-
-- The daemon owns routing. A feature registers its target in its provider (`weather`, `launcher`, `bar`, `menu`, `lock`, `vms`).
-- Hyprland binds, scripts, the MCP and VM scenarios all use `yudae call`, never raw `qs ipc call`.
-- Changing state from a CLI pushes a refresh, no timers.
-- The same command works inside a VM, because the guest runs the same yudaemond.
-
-## 5. Order of work
-
-1. Docs: split `AGENTS.md` into index + `agents/skills/` + `docs/`.
-2. `yudae call` and the idle-spawn test as an `xmake test` item.
-3. Repo restructure (section 1, steps 1 to 3).
-4. xmake tasks (section 2), starting with `link`, `lint`, `build`.
-5. `vm/`: copy the useful xmake pieces from playground, add the x86_64 cloud image, the host package-list layer and virtiofs dotfiles.
-6. Daemon `vms` provider: QMP, vsock to the guest daemon, headless guest daemon build.
-7. Governor, sleep tiers (hot, warm, parked, off), GPU limits, fork. RAM-file clones for non-GL VMs only if measured worth it.
-8. MCP tools, `vm view`, control flag, run records, the processes widget section.
-9. Scenarios, then CI.
-
-## 6. Decisions
-
-Settled:
-- `hypr/` is symlinked into `~/.config`.
-- Playground is merged into `vm/`, its old work is dropped.
-- Vanilla QEMU. A new Linux fork only if vanilla blocks us.
-- VMs are GPU accelerated.
-- VM control lives in yudaemond (Zig). Go is not used.
-- Full system upgrade done; QEMU 11.1.3 and virtiofsd 1.14 installed, kernel 7.3.1 and the NVIDIA module already match the installed packages.
-- QEMU display fixes live in the fork `yumedots/qemu-linux`, branch `yudae`, built at `~/qemu-linux/install`. The daemon prefers that binary and `YUDAE_QEMU` overrides it.
-- The perf gates stay on `yudaemond-headless`. The full desktop daemon measures 41.6MB idle RSS and about 80s cold build, over the 8MB/20s gates; the proposed full-daemon budget is 48MB and 90s, recorded in `docs/perf.md` rather than hidden.
-- Repo root is `~/dotfiles`; `~/.config` holds only the symlinks `xmake link` makes.
-- greetd starts the repo path, not `~/.config/quickshell`.
-
-Open:
-- None.
+Settled: state dir is `~/.local/state/yudae`; source only; version check at daemon start, no package hooks; nothing is rejected but binaries; everything tested end to end in the VM; agents first.

@@ -13,11 +13,15 @@ Item {
 	readonly property var current: list.current
 	readonly property int count: list.count
 	readonly property bool empty: root.count === 0
-	readonly property real rowHeight: prototype.implicitHeight
+	readonly property real rowHeight: Config.procRowHeight
 	readonly property real rowWidth: list.rowWidth
 
 	implicitHeight: root.visibleRows * root.rowHeight + Config.procsGap * Math.max(0, root.visibleRows - 1)
 	height: root.implicitHeight
+
+	function reset() {
+		list.reset();
+	}
 
 	function move(step) {
 		list.move(step);
@@ -32,22 +36,13 @@ Item {
 
 	signal killRequested(var proc)
 
-	Text {
-		id: prototype
-
-		visible: false
-		font.family: Config.fontFamily
-		font.pixelSize: Settings.fontSize
-		text: "0.0%"
-	}
-
 	Selector {
 		id: list
 
 		anchors.fill: parent
 		visible: !root.empty
 		visibleRows: root.visibleRows
-		rowHeight: prototype.implicitHeight
+		rowHeight: root.rowHeight
 		rowSpacing: Config.procsGap
 	}
 

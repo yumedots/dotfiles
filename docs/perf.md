@@ -88,8 +88,6 @@ The native viewer does receive 150 `UpdateDMABUF` frames/s on the animation, so 
 
 Venus was tried as the virgl alpha fix. QEMU ran with `virtio-gpu-gl-pci,blob=on,hostmem=2G,venus=on`; the guest installed `vulkan-virtio`. `vulkaninfo` sees `Virtio-GPU Venus (NVIDIA GeForce RTX 3070)` and `VK_KHR_wayland_surface`, but windowed use is broken on this host: `vkcube` selects the Wayland WSI and dumps core, and zink fails with `ZINK: failed to choose pdev` on every window surface, falling back to llvmpipe. `eglinfo -p wayland` sees zink only through the EGL device path, not a window. QEMU was reverted to plain `virtio-gpu-gl-pci`. Proof: `vm/runs/demo/proof/venus-vkcube.log`, `venus-gl-zink.txt`, `venus-gl-virgl.txt`.
 
-The virgl GL benchmark (`vm/bench/eglbench.c`, Wayland EGL, 1920x1080 FBO): heavy 240 frames 473-592 fps, draws 120 x 4096 47-51 fps (193k-208k draws/s). Host QEMU 20.9% CPU and 1.94GB RSS over 10s. A zink number is not comparable because windowed zink fell back to llvmpipe.
-
 ### Mesa fork attempt (2026-11-03)
 
 Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out of its dmabuf feedback because the virtio-gpu primary plane is XR24-only. `quirks:skip_non_kms_dmabuf_formats = false` makes Hyprland advertise non-KMS formats too; the system Mesa then exposes 25 ARGB8888 configs with alpha 8, and the guest launcher shows the wallpaper behind it. No Mesa or Hyprland fork is needed. Proof: `vm/runs/demo/proof/launcher-alpha-hyprland-quirk.png`. The local Mesa fork was deleted.
@@ -101,30 +99,62 @@ Superseded by a one-line Hyprland quirk. The guest compositor filtered ARGB out 
 - P4: 676 host font families against 642 guest; the missing ones are CachyOS extras (Arabic/Syriac PCF), no guest-only families. The shell font `GoogleSansCode Nerd Font` resolves in both. Icon themes are the same 8; host has one extra `cachyos.svg` icon, not a theme. `breeze_cursors` is present in both.
 - P5: fixed by the Hyprland non-KMS quirk; see the proof above.
 
-### vm/compare
+### VM image build
 
-`vm/compare` captures host and viewer-fullscreen at 2560x1440 for 8 scenes, masks the dynamic bar regions (workspaces, clock, stats) and reports ImageMagick RMSE. Side-by-side PNGs are in `vm/runs/demo/compare/`.
+`xmake vm bench [tag]` times `fetch`, `packages`, `golden` and appends one JSON line to `bench/images.jsonl` (gitignored). It uses `~/.cache/yudae-vm-bench`; `DOTFILES_VM_BENCH` moves the logs, `DOTFILES_VM_BENCH_CACHE` the cache.
 
-| scene | dimensions | masked RMSE |
-| --- | --- | --- |
-| idle | 2560x1440 | 1043.74 |
-| bar | 2560x1440 | 4852.83 |
-| launcher | 2560x1440 | 5152.76 |
-| launcher-fire | 2560x1440 | 7992.21 |
-| calendar | 2560x1440 | 5205.03 |
-| power | 2560x1440 | 1446.53 |
-| tiled | 2560x1440 | 6711.25 |
-| fullscreen | 2560x1440 | 3804.78 |
+| run | packages | golden | total |
+| --- | --- | --- | --- |
+| before | 4m29s | 49s | 5m18s |
+| after | 3m41s | 49s | 4m32s |
+| trimmed | 2m58s | 49s | 3m47s |
+| folded | 2m44s | 0.09s | 2m44s |
+| thin | 2m21s | 0.09s | 2m21s |
+| fast | 54.8s | 0.09s | 54.8s |
+| base | 53.9s | 0.09s | 53.9s |
+| restore | 0.05s | 0.04s | 0.09s |
+| materialized | 8.05s | 0.04s | 8.10s |
+| cached | 0.37s | 0.04s | 0.42s |
 
-Expected differences: `launcher-fire` shows host-only games in the guest query; calendar meters and the guest cursor differ; the tiled/fullscreen terminals are at different window positions. The images were inspected; these are not pixel-identical.
+The thin cut also drops KDE and GNOME file managers and their dependency trees, Noto/CJK and extra fonts, printing and network daemons, and the desktop portals. It keeps the shell font, Meslo, DejaVu, emoji, Qt, Hyprland, audio, NetworkManager and the plugin toolchain. Result: 735MB download, 2.97G layer, 719 packages, shell screenshot and an in-guest `agent-cursor` build verified. `golden_setup` now runs `passwd -d root`; the guest reports `root NP`.
 
-### Input latency
+Cloud Hypervisor is not installed and is not a drop-in: it needs a direct kernel and initrd and has no dbus/GL path for the viewer. Installing it needs host root, which is unavailable by design.
 
-Key input measured with a guest evdev marker written to `/dev/ttyS0` and timestamped on the host: 20 samples, p50 **5.49ms**, p95 **16.00ms** (min 4.59, max 16.00). The marker path is viewer key -> guest evdev -> serial; it does not use guest wall-clock compared with host. Mouse latency was not captured because the virtio-tablet marker produced no samples in this run; mouse position mapping is proven separately.
+The folded run makes the packages image bootable: the same provisioning boot writes the user units, fstab, enables them and sets the graphical target. `golden` is now an empty qcow2 overlay on packages, so it costs 0.09s instead of a second boot.
+
+The trimmed run excludes firmware, QEMU, virtiofsd, VLC, tesseract, Firefox, qBittorrent, Prism Launcher, Rust, Zig, Clang, LLVM, CMake, Ninja, Docker, Podman, libvirt and the existing CachyOS/NVIDIA/Steam-only packages. It keeps gcc, make and pkg-config for plugin builds. The package layer drops from 6.5G to 4.2G and the guest has 946 packages instead of 1011; the shell, Hyprland and a scenario screenshot were verified on it. Its 1m20s fetch was a one-time cloud image download and is not in the total.
+
+The second optimized run took 4m54s, so network variance is about 20s. Changes: one `pacman -Syu --needed` transaction instead of upgrade then install, `ParallelDownloads = 12`, `cache=unsafe`, `lazy_refcounts=on`, and `pacman -Scc` before poweroff. The 16G host package cache stays on 9p; virtiofs failed on the system QEMU with `vhost_set_vring_kick`.
+
+`packages` and `golden` skip when their stamp still matches the host package list and user data (`packages.sha`, `golden.sha` in the cache); `--force` materializes the disk from the cached compiled image; a changed package list falls back to the pacman delta. A cached `packages` is 0.01s, a cached `golden` is 0.01s. Both refuse to rebuild while any `vm/runs/*/disk.qcow2` exists, because that disk chain backs onto the layer being replaced; destroy those VMs first.
+
+When the list changed, `packages` boots the existing layer and applies only the delta: installs the new explicit packages, removes packages dropped from the list, prunes orphans, clears the cache and runs `fstrim`. A qcow2 snapshot rolls back a failed or interrupted delta; the VM has a 20 minute watchdog. Above `DOTFILES_VM_PACKAGES_CAP_MB` (default 8192) the layer is rewritten with `qemu-img convert`. Measured on the isolated cache: full 2m44s, add one package 58s, remove it 57s, compaction 1m01s, golden 0.09s. `DOTFILES_VM_PACKAGES` points at a package list file instead of `pacman -Qqen`, for tests.
+
+A host-side build was measured and rejected: pacman inside `unshare -r` installed 150 host packages (953MB) in 2m24s, slower than the guest, and unprivileged `/proc` and `/dev` mounts are denied. A from-scratch build under 60s is not reachable with pacman; the 58s delta is the practical floor, and the 2m44s figure is only for `--force` or a cold cache.
+
+Direct kernel boot with a custom initramfs is used for provisioning. The pacman path execs systemd because scriptlets and first boot assume PID 1. The parallel builder uses the same initramfs in bash mode (`dotfiles.parallel=1`) because it skips package scriptlets and runs explicit fixups; the earlier bash-init pacman attempt failed at D-Bus/logind.
+
+With a warmed package cache and the multi-mirror prefetcher, a forced packages build is **54.8s** (54.1s on the previous run) with 13-19MB left to download. The prefetcher reads `urls.txt` from the previous build, takes the missing packages across four mirrors, and the guest copies new packages back into the cache. The kernel upgrade is ignored so the cloud kernel stays. A cold first build is 1m38s; the 54s figure is a rebuild with the cache present.
+
+The one-time base is a parallel install into a separate raw target disk. Inputs live in `~/.local/share/dotfiles/vm-inputs`: the cloud image, the package store, a btrfs package-store image, a pre-grown 32G raw target base, the 32G GPT disk head, the direct initramfs and a compressed copy of the compiled root image. The builder boots under the bash init (`dotfiles.parallel=1`), mounts the package image on virtio, extracts 341 packages with 16 `bsdtar` workers into the target, installs the pacman DB from the precomputed tar, and writes the user, units and fstab with direct symlinks. Font cache, schemas, ca-trust and depmod run in a one-shot first-boot unit. The target is unmounted and the host slices partition 3 into `root.btrfs` with `vm/dcopy`. With the input compiled image also removed this extraction path measures **9.0s total** (`dotfiles: parallel done`; 8.33s to poweroff; 6s extraction).
+
+The packaged-input path removes `vm-base`, `vm-rootfs` and the output `vm-rootfs.img.zst`; the compiled-image input `~/.local/share/dotfiles/vm-inputs/rootfs.img.zst` (1.3G) is still present. It restores the image in **8.57s total** (`root image restored`), and the next build is **0.133s**:
+
+```
+noartifact total=8568ms
+root image restored
+next=133ms
+```
+
+`xmake vm bench final` from an empty bench cache is **0.45s** (`fetch 0.008s, packages 0.405s, golden 0.037s`). The boot check reports 493 packages, `pacman -Dk` clean, 2 users, `sudo 4755`, and `yudaemond`/`yudae-desktop`/`dotfiles-firstboot` enabled.
+
+Agent VM check: the default cache was cleared and regenerated from the durable image (`packages` 0.42s, `golden` 0.04s), and `scripts/yudae vm create <session>` (no `--from`) booted it. `vm exec` reports uid 1000, 493 packages, `pacman -Dk` clean, and all three user units enabled. Hyprland and quickshell are running (`quickshell` layer 0 0 1536 33). `eth0` is up via DHCP at 10.0.2.15, `/etc/pacman.d/gnupg` is populated, and `pacman -S tree` installs to 494 inside the VM without touching the base or golden. `vm create` prints a `yudae: NotFound` warning but creates and boots the VM.
+
+`vm/images backup` refreshes both the output and input compressed images after a package change. The rootfs directory and `mkfs.btrfs -r` remain as a 6.37s fallback when the input image is missing but the rootfs is present; the pacman build remains the final fallback when the store has no transaction/DB artifacts. `btrfs restore` was rejected because it loses setuid/setgid bits; the image slice and restore preserve them.
 
 ### Clock
 
-QEMU now uses `-rtc base=utc,clock=host`; guest `timedatectl set-ntp false` is applied by `setGuestMode` and `vm/desktop`. Guest `NTP=no`, `systemd-timesyncd` inactive/disabled; guest and host wall clocks stay within the vsock measurement margin.
+QEMU uses `-rtc base=utc,clock=host`, so the guest RTC is the host wall clock. `vm/desktop` runs `hwclock -s` at Hyprland start, applies the host timezone from `vm/hoststate/timezone`, then disables NTP. `setGuestMode` disables NTP too. Guest `NTP=no`, `systemd-timesyncd` inactive/disabled; guest and host wall clocks stay within the vsock measurement margin.
 
 ### Full daemon budget
 
@@ -136,6 +166,25 @@ The headless daemon still passes 3.6MB idle RSS and 9.1s cold build against 8MB/
 - C6 `egl-headless` on the same guest sizes for the agent comparison.
 - Mouse input latency still needs a tablet marker capture.
 - Per-delivered-frame CPU/GPU, not just totals.
+
+## Disk scanner, measured 2026-11-11
+
+`xmake bench disk` builds a seeded synthetic tree, runs the sequential and threaded scanners at 1/2/4/8/16/nproc, keeps the fastest exact version, and writes one row to `daemon/bench/disk.jsonl`. The first accurate run seeds the `disk` block in `daemon/bench/baseline.json`; later runs fail when throughput drops under 80% of that baseline, when the cache grows past twice its baseline, or when any total stops being exact. `--files=N` changes the tiny-file count and `--real` adds `$HOME`.
+
+Measured on CachyOS, kernel 7.3.3, Zig 0.17.1, 200k tiny files:
+
+| metric | first run |
+| --- | --- |
+| winner | v0 sequential |
+| throughput | 319k entries/s |
+| syscalls | 1.00 per entry |
+| cache | 5.7kB, sub-millisecond `mmap` load |
+| views | p50 0.7us, p99 1.1us |
+| accuracy | exact against `statx` block totals |
+
+The threaded candidate is measured at 1/2/4/8/16/nproc at the same time; at 200k tiny files it loses to the sequential scanner on this host and is not the shipped path.
+
+Reference scanners ncdu, gdu, dua and hyperfine are reported when present. Installing them needs root and is asked for at bench time, never done automatically. Cold-cache runs need `yudae-fsd` and `org.yudae.fs.bench`; without it the bench reports the warm numbers only.
 
 ## Rules
 
