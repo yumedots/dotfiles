@@ -65,7 +65,7 @@ weatherDayLabelColor = "#dcd7ba"
 
 [calendar]
 calendarBase = "#dcd7ba"
-calendarOutside = "#dcd7ba"
+calendarOutside = "#54546d"
 calendarTodayBox = "#2a2a37"
 calendarTrack = "#363646"
 calendarCursor = "#dcd7ba"

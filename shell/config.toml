@@ -372,7 +372,7 @@ calendarDialNoon = "#fdf3cf"
 calendarDialDay = "#7cc4f0"
 calendarBirthYear = 0
 calendarLifeExpectancy = 90
-calendarOutside = "#ffffff"  # same as foreground
+calendarOutside = "#3f3f3f"  # same as dim
 
 # weather card and its code table
 [weather]

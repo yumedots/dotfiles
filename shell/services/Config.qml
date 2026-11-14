@@ -412,7 +412,7 @@ QtObject {
 	readonly property var calendarDialDay: settings.calendarDialDay !== undefined ? settings.calendarDialDay : "#7cc4f0"
 	readonly property var calendarBirthYear: settings.calendarBirthYear !== undefined ? settings.calendarBirthYear : 0
 	readonly property var calendarLifeExpectancy: settings.calendarLifeExpectancy !== undefined ? settings.calendarLifeExpectancy : 90
-	readonly property var calendarOutside: settings.calendarOutside !== undefined ? settings.calendarOutside : "#ffffff"
+	readonly property var calendarOutside: settings.calendarOutside !== undefined ? settings.calendarOutside : "#3f3f3f"
 
 	// weather card and its code table
 	readonly property var weatherLocation: settings.weatherLocation !== undefined ? settings.weatherLocation : ""
