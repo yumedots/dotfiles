@@ -88,14 +88,15 @@ Item {
 	// The height of the glyph ink, which is the height a drawn icon takes.
 	readonly property real iconInkHeight: root.iconsInkAbove + root.iconsInkBelow
 
-	// The baseline of the icon glyphs, in the content item's coordinates.
-	//
-	// The glyph text is placed so that its baseline lands here, which is the
-	// same line for every icon in the bar, drawn or not.
-	readonly property real iconBaseline: root.inkAbove - root.iconLift
+	// The line the icon glyphs sit on, in the content item's coordinates.
+	readonly property real iconBaseline: root.inkAbove
 
-	// The centre of the glyph ink, which is where a drawn icon belongs.
+	// The centre of the glyph ink, which is where an icon belongs, drawn or
+	// not. A glyph is measured against its own ink, so a bigger glyph does not
+	// sink below the line.
 	readonly property real iconInkCentre: root.iconBaseline - root.iconsInkAbove + root.iconInkHeight / 2
+	readonly property real glyphInkCentre: iconMetrics.tightBoundingRect.y + iconMetrics.tightBoundingRect.height / 2
+	readonly property real glyphInkHeight: iconMetrics.tightBoundingRect.height
 
 	implicitWidth: root.iconMode ? Math.ceil(root.iconBreadth + root.gap) : Config.lineLength + root.gap
 	readonly property real contentHeight: Math.round(root.inkAbove + root.inkBelow)
@@ -159,7 +160,7 @@ Item {
 
 			visible: root.iconComponent === null
 			x: 0
-			y: root.inkAbove - root.iconAscent - root.iconLift
+			y: root.iconInkCentre - root.glyphInkCentre - root.iconAscent - root.iconLift
 			font.family: Config.fontFamily
 			font.pixelSize: root.iconSize
 			color: root.inkColor
