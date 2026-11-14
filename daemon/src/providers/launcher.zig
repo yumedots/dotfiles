@@ -1438,6 +1438,14 @@ pub const Launcher = struct {
 			}.less);
 		}
 
+		if (search.len == 0 and home and self.all) {
+			std.mem.sort(Row, kept.items, {}, struct {
+				fn less(_: void, a: Row, b: Row) bool {
+					return std.ascii.lessThanIgnoreCase(a.name, b.name);
+				}
+			}.less);
+		}
+
 		var out = kept.items;
 		const wants_calc = allow_calc and search.len > 0 and
 			!std.mem.startsWith(u8, search, "%") and
