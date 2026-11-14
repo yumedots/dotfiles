@@ -469,11 +469,30 @@ PanelWindow {
 		}
 	}
 
+	function altPick(event) {
+		const n = event.key - Qt.Key_0;
+
+		if (!(event.modifiers & Qt.AltModifier) || n < 1 || n > 9 || n > root.rows)
+			return false;
+
+		const at = list.firstVisible + n - 1;
+
+		if (at >= root.results.length)
+			return false;
+
+		root.activate(root.results[at]);
+		event.accepted = true;
+		return true;
+	}
+
 	function handleKeys(event) {
 		if (root.windows) {
 			Input.switcher(event, root);
 			return;
 		}
+
+		if (root.altPick(event))
+			return;
 
 		if ((root.mode === "procs" || root.mode === "vms") && event.text === Config.procKillKey) {
 			root.killProc(root.selectedRow);
@@ -549,6 +568,9 @@ PanelWindow {
 
 	function handleTypingKeys(event) {
 		if (Input.cancel(event))
+			return;
+
+		if (root.altPick(event))
 			return;
 
 		if ((root.mode === "procs" || root.mode === "vms") && event.key === Qt.Key_Delete) {
@@ -1119,6 +1141,8 @@ PanelWindow {
 					Selector {
 						id: list
 
+						readonly property int firstVisible: Math.round(list.offset / (list.rowHeight + list.rowSpacing))
+
 						anchors.fill: parent
 						visible: root.results.length > 0
 						visibleRows: root.rows
@@ -1223,10 +1247,39 @@ PanelWindow {
 							}
 
 							Text {
-								id: rowUsage
+								id: rowAlt
+
+								readonly property int slot: row.index - list.firstVisible + 1
 
 								anchors.right: parent.right
 								anchors.rightMargin: Config.launcherPadding * 2
+								anchors.verticalCenter: parent.verticalCenter
+								width: visible ? implicitWidth : 0
+								visible: !row.active && slot >= 1 && slot <= 9 && slot <= root.rows
+								font.family: Config.fontFamily
+								font.pixelSize: Math.round(root.fontSize * 0.8)
+								color: row.active ? Config.launcherHighlightText : Config.muted
+								text: "Alt" + slot
+							}
+
+							Glyph {
+								id: rowSelect
+
+								anchors.right: parent.right
+								anchors.rightMargin: Config.launcherPadding * 2 + (rowAlt.implicitWidth - width) / 2
+								anchors.verticalCenter: parent.verticalCenter
+								width: visible ? implicitWidth : 0
+								visible: row.active
+								size: Math.round(root.iconSize * 0.75)
+								color: Config.launcherHighlightText
+								glyph: Config.launcherIconSelect
+							}
+
+							Text {
+								id: rowUsage
+
+								anchors.right: row.active ? rowSelect.left : rowAlt.left
+								anchors.rightMargin: Config.launcherTextGap
 								anchors.verticalCenter: parent.verticalCenter
 								width: visible ? implicitWidth : 0
 								visible: row.modelData.kind === "proc" || row.modelData.kind === "vm"
