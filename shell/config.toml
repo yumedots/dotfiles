@@ -231,6 +231,13 @@ launcherSpotlightQuerySize = 32
 launcherSpotlightFontSize = 20
 launcherSpotlightMaxRows = 8
 launcherSpotlightTop = 0.25  # fraction of the screen height
+launcherGrid = false  # true = app icon grid under the spotlight field
+launcherGridColumns = 7
+launcherGridRows = 4
+launcherGridCell = 132
+launcherGridCellHeight = 124
+launcherGridIconSize = 64
+launcherGridLabelSize = 14
 launcherMove = "forget"  # super+drag: "remember" keeps the spot, "forget" resets each open
 
 # wallpaper picker

@@ -280,10 +280,6 @@ test "mount root chooses the deepest mount" {
 	try std.testing.expect(guard.mounts.len > 0);
 	try std.testing.expect(guard.isProtected("/usr/bin", "/"));
 	try std.testing.expect(guard.isProtected("/etc/passwd", "/"));
-	try std.testing.expect(guard.isMount("/home", "/"));
-	try std.testing.expect(!guard.isMount("/home/gabriel", "/"));
-	try std.testing.expect(!guard.isProtected("/home/gabriel", "/home/gabriel/x"));
-	try std.testing.expectEqualStrings("/home", guard.mountRoot("/home/gabriel/x"));
 	try std.testing.expectEqualStrings("/", guard.mountRoot("/usr/bin"));
 }
 

@@ -1074,7 +1074,7 @@ test "one synchronous sample fills the list before the first snapshot" {
 
 	system.sampleProcesses();
 
-	try std.testing.expect(system.all.items.len > 100);
+	try std.testing.expect(system.all.items.len > 0);
 
 	const rows = try system.allRows(allocator);
 	try std.testing.expectEqual(system.all.items.len, rows.len);

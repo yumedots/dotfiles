@@ -249,6 +249,13 @@ QtObject {
 	readonly property var launcherSpotlightFontSize: settings.launcherSpotlightFontSize !== undefined ? settings.launcherSpotlightFontSize : 20
 	readonly property var launcherSpotlightMaxRows: settings.launcherSpotlightMaxRows !== undefined ? settings.launcherSpotlightMaxRows : 8
 	readonly property var launcherSpotlightTop: settings.launcherSpotlightTop !== undefined ? settings.launcherSpotlightTop : 0.25
+	readonly property var launcherGrid: settings.launcherGrid !== undefined ? settings.launcherGrid : false
+	readonly property var launcherGridColumns: settings.launcherGridColumns !== undefined ? settings.launcherGridColumns : 7
+	readonly property var launcherGridRows: settings.launcherGridRows !== undefined ? settings.launcherGridRows : 4
+	readonly property var launcherGridCell: settings.launcherGridCell !== undefined ? settings.launcherGridCell : 132
+	readonly property var launcherGridCellHeight: settings.launcherGridCellHeight !== undefined ? settings.launcherGridCellHeight : 124
+	readonly property var launcherGridIconSize: settings.launcherGridIconSize !== undefined ? settings.launcherGridIconSize : 64
+	readonly property var launcherGridLabelSize: settings.launcherGridLabelSize !== undefined ? settings.launcherGridLabelSize : 14
 	readonly property var launcherMove: settings.launcherMove !== undefined ? settings.launcherMove : "remember"
 	readonly property var launcherIconActive: settings.launcherIconActive !== undefined ? settings.launcherIconActive : "\uf00c"
 
