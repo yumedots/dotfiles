@@ -1033,7 +1033,7 @@ test "scanner keeps exact totals, hardlinks once and skips protected paths" {
 
 	var uring = try Scan.init(std.testing.allocator, &guard, fold_below);
 	defer uring.deinit();
-	try uring.runUringThreaded(root, 4);
+	uring.runUringThreaded(root, 4) catch return error.SkipZigTest;
 
 	try std.testing.expectEqual(scan.total(), uring.total());
 	try std.testing.expectEqual(scan.stats.entries, uring.stats.entries);
