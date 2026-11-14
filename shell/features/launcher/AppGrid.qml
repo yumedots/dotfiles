@@ -37,6 +37,7 @@ Item {
 		highlightMoveDuration: 0
 		highlight: Highlight {
 			fillParent: false
+			radius: 0
 		}
 
 		onCurrentIndexChanged: view.positionViewAtIndex(view.currentIndex, GridView.Contain)

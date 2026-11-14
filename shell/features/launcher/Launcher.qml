@@ -1002,21 +1002,6 @@ PanelWindow {
 				}
 			}
 
-			Rectangle {
-				x: -card.inset
-				width: card.width
-				height: card.themeWidth
-				visible: root.grid
-				opacity: card.borderOpacity
-
-				gradient: Gradient {
-					orientation: Gradient.Horizontal
-
-					GradientStop { position: 0; color: card.edges[0].start }
-					GradientStop { position: 1; color: card.edges[0].end }
-				}
-			}
-
 			// ── results pane: clipboard preview + list ────────────────────
 			Item {
 				width: parent.width
