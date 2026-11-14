@@ -8,6 +8,6 @@ jobs:
     container: archlinux:latest
     steps:
       - uses: actions/checkout@v4
-      - run: pacman -Syu --noconfirm zig nodejs python3 libsystemd pkgconf
+      - run: pacman -Syu --noconfirm zig nodejs python3 libsystemd pkgconf polkit glib2
       - run: cd daemon && zig build test
       - run: node shell/ui/AgentFace.check.js

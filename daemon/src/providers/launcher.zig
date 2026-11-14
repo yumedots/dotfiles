@@ -214,6 +214,7 @@ pub const Launcher = struct {
 	query: []u8 = &.{},
 	forced: []u8 = &.{},
 	group: []u8 = &.{},
+	all: bool = false,
 	terminal: []u8 = &.{},
 	clip_full: []u8 = &.{},
 	clip_pages: usize = first_pages,
@@ -482,8 +483,9 @@ pub const Launcher = struct {
 		self.hub.publish();
 	}
 
-	pub fn setQuery(self: *Launcher, query: []const u8, forced: []const u8, group: []const u8) void {
+	pub fn setQuery(self: *Launcher, query: []const u8, forced: []const u8, group: []const u8, all: bool) void {
 		self.mutex.lockUncancelable(self.io);
+		self.all = all;
 		self.setStr(&self.query, query);
 		self.setStr(&self.forced, forced);
 		self.setStr(&self.group, group);
@@ -1381,7 +1383,7 @@ pub const Launcher = struct {
 
 		for (rows) |row| {
 			if (search.len == 0 and home) {
-				if (std.mem.eql(u8, row.kind, "app") and self.pinIndex(row.id) < 0) continue;
+				if (!self.all and std.mem.eql(u8, row.kind, "app") and self.pinIndex(row.id) < 0) continue;
 
 				kept.append(arena, row) catch continue;
 				continue;
@@ -1458,7 +1460,7 @@ pub const Launcher = struct {
 			}
 		}
 
-		if (out.len > max_results) out = out[0..max_results];
+		if (out.len > max_results and !(self.all and home and search.len == 0)) out = out[0..max_results];
 
 		return out;
 	}
@@ -2191,7 +2193,7 @@ test "the snapshot echoes the intent the client asked for" {
 	var hub: hubmod.Hub = .{ .allocator = allocator, .io = io };
 	const self = try Launcher.create(allocator, io, &hub);
 
-	self.setQuery("dol", "", "");
+	self.setQuery("dol", "", "", false);
 
 	var out: Writer.Allocating = .init(allocator);
 	defer out.deinit();
@@ -2203,7 +2205,7 @@ test "the snapshot echoes the intent the client asked for" {
 
 	try std.testing.expect(std.mem.indexOf(u8, body, "\"intent\":{\"query\":\"dol\",\"forced\":\"\",\"group\":\"\"}") != null);
 
-	self.setQuery("", "clipboard", "");
+	self.setQuery("", "clipboard", "", false);
 
 	var next: Writer.Allocating = .init(allocator);
 	defer next.deinit();
@@ -2239,6 +2241,23 @@ test "a pinned row sorts ahead of a better match and usage breaks the tie" {
 
 	try std.testing.expectEqualStrings("app:pin", ranked[0].id);
 	try std.testing.expectEqualStrings("app:used", ranked[1].id);
+}
+
+test "the grid home lists every app, not only the pinned ones" {
+	var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+	defer arena.deinit();
+
+	const allocator = arena.allocator();
+	var hub: hubmod.Hub = .{ .allocator = allocator, .io = std.testing.io };
+	const self = try Launcher.create(allocator, std.testing.io, &hub);
+
+	var rows: [max_results + 5]Row = undefined;
+	for (&rows, 0..) |*row, i| row.* = .{ .id = try std.fmt.allocPrint(allocator, "app:{d}", .{i}), .kind = "app", .name = "App", .glyph = "" };
+
+	try std.testing.expectEqual(@as(usize, 0), self.rank(allocator, &rows, "", true, true).len);
+
+	self.all = true;
+	try std.testing.expectEqual(rows.len, self.rank(allocator, &rows, "", true, true).len);
 }
 
 test "only launcher entries are remembered or pinned" {

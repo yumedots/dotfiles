@@ -175,10 +175,11 @@ PanelWindow {
 	readonly property int winCurrent: Calc.clamp(root.winIndex, 0, Math.max(0, root.results.length - 1))
 	readonly property string winName: root.windows && root.results.length > 0 ? root.results[root.winCurrent].name : ""
 
-	readonly property bool spotlight: Config.launcherSpotlight && !root.windows
+	readonly property bool spotlight: (Config.launcherSpotlight || Config.launcherGrid) && !root.windows
+	readonly property bool grid: Config.launcherGrid && !root.windows && (root.mode === "apps" || root.mode === "group:apps")
 	readonly property real rowGap: root.spotlight ? 0 : Config.launcherGap
 	readonly property bool home: root.forced === "" && root.group === ""
-	readonly property bool revealed: !root.spotlight || !root.home || (root.query !== "" && !!root.live.intent && root.live.intent.query !== "")
+	readonly property bool revealed: root.grid || !root.spotlight || !root.home || (root.query !== "" && !!root.live.intent && root.live.intent.query !== "")
 	readonly property real fontSize: root.spotlight ? Config.launcherSpotlightFontSize : Config.launcherFontSize
 	readonly property real iconSize: root.spotlight ? Math.round(root.fontSize * 1.4) : Config.launcherIconSize
 	readonly property real rowHeight: root.spotlight
@@ -199,7 +200,7 @@ PanelWindow {
 		return Calc.clamp(Math.floor(room / (root.emojiRowHeight + root.rowGap)), 1, base);
 	}
 	readonly property int rows: root.spotlight && !root.isClipboard ? Calc.clamp(root.results.length, 1, root.maxRows) : root.maxRows
-	readonly property int listHeight: root.spotlight ? root.rows * root.rowHeight + (root.rows - 1) * root.rowGap : Config.launcherMaxRows * root.rowHeight
+	readonly property int listHeight: root.grid ? appGrid.implicitHeight : root.spotlight ? root.rows * root.rowHeight + (root.rows - 1) * root.rowGap : Config.launcherMaxRows * root.rowHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
 
 	anchors.top: true
@@ -338,7 +339,7 @@ PanelWindow {
 			return;
 		}
 
-		Yudae.cmd("launcher", { query: root.query, forced: root.forced, group: root.group });
+		Yudae.cmd("launcher", { query: root.query, forced: root.forced, group: root.group, all: Config.launcherGrid });
 	}
 
 	function setWindowDrag(hold) {
@@ -600,6 +601,13 @@ PanelWindow {
 	}
 
 	function navigate(dir) {
+		const step = Input.axis(dir, appGrid.columns, 1);
+
+		if (root.grid && step !== 0) {
+			list.currentIndex = Calc.clamp(list.currentIndex + step, 0, root.results.length - 1);
+			return true;
+		}
+
 		if (dir === "down" || dir === "up") {
 			list.move(dir === "down" ? 1 : -1);
 			return true;
@@ -648,6 +656,22 @@ PanelWindow {
 			return;
 
 		Yudae.cmd("launcher", { pin: entry.id });
+	}
+
+	function hover(index, at) {
+		const prev = root.pointer;
+
+		if (!prev) {
+			root.pointer = { x: at.x, y: at.y, engaged: false };
+			return;
+		}
+
+		if (prev.engaged || (at.x - prev.x) ** 2 + (at.y - prev.y) ** 2 >= root.rowHeight ** 2) {
+			root.pointer = { x: at.x, y: at.y, engaged: true };
+
+			if (at.x !== prev.x || at.y !== prev.y)
+				list.currentIndex = index;
+		}
 	}
 
 	function copyClip(id) {
@@ -842,6 +866,7 @@ PanelWindow {
 	onModeChanged: {
 		list.currentIndex = 0;
 		list.reset();
+		appGrid.reset();
 
 		if (!root.shown)
 			return;
@@ -903,6 +928,7 @@ PanelWindow {
 		y: root.placed ? root.placeY : root.defaultY()
 
 		width: root.windows ? windowsGrid.implicitWidth + card.inset * 2
+		      : root.grid ? appGrid.implicitWidth + card.inset * 2
 		      : root.spotlight ? Config.launcherSpotlightWidth
 		      : root.isClipboard ? Config.launcherWidth * 2 + Config.launcherGap + card.inset * 2
 		      : Config.launcherWidth
@@ -973,6 +999,21 @@ PanelWindow {
 						root.leaveGroup();
 					else
 						root.close();
+				}
+			}
+
+			Rectangle {
+				x: -card.inset
+				width: card.width
+				height: card.themeWidth
+				visible: root.grid
+				opacity: card.borderOpacity
+
+				gradient: Gradient {
+					orientation: Gradient.Horizontal
+
+					GradientStop { position: 0; color: card.edges[0].start }
+					GradientStop { position: 1; color: card.edges[0].end }
 				}
 			}
 
@@ -1144,13 +1185,13 @@ PanelWindow {
 						readonly property int firstVisible: Math.round(list.offset / (list.rowHeight + list.rowSpacing))
 
 						anchors.fill: parent
-						visible: root.results.length > 0
+						visible: root.results.length > 0 && !root.grid
 						visibleRows: root.rows
 						scrollWidth: root.spotlight ? 0 : Config.scrollbarWidth
 						highlightRadius: 0
 						rowHeight: root.rowHeight
 						rowSpacing: root.rowGap
-						model: root.results
+						model: root.grid ? [] : root.results
 
 						delegate: Item {
 							id: row
@@ -1306,20 +1347,7 @@ PanelWindow {
 									if (!hovered)
 										return;
 
-									const at = point.scenePosition;
-									const prev = root.pointer;
-
-									if (!prev) {
-										root.pointer = { x: at.x, y: at.y, engaged: false };
-										return;
-									}
-
-									if (prev.engaged || (at.x - prev.x) ** 2 + (at.y - prev.y) ** 2 >= root.rowHeight ** 2) {
-										root.pointer = { x: at.x, y: at.y, engaged: true };
-
-										if (at.x !== prev.x || at.y !== prev.y)
-											list.currentIndex = row.index;
-									}
+									root.hover(row.index, point.scenePosition);
 								}
 							}
 
@@ -1336,6 +1364,21 @@ PanelWindow {
 									root.activate(row.modelData);
 								}
 							}
+						}
+					}
+
+					AppGrid {
+						id: appGrid
+
+						anchors.fill: parent
+						visible: root.grid && root.results.length > 0
+						results: root.grid ? root.results : []
+						currentIndex: root.selectedIndex
+
+						onHovered: function (index, at) { root.hover(index, at); }
+						onClicked: function (index) {
+							list.currentIndex = index;
+							root.activate(root.results[index]);
 						}
 					}
 
