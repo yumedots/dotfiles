@@ -176,6 +176,7 @@ PanelWindow {
 	readonly property string winName: root.windows && root.results.length > 0 ? root.results[root.winCurrent].name : ""
 
 	readonly property bool spotlight: Config.launcherSpotlight && !root.windows
+	readonly property real rowGap: root.spotlight ? 0 : Config.launcherGap
 	readonly property bool home: root.forced === "" && root.group === ""
 	readonly property bool revealed: !root.spotlight || !root.home || (root.query !== "" && !!root.live.intent && root.live.intent.query !== "")
 	readonly property real fontSize: root.spotlight ? Config.launcherSpotlightFontSize : Config.launcherFontSize
@@ -195,10 +196,10 @@ PanelWindow {
 		const top = Math.round(root.height * Config.launcherSpotlightTop);
 		const room = root.height - top - Config.launcherPadding * 2 - Config.launcherSpotlightInputHeight - Config.launcherGap;
 
-		return Calc.clamp(Math.floor(room / (root.emojiRowHeight + Config.launcherGap)), 1, base);
+		return Calc.clamp(Math.floor(room / (root.emojiRowHeight + root.rowGap)), 1, base);
 	}
 	readonly property int rows: root.spotlight && !root.isClipboard ? Calc.clamp(root.results.length, 1, root.maxRows) : root.maxRows
-	readonly property int listHeight: root.spotlight ? root.rows * root.rowHeight + (root.rows - 1) * Config.launcherGap : Config.launcherMaxRows * root.rowHeight
+	readonly property int listHeight: root.spotlight ? root.rows * root.rowHeight + (root.rows - 1) * root.rowGap : Config.launcherMaxRows * root.rowHeight
 	readonly property bool configured: root.screen !== null && root.width === root.screen.width && root.height > 1
 
 	anchors.top: true
@@ -883,7 +884,7 @@ PanelWindow {
 		      : root.spotlight ? Config.launcherSpotlightWidth
 		      : root.isClipboard ? Config.launcherWidth * 2 + Config.launcherGap + card.inset * 2
 		      : Config.launcherWidth
-		height: root.windows ? windowsGrid.implicitHeight + card.inset * 2 : column.implicitHeight + card.inset * 2
+		height: root.windows ? windowsGrid.implicitHeight + card.inset * 2 : column.implicitHeight + card.inset * 2 - (root.spotlight && root.revealed ? Config.launcherPadding : 0)
 		padding: Config.launcherPadding
 		backgroundColor: Config.surfaceTranslucent
 		opacity: root.shown && root.settled ? 1 : 0
@@ -1124,7 +1125,7 @@ PanelWindow {
 						scrollWidth: root.spotlight ? 0 : Config.scrollbarWidth
 						highlightRadius: 0
 						rowHeight: root.rowHeight
-						rowSpacing: Config.launcherGap
+						rowSpacing: root.rowGap
 						model: root.results
 
 						delegate: Item {
