@@ -222,7 +222,6 @@ fn dirSize(io: Io, allocator: Allocator, path: []const u8, depth: usize) u64 {
 
 fn toolArgv(allocator: Allocator, tool: []const u8, path: []const u8) ![]const []const u8 {
 	_ = path;
-	if (std.mem.eql(u8, tool, "paru")) return &.{ "paru", "-Sc", "--noconfirm" };
 	if (std.mem.eql(u8, tool, "npm")) return &.{ "npm", "cache", "clean", "--force" };
 	if (std.mem.eql(u8, tool, "bun")) return &.{ "bun", "pm", "cache", "rm" };
 	if (std.mem.eql(u8, tool, "go")) return &.{ "go", "clean", "-modcache" };
