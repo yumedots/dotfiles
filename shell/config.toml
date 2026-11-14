@@ -221,6 +221,7 @@ launcherHighlightText = "#ffffff"  # same as foreground
 launcherPrompt = "\uEA6D"
 launcherMaxRows = 12
 launcherIconPin = "\uEBA0"
+launcherIconSelect = "\U000F0311"
 launcherIconActive = "\uF00C"
 launcherClipTimeFormat = "h:mm AP"
 launcherSpotlight = true  # false = the box with the list under the field
